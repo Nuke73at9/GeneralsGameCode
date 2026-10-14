@@ -323,7 +323,7 @@ UnicodeString Version::getUnicodeBuildUserOrGitCommitAuthorName() const
 UnicodeString Version::getUnicodeProductTitle() const
 {
 	// @todo Make configurable
-	return L"GeneralsX";
+	return L"Abram's Personal Test v0.2";
 }
 
 UnicodeString Version::getUnicodeProductVersion() const
