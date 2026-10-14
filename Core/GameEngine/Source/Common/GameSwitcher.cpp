@@ -130,33 +130,62 @@ bool fileExists(const char* path)
 	return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
 }
 
-// Returns the command line arguments of this process, without the program name,
-// so options such as -win carry over to the other game.
-const char* getCommandLineArguments()
+// Copies this process's command line arguments, without the program name and without any
+// "-mod <path>" option, so options such as -win carry over when another game is launched.
+void copyArgumentsWithoutMod(char* out, unsigned int outSize)
 {
+	out[0] = '\0';
+	unsigned int outLen = 0;
+
 	const char* cmd = GetCommandLineA();
 	if (cmd == nullptr)
-		return "";
+		return;
 
-	// Skip the program name, which may be quoted.
-	if (*cmd == '"')
+	bool isProgramName = true;
+	bool skipNext = false;
+
+	while (*cmd != '\0')
 	{
-		++cmd;
-		while (*cmd != '\0' && *cmd != '"')
+		while (*cmd == ' ' || *cmd == '\t')
 			++cmd;
-		if (*cmd == '"')
-			++cmd;
-	}
-	else
-	{
-		while (*cmd != '\0' && *cmd != ' ' && *cmd != '\t')
-			++cmd;
-	}
+		if (*cmd == '\0')
+			break;
 
-	while (*cmd == ' ' || *cmd == '\t')
-		++cmd;
+		// Find the end of this token. Quoted parts may contain spaces.
+		const char* tokenStart = cmd;
+		bool inQuotes = false;
+		while (*cmd != '\0' && (inQuotes || (*cmd != ' ' && *cmd != '\t')))
+		{
+			if (*cmd == '"')
+				inQuotes = !inQuotes;
+			++cmd;
+		}
+		const unsigned int tokenLen = (unsigned int)(cmd - tokenStart);
 
-	return cmd;
+		if (isProgramName)
+		{
+			isProgramName = false;
+			continue;
+		}
+		if (skipNext)
+		{
+			skipNext = false;
+			continue;
+		}
+		if (tokenLen == 4 && _strnicmp(tokenStart, "-mod", 4) == 0)
+		{
+			skipNext = true;
+			continue;
+		}
+
+		if (outLen + tokenLen + 2 >= outSize)
+			break;
+		if (outLen > 0)
+			out[outLen++] = ' ';
+		memcpy(out + outLen, tokenStart, tokenLen);
+		outLen += tokenLen;
+		out[outLen] = '\0';
+	}
 }
 
 } // namespace
@@ -164,6 +193,7 @@ const char* getCommandLineArguments()
 bool GameSwitcher::s_switchRequested = false;
 char GameSwitcher::s_exePath[SWITCH_PATH_SIZE] = { 0 };
 char GameSwitcher::s_workingDir[SWITCH_PATH_SIZE] = { 0 };
+char GameSwitcher::s_arguments[SWITCH_PATH_SIZE * 2] = { 0 };
 
 bool GameSwitcher::findOtherGame(char* exePath, unsigned int exePathSize, char* workingDir, unsigned int workingDirSize)
 {
@@ -206,8 +236,47 @@ bool GameSwitcher::isOtherGameAvailable()
 bool GameSwitcher::requestSwitch()
 {
 	s_switchRequested = findOtherGame(s_exePath, SWITCH_PATH_SIZE, s_workingDir, SWITCH_PATH_SIZE);
+	// Mods belong to one game, so the -mod option is not passed to the other game.
+	copyArgumentsWithoutMod(s_arguments, sizeof(s_arguments));
 	DEBUG_LOG(("GameSwitcher: switch requested, target '%s' (%s)", s_exePath, s_switchRequested ? "found" : "not found"));
 	return s_switchRequested;
+}
+
+bool GameSwitcher::requestRestartWithMod(const char* modFolder)
+{
+	s_switchRequested = false;
+
+	DWORD len = GetModuleFileNameA(nullptr, s_exePath, SWITCH_PATH_SIZE);
+	if (len == 0 || len >= SWITCH_PATH_SIZE)
+		return false;
+
+	strncpy(s_workingDir, s_exePath, SWITCH_PATH_SIZE);
+	s_workingDir[SWITCH_PATH_SIZE - 1] = '\0';
+	char* lastSlash = strrchr(s_workingDir, '\\');
+	if (lastSlash == nullptr)
+		return false;
+	lastSlash[1] = '\0';
+
+	copyArgumentsWithoutMod(s_arguments, sizeof(s_arguments));
+
+	if (modFolder != nullptr && modFolder[0] != '\0')
+	{
+		// The -mod option needs a full path. Drop a trailing backslash so the quotes stay intact.
+		char folder[SWITCH_PATH_SIZE];
+		strncpy(folder, modFolder, sizeof(folder));
+		folder[sizeof(folder) - 1] = '\0';
+		size_t folderLen = strlen(folder);
+		if (folderLen > 0 && (folder[folderLen - 1] == '\\' || folder[folderLen - 1] == '/'))
+			folder[folderLen - 1] = '\0';
+
+		const size_t argLen = strlen(s_arguments);
+		_snprintf(s_arguments + argLen, sizeof(s_arguments) - argLen, "%s-mod \"%s\"", argLen > 0 ? " " : "", folder);
+		s_arguments[sizeof(s_arguments) - 1] = '\0';
+	}
+
+	s_switchRequested = true;
+	DEBUG_LOG(("GameSwitcher: restart requested with arguments '%s'", s_arguments));
+	return true;
 }
 
 bool GameSwitcher::isSwitchRequested()
@@ -223,8 +292,8 @@ bool GameSwitcher::launchRequested()
 	s_switchRequested = false;
 
 	// CreateProcess may modify the command line buffer, so build it in a writable array.
-	char commandLine[SWITCH_PATH_SIZE * 2];
-	_snprintf(commandLine, sizeof(commandLine), "\"%s\" %s", s_exePath, getCommandLineArguments());
+	char commandLine[SWITCH_PATH_SIZE * 3];
+	_snprintf(commandLine, sizeof(commandLine), "\"%s\" %s", s_exePath, s_arguments);
 	commandLine[sizeof(commandLine) - 1] = '\0';
 
 	STARTUPINFOA startupInfo;
