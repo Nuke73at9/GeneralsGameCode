@@ -313,8 +313,13 @@ if(SAGE_USE_MINIAUDIO)
 endif()
 
 if(RTS_BUILD_OPTION_FFMPEG)
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavcodec libavformat libavutil libswscale)
+    # Abram's Personal Test: on 64-bit Windows the target comes from vcpkg (cmake/abram-win64.cmake).
+    if(NOT TARGET PkgConfig::FFMPEG)
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavcodec libavformat libavutil libswscale)
+    else()
+        set(FFMPEG_FOUND TRUE)
+    endif()
 
     if(FFMPEG_FOUND)
         target_sources(corei_gameenginedevice_private INTERFACE

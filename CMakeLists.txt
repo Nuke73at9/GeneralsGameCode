@@ -96,6 +96,9 @@ include(cmake/openal.cmake)
 # miniaudio.cmake is self-guarded with if(SAGE_USE_MINIAUDIO), so this is always safe to include.
 include(cmake/miniaudio.cmake)
 
+# Abram's Personal Test: FFmpeg from vcpkg and DXVK DLLs for the 64-bit Windows build (no-op elsewhere).
+include(cmake/abram-win64.cmake)
+
 # GeneralsX @feature BenderAI 21/04/2026 libcurl for in-game update checker (SAGE_UPDATE_CHECK builds)
 # curl.cmake is self-guarded with if(SAGE_UPDATE_CHECK), so always safe to include.
 include(cmake/curl.cmake)

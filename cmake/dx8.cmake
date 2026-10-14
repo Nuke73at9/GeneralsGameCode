@@ -18,7 +18,25 @@
 
 set(DXVK_VERSION "v2.6")
 
-if(SAGE_USE_DX8)
+if(SAGE_USE_DX8 AND WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+  # Abram's Personal Test @build 64-bit Windows: min-dx8-sdk only ships 32-bit .lib files, so use its
+  # headers only. d3d8.dll is loaded at runtime (DXVK's 64-bit d3d8.dll, see cmake/abram-win64.cmake),
+  # D3DX comes from the d3dx8 compatibility library (GeneralsMD/Code/CompatLib), and dinput8/dxguid
+  # come from the 64-bit Windows SDK.
+  FetchContent_Declare(
+    dx8
+    GIT_REPOSITORY https://github.com/TheSuperHackers/min-dx8-sdk.git
+    GIT_TAG        7bddff8c01f5fb931c3cb73d4aa8e66d303d97bc
+    SOURCE_SUBDIR  abram-headers-only # no CMakeLists.txt here: populate without adding its 32-bit targets
+  )
+  FetchContent_MakeAvailable(dx8)
+  add_library(d3d8lib INTERFACE)
+  target_include_directories(d3d8lib INTERFACE ${dx8_SOURCE_DIR})
+  target_link_libraries(d3d8lib INTERFACE dinput8 dxguid legacy_stdio_definitions)
+  target_compile_definitions(d3d8lib INTERFACE BUILD_WITH_D3D8)
+  message(STATUS "Using DirectX 8 SDK headers for 64-bit Windows (d3d8.dll loaded at runtime)")
+
+elseif(SAGE_USE_DX8)
   # Windows: Fetch min-dx8-sdk for native DirectX 8
   FetchContent_Declare(
     dx8

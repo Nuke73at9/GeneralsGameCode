@@ -634,7 +634,32 @@ bool DX8Wrapper::Init(void * hwnd, bool lite)
 
 	if (!lite) {
 		// GeneralsX @build BenderAI 10/02/2026 - Platform-specific DLL/SO/DYLIB loading (Phase 5: macOS)
-#ifdef _WIN32
+#if defined(_WIN64)
+		// Abram's Personal Test @feature 64-bit Windows has no d3d8.dll of its own. Load DXVK's 64-bit
+		// d3d8.dll (DirectX 8 to Vulkan) from the "dxvk" folder next to the game. DXVK's d3d9.dll is
+		// loaded first from the same folder, so d3d8.dll uses it instead of Windows' own d3d9.dll.
+		// They live in a subfolder so the original 32-bit game never loads them.
+		{
+			char dxvkPath[MAX_PATH];
+			DWORD len = GetModuleFileNameA(nullptr, dxvkPath, MAX_PATH);
+			char* lastSlash = (len > 0 && len < MAX_PATH) ? strrchr(dxvkPath, '\\') : nullptr;
+			if (lastSlash != nullptr && (size_t)(lastSlash - dxvkPath) + sizeof("\\dxvk\\d3d8.dll") < MAX_PATH)
+			{
+				strcpy(lastSlash, "\\dxvk\\d3d9.dll");
+				if (LoadLibraryExA(dxvkPath, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH) != nullptr)
+				{
+					strcpy(lastSlash, "\\dxvk\\d3d8.dll");
+					D3D8Lib = LoadLibraryExA(dxvkPath, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+				}
+			}
+			if (D3D8Lib == nullptr)
+			{
+				fprintf(stderr, "WARNING: DX8Wrapper::Init() - dxvk\\d3d8.dll or dxvk\\d3d9.dll not found next to the game, trying the system d3d8.dll\n");
+				fflush(stderr);
+				D3D8Lib = LoadLibrary("D3D8.DLL");
+			}
+		}
+#elif defined(_WIN32)
 		D3D8Lib = LoadLibrary("D3D8.DLL");
 #elif defined(__APPLE__)
 		fprintf(stderr, "DEBUG: DX8Wrapper::Init() - Loading libdxvk_d3d8.dylib (macOS)...\n");

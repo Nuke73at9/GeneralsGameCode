@@ -32,12 +32,27 @@ if(NOT APPLE)
     target_link_libraries(d3dx8 PUBLIC gli)
 endif()
 
+if(WIN32)
+    # Abram's Personal Test @build 64-bit Windows: Include/ also holds windows.h and other Linux shims,
+    # which would hide the Windows SDK headers. Compile against a copy of only the D3DX headers, and keep
+    # it private: the game uses the DirectX 8 SDK's own d3dx8 headers, which declare the same functions.
+    set(ABRAM_D3DX8_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/abram-d3dx8-include")
+    foreach(_abram_d3dx8_header d3dx8.h d3dx8core.h d3dx8math.h d3dx8tex.h)
+        configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Include/${_abram_d3dx8_header}"
+            "${ABRAM_D3DX8_INCLUDE_DIR}/${_abram_d3dx8_header}" COPYONLY)
+    endforeach()
+    target_include_directories(d3dx8 PRIVATE
+        ${ABRAM_D3DX8_INCLUDE_DIR}
+        ${CMAKE_SOURCE_DIR}/Core/Libraries/Source/WWVegas/WWLib
+    )
+else()
 # d3dx8 needs bittype.h from WWLib for Win32 types (DWORD, BYTE, UINT, etc.)
 # Add only WWLib directory (not full core_wwcommon to avoid d3d8.h conflicts from WWAudio)
 target_include_directories(d3dx8 PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/Include
     ${CMAKE_SOURCE_DIR}/Core/Libraries/Source/WWVegas/WWLib
 )
+endif()
 
 if(SAGE_USE_DETERMINISTIC_MATH)
     target_link_libraries(d3dx8 PUBLIC gamemath)
@@ -56,7 +71,10 @@ endif()
 # GeneralsX @build BenderAI 10/02/2026
 # Configure d3d8lib target globally (created early in Core/CMakeLists.txt)
 # Fighter19's approach: Windows uses min-dx8-sdk, Linux uses ONLY DXVK headers
-if(SAGE_USE_DX8)
+if(SAGE_USE_DX8 AND WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+    # Abram's Personal Test @build 64-bit Windows: d3d8lib is fully set up in cmake/dx8.cmake (headers only,
+    # since min-dx8-sdk's .lib files are 32-bit).
+elseif(SAGE_USE_DX8)
     # Windows native: Use min-dx8-sdk headers and libs
     if(NOT dx8_SOURCE_DIR)
         message(FATAL_ERROR "DirectX 8 SDK (min-dx8-sdk) not fetched! Ensure cmake/dx8.cmake was included")

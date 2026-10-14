@@ -37,6 +37,9 @@
 #include "GameLogic/GameLogic.h"
 #include "GameNetwork/NetworkInterface.h"
 #include "MilesAudioDevice/MilesAudioManager.h"
+#ifdef SAGE_USE_MINIAUDIO
+#include "MiniAudioDevice/MiniAudioManager.h"
+#endif
 #include "Win32Device/Common/Win32BIGFileSystem.h"
 #include "Win32Device/Common/Win32LocalFileSystem.h"
 #include "W3DDevice/Common/W3DModuleFactory.h"
@@ -113,5 +116,11 @@ inline AudioManager *Win32GameEngine::createAudioManager(Bool dummy)
 {
 	if (dummy)
 		return NEW MilesAudioManagerDummy;
+#ifdef SAGE_USE_MINIAUDIO
+	// Abram's Personal Test @feature The 64-bit Windows build uses MiniAudio, because the Miles Sound
+	// System (mss32.dll) only exists as a 32-bit library.
+	return NEW MiniAudioManager;
+#else
 	return NEW MilesAudioManager;
+#endif
 }

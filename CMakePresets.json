@@ -320,6 +320,31 @@
                 "RTS_BUILD_GENERALS_TOOLS": "OFF",
                 "SAGE_USE_NGMP": "ON"
             }
+        },
+        {
+            "name": "abram-win64",
+            "inherits": "default-vcpkg",
+            "displayName": "Abram's Personal Test - Windows 64bit Release (DXVK/Vulkan, MiniAudio, FFmpeg)",
+            "description": "Windows 64bit Release. Graphics go through DXVK (DirectX 8 to Vulkan), audio through MiniAudio and videos through FFmpeg, because d3d8, Miles and Bink only exist as 32-bit libraries. Needs vcpkg (VCPKG_ROOT), which abram_build64.bat sets up.",
+            "binaryDir": "${sourceDir}/build/abram-win64",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "RTS_FLAGS": "/W3",
+                "VCPKG_TARGET_TRIPLET": "x64-windows",
+                "RTS_BUILD_OPTION_FFMPEG": "ON",
+                "SAGE_USE_MINIAUDIO": "ON",
+                "SAGE_USE_GLM": "ON",
+                "RTS_BUILD_OPTION_SAGE_PATCH": "OFF",
+                "SAGE_USE_DX8": "ON",
+                "SAGE_USE_DETERMINISTIC_MATH": "ON",
+                "RTS_BUILD_CORE_TOOLS": "OFF",
+                "RTS_BUILD_ZEROHOUR_TOOLS": "OFF",
+                "RTS_BUILD_GENERALS_TOOLS": "OFF",
+                "SAGE_USE_NGMP": "ON"
+            }
         }
     ],
     "buildPresets": [
@@ -442,6 +467,12 @@
             "name": "abram-win32",
             "configurePreset": "abram-win32",
             "displayName": "Build Abram's Personal Test Windows 32bit Release",
+            "configuration": "Release"
+        },
+        {
+            "name": "abram-win64",
+            "configurePreset": "abram-win64",
+            "displayName": "Build Abram's Personal Test Windows 64bit Release",
             "configuration": "Release"
         }
     ],
@@ -651,6 +682,19 @@
                 {
                     "type": "build",
                     "name": "abram-win32"
+                }
+            ]
+        },
+        {
+            "name": "abram-win64",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "abram-win64"
+                },
+                {
+                    "type": "build",
+                    "name": "abram-win64"
                 }
             ]
         }

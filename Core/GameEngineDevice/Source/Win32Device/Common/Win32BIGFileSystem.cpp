@@ -401,6 +401,19 @@ static Bool loadPrimaryGameAssets(TBigFileSystem* fileSystem, AsciiString* loade
 		}
 	}
 
+	// Abram's Personal Test @bugfix Use the game folder the executable is in before the registry. The
+	// registry's InstallPath can point at a different copy of the game (for example one made by a mod
+	// launcher), which would otherwise load that copy's data instead of this one.
+	if (exeDirectory.isNotEmpty()) {
+		if (tryLoadBigFiles(fileSystem, exeDirectory, "default-exedir")) {
+			fprintf(stderr, "[ASSET_ROOT] Selected source=exedir path='%s'\n", exeDirectory.str());
+			if (loadedDirectory != nullptr) {
+				*loadedDirectory = exeDirectory;
+			}
+			return TRUE;
+		}
+	}
+
 	AsciiString defaultPath;
 	if (GetStringFromRegistry("", "InstallPath", defaultPath)) {
 		if (tryLoadBigFiles(fileSystem, defaultPath, "default-registry")) {
@@ -424,15 +437,6 @@ static Bool loadPrimaryGameAssets(TBigFileSystem* fileSystem, AsciiString* loade
 		}
 	}
 #endif
-
-	if (exeDirectory.isNotEmpty()) {
-		if (tryLoadBigFiles(fileSystem, exeDirectory, "default-exedir")) {
-			if (loadedDirectory != nullptr) {
-				*loadedDirectory = exeDirectory;
-			}
-			return TRUE;
-		}
-	}
 
 	DEBUG_LOG(("Win32BIGFileSystem::init - trying current working directory as last-resort assets path"));
 	if (fileSystem->loadBigFilesFromDirectory("", "*.big")) {
