@@ -321,7 +321,7 @@ UnicodeString Version::getUnicodeBuildUserOrGitCommitAuthorName() const
 UnicodeString Version::getUnicodeProductTitle() const
 {
 	// @todo Make configurable
-	return L"Community Patch";
+	return L"Abram's Personal Test v0.1";
 }
 
 UnicodeString Version::getUnicodeProductVersion() const
