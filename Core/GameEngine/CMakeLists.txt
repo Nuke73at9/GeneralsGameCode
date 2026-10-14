@@ -136,6 +136,7 @@ set(GAMEENGINE_SRC
     Include/Common/UserPreferences.h
     Include/Common/version.h
     Include/Common/GameSwitcher.h
+    Include/Common/ModManager.h
 #    Include/Common/WellKnownKeys.h
     Include/Common/WorkerProcess.h
     Include/Common/WorkingDirectory.h
@@ -148,6 +149,7 @@ set(GAMEENGINE_SRC
     Include/GameClient/AnimateWindowManager.h
 #    Include/GameClient/CampaignManager.h
     Include/GameClient/ChallengeGenerals.h
+    Include/GameClient/AbramMainMenu.h
     Include/GameClient/ClientInstance.h
     Include/GameClient/ClientRandomValue.h
     Include/GameClient/Color.h
@@ -711,6 +713,7 @@ set(GAMEENGINE_SRC
     Source/Common/UserPreferences.cpp
     Source/Common/version.cpp
     Source/Common/GameSwitcher.cpp
+    Source/Common/ModManager.cpp
     Source/Common/WorkerProcess.cpp
     Source/Common/WorkingDirectory.cpp
     Source/GameClient/ClientInstance.cpp
@@ -731,6 +734,7 @@ set(GAMEENGINE_SRC
     Source/GameClient/GameText.cpp
     Source/GameClient/GlobalLanguage.cpp
     Source/GameClient/GraphDraw.cpp
+    Source/GameClient/GUI/AbramMainMenu.cpp
     Source/GameClient/GUI/AnimateWindowManager.cpp
     Source/GameClient/GUI/ChallengeGenerals.cpp
     Source/GameClient/GUI/ControlBar/ControlBar.cpp

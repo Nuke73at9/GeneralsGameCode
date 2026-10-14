@@ -18,7 +18,7 @@
 
 #pragma once
 
-// Abram's Personal Test @feature Switch between Generals and Zero Hour from the main menu.
+// Abram's Personal Test @feature Switch between Generals and Zero Hour, and restart with a mod.
 //
 // Generals and Zero Hour are separate executables with separate rules and data, and both use the
 // same single-instance mutex. So a switch works like this:
@@ -40,6 +40,10 @@ public:
 	// Returns false if the other game cannot be found.
 	static bool requestSwitch();
 
+	// Remembers this game's own executable, so it restarts after exiting with the given mod folder
+	// loaded through the -mod option. An empty or null folder restarts without a mod.
+	static bool requestRestartWithMod(const char* modFolder);
+
 	static bool isSwitchRequested();
 
 	// Starts the other game. Call only after the instance mutex has been released.
@@ -54,4 +58,5 @@ private:
 	static bool s_switchRequested;
 	static char s_exePath[];
 	static char s_workingDir[];
+	static char s_arguments[];
 };

@@ -39,7 +39,6 @@
 #include "Common/RandomValue.h"
 #include "Common/OptionPreferences.h"
 #include "Common/version.h"
-#include "Common/GameSwitcher.h"
 #include "Common/GameLOD.h"
 #include "GameClient/AnimateWindowManager.h"
 #include "GameClient/ExtendedMessageBox.h"
@@ -55,7 +54,7 @@
 #include "GameClient/KeyDefs.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GadgetStaticText.h"
-#include "GameClient/GadgetPushButton.h"
+#include "GameClient/AbramMainMenu.h"
 #include "GameClient/Mouse.h"
 #include "GameClient/WindowVideoManager.h"
 #include "GameClient/CampaignManager.h"
@@ -148,7 +147,6 @@ static GameWindow *buttonOnline = nullptr;
 static GameWindow *buttonNetwork = nullptr;
 static GameWindow *buttonOptions = nullptr;
 static GameWindow *buttonExit = nullptr;
-static GameWindow *buttonSwitchGame = nullptr; ///< Abram's Personal Test: switch between Generals and Zero Hour
 static GameWindow *buttonMOTD = nullptr;
 static GameWindow *buttonWorldBuilder = nullptr;
 static GameWindow *mainMenuMovie = nullptr;
@@ -429,36 +427,6 @@ static void initLabelVersion()
 	}
 }
 
-// Abram's Personal Test @feature Adds a button to the bottom left of the main menu that switches
-// to the other game (Generals <-> Zero Hour). The button only appears when the other game is installed.
-static void initButtonSwitchGame( GameWindow *parent )
-{
-	buttonSwitchGame = nullptr;
-
-	if (parent == nullptr || !GameSwitcher::isOtherGameAvailable())
-		return;
-
-	Int parentWidth = 0;
-	Int parentHeight = 0;
-	parent->winGetSize( &parentWidth, &parentHeight );
-
-	const Int buttonWidth = 180;
-	const Int buttonHeight = 26;
-	const Int margin = 20;
-
-	WinInstanceData instData;
-	instData.init();
-	BitSet( instData.m_style, GWS_PUSH_BUTTON | GWS_MOUSE_TRACK );
-
-	buttonSwitchGame = TheWindowManager->gogoGadgetPushButton( parent,
-																														 WIN_STATUS_ENABLED,
-																														 margin, parentHeight - buttonHeight - margin,
-																														 buttonWidth, buttonHeight,
-																														 &instData, nullptr, TRUE );
-	if (buttonSwitchGame)
-		GadgetButtonSetText( buttonSwitchGame, UnicodeString(GameSwitcher::getButtonLabel()) );
-}
-
 //-------------------------------------------------------------------------------------------------
 /** Initialize the main menu */
 //-------------------------------------------------------------------------------------------------
@@ -589,7 +557,7 @@ void MainMenuInit( WindowLayout *layout, void *userData )
 #endif
 
 	initLabelVersion();
-	initButtonSwitchGame( parentMainMenu );
+	AbramMainMenu::init( parentMainMenu, TheGlobalData->m_modDir.str() ); // Abram's Personal Test: mod and game switch buttons
 
 	//TheShell->registerWithAnimateManager(buttonCampaign, WIN_ANIMATION_SLIDE_LEFT, TRUE, 800);
 	//TheShell->registerWithAnimateManager(buttonSkirmish, WIN_ANIMATION_SLIDE_LEFT, TRUE, 600);
@@ -1290,12 +1258,15 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 			if(buttonPushed)
 				break;
 
-			// Abram's Personal Test @feature Switch to the other game. It is launched after this game has exited.
-			if( buttonSwitchGame != nullptr && control == buttonSwitchGame )
+			// Abram's Personal Test @feature Mod and game switch buttons. A restart or switch happens after this game has exited.
 			{
-				if( GameSwitcher::requestSwitch() )
-					quitCallback();
-				break;
+				bool quitGame = false;
+				if( AbramMainMenu::handleSelected( control, quitGame ) )
+				{
+					if( quitGame )
+						quitCallback();
+					break;
+				}
 			}
 
 #if defined(RTS_DEBUG) || defined RTS_PROFILE_LEGACY
