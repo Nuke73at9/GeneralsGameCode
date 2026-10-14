@@ -67,6 +67,9 @@
 
 #if USE_STD_FROM_CHARS_PARSING
 #include <charconv>
+#include <cstdlib>
+#include <limits>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #endif
@@ -1625,6 +1628,38 @@ Type scanType(std::string_view token)
 	// Unlike sscanf, std::from_chars cannot parse "-" as unsigned integer.
 	std::conditional_t<std::is_integral_v<Type>, Int64, Type> result{};
 	const auto [ptr, ec] = std::from_chars(token.data(), token.data() + token.size(), result);
+
+	// Abram's Personal Test @bugfix Accept numbers that are too large, like the original game did.
+	// Mods use values such as "ClipSize = 9999999999999999999999" to mean "unlimited". The original
+	// game's sscanf did not check for overflow and kept the low 32 bits, and the mods were made and
+	// balanced with that behavior, so we reproduce it instead of failing to load the mod.
+	if (ec == std::errc::result_out_of_range)
+	{
+		if constexpr (std::is_integral_v<Type>)
+		{
+			// Same as the conversion below for values that fit in 64 bits: wrap to 32 bits.
+			UnsignedInt wrapped = 0;
+			size_t i = 0;
+			const bool negative = (token[0] == '-');
+			if (negative)
+				++i;
+			for (; i < token.size() && token[i] >= '0' && token[i] <= '9'; ++i)
+				wrapped = wrapped * 10u + static_cast<UnsignedInt>(token[i] - '0');
+			if (negative)
+				wrapped = 0u - wrapped;
+			return static_cast<Type>(wrapped);
+		}
+		else
+		{
+			// Floating point: use the largest or smallest value instead of failing.
+			const double value = strtod(std::string(token).c_str(), nullptr);
+			if (value > static_cast<double>(std::numeric_limits<Type>::max()))
+				return std::numeric_limits<Type>::max();
+			if (value < static_cast<double>(std::numeric_limits<Type>::lowest()))
+				return std::numeric_limits<Type>::lowest();
+			return static_cast<Type>(value);
+		}
+	}
 
 	if (ec != std::errc{})
 	{
