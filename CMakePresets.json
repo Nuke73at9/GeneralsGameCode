@@ -307,12 +307,11 @@
         },
         {
             "name": "abram-win32",
-            "inherits": "win32",
+            "inherits": "win32-vcpkg",
             "displayName": "Abram's Personal Test - Windows 32bit Release (single player)",
-            "description": "Windows 32bit Release for single player and skirmish. Same options as GeneralsX's own Windows build, without the GeneralsOnline multiplayer component (which needs extra libraries).",
+            "description": "Windows 32bit Release with the same options as GeneralsX's own Windows build. Needs vcpkg (VCPKG_ROOT), which abram_build.bat sets up.",
             "binaryDir": "${sourceDir}/build/abram-win32",
             "cacheVariables": {
-                "SAGE_USE_NGMP": "OFF",
                 "RTS_BUILD_OPTION_SAGE_PATCH": "OFF",
                 "SAGE_USE_DX8": "ON",
                 "SAGE_USE_DETERMINISTIC_MATH": "ON",
