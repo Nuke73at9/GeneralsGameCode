@@ -460,6 +460,13 @@ Bool ArchiveFileSystem::isModArchive(ArchiveFile *archive, const Char *filename)
 	{
 		if (TheGlobalData->m_modDir.isNotEmpty())
 		{
+			// Abram's Personal Test @bugfix The -mod folder path ends with a backslash, so the archive path
+			// continues with the file name right after it. Any archive inside the folder is a mod archive.
+			if (archiveName.startsWithNoCase(TheGlobalData->m_modDir))
+			{
+				return TRUE;
+			}
+
 			const char* match = strstr(archiveName.str(), TheGlobalData->m_modDir.str());
 			if (match != nullptr)
 			{
