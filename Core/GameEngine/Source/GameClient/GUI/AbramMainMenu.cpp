@@ -20,7 +20,7 @@
 #include "GameClient/AbramMainMenu.h"
 
 #include "Common/GameSwitcher.h"
-#include "Common/ModManager.h"
+#include "Common/NameKeyGenerator.h"
 #include "GameClient/GadgetPushButton.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
@@ -28,146 +28,76 @@
 namespace
 {
 
-GameWindow *buttonModSelect = nullptr;
-GameWindow *buttonModApply = nullptr;
+GameWindow *buttonCustomMissionMods = nullptr; ///< Steam's Custom Mission button, used as MODS
+GameWindow *buttonMods = nullptr;              ///< bottom left fallback when the Steam button is missing
 GameWindow *buttonSwitchGame = nullptr;
 
-// Mod index: -1 means no mod (vanilla). The active mod's folder is kept as text, because a rescan
-// can change the order of the list.
-char activeModFolderPath[260] = { 0 };
-int activeMod = -1;
-int selectedMod = -1;
-
-const Int BUTTON_WIDTH = 260;
+const Int BUTTON_WIDTH = 220;
 const Int BUTTON_HEIGHT = 26;
 const Int BUTTON_SPACING = 6;
 const Int MARGIN = 20;
 
-GameWindow *createButton( GameWindow *parent, Int x, Int y )
+GameWindow *createButton( GameWindow *parent, Int x, Int y, const wchar_t *label )
 {
 	WinInstanceData instData;
 	instData.init();
 	BitSet( instData.m_style, GWS_PUSH_BUTTON | GWS_MOUSE_TRACK );
 
-	return TheWindowManager->gogoGadgetPushButton( parent, WIN_STATUS_ENABLED,
+	GameWindow *button = TheWindowManager->gogoGadgetPushButton( parent, WIN_STATUS_ENABLED,
 		x, y, BUTTON_WIDTH, BUTTON_HEIGHT, &instData, nullptr, TRUE );
-}
-
-UnicodeString modDisplayName( int index )
-{
-	if (index < 0)
-		return UnicodeString(L"None (original game)");
-
-	UnicodeString name;
-	name.translate( AsciiString(ModManager::getModName(index)) );
-	return name;
-}
-
-void refreshModButtons()
-{
-	if (buttonModSelect)
-	{
-		UnicodeString text;
-		if (ModManager::getModCount() == 0)
-			text = UnicodeString(L"Mods: none installed");
-		else
-			text.format( L"Mod: %ls", modDisplayName(selectedMod).str() );
-		GadgetButtonSetText( buttonModSelect, text );
-	}
-
-	if (buttonModApply)
-	{
-		const bool changed = (selectedMod != activeMod);
-		buttonModApply->winHide( !changed );
-		if (changed)
-		{
-			GadgetButtonSetText( buttonModApply,
-				UnicodeString(selectedMod < 0 ? L"Restart without mods" : L"Restart with this mod") );
-		}
-	}
+	if (button)
+		GadgetButtonSetText( button, UnicodeString( label ) );
+	return button;
 }
 
 } // namespace
 
-void AbramMainMenu::init( GameWindow *parent, const char *activeModFolder )
+void AbramMainMenu::init( GameWindow *parent )
 {
-	buttonModSelect = nullptr;
-	buttonModApply = nullptr;
+	buttonCustomMissionMods = nullptr;
+	buttonMods = nullptr;
 	buttonSwitchGame = nullptr;
 
 	if (parent == nullptr)
 		return;
 
-	strncpy( activeModFolderPath, activeModFolder ? activeModFolder : "", sizeof(activeModFolderPath) );
-	activeModFolderPath[sizeof(activeModFolderPath) - 1] = '\0';
-
-	ModManager::scan();
-	activeMod = ModManager::findModByFolder( activeModFolderPath );
-	selectedMod = activeMod;
+	// The Steam release adds this button to the Single Player menu. Our build has no code or text
+	// for it, so it becomes the MODS button.
+	buttonCustomMissionMods = TheWindowManager->winGetWindowFromId( parent,
+		TheNameKeyGenerator->nameToKey( "MainMenu.wnd:ButtonCustomMission" ) );
+	if (buttonCustomMissionMods)
+		GadgetButtonSetText( buttonCustomMissionMods, UnicodeString( L"MODS" ) );
 
 	Int parentWidth = 0;
 	Int parentHeight = 0;
 	parent->winGetSize( &parentWidth, &parentHeight );
 
-	// Stack the buttons upward from the bottom left corner.
+	// Stack plain buttons upward from the bottom left corner.
 	Int y = parentHeight - MARGIN - BUTTON_HEIGHT;
 
 	if (GameSwitcher::isOtherGameAvailable())
 	{
-		buttonSwitchGame = createButton( parent, MARGIN, y );
-		if (buttonSwitchGame)
-			GadgetButtonSetText( buttonSwitchGame, UnicodeString(GameSwitcher::getButtonLabel()) );
+		buttonSwitchGame = createButton( parent, MARGIN, y, GameSwitcher::getButtonLabel() );
+		y -= BUTTON_HEIGHT + BUTTON_SPACING;
 	}
-	y -= BUTTON_HEIGHT + BUTTON_SPACING;
 
-	buttonModApply = createButton( parent, MARGIN, y );
-	y -= BUTTON_HEIGHT + BUTTON_SPACING;
-
-	buttonModSelect = createButton( parent, MARGIN, y );
-
-	refreshModButtons();
+	if (buttonCustomMissionMods == nullptr)
+		buttonMods = createButton( parent, MARGIN, y, L"Mods" );
 }
 
-bool AbramMainMenu::handleSelected( GameWindow *control, bool &quitGame )
+AbramMainMenu::Action AbramMainMenu::handleSelected( GameWindow *control )
 {
-	quitGame = false;
-
 	if (control == nullptr)
-		return false;
+		return ACTION_NONE;
 
-	if (control == buttonModSelect)
-	{
-		// Look again each click, so newly copied mods show up without restarting the game.
-		ModManager::scan();
-		const int count = ModManager::getModCount();
-		if (selectedMod >= count)
-			selectedMod = -1;
-		if (count > 0)
-		{
-			// Cycle: None -> first mod -> ... -> last mod -> None.
-			selectedMod = (selectedMod + 1 >= count) ? -1 : selectedMod + 1;
-		}
-		else
-		{
-			selectedMod = -1;
-		}
-		activeMod = ModManager::findModByFolder( activeModFolderPath );
-		refreshModButtons();
-		return true;
-	}
+	if (buttonCustomMissionMods != nullptr && control == buttonCustomMissionMods)
+		return ACTION_OPEN_MODS_FROM_SINGLE_PLAYER;
 
-	if (control == buttonModApply)
-	{
-		const char *folder = (selectedMod >= 0) ? ModManager::getModFolder(selectedMod) : "";
-		quitGame = GameSwitcher::requestRestartWithMod( folder );
-		return true;
-	}
+	if (buttonMods != nullptr && control == buttonMods)
+		return ACTION_OPEN_MODS;
 
-	if (control == buttonSwitchGame)
-	{
-		quitGame = GameSwitcher::requestSwitch();
-		return true;
-	}
+	if (buttonSwitchGame != nullptr && control == buttonSwitchGame)
+		return GameSwitcher::requestSwitch() ? ACTION_QUIT : ACTION_HANDLED;
 
-	return false;
+	return ACTION_NONE;
 }

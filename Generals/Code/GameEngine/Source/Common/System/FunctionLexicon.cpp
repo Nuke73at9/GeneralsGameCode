@@ -35,6 +35,7 @@
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/Gadget.h"
+#include "GameClient/ModSelectMenu.h"
 
 // Popup Ladder Select --------------------------------------------------------------------------
 extern void PopupLadderSelectInit( WindowLayout *layout, void *userData );
@@ -99,6 +100,7 @@ static FunctionLexicon::TableEntry gameWinSystemTable[] =
 	{ NAMEKEY_INVALID, "SinglePlayerMenuSystem",             (void*)SinglePlayerMenuSystem },
 	{ NAMEKEY_INVALID, "QuitMenuSystem",                     (void*)QuitMenuSystem },
 	{ NAMEKEY_INVALID, "MapSelectMenuSystem",                (void*)MapSelectMenuSystem },
+	{ NAMEKEY_INVALID, "ModSelectMenuSystem",                (void*)ModSelectMenuSystem },
 	{ NAMEKEY_INVALID, "ReplayMenuSystem",                   (void*)ReplayMenuSystem },
 	{ NAMEKEY_INVALID, "CreditsMenuSystem",                  (void*)CreditsMenuSystem },
 	{ NAMEKEY_INVALID, "LanLobbyMenuSystem",                 (void*)LanLobbyMenuSystem },
@@ -172,6 +174,7 @@ static FunctionLexicon::TableEntry gameWinInputTable[] =
 
 	{ NAMEKEY_INVALID, "MainMenuInput",                     (void*)MainMenuInput },
 	{ NAMEKEY_INVALID, "MapSelectMenuInput",                (void*)MapSelectMenuInput },
+	{ NAMEKEY_INVALID, "ModSelectMenuInput",                (void*)ModSelectMenuInput },
 	{ NAMEKEY_INVALID, "OptionsMenuInput",                  (void*)OptionsMenuInput },
 	{ NAMEKEY_INVALID, "SinglePlayerMenuInput",             (void*)SinglePlayerMenuInput },
 	{ NAMEKEY_INVALID, "LanLobbyMenuInput",                 (void*)LanLobbyMenuInput },
@@ -247,6 +250,7 @@ static FunctionLexicon::TableEntry winLayoutInitTable[] =
 	{ NAMEKEY_INVALID, "KeyboardOptionsMenuInit",       (void*)KeyboardOptionsMenuInit },
 	{ NAMEKEY_INVALID, "SinglePlayerMenuInit",          (void*)SinglePlayerMenuInit },
 	{ NAMEKEY_INVALID, "MapSelectMenuInit",             (void*)MapSelectMenuInit },
+	{ NAMEKEY_INVALID, "ModSelectMenuInit",             (void*)ModSelectMenuInit },
 	{ NAMEKEY_INVALID, "LanLobbyMenuInit",              (void*)LanLobbyMenuInit },
 	{ NAMEKEY_INVALID, "ReplayMenuInit",                (void*)ReplayMenuInit },
 	{ NAMEKEY_INVALID, "CreditsMenuInit",               (void*)CreditsMenuInit },
@@ -293,6 +297,7 @@ static FunctionLexicon::TableEntry winLayoutUpdateTable[] =
 	{ NAMEKEY_INVALID, "OptionsMenuUpdate",               (void*)OptionsMenuUpdate },
 	{ NAMEKEY_INVALID, "SinglePlayerMenuUpdate",          (void*)SinglePlayerMenuUpdate },
 	{ NAMEKEY_INVALID, "MapSelectMenuUpdate",             (void*)MapSelectMenuUpdate },
+	{ NAMEKEY_INVALID, "ModSelectMenuUpdate",             (void*)ModSelectMenuUpdate },
 	{ NAMEKEY_INVALID, "LanLobbyMenuUpdate",              (void*)LanLobbyMenuUpdate },
 	{ NAMEKEY_INVALID, "ReplayMenuUpdate",                (void*)ReplayMenuUpdate },
 	{ NAMEKEY_INVALID, "SaveLoadMenuUpdate",              (void*)SaveLoadMenuUpdate },
@@ -335,6 +340,7 @@ static FunctionLexicon::TableEntry winLayoutShutdownTable[] =
 	{ NAMEKEY_INVALID, "KeyboardOptionsMenuShutdown",       (void*)KeyboardOptionsMenuShutdown },
 	{ NAMEKEY_INVALID, "SinglePlayerMenuShutdown",          (void*)SinglePlayerMenuShutdown },
 	{ NAMEKEY_INVALID, "MapSelectMenuShutdown",             (void*)MapSelectMenuShutdown },
+	{ NAMEKEY_INVALID, "ModSelectMenuShutdown",             (void*)ModSelectMenuShutdown },
 	{ NAMEKEY_INVALID, "LanLobbyMenuShutdown",              (void*)LanLobbyMenuShutdown },
 	{ NAMEKEY_INVALID, "ReplayMenuShutdown",                (void*)ReplayMenuShutdown },
 	{ NAMEKEY_INVALID, "CreditsMenuShutdown",               (void*)CreditsMenuShutdown },

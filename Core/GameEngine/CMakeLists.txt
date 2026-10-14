@@ -134,6 +134,7 @@ set(GAMEENGINE_SRC
     #Include/Common/urllaunch.h # unused
     Include/Common/UserPreferences.h
     Include/Common/version.h
+    Include/Common/AbramImageConvert.h
     Include/Common/GameSwitcher.h
     Include/Common/ModManager.h
 #    Include/Common/WellKnownKeys.h
@@ -150,6 +151,7 @@ set(GAMEENGINE_SRC
     Include/GameClient/ChallengeGenerals.h
     Include/GameClient/AbramMainMenu.h
     Include/GameClient/ClientInstance.h
+    Include/GameClient/ModSelectMenu.h
     Include/GameClient/ClientRandomValue.h
     Include/GameClient/Color.h
     Include/GameClient/CommandXlat.h
@@ -706,6 +708,7 @@ set(GAMEENGINE_SRC
     Source/Common/Thing/ThingTemplate.cpp
     Source/Common/UserPreferences.cpp
     Source/Common/version.cpp
+    Source/Common/AbramImageConvert.cpp
     Source/Common/GameSwitcher.cpp
     Source/Common/ModManager.cpp
     Source/Common/WorkerProcess.cpp
@@ -730,6 +733,7 @@ set(GAMEENGINE_SRC
     Source/GameClient/GraphDraw.cpp
     Source/GameClient/GUI/AbramMainMenu.cpp
     Source/GameClient/GUI/AnimateWindowManager.cpp
+    Source/GameClient/GUI/ModSelectMenu.cpp
     Source/GameClient/GUI/ChallengeGenerals.cpp
     Source/GameClient/GUI/ControlBar/ControlBar.cpp
     Source/GameClient/GUI/ControlBar/ControlBarBeacon.cpp
@@ -1200,6 +1204,7 @@ target_include_directories(corei_gameengine_private INTERFACE
 target_link_libraries(corei_gameengine_private INTERFACE
     corei_always
     core_profile_legacy
+    stb # Abram's Personal Test: decodes mod preview pictures
 )
 
 target_compile_definitions(corei_gameengine_private INTERFACE

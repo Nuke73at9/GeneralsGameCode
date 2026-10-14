@@ -54,6 +54,7 @@
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GadgetStaticText.h"
 #include "GameClient/AbramMainMenu.h"
+#include "GameClient/ModSelectMenu.h"
 #include "GameClient/Mouse.h"
 #include "GameClient/WindowVideoManager.h"
 #include "GameClient/CampaignManager.h"
@@ -590,7 +591,7 @@ void MainMenuInit( WindowLayout *layout, void *userData )
 #endif
 
 	initLabelVersion();
-	AbramMainMenu::init( parentMainMenu, TheGlobalData->m_modDir.str() ); // Abram's Personal Test: mod and game switch buttons
+	AbramMainMenu::init( parentMainMenu ); // Abram's Personal Test: Mods and game switch buttons
 
 	//TheShell->registerWithAnimateManager(buttonCampaign, WIN_ANIMATION_SLIDE_LEFT, TRUE, 800);
 	//TheShell->registerWithAnimateManager(buttonSkirmish, WIN_ANIMATION_SLIDE_LEFT, TRUE, 600);
@@ -1330,13 +1331,36 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 			if(buttonPushed)
 				break;
 
-			// Abram's Personal Test @feature Mod and game switch buttons. A restart or switch happens after this game has exited.
+			// Abram's Personal Test @feature Mods and game switch buttons. A switch happens after this game has exited.
 			{
-				bool quitGame = false;
-				if( AbramMainMenu::handleSelected( control, quitGame ) )
+				const AbramMainMenu::Action abramAction = AbramMainMenu::handleSelected( control );
+				if( abramAction == AbramMainMenu::ACTION_QUIT )
 				{
-					if( quitGame )
-						quitCallback();
+					quitCallback();
+					break;
+				}
+				else if( abramAction == AbramMainMenu::ACTION_OPEN_MODS )
+				{
+					if( dontAllowTransitions )
+						break;
+					buttonPushed = TRUE;
+					TheShell->push( ABRAM_MOD_SELECT_MENU_LAYOUT );
+					break;
+				}
+				else if( abramAction == AbramMainMenu::ACTION_OPEN_MODS_FROM_SINGLE_PLAYER )
+				{
+					// Leave the Single Player menu the same way the Skirmish button does.
+					if( campaignSelected || dontAllowTransitions )
+						break;
+					buttonPushed = TRUE;
+					campaignSelected = TRUE;
+					dropDownWindows[DROPDOWN_SINGLE]->winHide( FALSE );
+					TheTransitionHandler->reverse( "MainMenuSinglePlayerMenuBackSkirmish" );
+					TheShell->push( ABRAM_MOD_SELECT_MENU_LAYOUT );
+					break;
+				}
+				else if( abramAction == AbramMainMenu::ACTION_HANDLED )
+				{
 					break;
 				}
 			}

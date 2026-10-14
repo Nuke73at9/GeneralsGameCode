@@ -39,6 +39,9 @@ endif()
 
 if(RTS_INSTALL_PREFIX_GENERALS)
     install(TARGETS g_generals RUNTIME DESTINATION "${RTS_INSTALL_PREFIX_GENERALS}")
+
+    # Abram's Personal Test: the Mods screen layout. Loose files in the game folder are loaded like files in .big archives.
+    install(FILES "${CMAKE_SOURCE_DIR}/resources/abram/Window/Menus/ModSelectMenu.wnd" DESTINATION "${RTS_INSTALL_PREFIX_GENERALS}/Window/Menus")
     install(FILES $<TARGET_PDB_FILE:g_generals> DESTINATION "${RTS_INSTALL_PREFIX_GENERALS}" OPTIONAL)
 
     if(TARGET g_worldbuilder)

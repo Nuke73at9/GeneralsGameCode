@@ -52,6 +52,17 @@ public:
 	// Full path of the Mods folder, ending with a backslash.
 	static const char* getModsRoot();
 
+	// Number of .big files in the mod folder.
+	static int countBigFiles(int index);
+
+	// Finds the mod's picture: preview.tga/png/jpg/jpeg/bmp in the mod folder, or else the first
+	// .png or .jpg file. Returns false when the mod has no picture.
+	static bool findPreviewImage(int index, char* path, unsigned int pathSize);
+
+	// Reads the start of description.txt (or readme.txt) from the mod folder.
+	// Returns false when there is no such file.
+	static bool readDescription(int index, char* text, unsigned int textSize);
+
 private:
 	static int s_modCount;
 	static char s_modNames[MAX_MODS][NAME_SIZE];
