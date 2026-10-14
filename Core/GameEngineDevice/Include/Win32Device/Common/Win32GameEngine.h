@@ -36,9 +36,11 @@
 #include "GameClient/ParticleSys.h"
 #include "GameLogic/GameLogic.h"
 #include "GameNetwork/NetworkInterface.h"
-#include "MilesAudioDevice/MilesAudioManager.h"
+// Abram's Personal Test @build Only one audio backend header: Miles and MiniAudio define the same helper types.
 #ifdef SAGE_USE_MINIAUDIO
 #include "MiniAudioDevice/MiniAudioManager.h"
+#else
+#include "MilesAudioDevice/MilesAudioManager.h"
 #endif
 #include "Win32Device/Common/Win32BIGFileSystem.h"
 #include "Win32Device/Common/Win32LocalFileSystem.h"
@@ -114,13 +116,15 @@ inline Radar *Win32GameEngine::createRadar(Bool dummy)
 inline WebBrowser *Win32GameEngine::createWebBrowser() { return NEW CComObject<W3DWebBrowser>; }
 inline AudioManager *Win32GameEngine::createAudioManager(Bool dummy)
 {
-	if (dummy)
-		return NEW MilesAudioManagerDummy;
 #ifdef SAGE_USE_MINIAUDIO
 	// Abram's Personal Test @feature The 64-bit Windows build uses MiniAudio, because the Miles Sound
-	// System (mss32.dll) only exists as a 32-bit library.
+	// System (mss32.dll) only exists as a 32-bit library. Like the Linux and macOS builds, MiniAudio
+	// also serves headless mode, so scripts still get real audio file lengths.
+	(void)dummy;
 	return NEW MiniAudioManager;
 #else
+	if (dummy)
+		return NEW MilesAudioManagerDummy;
 	return NEW MilesAudioManager;
 #endif
 }

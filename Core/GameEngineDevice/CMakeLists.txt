@@ -195,13 +195,19 @@ set(GAMEENGINEDEVICE_SRC
 # GeneralsX @build BenderAI 13/02/2026 Platform-specific file implementations
 if(WIN32)
     # Windows-specific files (use Windows API for filesystem)
+    # Abram's Personal Test @build With MiniAudio (the 64-bit build) the Miles audio manager is not built.
+    # Both define the same helper types (PlayingAudio, ...), and Miles only exists as a 32-bit DLL.
+    if(NOT SAGE_USE_MINIAUDIO)
+        list(APPEND GAMEENGINEDEVICE_SRC
+            Include/MilesAudioDevice/MilesAudioManager.h
+            Source/MilesAudioDevice/MilesAudioManager.cpp
+        )
+    endif()
     list(APPEND GAMEENGINEDEVICE_SRC
-        Include/MilesAudioDevice/MilesAudioManager.h
         Include/VideoDevice/Bink/BinkVideoPlayer.h
         Include/Win32Device/Common/Win32LANInterface.h
         Include/Win32Device/Common/Win32LocalFile.h
         Include/Win32Device/Common/Win32LocalFileSystem.h
-        Source/MilesAudioDevice/MilesAudioManager.cpp
         Source/VideoDevice/Bink/BinkVideoPlayer.cpp
         Source/Win32Device/Common/Win32LANInterface.cpp
         Source/Win32Device/Common/Win32LocalFile.cpp
