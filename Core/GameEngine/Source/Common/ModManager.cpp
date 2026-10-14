@@ -298,3 +298,15 @@ bool ModManager::isBigArchive(const char* path)
 	// The engine reads "BIGF" archives (the Generals and Zero Hour format).
 	return bytesRead == sizeof(signature) && memcmp(signature, "BIGF", 4) == 0;
 }
+
+bool ModManager::isInModsFolder(const char* relativePath)
+{
+	if (relativePath == nullptr)
+		return false;
+
+	// Allow a leading ".\" or "./".
+	if (relativePath[0] == '.' && (relativePath[1] == '\\' || relativePath[1] == '/'))
+		relativePath += 2;
+
+	return _strnicmp(relativePath, "Mods", 4) == 0 && (relativePath[4] == '\\' || relativePath[4] == '/');
+}

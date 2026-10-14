@@ -33,6 +33,7 @@
 #include "Common/GameAudio.h"
 #include "Common/GameMemory.h"
 #include "Common/LocalFileSystem.h"
+#include "Common/ModManager.h"
 #include "Common/Registry.h"
 
 #include "Win32Device/Common/Win32BIGFile.h"
@@ -703,6 +704,14 @@ Bool Win32BIGFileSystem::loadBigFilesFromDirectory(AsciiString dir, AsciiString 
 	Bool actuallyAdded = FALSE;
 	FilenameListIter it = filenameList.begin();
 	while (it != filenameList.end()) {
+		// Abram's Personal Test @bugfix Never load archives from the Mods folder with the game's own data.
+		// The game folder is searched including subfolders, which would otherwise load every mod's .big
+		// files even when playing without mods. Mods are loaded separately, only when chosen.
+		if (dir.isEmpty() && ModManager::isInModsFolder(it->str())) {
+			it++;
+			continue;
+		}
+
 #if RTS_ZEROHOUR
 		// TheSuperHackers @bugfix bobtista 18/11/2025 Skip duplicate INIZH.big in Data\INI to prevent CRC mismatches.
 		// English, Chinese, and Korean SKUs shipped with two INIZH.big files (one in Run directory, one in Run\Data\INI).

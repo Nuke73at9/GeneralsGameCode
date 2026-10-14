@@ -243,12 +243,16 @@ void ArchiveFileSystem::loadMods()
 		// Abram's Personal Test @feature Load every archive in the mod folder, whatever its extension.
 		// Mods often name their archives .gib, .ctr and so on, which their own launchers rename to
 		// .big. We recognize archives by their content instead, so they load without renaming.
-		// The file list is sorted by name, the same order that loading "*.big" files used.
+		//
+		// Load order: in the original game, when two archives contain the same file, the archive whose
+		// name sorts first wins. Mods rely on that: they prefix names with '!' so that, for example,
+		// "!!!Patch.big" beats "!Base.big", and every mod archive beats the game's own archives.
+		// Loading with overwrite makes the archive loaded LAST win, so we load in reverse name order.
 		FilenameList filenameList;
 		TheLocalFileSystem->getFileListInDirectory(TheGlobalData->m_modDir, "", "*", filenameList, TRUE);
 
 		Bool actuallyAdded = FALSE;
-		for (FilenameListIter it = filenameList.begin(); it != filenameList.end(); ++it)
+		for (FilenameList::reverse_iterator it = filenameList.rbegin(); it != filenameList.rend(); ++it)
 		{
 			if (!ModManager::isBigArchive(it->str()))
 				continue;
