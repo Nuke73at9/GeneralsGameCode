@@ -39,6 +39,9 @@ endif()
 
 if(RTS_INSTALL_PREFIX_ZEROHOUR)
     install(TARGETS z_generals RUNTIME DESTINATION "${RTS_INSTALL_PREFIX_ZEROHOUR}")
+
+    # Abram's Personal Test: the Mods screen layout. Loose files in the game folder are loaded like files in .big archives.
+    install(FILES "${CMAKE_SOURCE_DIR}/resources/abram/Window/Menus/ModSelectMenu.wnd" DESTINATION "${RTS_INSTALL_PREFIX_ZEROHOUR}/Window/Menus")
     install(FILES $<TARGET_PDB_FILE:z_generals> DESTINATION "${RTS_INSTALL_PREFIX_ZEROHOUR}" OPTIONAL)
 
     if(TARGET z_worldbuilder)

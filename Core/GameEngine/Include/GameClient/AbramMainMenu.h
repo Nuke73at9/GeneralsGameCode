@@ -21,17 +21,25 @@
 class GameWindow;
 
 // Abram's Personal Test @feature Extra main menu buttons shared by Generals and Zero Hour:
-//   - Mod: <name>             cycles through the mods in the Mods folder (and "None").
-//   - Restart with this mod   restarts the game with the chosen mod. Shown only when the choice changed.
-//   - Switch to <other game>  quits and starts the other game. Shown only when it is installed.
-// The buttons are stacked in the bottom left corner of the main menu.
+//   - MODS: the Steam version's "Custom Mission" button in the Single Player menu
+//     (MainMenu.wnd:ButtonCustomMission) is renamed and opens the Mods screen. Without the Steam
+//     menu data, a plain "Mods" button in the bottom left corner does the same.
+//   - Switch to <other game>: quits and starts the other game. Shown only when it is installed.
 
 namespace AbramMainMenu
 {
-	// Creates the buttons. activeModFolder is the mod this session was started with (empty for none).
-	void init( GameWindow *parent, const char *activeModFolder );
+	enum Action
+	{
+		ACTION_NONE,                 ///< The click was not for one of these buttons.
+		ACTION_HANDLED,              ///< Handled, nothing more to do.
+		ACTION_QUIT,                 ///< A switch is pending; the game should quit now.
+		ACTION_OPEN_MODS,            ///< Open the Mods screen (from the bottom left button).
+		ACTION_OPEN_MODS_FROM_SINGLE_PLAYER ///< Open the Mods screen (from the Single Player menu).
+	};
 
-	// Handles a button click. Returns true when the click belonged to one of these buttons.
-	// Sets quitGame to true when the game should now quit (a restart or switch is pending).
-	bool handleSelected( GameWindow *control, bool &quitGame );
+	// Sets up the buttons. Call after the main menu layout is created.
+	void init( GameWindow *parent );
+
+	// Handles a button click and says what the main menu should do next.
+	Action handleSelected( GameWindow *control );
 }

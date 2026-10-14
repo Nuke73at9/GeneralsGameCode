@@ -29,10 +29,39 @@ char ModManager::s_modsRoot[260] = { 0 };
 namespace
 {
 
-bool folderContainsBigFiles(const char* folder)
+int countFiles(const char* folder, const char* wildcard)
 {
 	char pattern[260];
-	_snprintf(pattern, sizeof(pattern), "%s*.big", folder);
+	_snprintf(pattern, sizeof(pattern), "%s%s", folder, wildcard);
+	pattern[sizeof(pattern) - 1] = '\0';
+
+	WIN32_FIND_DATAA findData;
+	HANDLE find = FindFirstFileA(pattern, &findData);
+	if (find == INVALID_HANDLE_VALUE)
+		return 0;
+
+	int count = 0;
+	do
+	{
+		if ((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+			++count;
+	}
+	while (FindNextFileA(find, &findData));
+
+	FindClose(find);
+	return count;
+}
+
+bool folderContainsBigFiles(const char* folder)
+{
+	return countFiles(folder, "*.big") > 0;
+}
+
+// Finds the first file matching the wildcard in the folder. Writes its full path.
+bool findFirstFile(const char* folder, const char* wildcard, char* path, unsigned int pathSize)
+{
+	char pattern[260];
+	_snprintf(pattern, sizeof(pattern), "%s%s", folder, wildcard);
 	pattern[sizeof(pattern) - 1] = '\0';
 
 	WIN32_FIND_DATAA findData;
@@ -40,8 +69,21 @@ bool folderContainsBigFiles(const char* folder)
 	if (find == INVALID_HANDLE_VALUE)
 		return false;
 
+	bool found = false;
+	do
+	{
+		if ((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+		{
+			_snprintf(path, pathSize, "%s%s", folder, findData.cFileName);
+			path[pathSize - 1] = '\0';
+			found = true;
+			break;
+		}
+	}
+	while (FindNextFileA(find, &findData));
+
 	FindClose(find);
-	return true;
+	return found;
 }
 
 } // namespace
@@ -147,4 +189,76 @@ int ModManager::findModByFolder(const char* folder)
 const char* ModManager::getModsRoot()
 {
 	return s_modsRoot;
+}
+
+int ModManager::countBigFiles(int index)
+{
+	if (index < 0 || index >= s_modCount)
+		return 0;
+	return countFiles(s_modFolders[index], "*.big");
+}
+
+bool ModManager::findPreviewImage(int index, char* path, unsigned int pathSize)
+{
+	if (index < 0 || index >= s_modCount || path == nullptr || pathSize == 0)
+		return false;
+
+	const char* const preferred[] = { "preview.tga", "preview.png", "preview.jpg", "preview.jpeg", "preview.bmp" };
+	for (unsigned int i = 0; i < sizeof(preferred) / sizeof(preferred[0]); ++i)
+	{
+		if (findFirstFile(s_modFolders[index], preferred[i], path, pathSize))
+			return true;
+	}
+
+	const char* const fallback[] = { "*.png", "*.jpg", "*.jpeg" };
+	for (unsigned int i = 0; i < sizeof(fallback) / sizeof(fallback[0]); ++i)
+	{
+		if (findFirstFile(s_modFolders[index], fallback[i], path, pathSize))
+			return true;
+	}
+
+	path[0] = '\0';
+	return false;
+}
+
+bool ModManager::readDescription(int index, char* text, unsigned int textSize)
+{
+	if (text == nullptr || textSize == 0)
+		return false;
+	text[0] = '\0';
+
+	if (index < 0 || index >= s_modCount)
+		return false;
+
+	char path[260];
+	if (!findFirstFile(s_modFolders[index], "description.txt", path, sizeof(path))
+		&& !findFirstFile(s_modFolders[index], "readme.txt", path, sizeof(path)))
+		return false;
+
+	HANDLE file = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+	if (file == INVALID_HANDLE_VALUE)
+		return false;
+
+	DWORD bytesRead = 0;
+	BOOL ok = ReadFile(file, text, textSize - 1, &bytesRead, nullptr);
+	CloseHandle(file);
+	if (!ok)
+		return false;
+
+	text[bytesRead] = '\0';
+
+	// Skip a UTF-8 byte order mark, and drop carriage returns so line breaks show correctly.
+	char* src = text;
+	if ((unsigned char)src[0] == 0xEF && (unsigned char)src[1] == 0xBB && (unsigned char)src[2] == 0xBF)
+		src += 3;
+	char* dst = text;
+	while (*src != '\0')
+	{
+		if (*src != '\r')
+			*dst++ = *src;
+		++src;
+	}
+	*dst = '\0';
+
+	return text[0] != '\0';
 }
