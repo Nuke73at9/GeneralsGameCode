@@ -344,6 +344,12 @@ Bool ArchiveFileSystem::getFileInfo(const AsciiString& filename, FileInfo *fileI
 	return archive->getFileInfo(filename, fileInfo);
 }
 
+AsciiString ArchiveFileSystem::getArchiveNameForFile(const AsciiString& filename) const
+{
+	ArchiveFile *archiveFile = getArchiveFile(filename);
+	return archiveFile ? archiveFile->getName() : AsciiString::TheEmptyString;
+}
+
 ArchiveFile* ArchiveFileSystem::getArchiveFile(const AsciiString& filename, FileInstance instance) const
 {
 	ArchivedDirectoryInfoResult result = const_cast<ArchiveFileSystem*>(this)->getArchivedDirectoryInfo(filename.str());

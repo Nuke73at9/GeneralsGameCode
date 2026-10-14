@@ -49,7 +49,6 @@
 #include "Common/file.h"
 #include "Common/FileSystem.h"
 
-#include "Common/ArchiveFile.h"
 #include "Common/ArchiveFileSystem.h"
 #include "Common/GameAudio.h"
 #include "Common/GlobalData.h"
@@ -184,11 +183,8 @@ static Bool isProvidedByActiveMod(const Char *filename)
 	if (TheGlobalData == nullptr || TheGlobalData->m_modDir.isEmpty() || TheArchiveFileSystem == nullptr)
 		return FALSE;
 
-	ArchiveFile *archive = TheArchiveFileSystem->getArchiveFile(AsciiString(filename));
-	if (archive == nullptr)
-		return FALSE;
-
-	return archive->getName().startsWithNoCase(TheGlobalData->m_modDir);
+	const AsciiString archiveName = TheArchiveFileSystem->getArchiveNameForFile(AsciiString(filename));
+	return archiveName.isNotEmpty() && archiveName.startsWithNoCase(TheGlobalData->m_modDir);
 }
 
 //============================================================================

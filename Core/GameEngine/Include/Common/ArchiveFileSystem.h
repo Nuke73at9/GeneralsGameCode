@@ -145,6 +145,9 @@ public:
 
 	void loadMods();
 
+	// Abram's Personal Test: name (path) of the archive that provides this file, or empty if none.
+	AsciiString getArchiveNameForFile(const AsciiString& filename) const;
+
 	ArchivedDirectoryInfo* friend_getArchivedDirectoryInfo(const Char* directory);
 
 protected:
