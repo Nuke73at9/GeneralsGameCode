@@ -304,6 +304,16 @@
                 "SAGE_USE_MINIAUDIO": "ON"
             },
             "description": "Experimental: Linux build with miniaudio audio backend instead of OpenAL+FFmpeg. Single-header library for audio playback/capture."
+        },
+        {
+            "name": "abram-win32",
+            "inherits": "win32",
+            "displayName": "Abram's Personal Test - Windows 32bit Release (single player)",
+            "description": "Windows 32bit Release without the GeneralsOnline multiplayer component, so no extra libraries are needed.",
+            "binaryDir": "${sourceDir}/build/abram-win32",
+            "cacheVariables": {
+                "SAGE_USE_NGMP": "OFF"
+            }
         }
     ],
     "buildPresets": [
@@ -421,6 +431,12 @@
             "configurePreset": "linux64-miniaudio",
             "displayName": "Build Linux 64-bit DXVK/SDL3/MiniAudio Release",
             "description": "Build Linux 64-bit with DXVK graphics, SDL3 windowing, and MiniAudio audio"
+        },
+        {
+            "name": "abram-win32",
+            "configurePreset": "abram-win32",
+            "displayName": "Build Abram's Personal Test Windows 32bit Release",
+            "configuration": "Release"
         }
     ],
     "workflowPresets": [
@@ -616,6 +632,19 @@
                 {
                     "type": "build",
                     "name": "mingw-w64-i686-profile"
+                }
+            ]
+        },
+        {
+            "name": "abram-win32",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "abram-win32"
+                },
+                {
+                    "type": "build",
+                    "name": "abram-win32"
                 }
             ]
         }

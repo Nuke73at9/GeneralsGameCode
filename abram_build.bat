@@ -17,12 +17,12 @@ cd /d "%~dp0"
 
 echo.
 echo === Building (Release) ===
-cmake --workflow --preset win32
+cmake --workflow --preset abram-win32
 if errorlevel 1 goto :fail
 
 echo.
 echo === Installing into the game folder ===
-cmake --install build/win32 --config Release
+cmake --install build/abram-win32 --config Release
 if errorlevel 1 goto :fail
 
 echo.
