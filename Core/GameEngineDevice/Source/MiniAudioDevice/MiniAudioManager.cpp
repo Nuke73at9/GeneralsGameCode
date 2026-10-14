@@ -91,7 +91,9 @@ MiniAudioManager::MiniAudioManager() :
 	m_lastSelectedPlaybackDevice(PROVIDER_ERROR),
 	m_binkHandle(NULL),
 	m_pref3DProvider(AsciiString::TheEmptyString),
-	m_prefSpeaker(AsciiString::TheEmptyString)
+	m_prefSpeaker(AsciiString::TheEmptyString),
+	m_sampleCacheBytes(0),
+	m_sampleCacheClock(0)
 {
 }
 
@@ -329,130 +331,16 @@ void MiniAudioManager::playAudioEvent(AudioRequest *req)
 	}
 
 	ma_sound_group *groupToUse = NULL;
-	ma_uint32 flags = MA_SOUND_FLAG_NO_SPATIALIZATION | MA_SOUND_FLAG_NO_PITCH;
-	switch (info->m_soundType)
-	{
-	case AT_Music:
-		groupToUse = &m_musicGroup;
-		break;
-	case AT_Streaming:
-		groupToUse = &m_speechGroup;
-		break;
-	case AT_SoundEffect:
-		if (event->isPositionalAudio()) {
-			groupToUse = &m_sound3DGroup;
-			flags = 0; // Allow spatialization for 3D
-		}
-		else {
-			groupToUse = &m_soundGroup;
-		}
-		break;
-	}
+	ma_uint32 flags = 0;
+	selectGroupAndFlags(event, info, &groupToUse, &flags);
 
-	// Use FFmpeg to decode the file into PCM, then feed to miniaudio.
-	// This avoids miniaudio's built-in decoders which hang on MP3 via VFS.
-	File *file = TheFileSystem->openFile(fileToPlay.str());
-	if (!file) {
-		DEBUG_LOG(("MiniAudio: Failed to open file: %s\n", fileToPlay.str()));
+	// Abram's Personal Test @performance The file is decoded once and then shared from the sample cache.
+	if (!createSoundForFile(fileToPlay, flags, groupToUse, audio)) {
 		releasePlayingAudio(audio);
 		return;
 	}
-
-	FFmpegFile *ffmpegFile = NEW FFmpegFile();
-	if (!ffmpegFile->open(file)) {
-		DEBUG_LOG(("MiniAudio: Failed to open FFmpeg file: %s\n", fileToPlay.str()));
-		delete ffmpegFile;
-		releasePlayingAudio(audio);
-		return;
-	}
-
-	// Decode all audio frames into a buffer
-	std::vector<uint8_t> pcmData;
-	int sampleRate = 0;
-	int channels = 0;
-	int bytesPerSample = 0;
-
-	auto onFrame = [&](AVFrame *frame, int stream_idx, int stream_type, void *user_data) {
-		if (stream_type != AVMEDIA_TYPE_AUDIO) return;
-
-		sampleRate = frame->sample_rate;
-		channels = frame->ch_layout.nb_channels;
-		bytesPerSample = av_get_bytes_per_sample(static_cast<AVSampleFormat>(frame->format));
-
-		const int frameSize = av_samples_get_buffer_size(NULL, channels, frame->nb_samples,
-			static_cast<AVSampleFormat>(frame->format), 1);
-		if (frameSize <= 0) return;
-
-		if (av_sample_fmt_is_planar(static_cast<AVSampleFormat>(frame->format))) {
-			// Interleave planar audio
-			for (int s = 0; s < frame->nb_samples; s++) {
-				for (int c = 0; c < channels; c++) {
-					const uint8_t *src = frame->data[c] + s * bytesPerSample;
-					pcmData.insert(pcmData.end(), src, src + bytesPerSample);
-				}
-			}
-		} else {
-			pcmData.insert(pcmData.end(), frame->data[0], frame->data[0] + frameSize);
-		}
-	};
-
-	ffmpegFile->setFrameCallback(onFrame);
-	ffmpegFile->setUserData(NULL);
-
-	while (ffmpegFile->decodePacket()) {}
-
-	// Always delete ffmpegFile after decoding is complete
-	delete ffmpegFile;
-	ffmpegFile = NULL;
-
-	if (pcmData.empty() || sampleRate == 0 || bytesPerSample == 0) {
-		DEBUG_LOG(("MiniAudio: No audio data decoded from: %s\n", fileToPlay.str()));
-		releasePlayingAudio(audio);
-		return;
-	}
-
-	// Map FFmpeg bytes-per-sample to miniaudio format
-	ma_format maFmt = ma_format_unknown;
-	if (bytesPerSample == 1) maFmt = ma_format_u8;
-	else if (bytesPerSample == 2) maFmt = ma_format_s16;
-	else if (bytesPerSample == 4) maFmt = ma_format_f32;
-
-	if (maFmt == ma_format_unknown) {
-		DEBUG_LOG(("MiniAudio: Unsupported format (%d bps) for: %s\n", bytesPerSample, fileToPlay.str()));
-		releasePlayingAudio(audio);
-		return;
-	}
-
-	// Create audio buffer — init_copy copies data into internal storage
-	// so it's safe when pcmData goes out of scope after this function returns.
-	ma_audio_buffer *audioBuffer = (ma_audio_buffer *)malloc(sizeof(ma_audio_buffer));
-	ma_audio_buffer_config abConfig = ma_audio_buffer_config_init(maFmt, channels,
-		pcmData.size() / ma_get_bytes_per_frame(maFmt, channels),
-		pcmData.data(), NULL);
-
-	ma_result result = ma_audio_buffer_init_copy(&abConfig, audioBuffer);
-	if (result != MA_SUCCESS) {
-		DEBUG_LOG(("MiniAudio: Failed to create audio buffer: %d for '%s'\n", result, fileToPlay.str()));
-		free(audioBuffer);
-		releasePlayingAudio(audio);
-		return;
-	}
-	audioBuffer->ref.sampleRate = sampleRate;
-
-	ma_sound *sound = (ma_sound *)malloc(sizeof(ma_sound));
-	result = ma_sound_init_from_data_source(&m_engine, audioBuffer, flags, groupToUse, sound);
-	if (result != MA_SUCCESS) {
-		DEBUG_LOG(("MiniAudio: Failed to init sound: %d for '%s'\n", result, fileToPlay.str()));
-		ma_audio_buffer_uninit(audioBuffer);
-		free(audioBuffer);
-		free(sound);
-		releasePlayingAudio(audio);
-		return;
-	}
-
-	// Assign to PlayingAudio before any early returns below
-	audio->m_sound = sound;
-	audio->m_audioBuffer = audioBuffer;
+	ma_sound *sound = audio->m_sound;
+	ma_result result = MA_SUCCESS;
 
 	switch (info->m_soundType)
 	{
@@ -605,6 +493,11 @@ void MiniAudioManager::releaseMiniAudioHandles(PlayingAudio *release)
 		ma_audio_buffer_uninit(release->m_audioBuffer);
 		free(release->m_audioBuffer);
 		release->m_audioBuffer = NULL;
+	}
+	// The audio thread no longer reads the sample once the sound and buffer are gone.
+	if (release->m_cachedSample) {
+		releaseSample(release->m_cachedSample);
+		release->m_cachedSample = NULL;
 	}
 	release->m_type = PAT_INVALID;
 }
@@ -871,6 +764,8 @@ void MiniAudioManager::closeDevice(void)
 	ma_resource_manager_uninit(&m_resourceManager);
 	ma_context_uninit(&m_context);
 	ma_log_uninit(&m_log);
+
+	clearSampleCache();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1207,6 +1102,12 @@ void MiniAudioManager::processPlayingList(void)
 
 		// Check if sound has finished playing
 		if (playing->m_sound && !ma_sound_is_playing(playing->m_sound)) {
+			// Abram's Personal Test @bugfix Run the completion logic (looping, speech lock) like the
+			// Miles backend does from its completion callback. Looping sounds used to stop after one play.
+			if (handleFinishedAudio(playing)) {
+				++it;
+				continue;
+			}
 			it = m_playingSounds.erase(it);
 			releasePlayingAudio(playing);
 			continue;
@@ -1315,6 +1216,278 @@ void MiniAudioManager::setSpeakerSurround(Bool surround)
 }
 
 //-------------------------------------------------------------------------------------------------
+// Abram's Personal Test @performance Decoded sample cache.
+//
+// Every play used to open the file, decode all of it with FFmpeg and copy the PCM into a new buffer,
+// on the game thread. Unit and weapon sounds play many times a second, which made both the game and
+// the audio stutter. Now a file is decoded once; sounds read the cached PCM through ma_audio_buffer
+// without copying it. Unused samples are dropped, oldest first, when the cache grows past its budget.
+//-------------------------------------------------------------------------------------------------
+namespace
+{
+	const size_t SAMPLE_CACHE_BUDGET_BYTES = 256 * 1024 * 1024;
+
+	ma_format toMiniAudioFormat(AVSampleFormat format)
+	{
+		switch (av_get_packed_sample_fmt(format))
+		{
+		case AV_SAMPLE_FMT_U8: return ma_format_u8;
+		case AV_SAMPLE_FMT_S16: return ma_format_s16;
+		case AV_SAMPLE_FMT_S32: return ma_format_s32;
+		case AV_SAMPLE_FMT_FLT: return ma_format_f32;
+		default: return ma_format_unknown;
+		}
+	}
+
+	std::string sampleCacheKey(const AsciiString &fileName)
+	{
+		std::string key(fileName.str());
+		for (size_t i = 0; i < key.size(); ++i) {
+			char c = key[i];
+			if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+			else if (c == '/') c = '\\';
+			key[i] = c;
+		}
+		return key;
+	}
+
+	// Decodes a whole file to interleaved PCM. Returns false when nothing could be decoded.
+	Bool decodeFileToSample(const AsciiString &fileName, MiniAudioCachedSample *sample)
+	{
+		File *file = TheFileSystem->openFile(fileName.str());
+		if (!file) {
+			DEBUG_LOG(("MiniAudio: Failed to open file: %s\n", fileName.str()));
+			return FALSE;
+		}
+
+		FFmpegFile *ffmpegFile = NEW FFmpegFile();
+		if (!ffmpegFile->open(file)) {
+			DEBUG_LOG(("MiniAudio: Failed to open FFmpeg file: %s\n", fileName.str()));
+			delete ffmpegFile;
+			return FALSE;
+		}
+
+		Bool formatError = FALSE;
+		auto onFrame = [&](AVFrame *frame, int stream_idx, int stream_type, void *user_data) {
+			if (stream_type != AVMEDIA_TYPE_AUDIO || formatError) return;
+
+			const AVSampleFormat avFormat = static_cast<AVSampleFormat>(frame->format);
+			const ma_format format = toMiniAudioFormat(avFormat);
+			const ma_uint32 channels = (ma_uint32)frame->ch_layout.nb_channels;
+			if (format == ma_format_unknown || channels == 0) {
+				formatError = TRUE;
+				return;
+			}
+			if (sample->m_format == ma_format_unknown) {
+				sample->m_format = format;
+				sample->m_channels = channels;
+				sample->m_sampleRate = (ma_uint32)frame->sample_rate;
+			}
+			else if (sample->m_format != format || sample->m_channels != channels) {
+				formatError = TRUE;
+				return;
+			}
+
+			const int bytesPerSample = av_get_bytes_per_sample(avFormat);
+			const size_t frameBytes = (size_t)frame->nb_samples * channels * bytesPerSample;
+			if (frameBytes == 0) return;
+
+			const size_t offset = sample->m_pcm.size();
+			sample->m_pcm.resize(offset + frameBytes);
+			ma_uint8 *dst = sample->m_pcm.data() + offset;
+
+			if (av_sample_fmt_is_planar(avFormat)) {
+				// Interleave the planes into the buffer in one pass.
+				for (int s = 0; s < frame->nb_samples; ++s) {
+					for (ma_uint32 c = 0; c < channels; ++c) {
+						memcpy(dst, frame->data[c] + (size_t)s * bytesPerSample, bytesPerSample);
+						dst += bytesPerSample;
+					}
+				}
+			}
+			else {
+				memcpy(dst, frame->data[0], frameBytes);
+			}
+		};
+
+		ffmpegFile->setFrameCallback(onFrame);
+		ffmpegFile->setUserData(NULL);
+		while (ffmpegFile->decodePacket()) {}
+		delete ffmpegFile;
+
+		if (formatError) {
+			DEBUG_LOG(("MiniAudio: Unsupported or changing sample format in: %s\n", fileName.str()));
+			return FALSE;
+		}
+		if (sample->m_pcm.empty() || sample->m_sampleRate == 0) {
+			DEBUG_LOG(("MiniAudio: No audio data decoded from: %s\n", fileName.str()));
+			return FALSE;
+		}
+
+		sample->m_frameCount = sample->m_pcm.size() / ma_get_bytes_per_frame(sample->m_format, sample->m_channels);
+		sample->m_pcm.shrink_to_fit();
+		return TRUE;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+MiniAudioCachedSample *MiniAudioManager::acquireSample(const AsciiString &fileName)
+{
+	if (fileName.isEmpty())
+		return NULL;
+
+	const std::string key = sampleCacheKey(fileName);
+	SampleCacheMap::iterator found = m_sampleCache.find(key);
+	if (found != m_sampleCache.end()) {
+		found->second->m_refCount++;
+		found->second->m_lastUsed = ++m_sampleCacheClock;
+		return found->second;
+	}
+
+	MiniAudioCachedSample *sample = NEW MiniAudioCachedSample;
+	if (!decodeFileToSample(fileName, sample)) {
+		delete sample;
+		return NULL;
+	}
+
+	sample->m_refCount = 1;
+	sample->m_lastUsed = ++m_sampleCacheClock;
+	m_sampleCache[key] = sample;
+	m_sampleCacheBytes += sample->m_pcm.size();
+	trimSampleCache();
+	return sample;
+}
+
+//-------------------------------------------------------------------------------------------------
+void MiniAudioManager::releaseSample(MiniAudioCachedSample *sample)
+{
+	if (sample == NULL)
+		return;
+	DEBUG_ASSERTCRASH(sample->m_refCount > 0, ("MiniAudio sample released more often than acquired"));
+	if (sample->m_refCount > 0)
+		sample->m_refCount--;
+	trimSampleCache();
+}
+
+//-------------------------------------------------------------------------------------------------
+void MiniAudioManager::trimSampleCache(void)
+{
+	while (m_sampleCacheBytes > SAMPLE_CACHE_BUDGET_BYTES) {
+		SampleCacheMap::iterator oldest = m_sampleCache.end();
+		for (SampleCacheMap::iterator it = m_sampleCache.begin(); it != m_sampleCache.end(); ++it) {
+			if (it->second->m_refCount != 0)
+				continue;
+			if (oldest == m_sampleCache.end() || it->second->m_lastUsed < oldest->second->m_lastUsed)
+				oldest = it;
+		}
+		if (oldest == m_sampleCache.end())
+			return; // everything left is playing
+
+		m_sampleCacheBytes -= oldest->second->m_pcm.size();
+		delete oldest->second;
+		m_sampleCache.erase(oldest);
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void MiniAudioManager::clearSampleCache(void)
+{
+	for (SampleCacheMap::iterator it = m_sampleCache.begin(); it != m_sampleCache.end(); ++it) {
+		DEBUG_ASSERTCRASH(it->second->m_refCount == 0, ("MiniAudio sample still playing when the cache was cleared"));
+		delete it->second;
+	}
+	m_sampleCache.clear();
+	m_sampleCacheBytes = 0;
+}
+
+//-------------------------------------------------------------------------------------------------
+void MiniAudioManager::selectGroupAndFlags(AudioEventRTS *event, const AudioEventInfo *info, ma_sound_group **group, ma_uint32 *flags)
+{
+	*group = NULL;
+	*flags = MA_SOUND_FLAG_NO_SPATIALIZATION | MA_SOUND_FLAG_NO_PITCH;
+	if (info == NULL)
+		return;
+
+	switch (info->m_soundType)
+	{
+	case AT_Music:
+		*group = &m_musicGroup;
+		break;
+	case AT_Streaming:
+		*group = &m_speechGroup;
+		break;
+	case AT_SoundEffect:
+		if (event != NULL && event->isPositionalAudio()) {
+			*group = &m_sound3DGroup;
+			*flags = 0; // Allow spatialization for 3D
+		}
+		else {
+			*group = &m_soundGroup;
+		}
+		break;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool MiniAudioManager::createSoundForFile(const AsciiString &fileName, ma_uint32 flags, ma_sound_group *group, PlayingAudio *audio)
+{
+	MiniAudioCachedSample *sample = acquireSample(fileName);
+	if (sample == NULL)
+		return FALSE;
+
+	// The buffer only references the cached PCM; the cache keeps it alive while m_refCount > 0.
+	ma_audio_buffer *audioBuffer = (ma_audio_buffer *)malloc(sizeof(ma_audio_buffer));
+	ma_audio_buffer_config abConfig = ma_audio_buffer_config_init(sample->m_format, sample->m_channels,
+		sample->m_frameCount, sample->m_pcm.data(), NULL);
+	ma_result result = ma_audio_buffer_init(&abConfig, audioBuffer);
+	if (result != MA_SUCCESS) {
+		DEBUG_LOG(("MiniAudio: Failed to create audio buffer: %d for '%s'\n", result, fileName.str()));
+		free(audioBuffer);
+		releaseSample(sample);
+		return FALSE;
+	}
+	audioBuffer->ref.sampleRate = sample->m_sampleRate;
+
+	ma_sound *sound = (ma_sound *)malloc(sizeof(ma_sound));
+	result = ma_sound_init_from_data_source(&m_engine, audioBuffer, flags, group, sound);
+	if (result != MA_SUCCESS) {
+		DEBUG_LOG(("MiniAudio: Failed to init sound: %d for '%s'\n", result, fileName.str()));
+		ma_audio_buffer_uninit(audioBuffer);
+		free(audioBuffer);
+		free(sound);
+		releaseSample(sample);
+		return FALSE;
+	}
+
+	audio->m_sound = sound;
+	audio->m_audioBuffer = audioBuffer;
+	audio->m_cachedSample = sample;
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool MiniAudioManager::handleFinishedAudio(PlayingAudio *playing)
+{
+	if (!playing->m_audioEventRTS || !playing->m_audioEventRTS->getAudioEventInfo())
+		return FALSE;
+
+	const AudioEventInfo *info = playing->m_audioEventRTS->getAudioEventInfo();
+
+	if (getDisallowSpeech() && info->m_soundType == AT_Streaming)
+		setDisallowSpeech(FALSE);
+
+	if (info->m_control & AC_LOOP) {
+		if (playing->m_audioEventRTS->getNextPlayPortion() == PP_Attack)
+			playing->m_audioEventRTS->setNextPlayPortion(PP_Sound);
+		if (playing->m_audioEventRTS->getNextPlayPortion() == PP_Sound) {
+			playing->m_audioEventRTS->decreaseLoopCount();
+			return startNextLoop(playing);
+		}
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
 Real MiniAudioManager::getFileLengthMS(AsciiString strToLoad) const
 {
 	// GeneralsX @bugfix meerzulee 19/07/2026 FP env guard for audio entry point (see #215)
@@ -1376,18 +1549,35 @@ Bool MiniAudioManager::startNextLoop(PlayingAudio *looping)
 		return true;
 	}
 
-	// Re-initialize the sound from the new file
-	if (looping->m_sound) {
-		ma_sound_uninit(looping->m_sound);
-	}
+	// Abram's Personal Test @bugfix Re-create the sound from the sample cache. ma_sound_init_from_file
+	// decoded the whole file again and initialized a new sound over the old one while the old audio
+	// buffer was still attached.
+	const PlayingAudioType loopType = looping->m_type;
+	releaseMiniAudioHandles(looping);
+	looping->m_type = loopType;
 
 	AsciiString fileToPlay = looping->m_audioEventRTS->getFilename();
-	ma_uint32 flags = MA_SOUND_FLAG_NO_SPATIALIZATION | MA_SOUND_FLAG_NO_PITCH;
-	if (looping->m_type == PAT_3DSample) flags = 0;
+	ma_sound_group *group = NULL;
+	ma_uint32 flags = 0;
+	selectGroupAndFlags(looping->m_audioEventRTS.Peek(), looping->m_audioEventRTS->getAudioEventInfo(), &group, &flags);
 
-	ma_result result = ma_sound_init_from_file(&m_engine, fileToPlay.str(), flags,
-		(looping->m_type == PAT_3DSample) ? &m_sound3DGroup : &m_soundGroup,
-		NULL, looping->m_sound);
+	ma_result result = createSoundForFile(fileToPlay, flags, group, looping) ? MA_SUCCESS : MA_ERROR;
+
+	if (result == MA_SUCCESS && loopType == PAT_3DSample) {
+		const AudioEventInfo *loopInfo = looping->m_audioEventRTS->getAudioEventInfo();
+		if (loopInfo->m_type & ST_GLOBAL) {
+			ma_sound_set_min_distance(looping->m_sound, TheAudio->getAudioSettings()->m_globalMinRange);
+			ma_sound_set_max_distance(looping->m_sound, TheAudio->getAudioSettings()->m_globalMaxRange);
+		}
+		else {
+			ma_sound_set_min_distance(looping->m_sound, loopInfo->m_minDistance);
+			ma_sound_set_max_distance(looping->m_sound, loopInfo->m_maxDistance);
+		}
+		const Coord3D *pos = getCurrentPositionFromEvent(looping->m_audioEventRTS.Peek());
+		if (pos) {
+			ma_sound_set_position(looping->m_sound, pos->x, pos->y, pos->z);
+		}
+	}
 
 	if (result == MA_SUCCESS) {
 		// GeneralsX @bugfix Mr. Meeseeks 19/06/2026 - Initialize loop volume using adjustPlayingVolume

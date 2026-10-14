@@ -658,6 +658,16 @@ bool DX8Wrapper::Init(void * hwnd, bool lite)
 				fflush(stderr);
 				D3D8Lib = LoadLibrary("D3D8.DLL");
 			}
+			// Abram's Personal Test @bugfix Keep d3d8.dll loaded until the process ends. Some textures
+			// (for example the particle system's) are released after DX8Wrapper::Shutdown, and calling
+			// Release on them after FreeLibrary had unloaded DXVK crashed every exit. That crash also
+			// stopped the game switch and the mod restart. The Linux build never unloads DXVK either.
+			if (D3D8Lib != nullptr)
+			{
+				HMODULE pinned = nullptr;
+				GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+					reinterpret_cast<LPCSTR>(D3D8Lib), &pinned);
+			}
 		}
 #elif defined(_WIN32)
 		D3D8Lib = LoadLibrary("D3D8.DLL");

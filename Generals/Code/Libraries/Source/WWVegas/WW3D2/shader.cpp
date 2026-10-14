@@ -1027,7 +1027,10 @@ void ShaderClass::Apply()
 	DX8Wrapper::Set_DX8_Render_State(D3DRS_CULLMODE,Get_Cull_Mode() ? _PolygonCullMode : D3DCULL_NONE);
 
 	// NPATCHES
-	if (diff&ShaderClass::MASK_NPATCHENABLE) {
+	// Abram's Personal Test @bugfix Only set the N-patch level when the device supports N-patches. DXVK
+	// does not, and logged a warning to its log file every time this render state changed.
+	if ((diff&ShaderClass::MASK_NPATCHENABLE) && DX8Wrapper::Get_Current_Caps() != nullptr
+		&& DX8Wrapper::Get_Current_Caps()->Support_NPatches()) {
 		float level=1.0f;
 		if (Get_NPatch_Enable()) level=float(WW3D::Get_NPatches_Level());
 		DX8Wrapper::Set_DX8_Render_State(D3DRS_PATCHSEGMENTS,*((DWORD*)&level));

@@ -28,8 +28,33 @@
 #include "Common/AudioEventRTS.h"
 #include "Common/GameAudio.h"
 #include <miniaudio.h>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 enum { MAXPROVIDERS = 64 };
+
+// Abram's Personal Test @performance A sound file decoded to PCM once and shared by every sound that
+// plays it. Decoding on every play stalled the game thread each time a sound started.
+struct MiniAudioCachedSample
+{
+	std::vector<ma_uint8> m_pcm;
+	ma_format m_format;
+	ma_uint32 m_channels;
+	ma_uint32 m_sampleRate;
+	ma_uint64 m_frameCount;
+	Int m_refCount;          // sounds currently playing this sample; it is only freed at zero
+	UnsignedInt m_lastUsed;  // value of the cache clock when it was last played, for LRU eviction
+
+	MiniAudioCachedSample() :
+		m_format(ma_format_unknown),
+		m_channels(0),
+		m_sampleRate(0),
+		m_frameCount(0),
+		m_refCount(0),
+		m_lastUsed(0)
+	{ }
+};
 
 enum PlayingAudioType
 {
@@ -43,6 +68,7 @@ struct PlayingAudio
 {
 	ma_sound* m_sound;
 	ma_audio_buffer* m_audioBuffer;
+	MiniAudioCachedSample* m_cachedSample;
 	PlayingAudioType m_type;
 	RefCountPtr<DynamicAudioEventRTS> m_audioEventRTS;
 	Bool m_requestStop;
@@ -51,6 +77,7 @@ struct PlayingAudio
 	PlayingAudio() :
 		m_sound(NULL),
 		m_audioBuffer(NULL),
+		m_cachedSample(NULL),
 		m_type(PAT_INVALID),
 		m_audioEventRTS(NULL),
 		m_requestStop(false),
@@ -186,6 +213,15 @@ protected:
 
 	void adjustPlayingVolume(PlayingAudio *audio);
 
+	// Abram's Personal Test @performance Decoded sample cache (see MiniAudioCachedSample).
+	MiniAudioCachedSample *acquireSample(const AsciiString &fileName);
+	void releaseSample(MiniAudioCachedSample *sample);
+	void trimSampleCache(void);
+	void clearSampleCache(void);
+	void selectGroupAndFlags(AudioEventRTS *event, const AudioEventInfo *info, ma_sound_group **group, ma_uint32 *flags);
+	Bool createSoundForFile(const AsciiString &fileName, ma_uint32 flags, ma_sound_group *group, PlayingAudio *audio);
+	Bool handleFinishedAudio(PlayingAudio *playing);
+
 	void stopAllSpeech(void);
 
 protected:
@@ -223,6 +259,11 @@ protected:
 	std::list<PlayingAudio *> m_stoppedAudio;
 
 	void *m_binkHandle;
+
+	typedef std::unordered_map<std::string, MiniAudioCachedSample *> SampleCacheMap;
+	SampleCacheMap m_sampleCache;
+	size_t m_sampleCacheBytes;
+	UnsignedInt m_sampleCacheClock;
 
 #if defined(_DEBUG) || defined(_INTERNAL)
 	typedef std::set<AsciiString> SetAsciiString;
