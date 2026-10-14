@@ -40,7 +40,9 @@
 
 // TheSuperHackers @build 09/02/2026 Conditionally include Miles (Windows only)
 // GeneralsX @feature fbraz 11/06/2026 Also use MilesStub when MiniAudio is enabled
-#if !defined(SAGE_USE_OPENAL) && !defined(SAGE_USE_MINIAUDIO)
+// Abram's Personal Test @build Windows always has the Miles header (types only, the DLL is loaded at
+// runtime), also when the game plays sound through MiniAudio as the 64-bit build does.
+#if defined(_WIN32) || (!defined(SAGE_USE_OPENAL) && !defined(SAGE_USE_MINIAUDIO))
 #pragma warning (push, 3)
 #include "mss.h"
 #pragma warning (pop)
