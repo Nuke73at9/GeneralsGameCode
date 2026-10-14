@@ -59,6 +59,9 @@ public:
 	// True when the file is a game archive (it starts with the BIGF signature).
 	static bool isBigArchive(const char* path);
 
+	// True when a path relative to the game folder is inside the Mods folder ("Mods\...").
+	static bool isInModsFolder(const char* relativePath);
+
 	// Finds the mod's picture: preview.tga/png/jpg/jpeg/bmp in the mod folder, or else the first
 	// .png or .jpg file. Returns false when the mod has no picture.
 	static bool findPreviewImage(int index, char* path, unsigned int pathSize);
