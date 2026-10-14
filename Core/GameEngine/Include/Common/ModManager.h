@@ -21,10 +21,11 @@
 // Abram's Personal Test @feature Finds mods installed in the game's "Mods" folder.
 //
 // Each mod lives in its own folder next to the game executable:
-//   <game folder>\Mods\<Mod Name>\*.big
-// A folder counts as a mod when it contains at least one .big file. The engine loads a mod
-// through the existing -mod option, which reads every .big file in the folder on top of the
-// game's own data.
+//   <game folder>\Mods\<Mod Name>\
+// A folder counts as a mod when it contains at least one game archive. Archives are recognized by
+// their content, not their extension, so mods that name their archives .gib, .ctr and so on work
+// without renaming. The engine loads a mod through the -mod option, which reads every archive in
+// the folder (and its subfolders) on top of the game's own data.
 
 class ModManager
 {
@@ -52,8 +53,11 @@ public:
 	// Full path of the Mods folder, ending with a backslash.
 	static const char* getModsRoot();
 
-	// Number of .big files in the mod folder.
+	// Number of game archives in the mod folder and its subfolders, whatever their extension.
 	static int countBigFiles(int index);
+
+	// True when the file is a game archive (it starts with the BIGF signature).
+	static bool isBigArchive(const char* path);
 
 	// Finds the mod's picture: preview.tga/png/jpg/jpeg/bmp in the mod folder, or else the first
 	// .png or .jpg file. Returns false when the mod has no picture.
