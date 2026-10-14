@@ -30,13 +30,13 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
 #ifndef _WIN32
-#include "Common/AbramGameRules.h"
 #include <fenv.h>
 #if defined(__SSE__) || defined(__x86_64__)
 #include <xmmintrin.h>
 #endif
 #endif
 
+#include "Common/AbramGameRules.h"
 #include "Common/AudioAffect.h"
 #include "Common/AudioHandleSpecialValues.h"
 #include "Common/BuildAssistant.h"
