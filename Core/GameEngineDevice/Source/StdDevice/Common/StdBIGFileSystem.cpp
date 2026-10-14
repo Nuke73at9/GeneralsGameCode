@@ -713,7 +713,15 @@ Bool StdBIGFileSystem::loadBigFilesFromDirectory(AsciiString dir, AsciiString fi
 		// Abram's Personal Test @bugfix Never load archives from the Mods folder with the game's own data.
 		// The game folder is searched including subfolders, which would otherwise load every mod's .big
 		// files even when playing without mods. Mods are loaded separately, only when chosen.
-		if (dir.isEmpty() && ModManager::isInModsFolder(it->str())) {
+		// The check uses the path relative to the folder being loaded, which may be a full path.
+		const char* relativePath = it->str();
+		if (dir.isNotEmpty() && it->startsWithNoCase(dir)) {
+			relativePath += dir.getLength();
+		}
+		while (*relativePath == '\\' || *relativePath == '/') {
+			++relativePath;
+		}
+		if (ModManager::isInModsFolder(relativePath)) {
 			it++;
 			continue;
 		}
