@@ -30,6 +30,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
 #ifndef _WIN32
+#include "Common/AbramGameRules.h"
 #include <fenv.h>
 #if defined(__SSE__) || defined(__x86_64__)
 #include <xmmintrin.h>
@@ -2470,6 +2471,18 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 
 	// @todo remove this hack
 //	TheGlobalData->m_inGame = TRUE;
+
+	// Abram's Personal Test @feature Reveal Map match option: no shroud or fog of war for any player. A
+	// saved game keeps its own shroud state, so this only runs when a game starts.
+	if( loadingSaveGame == FALSE && AbramGameRules::isEnabled( ABRAM_RULE_REVEAL_MAP ) )
+	{
+		for (Int i = 0; i < ThePlayerList->getPlayerCount(); ++i)
+		{
+			Player *player = ThePlayerList->getNthPlayer(i);
+			if (player)
+				ThePartitionManager->revealMapForPlayerPermanently( player->getPlayerIndex() );
+		}
+	}
 
 	// If we are now starting a multiplayer or skirmish game, let us set the local players selectionto be the command center
 	// We'll ask the Recorder, so we survive replays

@@ -278,6 +278,7 @@ public:
 		MSG_META_TOGGLE_PAUSE_ALT,									///< TheSuperHackers @feature Toggle game pause (alternative mapping)
 		MSG_META_STEP_FRAME,												///< TheSuperHackers @feature Step one frame
 		MSG_META_STEP_FRAME_ALT,										///< TheSuperHackers @feature Step one frame (alternative mapping)
+		MSG_META_ABRAM_TEAM_MENU,										///< Abram's Personal Test @feature Open the team menu (AI control, give and request units)
 		MSG_META_DEMO_INSTANT_QUIT,									///< bail out of game immediately
 
 
@@ -604,6 +605,13 @@ public:
 		MSG_LOGIC_CRC,															///< CRC from the logic passed around in a network game :)
 		MSG_SET_MINE_CLEARING_DETAIL,								///< CRC from the logic passed around in a network game :)
 		MSG_ENABLE_RETALIATION_MODE,								///< Turn retaliation mode on or off.
+
+		// Abram's Personal Test @feature Team menu commands (see GameLogic/AbramTeamActions.h). They use fixed
+		// values in a range upstream does not use, so later upstream messages cannot shift them.
+		MSG_ABRAM_TRANSFER_OBJECTS = 1800,					///< (Int otherPlayerIndex, Int transferType, objectID1, ... objectIDN)
+		MSG_ABRAM_OFFER_RESPONSE,										///< (Int offerID, Bool accept)
+		MSG_ABRAM_TAKE_AI_CONTROL,									///< (Int aiPlayerIndex)
+		MSG_ABRAM_RELEASE_AI_CONTROL,								///< () sent as the controlled AI player
 
 		MSG_BEGIN_DEBUG_NETWORK_MESSAGES = 1900,		///< network messages that exist only in debug/internal builds. all grouped separately.
 

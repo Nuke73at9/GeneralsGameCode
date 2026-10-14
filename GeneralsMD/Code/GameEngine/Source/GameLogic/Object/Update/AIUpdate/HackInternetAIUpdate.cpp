@@ -28,6 +28,7 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include "Common/AbramGameRules.h"
 #include "Common/Player.h"
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
@@ -537,6 +538,8 @@ StateReturnType HackInternetState::update()
 						amount = 1;
 						break;
 				}
+				// Abram's Personal Test @feature Cash multiplier match option.
+				amount = AbramGameRules::scaleIncome( amount );
 				money->deposit( amount );
 				owner->getControllingPlayer()->getScoreKeeper()->addMoneyEarned( amount );
 

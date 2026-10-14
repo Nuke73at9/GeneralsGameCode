@@ -31,6 +31,7 @@
 
 #define DEFINE_SHADOW_NAMES
 
+#include "GameClient/AbramTeamMenu.h"
 #include "Common/ActionManager.h"
 #include "Common/FramePacer.h"
 #include "Common/GameAudio.h"
@@ -1821,6 +1822,9 @@ void InGameUI::preDraw()
 //DECLARE_PERF_TIMER(InGameUI_update)
 void InGameUI::update()
 {
+	// Abram's Personal Test @feature Show gifts and requests from allies (team menu, Ctrl+G).
+	AbramTeamMenu::update();
+
 	//USE_PERF_TIMER(InGameUI_update)
 	Int i;
 
@@ -2135,6 +2139,9 @@ void InGameUI::unregisterWindowLayout( WindowLayout *layout )
 //-------------------------------------------------------------------------------------------------
 void InGameUI::reset()
 {
+	// Abram's Personal Test @feature Close the team menu with the game.
+	AbramTeamMenu::reset();
+
 	m_isQuitMenuVisible = FALSE;
 	m_inputEnabled = true;
 	// reset the command bar

@@ -35,6 +35,7 @@
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/Gadget.h"
+#include "GameClient/AbramPopup.h"
 #include "GameClient/ModSelectMenu.h"
 
 // Popup Ladder Select --------------------------------------------------------------------------
@@ -101,6 +102,7 @@ static FunctionLexicon::TableEntry gameWinSystemTable[] =
 	{ NAMEKEY_INVALID, "QuitMenuSystem",                     (void*)QuitMenuSystem },
 	{ NAMEKEY_INVALID, "MapSelectMenuSystem",                (void*)MapSelectMenuSystem },
 	{ NAMEKEY_INVALID, "ModSelectMenuSystem",                (void*)ModSelectMenuSystem },
+	{ NAMEKEY_INVALID, "AbramPopupSystem",                (void*)AbramPopupSystem },
 	{ NAMEKEY_INVALID, "ReplayMenuSystem",                   (void*)ReplayMenuSystem },
 	{ NAMEKEY_INVALID, "CreditsMenuSystem",                  (void*)CreditsMenuSystem },
 	{ NAMEKEY_INVALID, "LanLobbyMenuSystem",                 (void*)LanLobbyMenuSystem },
@@ -177,6 +179,7 @@ static FunctionLexicon::TableEntry gameWinInputTable[] =
 	{ NAMEKEY_INVALID, "MainMenuInput",                     (void*)MainMenuInput },
 	{ NAMEKEY_INVALID, "MapSelectMenuInput",                (void*)MapSelectMenuInput },
 	{ NAMEKEY_INVALID, "ModSelectMenuInput",                (void*)ModSelectMenuInput },
+	{ NAMEKEY_INVALID, "AbramPopupInput",                (void*)AbramPopupInput },
 	{ NAMEKEY_INVALID, "OptionsMenuInput",                  (void*)OptionsMenuInput },
 	{ NAMEKEY_INVALID, "SinglePlayerMenuInput",             (void*)SinglePlayerMenuInput },
 	{ NAMEKEY_INVALID, "LanLobbyMenuInput",                 (void*)LanLobbyMenuInput },
@@ -255,6 +258,7 @@ static FunctionLexicon::TableEntry winLayoutInitTable[] =
 	{ NAMEKEY_INVALID, "SinglePlayerMenuInit",          (void*)SinglePlayerMenuInit },
 	{ NAMEKEY_INVALID, "MapSelectMenuInit",             (void*)MapSelectMenuInit },
 	{ NAMEKEY_INVALID, "ModSelectMenuInit",             (void*)ModSelectMenuInit },
+	{ NAMEKEY_INVALID, "AbramPopupInit",             (void*)AbramPopupInit },
 	{ NAMEKEY_INVALID, "LanLobbyMenuInit",              (void*)LanLobbyMenuInit },
 	{ NAMEKEY_INVALID, "ReplayMenuInit",                (void*)ReplayMenuInit },
 	{ NAMEKEY_INVALID, "CreditsMenuInit",               (void*)CreditsMenuInit },

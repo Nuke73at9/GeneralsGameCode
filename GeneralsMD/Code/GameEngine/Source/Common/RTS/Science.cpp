@@ -29,6 +29,7 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include "Common/AbramGameRules.h"
 #include "Common/INI.h"
 #include "Common/Player.h"
 #include "Common/Science.h"
@@ -276,6 +277,11 @@ Bool ScienceStore::playerHasPrereqsForScience(const Player* player, ScienceType 
 	const ScienceInfo* si = findScienceInfo(st);
 	if (si)
 	{
+		// Abram's Personal Test @feature Unlock Everything match option: every generals power of the
+		// player's general can be bought as soon as there are enough points, whatever the rank.
+		if (AbramGameRules::isEnabled( ABRAM_RULE_UNLOCK_ALL ))
+			return true;
+
 		for (ScienceVec::const_iterator it2 = si->m_prereqSciences.begin(); it2 != si->m_prereqSciences.end(); ++it2)
 		{
 			if (!player->hasScience(*it2))

@@ -38,6 +38,7 @@
 #define DEFINE_RADAR_PRIORITY_NAMES				// for RadarPriorityNames[]
 #define DEFINE_BUILDABLE_STATUS_NAMES			// for BuildableStatusNames[]
 
+#include "Common/AbramGameRules.h"
 #include "Common/DamageFX.h"
 #include "Common/GameAudio.h"
 #include "Common/GameCommon.h"
@@ -1629,7 +1630,8 @@ Int ThingTemplate::calcTimeToBuild( const Player* player) const
 		}
 	}
 
-	return(buildTime);
+	// Abram's Personal Test @feature Build speed match option.
+	return AbramGameRules::scaleBuildTime( buildTime );
 }
 
 //---------------------------------------------------------------------------------------ModuleInfo

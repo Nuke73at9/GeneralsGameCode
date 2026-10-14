@@ -29,11 +29,20 @@
 enum AbramGameRule
 {
 	ABRAM_RULE_LARGE_BUILD_QUEUE = 0x0001, ///< production buildings queue up to ABRAM_LARGE_BUILD_QUEUE_SIZE entries
+	ABRAM_RULE_REVEAL_MAP        = 0x0002, ///< no shroud or fog of war for anyone, from the start of the game
+	ABRAM_RULE_UNLOCK_ALL        = 0x0004, ///< units, buildings and generals powers ignore their prerequisites
 };
 
 enum
 {
 	ABRAM_LARGE_BUILD_QUEUE_SIZE = 99,
+
+	// The rules value also holds two small settings above the on/off rules.
+	ABRAM_RULE_FLAG_MASK          = 0x000000FF,
+	ABRAM_CASH_MULTIPLIER_SHIFT   = 8,
+	ABRAM_CASH_MULTIPLIER_MASK    = 0x00000F00,
+	ABRAM_BUILD_SPEED_SHIFT       = 12,
+	ABRAM_BUILD_SPEED_MASK        = 0x0000F000,
 };
 
 class AbramGameRules
@@ -41,4 +50,23 @@ class AbramGameRules
 public:
 	// True when the rule is on for the game being played. Always false outside skirmish and replays.
 	static Bool isEnabled( AbramGameRule rule );
+
+	// Income (supplies, oil derricks, hackers and other automatic income) is multiplied by this.
+	static UnsignedInt getCashMultiplier();
+	// Units, buildings and upgrades are built this many times faster.
+	static UnsignedInt getBuildSpeed();
+
+	static UnsignedInt scaleIncome( UnsignedInt amount );
+	static Int scaleBuildTime( Int buildFrames );
+
+	// The choices offered for the two settings, and helpers to read and change them in a rules value.
+	static Int getCashMultiplierChoiceCount();
+	static UnsignedInt getCashMultiplierChoice( Int index );
+	static Int getBuildSpeedChoiceCount();
+	static UnsignedInt getBuildSpeedChoice( Int index );
+
+	static Int getCashMultiplierIndex( UnsignedInt rules );
+	static Int getBuildSpeedIndex( UnsignedInt rules );
+	static UnsignedInt setCashMultiplierIndex( UnsignedInt rules, Int index );
+	static UnsignedInt setBuildSpeedIndex( UnsignedInt rules, Int index );
 };

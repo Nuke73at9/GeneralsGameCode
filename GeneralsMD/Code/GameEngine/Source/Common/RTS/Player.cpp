@@ -46,6 +46,7 @@
 
 #define DEFINE_SCIENCE_AVAILABILITY_NAMES
 
+#include "Common/AbramGameRules.h"
 #include "Common/ActionManager.h"
 #include "Common/BuildAssistant.h"
 #include "Common/CRCDebug.h"
@@ -2974,6 +2975,10 @@ Bool Player::canBuild(const ThingTemplate *tmplate) const
 		if (ignoresPrereqs())
 			prereqsOK = true;
 #endif
+
+		// Abram's Personal Test @feature Unlock Everything match option: no prerequisites for units and buildings.
+		if (AbramGameRules::isEnabled( ABRAM_RULE_UNLOCK_ALL ))
+			prereqsOK = true;
 
 		if (!prereqsOK)
 			return false;

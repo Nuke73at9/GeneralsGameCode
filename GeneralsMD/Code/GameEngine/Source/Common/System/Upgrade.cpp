@@ -31,6 +31,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
 #define DEFINE_VETERANCY_NAMES
+#include "Common/AbramGameRules.h"
 #include "Common/Upgrade.h"
 #include "Common/Player.h"
 #include "Common/Xfer.h"
@@ -162,7 +163,8 @@ Int UpgradeTemplate::calcTimeToBuild( Player *player ) const
 #endif
 
 	///@todo modify this by power state of player
-	return m_buildTime * static_cast<float>(LOGICFRAMES_PER_SECOND);
+	// Abram's Personal Test @feature Build speed match option.
+	return AbramGameRules::scaleBuildTime( (Int)(m_buildTime * static_cast<float>(LOGICFRAMES_PER_SECOND)) );
 
 }
 

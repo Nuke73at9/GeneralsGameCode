@@ -47,7 +47,9 @@ if(RTS_INSTALL_PREFIX_ZEROHOUR)
     install(TARGETS z_generals RUNTIME DESTINATION "${RTS_INSTALL_PREFIX_ZEROHOUR}")
 
     # Abram's Personal Test: the Mods screen layout. Loose files in the game folder are loaded like files in .big archives.
-    install(FILES "${CMAKE_SOURCE_DIR}/resources/abram/Window/Menus/ModSelectMenu.wnd" DESTINATION "${RTS_INSTALL_PREFIX_ZEROHOUR}/Window/Menus")
+    install(FILES "${CMAKE_SOURCE_DIR}/resources/abram/Window/Menus/ModSelectMenu.wnd"
+                  "${CMAKE_SOURCE_DIR}/resources/abram/Window/Menus/AbramPopup.wnd"
+            DESTINATION "${RTS_INSTALL_PREFIX_ZEROHOUR}/Window/Menus")
 
     # Abram's Personal Test: libraries from vcpkg (curl, GameNetworkingSockets, ...) must sit next to the game.
     if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET AND EXISTS "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin")

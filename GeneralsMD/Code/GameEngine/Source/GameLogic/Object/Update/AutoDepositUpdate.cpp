@@ -52,6 +52,7 @@
 //-----------------------------------------------------------------------------
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include "Common/AbramGameRules.h"
 #include "Common/BuildAssistant.h"
 #include "Common/Thing.h"
 #include "Common/ThingTemplate.h"
@@ -161,7 +162,8 @@ UpdateSleepTime AutoDepositUpdate::update()
 		if( getObject()->getConstructionPercent() != CONSTRUCTION_COMPLETE )
 			return UPDATE_SLEEP_NONE;
 
-		int moneyAmount = modData->m_depositAmount + getUpgradedSupplyBoost();
+		// Abram's Personal Test @feature Cash multiplier match option.
+		int moneyAmount = (int)AbramGameRules::scaleIncome( (UnsignedInt)(modData->m_depositAmount + getUpgradedSupplyBoost()) );
 
 		if( modData->m_isActualMoney )
 		{

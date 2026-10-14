@@ -150,7 +150,9 @@ set(GAMEENGINE_SRC
     Include/GameClient/AnimateWindowManager.h
 #    Include/GameClient/CampaignManager.h
     Include/GameClient/ChallengeGenerals.h
-    Include/GameClient/AbramGameRulesMenu.h
+    Include/GameClient/AbramMatchOptionsMenu.h
+    Include/GameClient/AbramPopup.h
+    Include/GameClient/AbramTeamMenu.h
     Include/GameClient/AbramMainMenu.h
     Include/GameClient/ClientInstance.h
     Include/GameClient/ModSelectMenu.h
@@ -248,6 +250,7 @@ set(GAMEENGINE_SRC
 #    Include/GameLogic/AIDock.h
 #    Include/GameLogic/AIGuard.h
 #    Include/GameLogic/AIGuardRetaliate.h
+    Include/GameLogic/AbramTeamActions.h
     Include/GameLogic/AIPathfind.h
 #    Include/GameLogic/AIPlayer.h
 #    Include/GameLogic/AISkirmishPlayer.h
@@ -734,7 +737,9 @@ set(GAMEENGINE_SRC
     Source/GameClient/GameText.cpp
     Source/GameClient/GlobalLanguage.cpp
     Source/GameClient/GraphDraw.cpp
-    Source/GameClient/GUI/AbramGameRulesMenu.cpp
+    Source/GameClient/GUI/AbramMatchOptionsMenu.cpp
+    Source/GameClient/GUI/AbramPopup.cpp
+    Source/GameClient/GUI/AbramTeamMenu.cpp
     Source/GameClient/GUI/AbramMainMenu.cpp
     Source/GameClient/GUI/AnimateWindowManager.cpp
     Source/GameClient/GUI/ModSelectMenu.cpp
@@ -1124,6 +1129,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/System/CrateSystem.cpp
     Source/GameLogic/System/Damage.cpp
 #    Source/GameLogic/System/GameLogic.cpp
+    Source/GameLogic/System/AbramTeamActions.cpp
     Source/GameLogic/System/GameLogicDispatch.cpp
     Source/GameLogic/System/RankInfo.cpp
     Source/GameNetwork/Connection.cpp

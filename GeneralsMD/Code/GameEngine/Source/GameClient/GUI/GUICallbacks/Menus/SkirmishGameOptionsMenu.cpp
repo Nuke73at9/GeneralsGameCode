@@ -41,7 +41,7 @@
 #include "Common/SkirmishPreferences.h"
 #include "Common/OptionPreferences.h"
 #include "GameLogic/GameLogic.h"
-#include "GameClient/AbramGameRulesMenu.h"
+#include "GameClient/AbramMatchOptionsMenu.h"
 #include "GameClient/AnimateWindowManager.h"
 #include "GameClient/ClientInstance.h"
 #include "GameClient/WindowLayout.h"
@@ -1057,6 +1057,15 @@ static void handleLimitSuperweaponsClick()
 
 
 //-------------------------------------------------------------------------------------------------
+/** Abram's Personal Test @feature The match options dialog can change Limit Superweapons too. */
+//-------------------------------------------------------------------------------------------------
+static void refreshMatchOptionGadgets()
+{
+	if (TheSkirmishGameInfo && checkBoxLimitSuperweapons)
+		GadgetCheckBoxSetChecked( checkBoxLimitSuperweapons, TheSkirmishGameInfo->getSuperweaponRestriction() != 0 );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Initialize the Gadgets Options Menu */
 //-------------------------------------------------------------------------------------------------
 void InitSkirmishGameGadgets()
@@ -1090,8 +1099,8 @@ void InitSkirmishGameGadgets()
 	DEBUG_ASSERTCRASH(staticTextGameSpeed, ("Could not find the staticTextGameSpeed"));
   checkBoxLimitSuperweapons = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, checkBoxLimitSuperweaponsID );
   DEBUG_ASSERTCRASH(checkBoxLimitSuperweapons, ("Could not find the checkBoxLimitSuperweapons"));
-	// Abram's Personal Test @feature Check boxes for the optional gameplay rules.
-	AbramGameRulesMenu::init( checkBoxLimitSuperweapons );
+	// Abram's Personal Test @feature MATCH OPTIONS button under SELECT MAP.
+	AbramMatchOptionsMenu::init( buttonSelectMap, refreshMatchOptionGadgets );
   comboBoxStartingCash = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, comboBoxStartingCashID );
   DEBUG_ASSERTCRASH(comboBoxStartingCash, ("Could not find the comboBoxStartingCash"));
   PopulateStartingCashComboBox(comboBoxStartingCash, TheSkirmishGameInfo );
@@ -1275,7 +1284,6 @@ void updateSkirmishGameOptions()
 	}
 
   GadgetCheckBoxSetChecked( checkBoxLimitSuperweapons, TheSkirmishGameInfo->getSuperweaponRestriction() != 0 );
-	AbramGameRulesMenu::refresh( TheSkirmishGameInfo );
   Int itemCount = GadgetComboBoxGetLength(comboBoxStartingCash);
   Int index = 0;
   for ( ; index < itemCount; index++ )
@@ -1362,7 +1370,6 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
   TheSkirmishGameInfo->setStartingCash( prefs.getStartingCash() );
   TheSkirmishGameInfo->setSuperweaponRestriction( prefs.getSuperweaponRestricted() ? 1 : 0 );
 	TheSkirmishGameInfo->setAbramRules( (UnsignedInt)prefs.getInt( "AbramRules", 0 ) );
-	AbramGameRulesMenu::refresh( TheSkirmishGameInfo );
 
   TheSkirmishGameInfo->setMap(prefs.getPreferredMap());
 	const MapMetaData *md = TheMapCache->findMap(TheSkirmishGameInfo->getMap());
@@ -1459,6 +1466,9 @@ static void shutdownComplete( WindowLayout *layout )
 void SkirmishGameOptionsMenuShutdown( WindowLayout *layout, void *userData )
 {
 	SignalUIInteraction(SHELL_SCRIPT_HOOK_SKIRMISH_CLOSED);
+
+	// Abram's Personal Test @feature Close the match options dialog with the screen.
+	AbramMatchOptionsMenu::shutdown();
 
 	TheMouse->setCursor(Mouse::ARROW);
 	TheMouse->setMouseText(UnicodeString::TheEmptyString,nullptr,nullptr);
@@ -1695,8 +1705,8 @@ WindowMsgHandledType SkirmishGameOptionsMenuSystem( GameWindow *window, Unsigned
         {
           handleLimitSuperweaponsClick();
         }
-				// Abram's Personal Test @feature The optional gameplay rule check boxes update the game's rules.
-				else if ( !AbramGameRulesMenu::handleSelected( control, TheSkirmishGameInfo ) )
+				// Abram's Personal Test @feature MATCH OPTIONS opens the match options dialog.
+				else if ( !AbramMatchOptionsMenu::handleSelected( control, TheSkirmishGameInfo ) )
 				{
 					for (Int i = 0; i < MAX_SLOTS; i++)
 					{

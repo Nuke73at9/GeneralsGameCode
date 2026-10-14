@@ -28,6 +28,7 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include "GameClient/AbramTeamMenu.h"
 #include "stdlib.h"				// VC++ wants this here, or gives compile error...
 
 #include "Common/AudioAffect.h"
@@ -4402,6 +4403,14 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 			}
 			break;
 		}
+		// Abram's Personal Test @feature Ctrl+G opens the team menu.
+		case GameMessage::MSG_META_ABRAM_TEAM_MENU:
+		{
+			AbramTeamMenu::open();
+			disp = DESTROY_MESSAGE;
+			break;
+		}
+
 		case GameMessage::MSG_META_STEP_FRAME:
 		case GameMessage::MSG_META_STEP_FRAME_ALT:
 		{

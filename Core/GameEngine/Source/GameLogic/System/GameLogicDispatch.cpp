@@ -30,6 +30,7 @@
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include "GameLogic/AbramTeamActions.h"
 #include "Common/CRCDebug.h"
 #include "Common/FramePacer.h"
 #include "Common/GameAudio.h"
@@ -450,6 +451,8 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, void *userData )
 	{
 		case GameMessage::MSG_NEW_GAME:
 		{
+			// Abram's Personal Test @feature Forget the team actions of the previous game.
+			AbramTeamActions::reset();
 			onNewGame(msg);
 			break;
 		}
@@ -506,6 +509,15 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, void *userData )
 		case GameMessage::MSG_ENABLE_RETALIATION_MODE:
 		{
 			onEnableRetaliationMode(msg);
+			break;
+		}
+		// Abram's Personal Test @feature Team menu commands.
+		case GameMessage::MSG_ABRAM_TRANSFER_OBJECTS:
+		case GameMessage::MSG_ABRAM_OFFER_RESPONSE:
+		case GameMessage::MSG_ABRAM_TAKE_AI_CONTROL:
+		case GameMessage::MSG_ABRAM_RELEASE_AI_CONTROL:
+		{
+			AbramTeamActions::processMessage(msg);
 			break;
 		}
 		case GameMessage::MSG_DO_WEAPON_AT_LOCATION:

@@ -29,6 +29,7 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include "Common/AbramGameRules.h"
 #include "Common/Player.h"
 #include "Common/Xfer.h"
 #include "GameLogic/Module/SupplyCenterDockUpdate.h"
@@ -118,6 +119,9 @@ Bool SupplyCenterDockUpdate::action( Object* docker, Object *drone )
 	Player *ownerPlayer = getObject()->getControllingPlayer();
 	while( supplyTruckAI->loseOneBox() )
 		value += ownerPlayer->getSupplyBoxValue();
+
+	// Abram's Personal Test @feature Cash multiplier match option.
+	value = AbramGameRules::scaleIncome( value );
 
 	if( value > 0)
 	{

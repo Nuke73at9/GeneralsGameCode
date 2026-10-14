@@ -191,6 +191,7 @@ static const LookupListRec GameMessageMetaTypeNames[] =
 	{ "TOGGLE_PAUSE_ALT",													GameMessage::MSG_META_TOGGLE_PAUSE_ALT },
 	{ "STEP_FRAME",																GameMessage::MSG_META_STEP_FRAME },
 	{ "STEP_FRAME_ALT",														GameMessage::MSG_META_STEP_FRAME_ALT },
+	{ "ABRAM_TEAM_MENU",													GameMessage::MSG_META_ABRAM_TEAM_MENU },
 	{ "DEMO_INSTANT_QUIT",												GameMessage::MSG_META_DEMO_INSTANT_QUIT },
 
 #if defined(_ALLOW_DEBUG_CHEATS_IN_RELEASE)//may be defined in GameCommon.h
@@ -744,6 +745,17 @@ MetaMapRec *MetaMap::getMetaMapRec(GameMessage::Type t)
 //-------------------------------------------------------------------------------------------------
 void MetaMap::generateMetaMap()
 {
+	{
+		// Abram's Personal Test @feature Ctrl+G opens the team menu (AI control, give and request units).
+		MetaMapRec *map = getMetaMapRec(GameMessage::MSG_META_ABRAM_TEAM_MENU);
+		if (map->m_key == MK_NONE)
+		{
+			map->m_key = MK_G;
+			map->m_transition = DOWN;
+			map->m_modState = CTRL;
+			map->m_usableIn = COMMANDUSABLE_GAME;
+		}
+	}
 	// TheSuperHackers @info A default mapping for MSG_META_SELECT_ALL_AIRCRAFT would be useful for Generals
 	// but is not recommended, because it will cause key mapping conflicts with original game languages.
 
