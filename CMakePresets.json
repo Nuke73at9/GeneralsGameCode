@@ -309,10 +309,16 @@
             "name": "abram-win32",
             "inherits": "win32",
             "displayName": "Abram's Personal Test - Windows 32bit Release (single player)",
-            "description": "Windows 32bit Release without the GeneralsOnline multiplayer component, so no extra libraries are needed.",
+            "description": "Windows 32bit Release for single player and skirmish. Same options as GeneralsX's own Windows build, without the GeneralsOnline multiplayer component (which needs extra libraries).",
             "binaryDir": "${sourceDir}/build/abram-win32",
             "cacheVariables": {
-                "SAGE_USE_NGMP": "OFF"
+                "SAGE_USE_NGMP": "OFF",
+                "RTS_BUILD_OPTION_SAGE_PATCH": "OFF",
+                "SAGE_USE_DX8": "ON",
+                "SAGE_USE_DETERMINISTIC_MATH": "ON",
+                "RTS_BUILD_CORE_TOOLS": "OFF",
+                "RTS_BUILD_ZEROHOUR_TOOLS": "OFF",
+                "RTS_BUILD_GENERALS_TOOLS": "OFF"
             }
         }
     ],
