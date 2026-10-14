@@ -11,6 +11,12 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 # Add main build targets
 add_subdirectory(Code)
 
+# Abram's Personal Test: an install folder named by the build script wins over the registry, because
+# other tools (for example a second copy of the game) can change which registry entry is found first.
+if(DEFINED ENV{ABRAM_ZEROHOUR_PATH} AND NOT "$ENV{ABRAM_ZEROHOUR_PATH}" STREQUAL "")
+    set(RTS_INSTALL_PREFIX_ZEROHOUR "$ENV{ABRAM_ZEROHOUR_PATH}" CACHE PATH "Install path from ABRAM_ZEROHOUR_PATH" FORCE)
+endif()
+
 # If we are building on windows for windows, try and get the game install path from the registry.
 if("${CMAKE_HOST_SYSTEM}" MATCHES "Windows" AND "${CMAKE_SYSTEM}" MATCHES "Windows")
     include(${CMAKE_SOURCE_DIR}/cmake/registry.cmake)

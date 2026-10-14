@@ -21,6 +21,10 @@ if not defined VCPKG_ROOT goto :novcpkg
 if not exist "%VCPKG_ROOT%\vcpkg.exe" goto :novcpkg
 echo Using vcpkg from %VCPKG_ROOT%
 
+rem Install into these game folders. Change them here if your games are somewhere else.
+set "ABRAM_ZEROHOUR_PATH=C:\Program Files (x86)\Steam\steamapps\common\Command & Conquer Generals - Zero Hour"
+set "ABRAM_GENERALS_PATH=C:\Program Files (x86)\Steam\steamapps\common\Command and Conquer Generals"
+
 cd /d "%~dp0"
 
 echo.
@@ -34,7 +38,7 @@ cmake --install build/abram-win32-vcpkg --config Release
 if errorlevel 1 goto :fail
 
 echo.
-echo === Done. Launch generalszh.exe from your Zero Hour folder. ===
+echo === Done. Launch GeneralsXZH.exe from your Zero Hour folder. ===
 pause
 exit /b 0
 

@@ -51,8 +51,10 @@ const RegistryLocation OtherGameLocations[] =
 	{ "SOFTWARE\\Electronic Arts\\EA Games\\Generals", "InstallPath" },
 	{ "SOFTWARE\\Electronic Arts\\EA Games\\Command and Conquer The First Decade", "gr_folder" },
 };
-// Our own build first, then the retail executable as a fallback.
-const char* const OtherGameExeNames[] = { "generalsv.exe", "generals.exe" };
+// Our own build first (GeneralsX names, then the older names), then the retail executable.
+const char* const OtherGameExeNames[] = { "GeneralsX.exe", "generalsv.exe", "generals.exe" };
+// Folder names of the other game next to this one in a Steam library.
+const char* const OtherGameSiblingFolders[] = { "Command and Conquer Generals" };
 const wchar_t* const SwitchButtonLabel = L"Switch to Generals";
 #else
 const RegistryLocation OtherGameLocations[] =
@@ -61,7 +63,8 @@ const RegistryLocation OtherGameLocations[] =
 	{ "SOFTWARE\\Electronic Arts\\EA Games\\ZeroHour", "InstallPath" },
 	{ "SOFTWARE\\Electronic Arts\\EA Games\\Command and Conquer The First Decade", "zh_folder" },
 };
-const char* const OtherGameExeNames[] = { "generalszh.exe", "generals.exe" };
+const char* const OtherGameExeNames[] = { "GeneralsXZH.exe", "generalszh.exe", "generals.exe" };
+const char* const OtherGameSiblingFolders[] = { "Command & Conquer Generals - Zero Hour", "Command and Conquer Generals Zero Hour" };
 const wchar_t* const SwitchButtonLabel = L"Switch to Zero Hour";
 #endif
 
@@ -198,6 +201,43 @@ char GameSwitcher::s_arguments[SWITCH_PATH_SIZE * 2] = { 0 };
 bool GameSwitcher::findOtherGame(char* exePath, unsigned int exePathSize, char* workingDir, unsigned int workingDirSize)
 {
 	char folder[SWITCH_PATH_SIZE];
+
+	// Abram's Personal Test: first look next to this game's own folder (the Steam library layout), so the
+	// switch stays within the same installation even when the registry points at another copy.
+	char ownPath[SWITCH_PATH_SIZE];
+	DWORD ownLen = GetModuleFileNameA(nullptr, ownPath, SWITCH_PATH_SIZE);
+	if (ownLen > 0 && ownLen < SWITCH_PATH_SIZE)
+	{
+		char* lastSlash = strrchr(ownPath, '\\');
+		if (lastSlash)
+		{
+			*lastSlash = '\0';                         // ownPath is now this game's folder
+			char* parentSlash = strrchr(ownPath, '\\');
+			if (parentSlash)
+			{
+				parentSlash[1] = '\0';                 // ownPath is now the parent folder
+				for (unsigned int i = 0; i < sizeof(OtherGameSiblingFolders) / sizeof(OtherGameSiblingFolders[0]); ++i)
+				{
+					_snprintf(folder, sizeof(folder), "%s%s\\", ownPath, OtherGameSiblingFolders[i]);
+					folder[sizeof(folder) - 1] = '\0';
+					for (unsigned int j = 0; j < sizeof(OtherGameExeNames) / sizeof(OtherGameExeNames[0]); ++j)
+					{
+						char candidate[SWITCH_PATH_SIZE];
+						_snprintf(candidate, sizeof(candidate), "%s%s", folder, OtherGameExeNames[j]);
+						candidate[sizeof(candidate) - 1] = '\0';
+						if (fileExists(candidate))
+						{
+							strncpy(exePath, candidate, exePathSize);
+							exePath[exePathSize - 1] = '\0';
+							strncpy(workingDir, folder, workingDirSize);
+							workingDir[workingDirSize - 1] = '\0';
+							return true;
+						}
+					}
+				}
+			}
+		}
+	}
 
 	for (unsigned int i = 0; i < sizeof(OtherGameLocations) / sizeof(OtherGameLocations[0]); ++i)
 	{
