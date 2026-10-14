@@ -51,6 +51,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Module/CreateModule.h"
 #include "GameLogic/Module/ParkingPlaceBehavior.h"
+#include "Common/AbramGameRules.h"
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/ScriptEngine.h"
@@ -218,10 +219,23 @@ ProductionUpdate::~ProductionUpdate()
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Abram's Personal Test @feature With the Large Build Queue rule a production building queues up to
+	* ABRAM_LARGE_BUILD_QUEUE_SIZE entries, built in the order they were placed. Without it, the module's
+	* MaxQueueEntries (9 unless a mod changes it) applies as always. */
+//-------------------------------------------------------------------------------------------------
+UnsignedInt ProductionUpdate::getMaxProductionCount() const
+{
+	const Int dataMax = getProductionUpdateModuleData()->m_maxQueueEntries;
+	if (AbramGameRules::isEnabled( ABRAM_RULE_LARGE_BUILD_QUEUE ) && dataMax < ABRAM_LARGE_BUILD_QUEUE_SIZE)
+		return ABRAM_LARGE_BUILD_QUEUE_SIZE;
+	return dataMax > 0 ? (UnsignedInt)dataMax : 0;
+}
+
+//-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 CanMakeType ProductionUpdate::canQueueUpgrade( const UpgradeTemplate *upgrade ) const
 {
-	if (m_productionCount >= getProductionUpdateModuleData()->m_maxQueueEntries)
+	if (m_productionCount >= getMaxProductionCount())
 		return CANMAKE_QUEUE_FULL;
 
 	return CANMAKE_OK;
@@ -244,7 +258,7 @@ CanMakeType ProductionUpdate::canQueueCreateUnit( const ThingTemplate *unitType 
 		}
 	}
 
-	if (m_productionCount >= getProductionUpdateModuleData()->m_maxQueueEntries)
+	if (m_productionCount >= getMaxProductionCount())
 		return CANMAKE_QUEUE_FULL;
 
 	return CANMAKE_OK;
@@ -289,7 +303,7 @@ Bool ProductionUpdate::queueUpgrade( const UpgradeTemplate *upgrade )
       (player->hasUpgradeComplete( upgrade ) || player->hasUpgradeInProduction( upgrade )) )
 		return FALSE;
 
-	if (m_productionCount >= getProductionUpdateModuleData()->m_maxQueueEntries)
+	if (m_productionCount >= getMaxProductionCount())
 	{
 		DEBUG_CRASH(("Production Queue is full... how did we get here?"));
 		return FALSE;
@@ -385,7 +399,7 @@ Bool ProductionUpdate::queueCreateUnit( const ThingTemplate *unitType, Productio
 		}
 	}
 
-	if (m_productionCount >= getProductionUpdateModuleData()->m_maxQueueEntries)
+	if (m_productionCount >= getMaxProductionCount())
 	{
 		DEBUG_CRASH(("Production Queue is full... how did we get here?"));
 		return FALSE;

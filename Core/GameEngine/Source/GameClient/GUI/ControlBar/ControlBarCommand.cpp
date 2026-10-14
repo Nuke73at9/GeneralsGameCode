@@ -54,6 +54,7 @@
 
 #include "GameClient/InGameUI.h"
 #include "GameClient/Drawable.h"
+#include "Common/AbramGameRules.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
@@ -680,6 +681,15 @@ void ControlBar::populateBuildQueue( Object *producer )
 
 	}
 
+	// Abram's Personal Test @feature With the Large Build Queue rule more entries can be queued than there
+	// are queue buttons. The last button then shows how many more are waiting behind it.
+	if( pu->getProductionCount() > MAX_BUILD_QUEUE_BUTTONS )
+	{
+		UnicodeString moreText;
+		moreText.format( L"+%u", pu->getProductionCount() - MAX_BUILD_QUEUE_BUTTONS );
+		GadgetButtonSetText( m_queueData[ MAX_BUILD_QUEUE_BUTTONS - 1 ].control, moreText );
+	}
+
 	//
 	// save the count of things being produced in the build queue, when it changes we will
 	// repopulate the queue to visually show the change
@@ -863,6 +873,22 @@ void ControlBar::updateContextCommand()
 			default:
 				win->winEnable( TRUE );
 				break;
+		}
+
+		// Abram's Personal Test @feature With the Large Build Queue rule, unit buttons show how many of that
+		// unit are queued, so long queues can be followed without opening them.
+		if( command->getCommandType() == GUI_COMMAND_UNIT_BUILD )
+		{
+			UnicodeString countText;
+			if( pu && AbramGameRules::isEnabled( ABRAM_RULE_LARGE_BUILD_QUEUE ) )
+			{
+				const UnsignedInt queued = pu->countUnitTypeInQueue( command->getThingTemplate() );
+				if( queued > 0 )
+					countText.format( L"%u", queued );
+			}
+			// Also clears a count left over from an earlier game that used the rule.
+			if( countText.getLength() > 0 || win->winGetTextLength() > 0 )
+				GadgetButtonSetText( win, countText );
 		}
 
 		//Determine by the production type of this button, whether or not the created object
@@ -1120,7 +1146,8 @@ CommandAvailability ControlBar::getCommandAvailability( const CommandButton *com
 		return COMMAND_RESTRICTED;
 	}
 
-	Bool queueMaxed = pu ? ( pu->getProductionCount() == MAX_BUILD_QUEUE_BUTTONS ) : FALSE;
+	// Abram's Personal Test @feature The queue can be longer than the 9 queue buttons (Large Build Queue rule).
+	Bool queueMaxed = pu ? ( pu->getProductionCount() >= pu->getMaxProductionCount() ) : FALSE;
 
 	switch( command->getCommandType() )
 	{

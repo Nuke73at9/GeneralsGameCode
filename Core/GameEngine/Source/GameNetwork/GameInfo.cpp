@@ -321,6 +321,7 @@ void GameInfo::reset()
 	m_mapSize = 0;
   m_superweaponRestriction = 0;
   m_startingCash = TheGlobalData->m_defaultStartingCash;
+	m_abramRules = 0;
 
 	for (Int i=0; i<MAX_SLOTS; ++i)
 	{
@@ -1000,6 +1001,15 @@ static AsciiString buildGameInfoAsciiString(const GameInfo& game, const AsciiStr
 		game.getStartingCash().countMoney(), game.oldFactionsOnly() ? 'Y' : 'N' );
 #endif
 
+	// Abram's Personal Test @feature Optional gameplay rules. Only written when one is on, so the options
+	// string of a normal game stays exactly what other builds expect.
+	if (game.getAbramRules() != 0)
+	{
+		AsciiString rules;
+		rules.format("AR=%u;", game.getAbramRules());
+		optionsString.concat(rules);
+	}
+
 	//add player info for each slot
 	optionsString.concat(slotListID);
 	optionsString.concat('=');
@@ -1185,6 +1195,7 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
 	Bool sawSuperweaponRestriction = FALSE;
 	Bool sawStartingCash = FALSE;
 	Bool sawOldFactions = FALSE;
+	UnsignedInt abramRules = 0;
 
 	//DEBUG_LOG(("Saw options of %s", options.str()));
 	DEBUG_LOG(("ParseAsciiStringToGameInfo - parsing [%s]", options.str()));
@@ -1310,6 +1321,10 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
       oldFactionsOnly = ( val.compareNoCase( "Y" ) == 0 );
       sawOldFactions = TRUE;
     }
+		else if (key.compare("AR") == 0 )
+		{
+			abramRules = strtoul( val.str(), nullptr, 10 );
+		}
 		else if (key.getLength() == 1 && *key.str() == slotListID)
 		{
 			sawSlotlist = true;
@@ -1713,6 +1728,7 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
 		game->setSuperweaponRestriction(restriction);
 		game->setStartingCash(startingCash);
 		game->setOldFactionsOnly(oldFactionsOnly);
+		game->setAbramRules(abramRules);
 
 		return true;
 	}
@@ -1741,10 +1757,13 @@ void SkirmishGameInfo::xfer( Xfer *xfer )
 {
 #if RTS_GENERALS
 	const XferVersion currentVersion = 2;
-#else
-	const XferVersion currentVersion = 4;
-#endif
 	XferVersion version = currentVersion;
+#else
+	// Abram's Personal Test @feature Version 5 adds the optional gameplay rules. A game without them is
+	// still saved as version 4, so those saves stay loadable by the original game.
+	const XferVersion currentVersion = 5;
+	XferVersion version = (xfer->getXferMode() == XFER_SAVE && m_abramRules == 0) ? 4 : currentVersion;
+#endif
 	xfer->xferVersion( &version, currentVersion );
 
 
@@ -1840,6 +1859,17 @@ void SkirmishGameInfo::xfer( Xfer *xfer )
     m_superweaponRestriction = 0;
     m_startingCash = TheGlobalData->m_defaultStartingCash;
   }
+
+#if !RTS_GENERALS
+	if ( version >= 5 )
+	{
+		xfer->xferUnsignedInt( &m_abramRules );
+	}
+	else if ( xfer->getXferMode() == XFER_LOAD )
+	{
+		m_abramRules = 0;
+	}
+#endif
 
 }
 

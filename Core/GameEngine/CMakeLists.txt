@@ -136,6 +136,7 @@ set(GAMEENGINE_SRC
     Include/Common/version.h
     Include/Common/AbramImageConvert.h
     Include/Common/GameSwitcher.h
+    Include/Common/AbramGameRules.h
     Include/Common/ModManager.h
 #    Include/Common/WellKnownKeys.h
     Include/Common/WorkerProcess.h
@@ -149,6 +150,7 @@ set(GAMEENGINE_SRC
     Include/GameClient/AnimateWindowManager.h
 #    Include/GameClient/CampaignManager.h
     Include/GameClient/ChallengeGenerals.h
+    Include/GameClient/AbramGameRulesMenu.h
     Include/GameClient/AbramMainMenu.h
     Include/GameClient/ClientInstance.h
     Include/GameClient/ModSelectMenu.h
@@ -710,6 +712,7 @@ set(GAMEENGINE_SRC
     Source/Common/version.cpp
     Source/Common/AbramImageConvert.cpp
     Source/Common/GameSwitcher.cpp
+    Source/Common/AbramGameRules.cpp
     Source/Common/ModManager.cpp
     Source/Common/WorkerProcess.cpp
     Source/Common/WorkingDirectory.cpp
@@ -731,6 +734,7 @@ set(GAMEENGINE_SRC
     Source/GameClient/GameText.cpp
     Source/GameClient/GlobalLanguage.cpp
     Source/GameClient/GraphDraw.cpp
+    Source/GameClient/GUI/AbramGameRulesMenu.cpp
     Source/GameClient/GUI/AbramMainMenu.cpp
     Source/GameClient/GUI/AnimateWindowManager.cpp
     Source/GameClient/GUI/ModSelectMenu.cpp

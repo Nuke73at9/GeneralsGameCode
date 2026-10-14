@@ -41,6 +41,7 @@
 #include "Common/SkirmishPreferences.h"
 #include "Common/OptionPreferences.h"
 #include "GameLogic/GameLogic.h"
+#include "GameClient/AbramGameRulesMenu.h"
 #include "GameClient/AnimateWindowManager.h"
 #include "GameClient/ClientInstance.h"
 #include "GameClient/WindowLayout.h"
@@ -385,6 +386,7 @@ Bool SkirmishPreferences::write()
 
   setStartingCash( TheSkirmishGameInfo->getStartingCash() );
   setSuperweaponRestricted( TheSkirmishGameInfo->getSuperweaponRestriction() != 0 );
+	setInt( "AbramRules", (Int)TheSkirmishGameInfo->getAbramRules() );
 
 	setSlotList();
 
@@ -1088,6 +1090,8 @@ void InitSkirmishGameGadgets()
 	DEBUG_ASSERTCRASH(staticTextGameSpeed, ("Could not find the staticTextGameSpeed"));
   checkBoxLimitSuperweapons = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, checkBoxLimitSuperweaponsID );
   DEBUG_ASSERTCRASH(checkBoxLimitSuperweapons, ("Could not find the checkBoxLimitSuperweapons"));
+	// Abram's Personal Test @feature Check boxes for the optional gameplay rules.
+	AbramGameRulesMenu::init( checkBoxLimitSuperweapons );
   comboBoxStartingCash = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, comboBoxStartingCashID );
   DEBUG_ASSERTCRASH(comboBoxStartingCash, ("Could not find the comboBoxStartingCash"));
   PopulateStartingCashComboBox(comboBoxStartingCash, TheSkirmishGameInfo );
@@ -1271,6 +1275,7 @@ void updateSkirmishGameOptions()
 	}
 
   GadgetCheckBoxSetChecked( checkBoxLimitSuperweapons, TheSkirmishGameInfo->getSuperweaponRestriction() != 0 );
+	AbramGameRulesMenu::refresh( TheSkirmishGameInfo );
   Int itemCount = GadgetComboBoxGetLength(comboBoxStartingCash);
   Int index = 0;
   for ( ; index < itemCount; index++ )
@@ -1356,6 +1361,8 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
 
   TheSkirmishGameInfo->setStartingCash( prefs.getStartingCash() );
   TheSkirmishGameInfo->setSuperweaponRestriction( prefs.getSuperweaponRestricted() ? 1 : 0 );
+	TheSkirmishGameInfo->setAbramRules( (UnsignedInt)prefs.getInt( "AbramRules", 0 ) );
+	AbramGameRulesMenu::refresh( TheSkirmishGameInfo );
 
   TheSkirmishGameInfo->setMap(prefs.getPreferredMap());
 	const MapMetaData *md = TheMapCache->findMap(TheSkirmishGameInfo->getMap());
@@ -1688,7 +1695,8 @@ WindowMsgHandledType SkirmishGameOptionsMenuSystem( GameWindow *window, Unsigned
         {
           handleLimitSuperweaponsClick();
         }
-				else
+				// Abram's Personal Test @feature The optional gameplay rule check boxes update the game's rules.
+				else if ( !AbramGameRulesMenu::handleSelected( control, TheSkirmishGameInfo ) )
 				{
 					for (Int i = 0; i < MAX_SLOTS; i++)
 					{
