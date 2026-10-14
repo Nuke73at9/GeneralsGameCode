@@ -52,6 +52,7 @@
 #include "Common/PlayerList.h"
 #include "Common/Registry.h"
 #include "Common/Team.h"
+#include "Common/GameSwitcher.h"
 #include "GameClient/ClientInstance.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/GameClient.h"
@@ -917,6 +918,14 @@ Int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 		// run the game main loop
 		exitcode = GameMain();
+
+		// Abram's Personal Test @feature Start the other game if the player chose to switch.
+		// The instance mutex must be released first, because both games share it.
+		if (GameSwitcher::isSwitchRequested())
+		{
+			rts::ClientInstance::shutdown();
+			GameSwitcher::launchRequested();
+		}
 
 		delete TheVersion;
 		TheVersion = nullptr;

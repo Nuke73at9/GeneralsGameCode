@@ -89,6 +89,15 @@ bool ClientInstance::isInitialized()
 	return s_mutexHandle != nullptr;
 }
 
+void ClientInstance::shutdown()
+{
+	if (s_mutexHandle != nullptr)
+	{
+		CloseHandle(s_mutexHandle);
+		s_mutexHandle = nullptr;
+	}
+}
+
 bool ClientInstance::isMultiInstance()
 {
 	return s_isMultiInstance;

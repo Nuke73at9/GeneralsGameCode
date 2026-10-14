@@ -134,6 +134,7 @@ set(GAMEENGINE_SRC
     #Include/Common/urllaunch.h # unused
     Include/Common/UserPreferences.h
     Include/Common/version.h
+    Include/Common/GameSwitcher.h
 #    Include/Common/WellKnownKeys.h
     Include/Common/WorkerProcess.h
     Include/Common/WorkingDirectory.h
@@ -703,6 +704,7 @@ set(GAMEENGINE_SRC
     Source/Common/Thing/ThingTemplate.cpp
     Source/Common/UserPreferences.cpp
     Source/Common/version.cpp
+    Source/Common/GameSwitcher.cpp
     Source/Common/WorkerProcess.cpp
     Source/Common/WorkingDirectory.cpp
     Source/GameClient/ClientInstance.cpp

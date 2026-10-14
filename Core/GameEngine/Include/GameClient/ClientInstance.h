@@ -29,6 +29,10 @@ public:
 
 	static bool isInitialized();
 
+	// Releases the instance mutex so that another game client can start.
+	// Abram's Personal Test @feature Used when switching between Generals and Zero Hour.
+	static void shutdown();
+
 	static bool isMultiInstance();
 
 	// Change multi instance on runtime. Must be called before initialize.
