@@ -49,8 +49,10 @@
 #include "Common/file.h"
 #include "Common/FileSystem.h"
 
+#include "Common/ArchiveFile.h"
 #include "Common/ArchiveFileSystem.h"
 #include "Common/GameAudio.h"
+#include "Common/GlobalData.h"
 #include "Common/LocalFileSystem.h"
 #include "Common/PerfTimer.h"
 
@@ -169,6 +171,27 @@ void		FileSystem::reset()
 }
 
 //============================================================================
+// Abram's Personal Test @bugfix Files from the active mod beat loose files of the original install.
+//
+// The game normally prefers loose files in the game folder over files inside archives. Some
+// installs ship loose originals, for example Steam's Data\Scripts\SkirmishScripts.scb (the
+// skirmish AI). Mod launchers rename those loose files while a mod runs; without that, the
+// original AI scripts would drive the mod's units. So while a mod is active, a file that the mod's
+// archives contain is read from the mod, not from the loose original.
+//============================================================================
+static Bool isProvidedByActiveMod(const Char *filename)
+{
+	if (TheGlobalData == nullptr || TheGlobalData->m_modDir.isEmpty() || TheArchiveFileSystem == nullptr)
+		return FALSE;
+
+	ArchiveFile *archive = TheArchiveFileSystem->getArchiveFile(AsciiString(filename));
+	if (archive == nullptr)
+		return FALSE;
+
+	return archive->getName().startsWithNoCase(TheGlobalData->m_modDir);
+}
+
+//============================================================================
 // FileSystem::open
 //============================================================================
 
@@ -177,7 +200,12 @@ File*		FileSystem::openFile( const Char *filename, Int access, size_t bufferSize
 	USE_PERF_TIMER(FileSystem)
 	File *file = nullptr;
 
-	if ( TheLocalFileSystem != nullptr )
+	// Reading a file that the active mod provides: skip the loose original (see above).
+	const Bool readFromMod = (instance == 0)
+		&& (access & (File::WRITE | File::CREATE)) == 0
+		&& isProvidedByActiveMod(filename);
+
+	if ( TheLocalFileSystem != nullptr && !readFromMod )
 	{
 		if (instance != 0)
 		{
@@ -303,6 +331,11 @@ Bool FileSystem::getFileInfo(const AsciiString& filename, FileInfo *fileInfo, Fi
 		return FALSE;
 	}
 	memset(fileInfo, 0, sizeof(*fileInfo));
+
+	// Same rule as openFile: the active mod's file beats a loose original.
+	if (instance == 0 && isProvidedByActiveMod(filename.str())) {
+		return TheArchiveFileSystem->getFileInfo(filename, fileInfo, 0);
+	}
 
 	if (TheLocalFileSystem->getFileInfo(filename, fileInfo)) {
 		if (instance == 0) {
