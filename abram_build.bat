@@ -30,7 +30,7 @@ if errorlevel 1 goto :fail
 
 echo.
 echo === Installing into the game folder ===
-cmake --install build/abram-win32 --config Release
+cmake --install build/abram-win32-vcpkg --config Release
 if errorlevel 1 goto :fail
 
 echo.
