@@ -219,9 +219,15 @@ void setFPMode()
 	UnsignedInt newVal = curVal;
 	newVal = (newVal & ~_MCW_RC) | (_RC_NEAR & _MCW_RC);
 	//newVal = (newVal & ~_MCW_RC) | (_RC_CHOP & _MCW_RC);
+#if defined(_WIN64)
+	// Abram's Personal Test @bugfix 64-bit Windows does math with SSE, which has no precision control.
+	// Passing _MCW_PC there makes the C runtime stop the game, so only the rounding mode is set.
+	_controlfp(newVal, _MCW_RC);
+#else
 	newVal = (newVal & ~_MCW_PC) | (_PC_24   & _MCW_PC);
 
 	_controlfp(newVal, _MCW_PC | _MCW_RC);
+#endif
 	#else
 	fesetenv(FE_DFL_ENV);
 	feclearexcept(FE_ALL_EXCEPT);

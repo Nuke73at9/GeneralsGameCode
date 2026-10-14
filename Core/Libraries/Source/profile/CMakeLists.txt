@@ -35,6 +35,7 @@ target_link_libraries(core_profile_legacy PRIVATE
     corei_always
 )
 
-if(WIN32)
+# Abram's Personal Test @build core_debug only exists on 32-bit Windows (see Source/debug/CMakeLists.txt).
+if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 4)
     target_link_libraries(core_profile_legacy PRIVATE core_debug)
 endif()

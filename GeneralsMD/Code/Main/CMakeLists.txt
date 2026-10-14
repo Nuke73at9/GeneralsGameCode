@@ -10,7 +10,6 @@ if(WIN32)
     target_link_libraries(z_generals PRIVATE
         deps_bink
         comctl32
-        core_debug
         dinput8
         dxguid
         imm32
@@ -18,9 +17,10 @@ if(WIN32)
         vfw32
         winmm
     )
-    # Abram's Personal Test: d3d8.lib is 32-bit only. The 64-bit build loads d3d8.dll at runtime.
+    # Abram's Personal Test: d3d8.lib and the debug library are 32-bit only. The 64-bit build loads
+    # d3d8.dll at runtime.
     if(CMAKE_SIZEOF_VOID_P EQUAL 4)
-        target_link_libraries(z_generals PRIVATE d3d8)
+        target_link_libraries(z_generals PRIVATE d3d8 core_debug)
     endif()
 endif()
 

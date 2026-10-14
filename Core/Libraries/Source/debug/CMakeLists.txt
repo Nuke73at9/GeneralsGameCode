@@ -22,7 +22,9 @@ set(DEBUG_SRC
 )
 
 # Debug library is Windows-only (depends on windows.h)
-if(WIN32)
+# Abram's Personal Test @build It reads 32-bit x86 registers (Eip, Esp, x87 state) and uses x86 inline
+# assembly, and only the tools link it, so it is built for 32-bit Windows only.
+if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 4)
     add_library(core_debug STATIC)
 
     target_sources(core_debug PRIVATE ${DEBUG_SRC})

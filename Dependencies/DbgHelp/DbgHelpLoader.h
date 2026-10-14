@@ -52,6 +52,14 @@ public:
 // the declarations in imagehlp.h. Other libraries such as Tracy link dbghelp.lib, which already
 // defines the global names, so defining them here too would fail to link with duplicate symbols.
 // Calling the unqualified global names instead would bypass this loader.
+// Abram's Personal Test @bugfix Code and module addresses are 64-bit on 64-bit Windows. There,
+// imagehlp.h maps these names and types to their 64-bit versions (SymLoadModule64, STACKFRAME64, ...).
+#if defined(_WIN64)
+typedef DWORD64 DbgHelpAddress;
+#else
+typedef DWORD DbgHelpAddress;
+#endif
+
 namespace DbgHelp
 {
 
@@ -63,31 +71,31 @@ BOOL WINAPI SymInitialize(
 BOOL WINAPI SymCleanup(
 	HANDLE hProcess);
 
-DWORD WINAPI SymLoadModule(
+DbgHelpAddress WINAPI SymLoadModule(
 	HANDLE hProcess,
 	HANDLE hFile,
 	PCSTR ImageName,
 	PCSTR ModuleName,
-	DWORD BaseOfDll,
+	DbgHelpAddress BaseOfDll,
 	DWORD SizeOfDll);
 
-DWORD WINAPI SymGetModuleBase(
+DbgHelpAddress WINAPI SymGetModuleBase(
 	HANDLE hProcess,
-	DWORD dwAddr);
+	DbgHelpAddress dwAddr);
 
 BOOL WINAPI SymUnloadModule(
 	HANDLE hProcess,
-	DWORD BaseOfDll);
+	DbgHelpAddress BaseOfDll);
 
 BOOL WINAPI SymGetSymFromAddr(
 	HANDLE hProcess,
-	DWORD dwAddr,
-	PDWORD pdwDisplacement,
+	DbgHelpAddress dwAddr,
+	DbgHelpAddress* pdwDisplacement,
 	PIMAGEHLP_SYMBOL Symbol);
 
 BOOL WINAPI SymGetLineFromAddr(
 	HANDLE hProcess,
-	DWORD dwAddr,
+	DbgHelpAddress dwAddr,
 	PDWORD pdwDisplacement,
 	PIMAGEHLP_LINE Line);
 
@@ -96,7 +104,7 @@ DWORD WINAPI SymSetOptions(
 
 PVOID WINAPI SymFunctionTableAccess(
 	HANDLE hProcess,
-	DWORD AddrBase);
+	DbgHelpAddress AddrBase);
 
 BOOL WINAPI StackWalk(
 	DWORD MachineType,
