@@ -49,6 +49,9 @@
 #include "Common/ArchiveFile.h"
 #include "Common/ArchiveFileSystem.h"
 #include "Common/AsciiString.h"
+#include "Common/FileSystem.h"
+#include "Common/LocalFileSystem.h"
+#include "Common/ModManager.h"
 #include "Common/PerfTimer.h"
 
 
@@ -230,9 +233,31 @@ void ArchiveFileSystem::loadMods()
 
 	if (TheGlobalData->m_modDir.isNotEmpty())
 	{
-		MAYBE_UNUSED Bool ret = loadBigFilesFromDirectory(TheGlobalData->m_modDir, "*.big", TRUE);
-		(void)ret;
-		DEBUG_ASSERTLOG(ret, ("loadBigFilesFromDirectory(%s) returned FALSE!", TheGlobalData->m_modDir.str()));
+		// Abram's Personal Test @feature Load every archive in the mod folder, whatever its extension.
+		// Mods often name their archives .gib, .ctr and so on, which their own launchers rename to
+		// .big. We recognize archives by their content instead, so they load without renaming.
+		// The file list is sorted by name, the same order that loading "*.big" files used.
+		FilenameList filenameList;
+		TheLocalFileSystem->getFileListInDirectory(TheGlobalData->m_modDir, "", "*", filenameList, TRUE);
+
+		Bool actuallyAdded = FALSE;
+		for (FilenameListIter it = filenameList.begin(); it != filenameList.end(); ++it)
+		{
+			if (!ModManager::isBigArchive(it->str()))
+				continue;
+
+			ArchiveFile *archiveFile = openArchiveFile(it->str());
+			if (archiveFile != nullptr)
+			{
+				DEBUG_LOG(("ArchiveFileSystem::loadMods - loading %s into the directory tree.", it->str()));
+				loadIntoDirectoryTree(archiveFile, TRUE);
+				m_archiveFileMap[*it] = archiveFile;
+				actuallyAdded = TRUE;
+			}
+		}
+
+		(void)actuallyAdded;
+		DEBUG_ASSERTLOG(actuallyAdded, ("ArchiveFileSystem::loadMods - no archives found in %s", TheGlobalData->m_modDir.str()));
 	}
 }
 

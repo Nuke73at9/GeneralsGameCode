@@ -19,6 +19,7 @@
 #include "PreRTS.h"
 #include "Common/ModManager.h"
 
+#include <stdio.h>
 #include <string.h>
 
 int ModManager::s_modCount = 0;
@@ -29,10 +30,11 @@ char ModManager::s_modsRoot[260] = { 0 };
 namespace
 {
 
-int countFiles(const char* folder, const char* wildcard)
+// Counts the game archives in a folder and its subfolders, up to a few levels deep.
+int countArchives(const char* folder, int depth)
 {
 	char pattern[260];
-	_snprintf(pattern, sizeof(pattern), "%s%s", folder, wildcard);
+	_snprintf(pattern, sizeof(pattern), "%s*", folder);
 	pattern[sizeof(pattern) - 1] = '\0';
 
 	WIN32_FIND_DATAA findData;
@@ -43,8 +45,25 @@ int countFiles(const char* folder, const char* wildcard)
 	int count = 0;
 	do
 	{
-		if ((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+		if (strcmp(findData.cFileName, ".") == 0 || strcmp(findData.cFileName, "..") == 0)
+			continue;
+
+		char path[260];
+		_snprintf(path, sizeof(path), "%s%s", folder, findData.cFileName);
+		path[sizeof(path) - 1] = '\0';
+
+		if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+		{
+			if (depth < 3)
+			{
+				strncat(path, "\\", sizeof(path) - strlen(path) - 1);
+				count += countArchives(path, depth + 1);
+			}
+		}
+		else if (ModManager::isBigArchive(path))
+		{
 			++count;
+		}
 	}
 	while (FindNextFileA(find, &findData));
 
@@ -54,7 +73,7 @@ int countFiles(const char* folder, const char* wildcard)
 
 bool folderContainsBigFiles(const char* folder)
 {
-	return countFiles(folder, "*.big") > 0;
+	return countArchives(folder, 0) > 0;
 }
 
 // Finds the first file matching the wildcard in the folder. Writes its full path.
@@ -195,7 +214,7 @@ int ModManager::countBigFiles(int index)
 {
 	if (index < 0 || index >= s_modCount)
 		return 0;
-	return countFiles(s_modFolders[index], "*.big");
+	return countArchives(s_modFolders[index], 0);
 }
 
 bool ModManager::findPreviewImage(int index, char* path, unsigned int pathSize)
@@ -261,4 +280,21 @@ bool ModManager::readDescription(int index, char* text, unsigned int textSize)
 	*dst = '\0';
 
 	return text[0] != '\0';
+}
+
+bool ModManager::isBigArchive(const char* path)
+{
+	if (path == nullptr)
+		return false;
+
+	FILE* file = fopen(path, "rb");
+	if (file == nullptr)
+		return false;
+
+	char signature[4];
+	const size_t bytesRead = fread(signature, 1, sizeof(signature), file);
+	fclose(file);
+
+	// The engine reads "BIGF" archives (the Generals and Zero Hour format).
+	return bytesRead == sizeof(signature) && memcmp(signature, "BIGF", 4) == 0;
 }
