@@ -78,7 +78,9 @@
 HTreeClass::HTreeClass() :
 	NumPivots(0),
 	Pivot(nullptr),
-	ScaleFactor(1.0f)
+	ScaleFactor(1.0f),
+	Aliases(nullptr),
+	NumAliases(0)
 {
 }
 
@@ -138,7 +140,9 @@ HTreeClass::~HTreeClass()
 HTreeClass::HTreeClass(const HTreeClass & src) :
 	NumPivots(0),
 	Pivot(nullptr),
-	ScaleFactor(1.0f)
+	ScaleFactor(1.0f),
+	Aliases(nullptr),
+	NumAliases(0)
 {
 	memcpy(&Name,&src.Name,sizeof(Name));
 
@@ -158,6 +162,12 @@ HTreeClass::HTreeClass(const HTreeClass & src) :
 	}
 
 	ScaleFactor = src.ScaleFactor;
+
+	if (src.NumAliases > 0) {
+		NumAliases = src.NumAliases;
+		Aliases = MSGW3DNEWARRAY("HTreeClass::Aliases") W3dPivotAliasStruct[NumAliases];
+		memcpy(Aliases, src.Aliases, sizeof(W3dPivotAliasStruct) * NumAliases);
+	}
 }
 
 /***********************************************************************************************
@@ -224,6 +234,12 @@ int HTreeClass::Load_W3D(ChunkLoadClass & cload)
 
 			case W3D_CHUNK_PIVOTS:
 				if (!read_pivots(cload,pre30)) {
+					goto Error;
+				}
+				break;
+
+			case W3D_CHUNK_PIVOT_ALIASES:
+				if (!read_aliases(cload)) {
 					goto Error;
 				}
 				break;
@@ -360,6 +376,10 @@ void HTreeClass::Free()
 	delete[] Pivot;
 	Pivot = nullptr;
 	NumPivots = 0;
+
+	delete[] Aliases;
+	Aliases = nullptr;
+	NumAliases = 0;
 
 	// Also clean up other members:
 	ScaleFactor = 1.0f;
@@ -932,7 +952,123 @@ int HTreeClass::Get_Bone_Index(const char * name) const
 			return i;
 		}
 	}
+
+	/*
+	** Skeletons converted from SAGE 2 games carry aliases: the original name of a bone
+	** whose stored name was shortened, and/or the SAGE hash of its real name (C&C4 kept
+	** only the hash). Vanilla skeletons have no aliases, so for them nothing changes.
+	*/
+	if (NumAliases > 0 && name != nullptr && name[0] != 0) {
+		for (int i=0; i < NumAliases; i++) {
+			if (Aliases[i].Name[0] != 0 && stricmp(Aliases[i].Name,name) == 0) {
+				return (int)Aliases[i].PivotIdx;
+			}
+		}
+
+		const uint32 hash = Sage_Name_Hash(name);
+		for (int i=0; i < NumAliases; i++) {
+			if (Aliases[i].NameHash != 0 && Aliases[i].NameHash == hash) {
+				return (int)Aliases[i].PivotIdx;
+			}
+		}
+
+		// A miss on a converted model usually means a wrong bone name in INI. Warn instead of
+		// silently attaching to the root. Vanilla models probe optional bones, so they stay quiet.
+		WWDEBUG_WARNING(("HTreeClass::Get_Bone_Index - bone '%s' not found in '%s', using the root\n", name, Name));
+	}
+
 	return 0;
+}
+
+
+/***********************************************************************************************
+ * HTreeClass::Sage_Name_Hash -- SAGE 2 name hash, used to match C&C4 bone names              *
+ *                                                                                             *
+ * A SuperFastHash variant applied to the lower-cased name. It reproduces SAGE 2 asset ids,   *
+ * and C&C4 stores bone names only in this form.                                               *
+ *=============================================================================================*/
+static inline uint32 sage_hash_byte(const char * name, int i)
+{
+	unsigned char c = (unsigned char)name[i];
+	if (c >= 'A' && c <= 'Z') {
+		c = (unsigned char)(c - 'A' + 'a');
+	}
+	return (uint32)c;
+}
+
+uint32 HTreeClass::Sage_Name_Hash(const char * name)
+{
+	if (name == nullptr) {
+		return 0;
+	}
+
+	const int len = (int)strlen(name);
+	if (len == 0) {
+		return 0;
+	}
+
+	uint32 hash = (uint32)len;
+	int i = 0;
+	for (int block = len >> 2; block != 0; --block) {
+		hash += (sage_hash_byte(name, i + 1) << 8) | sage_hash_byte(name, i);
+		hash ^= (((sage_hash_byte(name, i + 3) << 8) | sage_hash_byte(name, i + 2)) ^ (hash << 5)) << 11;
+		hash += hash >> 11;
+		i += 4;
+	}
+
+	switch (len & 3) {
+		case 1:
+			hash += sage_hash_byte(name, i);
+			hash = (hash << 10) ^ hash;
+			hash += hash >> 1;
+			break;
+		case 2:
+			hash += (sage_hash_byte(name, i + 1) << 8) | sage_hash_byte(name, i);
+			hash ^= hash << 11;
+			hash += hash >> 17;
+			break;
+		case 3:
+			hash += (sage_hash_byte(name, i + 1) << 8) | sage_hash_byte(name, i);
+			hash ^= (hash ^ (sage_hash_byte(name, i + 2) << 2)) << 16;
+			hash += hash >> 11;
+			break;
+	}
+
+	hash ^= hash << 3;
+	hash += hash >> 5;
+	hash ^= hash << 2;
+	hash += hash >> 15;
+	hash ^= hash << 10;
+	return hash;
+}
+
+
+/***********************************************************************************************
+ * HTreeClass::read_aliases -- reads the optional W3D_CHUNK_PIVOT_ALIASES chunk                *
+ *=============================================================================================*/
+bool HTreeClass::read_aliases(ChunkLoadClass & cload)
+{
+	const unsigned int length = cload.Cur_Chunk_Length();
+	const int count = (int)(length / sizeof(W3dPivotAliasStruct));
+	if (count <= 0 || (length % sizeof(W3dPivotAliasStruct)) != 0) {
+		return false;
+	}
+
+	delete[] Aliases;
+	Aliases = MSGW3DNEWARRAY("HTreeClass::Aliases") W3dPivotAliasStruct[count];
+	NumAliases = 0;
+
+	for (int i = 0; i < count; i++) {
+		W3dPivotAliasStruct alias;
+		if (cload.Read(&alias, sizeof(W3dPivotAliasStruct)) != sizeof(W3dPivotAliasStruct)) {
+			return false;
+		}
+		alias.Name[sizeof(alias.Name) - 1] = 0;
+		if ((int)alias.PivotIdx < NumPivots) {
+			Aliases[NumAliases++] = alias;
+		}
+	}
+	return true;
 }
 
 

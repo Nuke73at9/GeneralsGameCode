@@ -45,6 +45,21 @@
 #include "WW3D2/w3d_file.h"
 #include "WWDebug/wwdebug.h"
 
+/*
+** Bone aliases for skeletons converted from SAGE 2 games.
+** An optional chunk inside W3D_CHUNK_HIERARCHY, after W3D_CHUNK_PIVOTS. Loaders that
+** don't know it skip it. Each record maps a name (the original name when the stored
+** one was shortened to fit W3D_NAME_LEN) and/or a SAGE name hash to a pivot index.
+*/
+#define W3D_CHUNK_PIVOT_ALIASES		0x00000110
+
+struct W3dPivotAliasStruct
+{
+	uint32					PivotIdx;
+	uint32					NameHash;		// Sage_Name_Hash of the bone's real name, 0 if unknown
+	char						Name[64];		// alternate name, empty if only the hash is known
+};
+
 class HAnimClass;
 class HAnimComboClass;
 class MeshClass;
@@ -161,8 +176,19 @@ private:
 	PivotClass *		Pivot;
 	float					ScaleFactor;
 
+	// Optional bone aliases (W3D_CHUNK_PIVOT_ALIASES). Only skeletons converted from
+	// SAGE 2 (C&C3/KW/C&C4) carry them; vanilla skeletons have none and behave as before.
+	W3dPivotAliasStruct *	Aliases;
+	int					NumAliases;
+
 	void					Free();
 	bool					read_pivots(ChunkLoadClass & cload,bool pre30);
+	bool					read_aliases(ChunkLoadClass & cload);
+
+public:
+	// SAGE 2 name hash (lower-cased SuperFastHash variant). C&C4 stores bone names only
+	// as this hash, so a lookup by name can still find a bone whose real name was lost.
+	static uint32		Sage_Name_Hash(const char * name);
 
 	friend class MeshClass;
 
