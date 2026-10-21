@@ -917,7 +917,6 @@ int Sage2EffectClass::Select_Shader(const Object& arrayObject, const Preshader* 
 void Sage2EffectClass::Apply_Constants(IDirect3DDevice9* device, const Shader& shader)
 {
 	bool vs = shader.type == TYPE_VERTEXSHADER;
-	float regs[4 * 4];
 	for (size_t s = 0; s < shader.symbols.size(); ++s)
 	{
 		const CtabSymbol& sym = shader.symbols[s];
