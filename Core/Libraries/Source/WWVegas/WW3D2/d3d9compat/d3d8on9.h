@@ -197,6 +197,11 @@ public:
 	/// Draw meshes in the fixed-function vertex format with this vertex shader instead of fixed-function
 	/// vertex processing (nullptr: back to fixed-function). The FVF still describes the vertices.
 	void Set_Vertex_Shader_Override(IDirect3DVertexShader9* shader);
+	/// Tiberium Project @feature SAGE 2 materials: describe the fixed-function-format vertices with this
+	/// declaration instead of the FVF (for extra streams the FVF cannot name; nullptr: back to the FVF).
+	void Set_Vertex_Declaration_Override(IDirect3DVertexDeclaration9* declaration);
+	/// The current FVF, or 0 when a vertex shader handle is current
+	DWORD Get_Current_FVF() const { return (m_vertexShader != ~0u && (m_vertexShader & 1) == 0) ? m_vertexShader : 0; }	// bit 0: a shader handle
 
 	// device
 	HRESULT TestCooperativeLevel() { return m_device->TestCooperativeLevel(); }
@@ -299,6 +304,7 @@ private:
 	UINT m_baseVertexIndex;
 	DWORD m_vertexShader;		///< the current Direct3D 8 vertex shader handle or FVF
 	IDirect3DVertexShader9* m_vertexShaderOverride;	///< used with FVFs instead of fixed-function, or nullptr
+	IDirect3DVertexDeclaration9* m_vertexDeclarationOverride;	///< used with FVFs instead of SetFVF, or nullptr
 	std::vector<VertexShader> m_vertexShaders;
 	std::vector<IDirect3DPixelShader9*> m_pixelShaders;
 };

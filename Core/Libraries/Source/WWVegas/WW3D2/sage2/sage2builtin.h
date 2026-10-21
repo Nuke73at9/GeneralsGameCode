@@ -16,7 +16,8 @@
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Tiberium Project @feature C&C4 (SAGE 2) object look (Direct3D 9 renderer only).
+// Tiberium Project @feature The built-in approximation of the C&C4 object look (Direct3D 9 only):
+// the fallback when a mesh has no SAGE 2 material or its effect file is not available.
 //
 // A mesh whose base texture has a C&C4 normal map next to it (<texture>_NRM.dds, and optionally a
 // specular map <texture>_SPM.dds) is drawn per pixel: bumped lighting from the scene's own lights,
@@ -29,7 +30,7 @@ class MeshClass;
 class TextureClass;
 class VertexMaterialClass;
 
-class Sage2MaterialClass
+class Sage2BuiltinMaterialClass
 {
 public:
 	/// Sets up the C&C4 object shaders for this mesh if its texture has a normal map; the caller then

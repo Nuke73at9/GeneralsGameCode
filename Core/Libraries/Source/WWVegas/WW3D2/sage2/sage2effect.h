@@ -70,6 +70,7 @@ public:
 		std::vector<unsigned> objects;	// object parameters: the object indices (shader arrays have several)
 		bool unmanaged;					// 'unmanaged' annotation: a per-draw engine global
 		IDirect3DBaseTexture9* texture;	// textures: what is bound, or nullptr
+		int binding;					// for the engine: which global value feeds this parameter (0: none)
 
 		const Annotation* Find_Annotation(const char* name) const;
 		const char* Bind_Address() const;	// SasBindAddress annotation or ""
@@ -99,6 +100,7 @@ public:
 	/// rows = rows of projection * view).
 	void Set_Matrix(const char* name, const float* rowMajor16);
 	void Set_Texture(int index, IDirect3DBaseTexture9* texture);
+	void Set_Binding(int index, int binding) { if (index >= 0 && index < (int)m_params.size()) m_params[index].binding = binding; }
 	void Set_Texture(const char* name, IDirect3DBaseTexture9* texture) { int i = Find_Param(name); if (i >= 0) Set_Texture(i, texture); }
 
 	//---------------------------------------------------------------------------- techniques
@@ -109,7 +111,8 @@ public:
 
 	/// Applies the pass: shaders (after running the selection pre-shaders), constants (after the
 	/// shaders' own pre-shaders), samplers and textures, render states. The caller draws, then
-	/// calls End(). Render states are left as the pass set them; the caller restores what it needs.
+	/// calls End(), which puts back every device state the pass changed (render states, sampler
+	/// states, textures, shaders), so a caller that caches device state stays right.
 	bool Begin(IDirect3DDevice9* device, int technique, int pass);
 	void End(IDirect3DDevice9* device);
 
@@ -180,4 +183,14 @@ private:
 	std::map<std::string, int> m_paramIndex;
 	std::vector<VertexInput> m_noInputs;
 	int m_currentTechnique, m_currentPass;
+
+	// what Begin() changed on the device, for End() to put back
+	struct SavedRenderState { D3DRENDERSTATETYPE state; DWORD value; };
+	struct SavedSamplerState { DWORD stage; D3DSAMPLERSTATETYPE state; DWORD value; };
+	struct SavedTexture { DWORD stage; IDirect3DBaseTexture9* texture; };
+	std::vector<SavedRenderState> m_savedRenderStates;
+	std::vector<SavedSamplerState> m_savedSamplerStates;
+	std::vector<SavedTexture> m_savedTextures;
+	IDirect3DVertexShader9* m_savedVertexShader;
+	IDirect3DPixelShader9* m_savedPixelShader;
 };

@@ -53,7 +53,7 @@
 #include "dx8wrapper.h"
 #ifdef RTS_RENDERER_D3D9
 #include "damagelook.h"
-#include "sage2material.h"
+#include "sage2/sage2material.h"
 #include "postprocess.h"
 #endif
 // GeneralsX @build BenderAI 10/02/2026 - Need LoadLibrary/GetProcAddress/FreeLibrary for dynamic loading

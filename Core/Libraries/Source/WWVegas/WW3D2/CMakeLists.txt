@@ -247,8 +247,14 @@ if(SAGE_USE_D3D9)
         damagelook.h
         postprocess.cpp
         postprocess.h
-        sage2material.cpp
-        sage2material.h
+        sage2/sage2builtin.cpp
+        sage2/sage2builtin.h
+        sage2/sage2effect.cpp
+        sage2/sage2effect.h
+        sage2/sage2globals.cpp
+        sage2/sage2globals.h
+        sage2/sage2material.cpp
+        sage2/sage2material.h
         shaders/damagelook_ps.h
         shaders/postprocess_blur_ps.h
         shaders/postprocess_bright_ps.h

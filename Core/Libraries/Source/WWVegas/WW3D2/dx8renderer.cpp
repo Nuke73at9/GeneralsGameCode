@@ -62,7 +62,7 @@
 #include "meshgeometry.h"
 #ifdef RTS_RENDERER_D3D9
 #include "damagelook.h"
-#include "sage2material.h"
+#include "sage2/sage2material.h"
 #endif
 
 /*

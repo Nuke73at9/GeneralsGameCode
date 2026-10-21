@@ -16,9 +16,9 @@
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Tiberium Project @feature C&C4 (SAGE 2) object look (see sage2material.h)
+// Tiberium Project @feature The built-in approximation of the C&C4 object look (see sage2builtin.h)
 
-#include "sage2material.h"
+#include "sage2builtin.h"
 
 #include <map>
 #include <string.h>
@@ -34,8 +34,8 @@
 #include "WWLib/ffactory.h"
 #include "WWLib/wwstring.h"
 
-#include "shaders/sage2object_vs.h"	// from shaders/sage2object.hlsl (shaders/build_shaders.py)
-#include "shaders/sage2object_ps.h"
+#include "../shaders/sage2object_vs.h"	// from shaders/sage2object.hlsl (shaders/build_shaders.py)
+#include "../shaders/sage2object_ps.h"
 
 namespace
 {
@@ -133,7 +133,7 @@ namespace
 }
 
 //-------------------------------------------------------------------------------------------------
-bool Sage2MaterialClass::Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const VertexMaterialClass* material)
+bool Sage2BuiltinMaterialClass::Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const VertexMaterialClass* material)
 {
 	if (mesh == nullptr || base == nullptr || material == nullptr || !material->Get_Lighting())
 		return false;
@@ -238,7 +238,7 @@ bool Sage2MaterialClass::Begin(MeshClass* mesh, TextureClass* base, TextureClass
 }
 
 //-------------------------------------------------------------------------------------------------
-void Sage2MaterialClass::End()
+void Sage2BuiltinMaterialClass::End()
 {
 	DX8Wrapper::_Get_D3D_Device8()->Set_Vertex_Shader_Override(nullptr);
 	DX8Wrapper::Set_Pixel_Shader(0);
@@ -248,7 +248,7 @@ void Sage2MaterialClass::End()
 }
 
 //-------------------------------------------------------------------------------------------------
-void Sage2MaterialClass::Shutdown()
+void Sage2BuiltinMaterialClass::Shutdown()
 {
 	for (std::map<TextureClass*, Maps>::iterator it = s_maps.begin(); it != s_maps.end(); ++it)
 	{

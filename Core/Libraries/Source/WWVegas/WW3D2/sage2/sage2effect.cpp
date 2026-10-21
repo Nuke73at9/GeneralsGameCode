@@ -129,7 +129,7 @@ const char* Sage2EffectClass::Param::Bind_Address() const
 }
 
 //-------------------------------------------------------------------------------------------------
-Sage2EffectClass::Sage2EffectClass() : m_currentTechnique(-1), m_currentPass(-1)
+Sage2EffectClass::Sage2EffectClass() : m_currentTechnique(-1), m_currentPass(-1), m_savedVertexShader(nullptr), m_savedPixelShader(nullptr)
 {
 }
 
@@ -191,6 +191,7 @@ bool Sage2EffectClass::Read_Value(const unsigned char* base, size_t baseLen, uns
 	out.elements = elements;
 	out.rows = out.columns = 0;
 	out.textureParam = -1;
+	out.binding = 0;
 	out.unmanaged = false;
 	out.texture = nullptr;
 
@@ -1016,9 +1017,23 @@ void Sage2EffectClass::Apply_Samplers(IDirect3DDevice9* device, const Shader& sh
 		if (Trace_Enabled())
 			printf("  %s s%u %s -> %s %p\n", vs ? "vs" : "ps", sym.registerIndex, sampler.name.c_str(),
 				sampler.textureParam >= 0 ? m_params[sampler.textureParam].name.c_str() : "(none)", (void*)texture);
+		SavedTexture savedTexture;
+		savedTexture.stage = stage;
+		savedTexture.texture = nullptr;
+		device->GetTexture(stage, &savedTexture.texture);
+		m_savedTextures.push_back(savedTexture);
 		device->SetTexture(stage, texture);
 		for (size_t i = 0; i < sampler.samplerStates.size(); ++i)
-			device->SetSamplerState(stage, (D3DSAMPLERSTATETYPE)sampler.samplerStates[i].state, sampler.samplerStates[i].value);
+		{
+			SavedSamplerState saved;
+			saved.stage = stage;
+			saved.state = (D3DSAMPLERSTATETYPE)sampler.samplerStates[i].state;
+			device->GetSamplerState(stage, saved.state, &saved.value);
+			if (saved.value == sampler.samplerStates[i].value)
+				continue;
+			m_savedSamplerStates.push_back(saved);
+			device->SetSamplerState(stage, saved.state, sampler.samplerStates[i].value);
+		}
 	}
 }
 
@@ -1041,6 +1056,12 @@ void Sage2EffectClass::Apply_Render_State(IDirect3DDevice9* device, const State&
 		memcpy(&dw, &value, 4);
 	else
 		dw = (DWORD)(int)value;
+	SavedRenderState saved;
+	saved.state = rs;
+	device->GetRenderState(rs, &saved.value);
+	if (saved.value == dw)
+		return;
+	m_savedRenderStates.push_back(saved);
 	device->SetRenderState(rs, dw);
 }
 
@@ -1051,6 +1072,11 @@ bool Sage2EffectClass::Begin(IDirect3DDevice9* device, int technique, int pass)
 	const Pass& p = m_techniques[technique].passes[pass];
 	m_currentTechnique = technique;
 	m_currentPass = pass;
+	m_savedRenderStates.clear();
+	m_savedSamplerStates.clear();
+	m_savedTextures.clear();
+	device->GetVertexShader(&m_savedVertexShader);
+	device->GetPixelShader(&m_savedPixelShader);
 	for (size_t s = 0; s < p.states.size(); ++s)
 	{
 		const State& st = p.states[s];
@@ -1082,8 +1108,25 @@ bool Sage2EffectClass::Begin(IDirect3DDevice9* device, int technique, int pass)
 
 void Sage2EffectClass::End(IDirect3DDevice9* device)
 {
-	device->SetVertexShader(nullptr);
-	device->SetPixelShader(nullptr);
+	for (size_t i = m_savedRenderStates.size(); i-- > 0;)
+		device->SetRenderState(m_savedRenderStates[i].state, m_savedRenderStates[i].value);
+	for (size_t i = m_savedSamplerStates.size(); i-- > 0;)
+		device->SetSamplerState(m_savedSamplerStates[i].stage, m_savedSamplerStates[i].state, m_savedSamplerStates[i].value);
+	for (size_t i = m_savedTextures.size(); i-- > 0;)
+	{
+		device->SetTexture(m_savedTextures[i].stage, m_savedTextures[i].texture);
+		if (m_savedTextures[i].texture)
+			m_savedTextures[i].texture->Release();	// GetTexture added a reference
+	}
+	device->SetVertexShader(m_savedVertexShader);
+	device->SetPixelShader(m_savedPixelShader);
+	if (m_savedVertexShader) m_savedVertexShader->Release();
+	if (m_savedPixelShader) m_savedPixelShader->Release();
+	m_savedVertexShader = nullptr;
+	m_savedPixelShader = nullptr;
+	m_savedRenderStates.clear();
+	m_savedSamplerStates.clear();
+	m_savedTextures.clear();
 	m_currentTechnique = m_currentPass = -1;
 }
 

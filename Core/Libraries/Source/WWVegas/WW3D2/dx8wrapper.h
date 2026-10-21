@@ -547,6 +547,9 @@ public:
 
 	static void Set_Vertex_Shader_Constant(int reg, const void* data, int count);
 	static void Set_Pixel_Shader_Constant(int reg, const void* data, int count);
+	/// Tiberium Project @feature after shader constants were set on the device behind the cache above
+	/// (by a SAGE 2 effect), forget what it holds so the next Set_ calls reach the device again
+	static void Invalidate_Shader_Constants();
 
 	static DWORD Get_Vertex_Processing_Behavior() { return Vertex_Processing_Behavior; }
 
@@ -796,6 +799,13 @@ WWINLINE void DX8Wrapper::Set_Vertex_Shader_Constant(int reg, const void* data, 
 
 	memcpy(&Vertex_Shader_Constants[reg],data,memsize);
 	DX8CALL(SetVertexShaderConstant(reg,data,count));
+}
+
+WWINLINE void DX8Wrapper::Invalidate_Shader_Constants()
+{
+	// a value no caller sets: every component NaN
+	memset(Vertex_Shader_Constants, 0xFF, sizeof(Vertex_Shader_Constants));
+	memset(Pixel_Shader_Constants, 0xFF, sizeof(Pixel_Shader_Constants));
 }
 
 WWINLINE void DX8Wrapper::Set_Pixel_Shader_Constant(int reg, const void* data, int count)

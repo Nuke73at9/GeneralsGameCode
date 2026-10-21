@@ -198,7 +198,8 @@ D3D8On9Device::D3D8On9Device(IDirect3DDevice9* device, DWORD behaviorFlags) :
 	m_refs(1),
 	m_baseVertexIndex(0),
 	m_vertexShader(~0u),	// nothing set yet, so the first SetVertexShader always applies
-	m_vertexShaderOverride(nullptr)
+	m_vertexShaderOverride(nullptr),
+	m_vertexDeclarationOverride(nullptr)
 {
 }
 
@@ -236,6 +237,20 @@ void D3D8On9Device::Set_Vertex_Shader_Override(IDirect3DVertexShader9* shader)
 	m_vertexShaderOverride = shader;
 	if (m_vertexShader != ~0u && (m_vertexShader & SHADER_HANDLE_BIT) == 0)
 		m_device->SetVertexShader(shader);
+}
+
+void D3D8On9Device::Set_Vertex_Declaration_Override(IDirect3DVertexDeclaration9* declaration)
+{
+	if (declaration == m_vertexDeclarationOverride)
+		return;
+	m_vertexDeclarationOverride = declaration;
+	if (m_vertexShader != ~0u && (m_vertexShader & SHADER_HANDLE_BIT) == 0)
+	{
+		if (declaration != nullptr)
+			m_device->SetVertexDeclaration(declaration);
+		else
+			m_device->SetFVF(m_vertexShader);
+	}
 }
 
 HRESULT D3D8On9Device::GetDeviceCaps(D3DCAPS8* caps)
@@ -480,6 +495,8 @@ HRESULT D3D8On9Device::SetVertexShader(DWORD handle)
 	if ((handle & SHADER_HANDLE_BIT) == 0)
 	{
 		m_device->SetVertexShader(m_vertexShaderOverride);	// usually none: fixed-function
+		if (m_vertexDeclarationOverride != nullptr)
+			return m_device->SetVertexDeclaration(m_vertexDeclarationOverride);
 		return m_device->SetFVF(handle);
 	}
 	size_t index = handle >> 1;
