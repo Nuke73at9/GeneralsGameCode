@@ -1964,6 +1964,7 @@ Bool ActionManager::canDoSpecialPower( const Object *obj, const SpecialPowerTemp
 			case SPECIAL_DETONATE_DIRTY_NUKE:
 			case SPECIAL_CHANGE_BATTLE_PLANS:
 			case SPECIAL_LAUNCH_BAIKONUR_ROCKET:
+			case SPECIAL_TOGGLE_DEPLOY:	// Tiberium Project @feature the Deploy / Pack Up button
 				//Detonate's any existing charges
 				return true;
 		}
