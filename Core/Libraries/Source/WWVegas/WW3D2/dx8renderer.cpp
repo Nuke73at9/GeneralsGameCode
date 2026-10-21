@@ -62,6 +62,7 @@
 #include "meshgeometry.h"
 #ifdef RTS_RENDERER_D3D9
 #include "damagelook.h"
+#include "sage2material.h"
 #endif
 
 /*
@@ -1940,8 +1941,14 @@ void DX8TextureCategoryClass::Render()
 				DX8Wrapper::Set_Material(vmaterial);	//restore previous material.
 			}
 #ifdef RTS_RENDERER_D3D9
-			// Tiberium Project @feature C&C4-style procedural damage: a damaged object's meshes that carry a
-			// damage sheet in texture stage 1 are drawn with the damage shader.
+			// Tiberium Project @feature C&C4 object look: meshes whose texture has a C&C4 normal map are
+			// lit per pixel (with their procedural damage)...
+			else if (Sage2MaterialClass::Begin(mesh, Peek_Texture(0), Peek_Texture(1), vmaterial))
+			{
+				renderer->Render(mesh->Get_Base_Vertex_Offset());
+				Sage2MaterialClass::End();
+			}
+			// ...and other damaged meshes that carry a damage sheet in texture stage 1 get the damage shader.
 			else if (DamageLookClass::Begin(mesh, Peek_Texture(1)))
 			{
 				renderer->Render(mesh->Get_Base_Vertex_Offset());

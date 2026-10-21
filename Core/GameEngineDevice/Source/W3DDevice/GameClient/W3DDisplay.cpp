@@ -102,6 +102,10 @@ static void drawFramerateBar();
 #include "WW3D2/render2dsentence.h"
 #include "WW3D2/sortingrenderer.h"
 #include "WW3D2/textureloader.h"
+#ifdef RTS_RENDERER_D3D9
+#include "WW3D2/postprocess.h"
+#endif
+#include "Common/OptionPreferences.h"
 #include "WW3D2/dx8webbrowser.h"
 #include "WW3D2/mesh.h"
 #include "WW3D2/hlod.h"
@@ -2241,6 +2245,21 @@ AGAIN:
 
 				// draw all views of the world
 				drawViews();
+
+#ifdef RTS_RENDERER_D3D9
+				// Tiberium Project @feature C&C4-like bloom and colour grade on the world, under the interface.
+				// Options.ini: PostProcess = no turns it off.
+				{
+					static Bool s_postProcessChecked = FALSE;
+					if (!s_postProcessChecked)
+					{
+						OptionPreferences prefs;
+						PostProcessClass::Set_Enabled(prefs.getBool("PostProcess", TRUE));
+						s_postProcessChecked = TRUE;
+					}
+					PostProcessClass::Apply();
+				}
+#endif
 
 				// draw the user interface
 				TheInGameUI->DRAW();

@@ -194,6 +194,9 @@ public:
 	IDirect3DDevice9* Get_D3D9() const { return m_device; }
 	/// Forget what the adapter knows about shader, FVF and index state (after changing it through Direct3D 9)
 	void Invalidate_State();
+	/// Draw meshes in the fixed-function vertex format with this vertex shader instead of fixed-function
+	/// vertex processing (nullptr: back to fixed-function). The FVF still describes the vertices.
+	void Set_Vertex_Shader_Override(IDirect3DVertexShader9* shader);
 
 	// device
 	HRESULT TestCooperativeLevel() { return m_device->TestCooperativeLevel(); }
@@ -295,6 +298,7 @@ private:
 	ULONG m_refs;
 	UINT m_baseVertexIndex;
 	DWORD m_vertexShader;		///< the current Direct3D 8 vertex shader handle or FVF
+	IDirect3DVertexShader9* m_vertexShaderOverride;	///< used with FVFs instead of fixed-function, or nullptr
 	std::vector<VertexShader> m_vertexShaders;
 	std::vector<IDirect3DPixelShader9*> m_pixelShaders;
 };

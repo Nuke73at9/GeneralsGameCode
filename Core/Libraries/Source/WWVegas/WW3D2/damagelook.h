@@ -36,6 +36,13 @@ public:
 	static bool Begin(MeshClass* mesh, TextureClass* damageSheet);
 	static void End();
 
+	/// How damaged the mesh's object looks, 0..1.
+	static float Get_Amount(MeshClass* mesh);
+	/// The shader constants for that amount (three float4s); false when nothing would show.
+	static bool Get_Constants(float amount, float constants[3][4]);
+	/// Binds the noise texture (tiling, filtered) to a texture stage; false if unavailable.
+	static bool Bind_Noise(unsigned stage);
+
 	/// Frees the shader and noise texture (before the device goes away).
 	static void Shutdown();
 };

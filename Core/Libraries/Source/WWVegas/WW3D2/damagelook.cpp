@@ -21,6 +21,7 @@
 #include "damagelook.h"
 
 #include <math.h>
+#include <string.h>
 
 #include "dx8caps.h"
 #include "dx8wrapper.h"
@@ -146,43 +147,63 @@ namespace
 }
 
 //-------------------------------------------------------------------------------------------------
+float DamageLookClass::Get_Amount(MeshClass* mesh)
+{
+	// the damage amount lives on the outermost render object (the unit's model)
+	RenderObjClass* top = mesh;
+	while (top->Get_Container() != nullptr)
+		top = top->Get_Container();
+	return Clamp01(top->Get_Damage_Look());
+}
+
+//-------------------------------------------------------------------------------------------------
+bool DamageLookClass::Get_Constants(float amount, float constants[3][4])
+{
+	if (amount <= MIN_VISIBLE_DAMAGE)
+		return false;
+	float gate = Clamp01((amount - HOLE_START) / HOLE_RAMP);
+	const float values[3][4] =
+	{
+		{ (amount - SPREAD_START) * SPREAD_SCALE, NOISE_SCALE_DAMAGE_UV, NOISE_SCALE_BASE_UV, SHARPNESS },
+		{ EMBER_COLOR[0], EMBER_COLOR[1], EMBER_COLOR[2], EMBER_STRENGTH },
+		{ gate * HOLE_MAX, BLOB_GROWTH, HOLE_NOISE_SCALE, SCORCH_STRENGTH },
+	};
+	memcpy(constants, values, sizeof(values));
+	return true;
+}
+
+//-------------------------------------------------------------------------------------------------
+bool DamageLookClass::Bind_Noise(unsigned stage)
+{
+	if (s_state == NOT_TRIED)
+		Init();
+	if (s_state != READY)
+		return false;
+	DX8Wrapper::Set_DX8_Texture(stage, s_noise);
+	DX8Wrapper::Set_DX8_Texture_Stage_State(stage, D3DTSS_ADDRESSU, D3DTADDRESS_WRAP);
+	DX8Wrapper::Set_DX8_Texture_Stage_State(stage, D3DTSS_ADDRESSV, D3DTADDRESS_WRAP);
+	DX8Wrapper::Set_DX8_Texture_Stage_State(stage, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
+	DX8Wrapper::Set_DX8_Texture_Stage_State(stage, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
+	DX8Wrapper::Set_DX8_Texture_Stage_State(stage, D3DTSS_MIPFILTER, D3DTEXF_NONE);
+	return true;
+}
+
+//-------------------------------------------------------------------------------------------------
 bool DamageLookClass::Begin(MeshClass* mesh, TextureClass* damageSheet)
 {
 	if (damageSheet == nullptr || mesh == nullptr)
 		return false;
 
-	// the damage amount lives on the outermost render object (the unit's model)
-	RenderObjClass* top = mesh;
-	while (top->Get_Container() != nullptr)
-		top = top->Get_Container();
-	float amount = top->Get_Damage_Look();
-	if (amount <= MIN_VISIBLE_DAMAGE)
+	float constants[3][4];
+	if (!Get_Constants(Get_Amount(mesh), constants))
 		return false;
 
 	MeshModelClass* model = mesh->Peek_Model();
 	if (model == nullptr || model->Get_UV_Array_Count() < 2)
 		return false;
 
-	if (s_state == NOT_TRIED)
-		Init();
-	if (s_state != READY)
+	if (!Bind_Noise(2))
 		return false;
-
-	amount = Clamp01(amount);
-	float gate = Clamp01((amount - HOLE_START) / HOLE_RAMP);
-	const float constants[3][4] =
-	{
-		{ (amount - SPREAD_START) * SPREAD_SCALE, NOISE_SCALE_DAMAGE_UV, NOISE_SCALE_BASE_UV, SHARPNESS },
-		{ EMBER_COLOR[0], EMBER_COLOR[1], EMBER_COLOR[2], EMBER_STRENGTH },
-		{ gate * HOLE_MAX, BLOB_GROWTH, HOLE_NOISE_SCALE, SCORCH_STRENGTH },
-	};
-
-	DX8Wrapper::Set_DX8_Texture(2, s_noise);
-	DX8Wrapper::Set_DX8_Texture_Stage_State(2, D3DTSS_ADDRESSU, D3DTADDRESS_WRAP);
-	DX8Wrapper::Set_DX8_Texture_Stage_State(2, D3DTSS_ADDRESSV, D3DTADDRESS_WRAP);
-	DX8Wrapper::Set_DX8_Texture_Stage_State(2, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
-	DX8Wrapper::Set_DX8_Texture_Stage_State(2, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
-	DX8Wrapper::Set_DX8_Texture_Stage_State(2, D3DTSS_MIPFILTER, D3DTEXF_NONE);
 	DX8Wrapper::Set_Pixel_Shader_Constant(0, constants, 3);
 	DX8Wrapper::Set_Pixel_Shader(s_pixelShader);
 	return true;

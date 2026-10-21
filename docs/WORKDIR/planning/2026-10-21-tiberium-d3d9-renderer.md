@@ -43,8 +43,9 @@ The Direct3D 8 build is unchanged; the option is off by default. Windows: `abram
    Direct3D 8. Linux build compiles `z_ww3d2` and the Direct3D-heavy device files; Windows build
    and in-game comparison by the user.
 2. **C&C4 procedural damage** on the Crawlers (below): first version in, in-game tuning next.
-3. Normal / specular maps, house colour (`RecolorColor`), environment cube; then the rest of
-   C&C4's object shader.
+3. **C&C4 object lighting** (`Sage2MaterialClass`): normal and specular maps, per pixel, with
+   the scene's own lights; post-processing (bloom, colour grade). In; tuning in game next.
+4. Later: house colour (`RecolorColor`), a real environment cube, shadows.
 
 ## C&C4 procedural damage
 

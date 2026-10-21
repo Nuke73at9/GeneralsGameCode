@@ -245,7 +245,17 @@ if(SAGE_USE_D3D9)
         d3d9compat/d3d8on9.h
         damagelook.cpp
         damagelook.h
+        postprocess.cpp
+        postprocess.h
+        sage2material.cpp
+        sage2material.h
         shaders/damagelook_ps.h
+        shaders/postprocess_blur_ps.h
+        shaders/postprocess_bright_ps.h
+        shaders/postprocess_combine_ps.h
+        shaders/postprocess_vs.h
+        shaders/sage2object_ps.h
+        shaders/sage2object_vs.h
     )
 endif()
 

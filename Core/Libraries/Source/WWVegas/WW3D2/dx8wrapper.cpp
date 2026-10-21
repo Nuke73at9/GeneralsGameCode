@@ -53,6 +53,8 @@
 #include "dx8wrapper.h"
 #ifdef RTS_RENDERER_D3D9
 #include "damagelook.h"
+#include "sage2material.h"
+#include "postprocess.h"
 #endif
 // GeneralsX @build BenderAI 10/02/2026 - Need LoadLibrary/GetProcAddress/FreeLibrary for dynamic loading
 #ifndef _WIN32
@@ -1095,6 +1097,9 @@ bool DX8Wrapper::Reset_Device(bool reload_assets)
 	if ((IsInitted) && (D3DDevice != nullptr)) {
 		// Release all non-MANAGED stuff
 		WW3D::_Invalidate_Textures();
+#ifdef RTS_RENDERER_D3D9
+		PostProcessClass::Release_Resources();	// Tiberium Project @feature post-processing render targets
+#endif
 
 		for (unsigned i=0;i<MAX_VERTEX_STREAMS;++i)
 		{
@@ -1149,6 +1154,8 @@ void DX8Wrapper::Release_Device()
 
 #ifdef RTS_RENDERER_D3D9
 		DamageLookClass::Shutdown();	// Tiberium Project @feature procedural damage shader and noise texture
+		Sage2MaterialClass::Shutdown();	// Tiberium Project @feature C&C4 object shaders and normal map cache
+		PostProcessClass::Shutdown();	// Tiberium Project @feature post-processing targets and shaders
 #endif
 
 		for (int a=0;a<MAX_TEXTURE_STAGES;++a)
