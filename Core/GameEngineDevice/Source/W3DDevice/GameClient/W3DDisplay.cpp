@@ -104,6 +104,7 @@ static void drawFramerateBar();
 #include "WW3D2/textureloader.h"
 #ifdef RTS_RENDERER_D3D9
 #include "WW3D2/postprocess.h"
+#include "WW3D2/sage2/sage2scene.h"
 #endif
 #include "Common/OptionPreferences.h"
 #include "WW3D2/dx8webbrowser.h"
@@ -2255,6 +2256,7 @@ AGAIN:
 					{
 						OptionPreferences prefs;
 						PostProcessClass::Set_Enabled(prefs.getBool("PostProcess", TRUE));
+						Sage2SceneClass::Set_Enabled(prefs.getBool("Sage2Deferred", TRUE));	// Tiberium Project @feature C&C4 deferred lighting
 						s_postProcessChecked = TRUE;
 					}
 					PostProcessClass::Apply();

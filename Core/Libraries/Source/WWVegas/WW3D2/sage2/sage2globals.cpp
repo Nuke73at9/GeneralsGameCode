@@ -119,11 +119,30 @@ namespace
 	IDirect3DBaseTexture9* s_deferredSpecular = nullptr;
 	IDirect3DBaseTexture9* s_depth = nullptr;
 	IDirect3DBaseTexture9* s_normalSpec = nullptr;
+	IDirect3DBaseTexture9* s_depthBuffer = nullptr;
 
 	IDirect3DTexture9* s_white = nullptr;
 	IDirect3DTexture9* s_black = nullptr;
 	IDirect3DTexture9* s_grey = nullptr;
 	IDirect3DCubeTexture9* s_environment = nullptr;
+
+	bool Apply_Scene_Texture(Sage2EffectClass& effect, int i, int binding)
+	{
+		switch (binding)
+		{
+			case SAGE2_BIND_TEXTURE_WHITE: effect.Set_Texture(i, s_white); return true;
+			case SAGE2_BIND_TEXTURE_BLACK: effect.Set_Texture(i, s_black); return true;
+			case SAGE2_BIND_TEXTURE_GREY: effect.Set_Texture(i, s_grey); return true;
+			case SAGE2_BIND_TEXTURE_ENVIRONMENT: effect.Set_Texture(i, s_environment); return true;
+			case SAGE2_BIND_TEXTURE_DEFERRED_DIFFUSE: effect.Set_Texture(i, s_deferredDiffuse ? s_deferredDiffuse : s_grey); return true;
+			case SAGE2_BIND_TEXTURE_DEFERRED_SPECULAR: effect.Set_Texture(i, s_deferredSpecular ? s_deferredSpecular : s_black); return true;
+			case SAGE2_BIND_TEXTURE_DEPTH: effect.Set_Texture(i, s_depth ? s_depth : s_white); return true;
+			case SAGE2_BIND_TEXTURE_NORMAL_SPEC: effect.Set_Texture(i, s_normalSpec ? s_normalSpec : s_grey); return true;
+			case SAGE2_BIND_TEXTURE_DEPTH_BUFFER: effect.Set_Texture(i, s_depthBuffer ? s_depthBuffer : s_white); return true;
+			default: return false;
+		}
+	}
+
 	bool s_standInsTried = false;
 
 	IDirect3DTexture9* Make_Flat(IDirect3DDevice9* device, DWORD argb)
@@ -254,6 +273,20 @@ void Sage2GlobalsClass::Set_Scene_Textures(IDirect3DBaseTexture9* deferredDiffus
 	s_deferredSpecular = deferredSpecular;
 	s_depth = depth;
 	s_normalSpec = normalSpec;
+}
+
+//-------------------------------------------------------------------------------------------------
+void Sage2GlobalsClass::Set_Depth_Buffer_Texture(IDirect3DBaseTexture9* depthBuffer)
+{
+	s_depthBuffer = depthBuffer;
+}
+
+//-------------------------------------------------------------------------------------------------
+void Sage2GlobalsClass::Apply_Scene_Textures(Sage2EffectClass& effect)
+{
+	Make_Stand_Ins();
+	for (int i = 0; i < effect.Get_Param_Count(); ++i)
+		Apply_Scene_Texture(effect, i, effect.Get_Param(i).binding);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -421,16 +454,8 @@ void Sage2GlobalsClass::Apply(Sage2EffectClass& effect, const Sage2DrawState& dr
 				effect.Set_Float(i, v, 2);
 				break;
 			}
-			case SAGE2_BIND_TEXTURE_WHITE: effect.Set_Texture(i, s_white); break;
-			case SAGE2_BIND_TEXTURE_BLACK: effect.Set_Texture(i, s_black); break;
-			case SAGE2_BIND_TEXTURE_GREY: effect.Set_Texture(i, s_grey); break;
-			case SAGE2_BIND_TEXTURE_ENVIRONMENT: effect.Set_Texture(i, s_environment); break;
-			case SAGE2_BIND_TEXTURE_DEFERRED_DIFFUSE: effect.Set_Texture(i, s_deferredDiffuse ? s_deferredDiffuse : s_grey); break;
-			case SAGE2_BIND_TEXTURE_DEFERRED_SPECULAR: effect.Set_Texture(i, s_deferredSpecular ? s_deferredSpecular : s_black); break;
-			case SAGE2_BIND_TEXTURE_DEPTH: effect.Set_Texture(i, s_depth ? s_depth : s_white); break;
-			case SAGE2_BIND_TEXTURE_NORMAL_SPEC: effect.Set_Texture(i, s_normalSpec ? s_normalSpec : s_grey); break;
-			case SAGE2_BIND_TEXTURE_DEPTH_BUFFER: effect.Set_Texture(i, s_depth ? s_depth : s_white); break;
 			default:
+				Apply_Scene_Texture(effect, i, p.binding);
 				break;
 		}
 	}
@@ -446,5 +471,5 @@ void Sage2GlobalsClass::Shutdown()
 	s_white = s_black = s_grey = nullptr;
 	s_environment = nullptr;
 	s_standInsTried = false;
-	s_deferredDiffuse = s_deferredSpecular = s_depth = s_normalSpec = nullptr;
+	s_deferredDiffuse = s_deferredSpecular = s_depth = s_normalSpec = s_depthBuffer = nullptr;
 }

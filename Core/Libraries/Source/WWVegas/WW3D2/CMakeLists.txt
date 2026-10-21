@@ -255,6 +255,8 @@ if(SAGE_USE_D3D9)
         sage2/sage2globals.h
         sage2/sage2material.cpp
         sage2/sage2material.h
+        sage2/sage2scene.cpp
+        sage2/sage2scene.h
         shaders/damagelook_ps.h
         shaders/postprocess_blur_ps.h
         shaders/postprocess_bright_ps.h

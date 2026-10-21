@@ -30,6 +30,7 @@
 #include "assetmgr.h"
 #include "damagelook.h"
 #include "dx8caps.h"
+#include "dx8polygonrenderer.h"
 #include "dx8vertexbuffer.h"
 #include "dx8wrapper.h"
 #include "htree.h"
@@ -38,6 +39,7 @@
 #include "sage2builtin.h"
 #include "sage2effect.h"
 #include "sage2globals.h"
+#include "sage2scene.h"
 #include "texture.h"
 #include "textureloader.h"
 #include "vertmaterial.h"
@@ -110,11 +112,12 @@ namespace
 	struct MeshMaterial
 	{
 		Sage2EffectClass* effect;
-		int technique;			// the material's technique
+		int technique;			// the material's technique (deferred-lit when it is a High one)
 		int forwardTechnique;	// its "_M" variant (per-pixel lighting without the deferred light buffers), or the same
+		int prepassTechnique;	// _CreateDepthNormalMap, or -1
 		std::vector<MaterialTexture> textures;
 		std::vector<MaterialValue> values;
-		MeshMaterial() : effect(nullptr), technique(-1), forwardTechnique(-1) {}
+		MeshMaterial() : effect(nullptr), technique(-1), forwardTechnique(-1), prepassTechnique(-1) {}
 	};
 	// mesh model (held) -> its material; a model without one is entered with effect == nullptr
 	std::map<MeshModelClass*, MeshMaterial> s_materials;
@@ -226,6 +229,7 @@ namespace
 		mat.forwardTechnique = effect->Find_Technique(forward.c_str());
 		if (mat.forwardTechnique < 0)
 			mat.forwardTechnique = technique;
+		mat.prepassTechnique = mat.forwardTechnique != technique ? effect->Find_Technique("_CreateDepthNormalMap") : -1;
 		return mat;
 	}
 
@@ -429,6 +433,7 @@ namespace
 
 	//---------------------------------------------------------------------------------- the draw
 	bool s_builtin = false;		// the current draw went to the built-in approximation
+	bool s_srgb = false;		// the current draw writes sRGB
 	Sage2EffectClass* s_current = nullptr;
 
 	bool Init()
@@ -453,8 +458,34 @@ namespace
 	}
 }
 
+namespace
+{
+	bool Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const VertexMaterialClass* material, DX8PolygonRendererClass* renderer);
+	void End();
+}
+
 //-------------------------------------------------------------------------------------------------
-bool Sage2MaterialClass::Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const VertexMaterialClass* material)
+Sage2EffectClass* Sage2MaterialClass::Get_Effect(const char* name)
+{
+	if (DX8Wrapper::_Get_D3D_Device8() == nullptr)
+		return nullptr;
+	return Load_Effect(Lower(name));
+}
+
+//-------------------------------------------------------------------------------------------------
+bool Sage2MaterialClass::Render(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const VertexMaterialClass* material,
+	DX8PolygonRendererClass* renderer)
+{
+	if (!Begin(mesh, base, damageSheet, material, renderer))
+		return false;
+	renderer->Render(mesh->Get_Base_Vertex_Offset());
+	End();
+	return true;
+}
+
+namespace
+{
+bool Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const VertexMaterialClass* material, DX8PolygonRendererClass* renderer)
 {
 	if (mesh == nullptr || material == nullptr)
 		return false;
@@ -524,11 +555,29 @@ bool Sage2MaterialClass::Begin(MeshClass* mesh, TextureClass* base, TextureClass
 
 	device8->Set_Vertex_Declaration_Override(decl);
 	device->SetStreamSource(SIDE_STREAM, side, 0, SIDE_STRIDE);
-	int technique = Sage2GlobalsClass::Is_Deferred_Lighting_Available() ? mat.technique : mat.forwardTechnique;
+
+	// the High technique lights from the light buffers the scene computes for this mesh (in linear
+	// space, so the frame buffer takes sRGB writes for it); otherwise the forward-lit one
+	int technique = mat.forwardTechnique;
+	s_srgb = false;
+	if (mat.prepassTechnique >= 0 && Sage2SceneClass::Is_Enabled() && Sage2SceneClass::Supports_SRGB_Write())
+	{
+		IDirect3DVertexBuffer9* meshBuffer = static_cast<DX8VertexBufferClass*>(state.vertex_buffers[0])->Get_DX8_Vertex_Buffer();
+		unsigned meshStride = state.vertex_buffers[0]->FVF_Info().Get_FVF_Size();
+		if (Sage2SceneClass::Light_Mesh(*mat.effect, mat.prepassTechnique, mesh, renderer, meshBuffer, meshStride, decl))
+		{
+			technique = mat.technique;
+			s_srgb = true;
+			device->SetRenderState(D3DRS_SRGBWRITEENABLE, TRUE);
+		}
+	}
 	if (!mat.effect->Begin(device, technique, 0))
 	{
+		if (s_srgb) device->SetRenderState(D3DRS_SRGBWRITEENABLE, FALSE);
+		s_srgb = false;
 		device->SetStreamSource(SIDE_STREAM, nullptr, 0, 0);
 		device8->Set_Vertex_Declaration_Override(nullptr);
+		DX8Wrapper::Invalidate_Shader_Constants();
 		s_builtin = Sage2BuiltinMaterialClass::Begin(mesh, base, damageSheet, material);
 		return s_builtin;
 	}
@@ -536,8 +585,7 @@ bool Sage2MaterialClass::Begin(MeshClass* mesh, TextureClass* base, TextureClass
 	return true;
 }
 
-//-------------------------------------------------------------------------------------------------
-void Sage2MaterialClass::End()
+void End()
 {
 	if (s_builtin)
 	{
@@ -549,17 +597,22 @@ void Sage2MaterialClass::End()
 		return;
 	IDirect3DDevice8* device8 = DX8Wrapper::_Get_D3D_Device8();
 	s_current->End(device8->Get_D3D9());
+	if (s_srgb)
+		device8->Get_D3D9()->SetRenderState(D3DRS_SRGBWRITEENABLE, FALSE);
+	s_srgb = false;
 	device8->Get_D3D9()->SetStreamSource(SIDE_STREAM, nullptr, 0, 0);
 	device8->Set_Vertex_Declaration_Override(nullptr);
 	// the effect wrote shader constants the wrapper's cache knows nothing about
 	DX8Wrapper::Invalidate_Shader_Constants();
 	s_current = nullptr;
 }
+}	// namespace
 
 //-------------------------------------------------------------------------------------------------
 void Sage2MaterialClass::Shutdown()
 {
 	Sage2BuiltinMaterialClass::Shutdown();
+	Sage2SceneClass::Shutdown();
 	Sage2GlobalsClass::Shutdown();
 
 	for (std::map<MeshModelClass*, MeshMaterial>::iterator it = s_materials.begin(); it != s_materials.end(); ++it)

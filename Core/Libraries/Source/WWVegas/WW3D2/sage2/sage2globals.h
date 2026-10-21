@@ -117,8 +117,12 @@ public:
 	static void Set_Frame_Buffer_Size(unsigned width, unsigned height);
 	static void Set_Scene_Textures(IDirect3DBaseTexture9* deferredDiffuse, IDirect3DBaseTexture9* deferredSpecular,
 		IDirect3DBaseTexture9* depth, IDirect3DBaseTexture9* normalSpec);
+	/// The clip-space depth buffer the linear-depth pass reads (PostEffect.DepthBufferTexture)
+	static void Set_Depth_Buffer_Texture(IDirect3DBaseTexture9* depthBuffer);
 	/// Whether the scene has rendered the deferred light buffers this frame (else the forward techniques are used)
 	static bool Is_Deferred_Lighting_Available();
+	/// Re-binds only the scene's texture parameters (after Set_Scene_Textures changed between passes)
+	static void Apply_Scene_Textures(Sage2EffectClass& effect);
 
 	/// Fills every bound parameter of the effect from W3D's current state and the draw's values.
 	static void Apply(Sage2EffectClass& effect, const Sage2DrawState& draw);

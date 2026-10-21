@@ -1943,10 +1943,8 @@ void DX8TextureCategoryClass::Render()
 #ifdef RTS_RENDERER_D3D9
 			// Tiberium Project @feature C&C4 object look: meshes whose texture has a C&C4 normal map are
 			// lit per pixel (with their procedural damage)...
-			else if (Sage2MaterialClass::Begin(mesh, Peek_Texture(0), Peek_Texture(1), vmaterial))
+			else if (Sage2MaterialClass::Render(mesh, Peek_Texture(0), Peek_Texture(1), vmaterial, renderer))
 			{
-				renderer->Render(mesh->Get_Base_Vertex_Offset());
-				Sage2MaterialClass::End();
 			}
 			// ...and other damaged meshes that carry a damage sheet in texture stage 1 get the damage shader.
 			else if (DamageLookClass::Begin(mesh, Peek_Texture(1)))

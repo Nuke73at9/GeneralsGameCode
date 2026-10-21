@@ -38,17 +38,23 @@
 
 #pragma once
 
+class DX8PolygonRendererClass;
 class MeshClass;
+class Sage2EffectClass;
 class TextureClass;
 class VertexMaterialClass;
 
 class Sage2MaterialClass
 {
 public:
-	/// Sets up the mesh's SAGE 2 effect (or the built-in approximation) if it has one; the caller
-	/// then draws the mesh and calls End(). Returns false (and changes nothing) otherwise.
-	static bool Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const VertexMaterialClass* material);
-	static void End();
+	/// Draws the mesh with its SAGE 2 effect (deferred-lit when the scene allows it, else with the
+	/// forward-lit technique), or with the built-in approximation when it has no effect but a normal
+	/// map. Returns false (and draws nothing) when the mesh is an ordinary W3D one.
+	static bool Render(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const VertexMaterialClass* material,
+		DX8PolygonRendererClass* renderer);
+
+	/// The effect Art\Shaders\<name>.fxo, loaded once; nullptr when missing or broken.
+	static Sage2EffectClass* Get_Effect(const char* name);
 
 	/// Frees the effects, side streams and caches (before the device goes away).
 	static void Shutdown();

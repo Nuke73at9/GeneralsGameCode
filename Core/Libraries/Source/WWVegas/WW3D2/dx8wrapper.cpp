@@ -54,6 +54,7 @@
 #ifdef RTS_RENDERER_D3D9
 #include "damagelook.h"
 #include "sage2/sage2material.h"
+#include "sage2/sage2scene.h"
 #include "postprocess.h"
 #endif
 // GeneralsX @build BenderAI 10/02/2026 - Need LoadLibrary/GetProcAddress/FreeLibrary for dynamic loading
@@ -1099,6 +1100,7 @@ bool DX8Wrapper::Reset_Device(bool reload_assets)
 		WW3D::_Invalidate_Textures();
 #ifdef RTS_RENDERER_D3D9
 		PostProcessClass::Release_Resources();	// Tiberium Project @feature post-processing render targets
+		Sage2SceneClass::Release_Resources();	// Tiberium Project @feature deferred lighting buffers
 #endif
 
 		for (unsigned i=0;i<MAX_VERTEX_STREAMS;++i)
@@ -2190,6 +2192,9 @@ void DX8Wrapper::Begin_Scene()
 #endif
 
 	DX8CALL(BeginScene());
+#ifdef RTS_RENDERER_D3D9
+	Sage2SceneClass::Begin_Frame();	// Tiberium Project @feature deferred lighting: new frame
+#endif
 
 	// GeneralsX @build BenderAI 10/02/2026 - Embedded browser Windows-only
 #ifdef _WIN32
