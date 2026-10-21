@@ -286,6 +286,7 @@ static PoolSizeRec PoolSizes[] =
 	{ "WorkerStateMachine", 128, 128 },
 	{ "ChinookAIStateMachine", 32, 32 },
 	{ "DeployStyleAIUpdate", 32, 32 },
+	{ "DeployToggleSpecialPower", 32, 32 },	// Tiberium Project @feature manual deploy toggle
 	{ "AssaultTransportAIUpdate", 64, 32 },
 	{ "StreamingArchiveFile", 8, 8 },
 
