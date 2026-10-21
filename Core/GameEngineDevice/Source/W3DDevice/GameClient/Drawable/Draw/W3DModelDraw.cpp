@@ -2281,6 +2281,13 @@ Real W3DModelDraw::getCurAnimDistanceCovered() const
 */
 static void doHideShowBoneSubObjs(Bool state, Int numSubObjects, Int boneIdx, RenderObjClass *fullObject, const HTreeClass *htree)
 {
+	// Tiberium Project @bugfix Hiding a sub-object also hides every sub-object on a child bone
+	// (a turret takes its barrel with it). Skinned meshes are attached to the root bone, so hiding
+	// one (e.g. a C&C4 Crawler's upgrade armor) would hide every rigid part of the model. A part on
+	// the root bone has no bone-children of its own, so don't cascade from the root.
+	if (boneIdx == 0)
+		return;
+
 #if 1	//(gth) fixed and tested this version
 	for (Int i=0; i < numSubObjects; i++)
 	{
