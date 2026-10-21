@@ -340,6 +340,28 @@ void Sage2GlobalsClass::Apply(Sage2EffectClass& effect, const Sage2DrawState& dr
 	float scale = axisX.Length();
 	bool scaled = scale < 0.999f || scale > 1.001f;
 
+	// the first draws, for Sage2.log: what the scene feeds the effects
+	static int logged = 0;
+	if (logged < 6)
+	{
+		++logged;
+		DWORD a = DX8Wrapper::Get_DX8_Render_State(D3DRS_AMBIENT);
+		Sage2_Log("draw %d: world rows (%.3f %.3f %.3f | %.1f) (%.3f %.3f %.3f | %.1f) (%.3f %.3f %.3f | %.1f) scale %.3f%s, eye (%.1f %.1f %.1f), ambient %08x",
+			logged, world[0][0], world[0][1], world[0][2], world[0][3], world[1][0], world[1][1], world[1][2], world[1][3],
+			world[2][0], world[2][1], world[2][2], world[2][3], scale, scaled ? " (World path)" : "", eye.X, eye.Y, eye.Z, (unsigned)a);
+		for (unsigned l = 0; l < 4; ++l)
+		{
+			if (!DX8Wrapper::Is_Light_Enabled(l))
+				continue;
+			const D3DLIGHT8& light = DX8Wrapper::Peek_Light(l);
+			Sage2_Log("  light %u: type %d colour (%.2f %.2f %.2f) direction (%.2f %.2f %.2f)", l, (int)light.Type,
+				light.Diffuse.r, light.Diffuse.g, light.Diffuse.b, light.Direction.x, light.Direction.y, light.Direction.z);
+		}
+		Sage2_Log("  opacity %.2f, house colour %06x, damage %.2f, projection row 0 (%.3f %.3f %.3f %.3f) row 2 (%.3f %.3f %.3f %.3f)",
+			draw.opacity, draw.houseColor, draw.damage, projection[0][0], projection[0][1], projection[0][2], projection[0][3],
+			projection[2][0], projection[2][1], projection[2][2], projection[2][3]);
+	}
+
 	for (int i = 0; i < effect.Get_Param_Count(); ++i)
 	{
 		const Sage2EffectClass::Param& p = effect.Get_Param(i);
