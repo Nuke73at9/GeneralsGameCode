@@ -133,7 +133,22 @@ D3DXCreateVolumeTexture(
 	D3DPOOL Pool,
 	LPDIRECT3DVOLUMETEXTURE8 *ppVolumeTexture);
 
+#ifdef __cplusplus
+// Tiberium Project @bugfix Complete type, so Windows code that reads an assembled shader still compiles
+// against these headers (the Direct3D 9 build). This D3DXAssembleShader never makes one.
+struct ID3DXBuffer
+{
+	virtual long QueryInterface(const void* iid, void** object) = 0;
+	virtual unsigned long AddRef() = 0;
+	virtual unsigned long Release() = 0;
+	virtual void* GetBufferPointer() = 0;
+	virtual unsigned long GetBufferSize() = 0;
+};
+typedef ID3DXBuffer D3DXBUFFER;
+typedef ID3DXBuffer *LPD3DXBUFFER;
+#else
 typedef struct D3DXBUFFER *LPD3DXBUFFER;
+#endif
 
 HRESULT WINAPI
 D3DXAssembleShader(

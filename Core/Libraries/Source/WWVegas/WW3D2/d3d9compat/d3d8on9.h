@@ -45,6 +45,13 @@
 #define RTS_RENDERER_D3D9 1
 #endif
 
+// Everything the Direct3D 8 headers provide comes from here now. Claim their include guards, so a
+// Direct3D 8 SDK header reached some other way (a quoted include next to the SDK, say) stays empty
+// instead of redefining the Direct3D 9 types.
+#define _D3D8_H_
+#define _D3D8TYPES_H_
+#define _D3D8CAPS_H
+
 //-------------------------------------------------------------------------------------------------
 // Resources: the Direct3D 9 interfaces under their Direct3D 8 names
 //-------------------------------------------------------------------------------------------------
