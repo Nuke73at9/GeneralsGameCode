@@ -89,18 +89,21 @@ namespace
 				{
 					Sage2GlobalsClass::Resolve_All(*effect);
 					entry.effect = effect;
+					Sage2_Log("effect %s: loaded, %d parameters, %d techniques", path.c_str(), effect->Get_Param_Count(), effect->Get_Technique_Count());
 				}
 				else
 				{
-					WWDEBUG_SAY(("SAGE 2 effect %s: %s", name.c_str(), effect->Get_Error().c_str()));
+					Sage2_Log("effect %s: %s", path.c_str(), effect->Get_Error().c_str());
 					delete effect;
 				}
 			}
+			else
+				Sage2_Log("effect %s: could not read %u bytes", path.c_str(), (unsigned)data.size());
 			file->Close();
 		}
 		else
 		{
-			WWDEBUG_SAY(("SAGE 2 effect %s not found", path.c_str()));
+			Sage2_Log("effect %s: not found", path.c_str());
 		}
 		s_effects[name] = entry;
 		return entry.effect;
@@ -230,6 +233,9 @@ namespace
 		if (mat.forwardTechnique < 0)
 			mat.forwardTechnique = technique;
 		mat.prepassTechnique = mat.forwardTechnique != technique ? effect->Find_Technique("_CreateDepthNormalMap") : -1;
+		Sage2_Log("mesh %s: %s, technique %s (forward %s, pre-pass %d), %u textures, %u values", model->Get_Name(), effectName.c_str(),
+			effect->Get_Technique_Name(technique), effect->Get_Technique_Name(mat.forwardTechnique), mat.prepassTechnique,
+			(unsigned)mat.textures.size(), (unsigned)mat.values.size());
 		return mat;
 	}
 
@@ -440,6 +446,11 @@ namespace
 	{
 		s_state = UNAVAILABLE;
 		IDirect3DDevice8* device = DX8Wrapper::_Get_D3D_Device8();
+		Sage2_Log("device %p, pixel shader %d.x, vertex shader %d.x, deferred %s, sRGB write %s", (void*)device,
+			device ? DX8Wrapper::Get_Current_Caps()->Get_Pixel_Shader_Major_Version() : 0,
+			device ? DX8Wrapper::Get_Current_Caps()->Get_Vertex_Shader_Major_Version() : 0,
+			device && Sage2SceneClass::Is_Available() ? "available" : "unavailable",
+			device && Sage2SceneClass::Supports_SRGB_Write() ? "yes" : "no");
 		if (device == nullptr
 			|| DX8Wrapper::Get_Current_Caps()->Get_Pixel_Shader_Major_Version() < 3
 			|| DX8Wrapper::Get_Current_Caps()->Get_Vertex_Shader_Major_Version() < 3)
@@ -533,6 +544,7 @@ bool Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const
 	IDirect3DVertexDeclaration9* decl = fvf ? Declaration_For(fvf) : nullptr;
 	if (side == nullptr || decl == nullptr)
 	{
+		Sage2_Log("mesh %s: no side stream (%p) or declaration (%p, fvf %x, buffer type %d)", model->Get_Name(), (void*)side, (void*)decl, (unsigned)fvf, state.vertex_buffer_types[0]);
 		s_builtin = Sage2BuiltinMaterialClass::Begin(mesh, base, damageSheet, material);
 		return s_builtin;
 	}
@@ -571,8 +583,15 @@ bool Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const
 			device->SetRenderState(D3DRS_SRGBWRITEENABLE, TRUE);
 		}
 	}
+	static std::map<MeshModelClass*, int> s_loggedPath;
+	if (s_loggedPath[model] != (s_srgb ? 2 : 1))
+	{
+		s_loggedPath[model] = s_srgb ? 2 : 1;
+		Sage2_Log("mesh %s: drawn %s with technique %s", model->Get_Name(), s_srgb ? "deferred-lit" : "forward-lit", mat.effect->Get_Technique_Name(technique));
+	}
 	if (!mat.effect->Begin(device, technique, 0))
 	{
+		Sage2_Log("mesh %s: Begin failed for technique %s", model->Get_Name(), mat.effect->Get_Technique_Name(technique));
 		if (s_srgb) device->SetRenderState(D3DRS_SRGBWRITEENABLE, FALSE);
 		s_srgb = false;
 		device->SetStreamSource(SIDE_STREAM, nullptr, 0, 0);

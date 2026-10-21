@@ -104,6 +104,9 @@ struct Sage2DrawState
 	Sage2DrawState() : opacity(1.0f), houseColor(0), damage(0.0f), stealth(false) {}
 };
 
+/// Diagnostics: a few lines in Sage2.log next to the game (what loaded, what path each mesh took).
+void Sage2_Log(const char* format, ...);
+
 class Sage2GlobalsClass
 {
 public:

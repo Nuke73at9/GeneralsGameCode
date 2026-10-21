@@ -20,11 +20,33 @@
 
 #include "sage2globals.h"
 
+#include <stdarg.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "dx8wrapper.h"
 #include "WWMath/quat.h"
 #include "ww3d.h"
+
+void Sage2_Log(const char* format, ...)
+{
+	static FILE* file = nullptr;
+	static int lines = 0;
+	if (file == nullptr)
+	{
+		file = fopen("Sage2.log", "w");
+		if (file == nullptr)
+			return;
+	}
+	if (++lines > 400)	// enough to see what happened, never a runaway
+		return;
+	va_list args;
+	va_start(args, format);
+	vfprintf(file, format, args);
+	va_end(args);
+	fputc('\n', file);
+	fflush(file);
+}
 
 namespace
 {

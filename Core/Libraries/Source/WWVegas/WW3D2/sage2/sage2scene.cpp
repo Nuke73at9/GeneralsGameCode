@@ -199,6 +199,8 @@ bool Sage2SceneClass::Is_Available()
 			if (SUCCEEDED(device8->Get_D3D9()->GetDeviceCaps(&caps)) && caps.NumSimultaneousRTs >= 2
 				&& caps.PixelShaderVersion >= D3DPS_VERSION(3, 0) && Make_Effects())
 				s_available = AVAILABLE;
+			Sage2_Log("deferred lighting: %s (%u render targets, pixel shader %x)", s_available == AVAILABLE ? "available" : "unavailable",
+				(unsigned)caps.NumSimultaneousRTs, (unsigned)caps.PixelShaderVersion);
 		}
 	}
 	return s_available == AVAILABLE;
@@ -268,6 +270,7 @@ bool Sage2SceneClass::Light_Mesh(Sage2EffectClass& effect, int prepassTechnique,
 	target->GetDesc(&desc);
 	if (!Make_Resources(device, desc.Width, desc.Height))
 	{
+		Sage2_Log("deferred lighting: could not make the %ux%u buffers", (unsigned)desc.Width, (unsigned)desc.Height);
 		target->Release();
 		if (depth) depth->Release();
 		return false;
