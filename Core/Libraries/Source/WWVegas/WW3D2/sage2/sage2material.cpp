@@ -53,7 +53,7 @@ namespace
 
 	const char* EFFECT_DIRECTORY = "Art\\Shaders\\";
 	const unsigned SIDE_STREAM = 1;
-	const unsigned SIDE_STRIDE = 28;	// tangent 3, binormal 3, blend indices 4 bytes
+	const unsigned SIDE_STRIDE = 32;	// tangent 3, binormal 3, blend indices 4 bytes, colour 4 bytes
 
 	//------------------------------------------------------------------------------------ effects
 	struct EffectEntry
@@ -247,6 +247,7 @@ namespace
 		float tangent[3];
 		float binormal[3];
 		unsigned char blendIndices[4];
+		DWORD color;			// opaque white: the effects read the vertex alpha as "how intact"
 	};
 	struct SideStream
 	{
@@ -307,6 +308,7 @@ namespace
 			out[i].tangent[0] = t.X; out[i].tangent[1] = t.Y; out[i].tangent[2] = t.Z;
 			out[i].binormal[0] = b.X; out[i].binormal[1] = b.Y; out[i].binormal[2] = b.Z;
 			out[i].blendIndices[0] = out[i].blendIndices[1] = out[i].blendIndices[2] = out[i].blendIndices[3] = 0;
+			out[i].color = 0xFFFFFFFF;
 		}
 	}
 
@@ -407,7 +409,10 @@ namespace
 		else { e.Offset = offset; e.Type = D3DDECLTYPE_FLOAT3; e.Usage = D3DDECLUSAGE_POSITION; el.push_back(e); offset += 12; offset += (WORD)(4 * ((position - D3DFVF_XYZB1) / 2 + 1)); }
 		if (fvf & D3DFVF_NORMAL) { e.Offset = offset; e.Type = D3DDECLTYPE_FLOAT3; e.Usage = D3DDECLUSAGE_NORMAL; el.push_back(e); offset += 12; }
 		if (fvf & D3DFVF_PSIZE) { e.Offset = offset; e.Type = D3DDECLTYPE_FLOAT1; e.Usage = D3DDECLUSAGE_PSIZE; el.push_back(e); offset += 4; }
-		if (fvf & D3DFVF_DIFFUSE) { e.Offset = offset; e.Type = D3DDECLTYPE_D3DCOLOR; e.Usage = D3DDECLUSAGE_COLOR; e.UsageIndex = 0; el.push_back(e); offset += 4; }
+		// W3D's diffuse colour is skipped: the effects read COLOR0's alpha as the damage blend, and
+		// that must be 1 whatever W3D put there (the side stream provides it), and a missing input
+		// would be whatever the driver defaults to
+		if (fvf & D3DFVF_DIFFUSE) offset += 4;
 		if (fvf & D3DFVF_SPECULAR) { e.Offset = offset; e.Type = D3DDECLTYPE_D3DCOLOR; e.Usage = D3DDECLUSAGE_COLOR; e.UsageIndex = 1; el.push_back(e); offset += 4; }
 		unsigned texCount = (fvf & D3DFVF_TEXCOUNT_MASK) >> D3DFVF_TEXCOUNT_SHIFT;
 		for (unsigned t = 0; t < texCount; ++t)
@@ -428,6 +433,7 @@ namespace
 		e.Offset = 0; e.Type = D3DDECLTYPE_FLOAT3; e.Usage = D3DDECLUSAGE_TANGENT; el.push_back(e);
 		e.Offset = 12; e.Type = D3DDECLTYPE_FLOAT3; e.Usage = D3DDECLUSAGE_BINORMAL; el.push_back(e);
 		e.Offset = 24; e.Type = D3DDECLTYPE_UBYTE4; e.Usage = D3DDECLUSAGE_BLENDINDICES; el.push_back(e);
+		e.Offset = 28; e.Type = D3DDECLTYPE_D3DCOLOR; e.Usage = D3DDECLUSAGE_COLOR; e.UsageIndex = 0; el.push_back(e);
 		D3DVERTEXELEMENT9 end = D3DDECL_END();
 		el.push_back(end);
 		IDirect3DVertexDeclaration9* decl = nullptr;
