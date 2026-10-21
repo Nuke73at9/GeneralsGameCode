@@ -40,18 +40,21 @@ namespace
 	IDirect3DTexture8*		s_noise = nullptr;
 
 	// Tuning; tools/dmg_preview.py in the extractor renders the same maths offline.
-	const float SPREAD_SCALE		= 1.3f;	// damage 0..1 -> how far the burning has spread
+	// Tuned against C&C4 footage: a Crawler stays nearly clean to about a third down, then darkens in
+	// soot patches; faint embers, and small holes only right before it dies.
+	const float SPREAD_START		= 0.15f;	// damage below this shows nothing
+	const float SPREAD_SCALE		= 1.3f;	// damage -> how far the burning has spread
 	const float NOISE_SCALE_DAMAGE_UV	= 0.9f;
 	const float NOISE_SCALE_BASE_UV	= 5.0f;
 	const float SHARPNESS			= 4.0f;
 	const float EMBER_COLOR[3]		= { 1.0f, 0.45f, 0.1f };
-	const float EMBER_STRENGTH		= 0.9f;
-	const float HOLE_START			= 0.6f;	// holes burn through from this damage...
-	const float HOLE_RAMP			= 0.25f;	// ...fully open this much later
-	const float HOLE_MAX			= 0.24f;
+	const float EMBER_STRENGTH		= 0.35f;
+	const float HOLE_START			= 0.8f;	// holes burn through from this damage...
+	const float HOLE_RAMP			= 0.15f;	// ...fully open this much later
+	const float HOLE_MAX			= 0.15f;
 	const float BLOB_GROWTH			= 3.0f;
 	const float HOLE_NOISE_SCALE		= 5.0f;
-	const float SCORCH_STRENGTH		= 0.82f;
+	const float SCORCH_STRENGTH		= 0.65f;
 	const float MIN_VISIBLE_DAMAGE	= 0.002f;
 
 	// The noise texture: tiling value noise, three octaves. Deterministic, so every machine draws
@@ -169,7 +172,7 @@ bool DamageLookClass::Begin(MeshClass* mesh, TextureClass* damageSheet)
 	float gate = Clamp01((amount - HOLE_START) / HOLE_RAMP);
 	const float constants[3][4] =
 	{
-		{ amount * SPREAD_SCALE, NOISE_SCALE_DAMAGE_UV, NOISE_SCALE_BASE_UV, SHARPNESS },
+		{ (amount - SPREAD_START) * SPREAD_SCALE, NOISE_SCALE_DAMAGE_UV, NOISE_SCALE_BASE_UV, SHARPNESS },
 		{ EMBER_COLOR[0], EMBER_COLOR[1], EMBER_COLOR[2], EMBER_STRENGTH },
 		{ gate * HOLE_MAX, BLOB_GROWTH, HOLE_NOISE_SCALE, SCORCH_STRENGTH },
 	};
