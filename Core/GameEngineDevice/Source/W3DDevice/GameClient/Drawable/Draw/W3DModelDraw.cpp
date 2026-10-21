@@ -50,6 +50,7 @@
 #include "GameClient/Shadow.h"
 #include "GameLogic/GameLogic.h"		// for real-time frame
 #include "GameLogic/Object.h"
+#include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/WeaponSet.h"
 #include "GameLogic/FPUControl.h"
 #include "GameLogic/Module/AIUpdate.h"
@@ -1020,6 +1021,7 @@ void ModelConditionInfo::clear()
 W3DModelDrawModuleData::W3DModelDrawModuleData() :
 	m_validated(0),
 	m_okToChangeModelColor(false),
+	m_proceduralDamage(false),
   m_particlesAttachedToAnimatedBones(false),
 	m_animationsRequirePower(true),
 #ifdef CACHE_ATTACH_BONE
@@ -1204,6 +1206,7 @@ void W3DModelDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "RecoilDamping",	INI::parseReal, nullptr, offsetof(W3DModelDrawModuleData, m_recoilDamping) },
 		{ "RecoilSettleSpeed",	INI::parseVelocityReal, nullptr, offsetof(W3DModelDrawModuleData, m_recoilSettle) },
 		{ "OkToChangeModelColor",	INI::parseBool, nullptr, offsetof(W3DModelDrawModuleData, m_okToChangeModelColor) },
+		{ "ProceduralDamage",	INI::parseBool, nullptr, offsetof(W3DModelDrawModuleData, m_proceduralDamage) },	// Tiberium Project
 		{ "AnimationsRequirePower",	INI::parseBool, nullptr, offsetof(W3DModelDrawModuleData, m_animationsRequirePower) },
 		{ "ParticlesAttachedToAnimatedBones",	INI::parseBool, nullptr, offsetof(W3DModelDrawModuleData, m_particlesAttachedToAnimatedBones) },
 		{ "MinLODRequired",		INI::parseStaticGameLODLevel,	nullptr,	offsetof(W3DModelDrawModuleData, m_minLODRequired) },
@@ -1731,6 +1734,7 @@ W3DModelDraw::W3DModelDraw(Thing *thing, const ModuleData* moduleData) : DrawMod
 	m_curState = nullptr;
 	m_hexColor = 0;
 	m_renderObject = nullptr;
+	m_damageLook = 0.0f;
 	m_shadow = nullptr;
 	m_shadowEnabled = TRUE;
 	m_terrainDecal = nullptr;
@@ -2114,6 +2118,22 @@ void W3DModelDraw::doDrawModule(const Matrix3D* transformMtx)
 
   handleClientRecoil();
 
+	// Tiberium Project @feature ProceduralDamage: tell the renderer how damaged the unit looks. The shown
+	// damage eases toward the real damage, so new scorching spreads instead of popping in. Visual only:
+	// reads the health, changes nothing in the game.
+	if (modData->m_proceduralDamage && m_renderObject)
+	{
+		const Object* obj = getDrawable()->getObject();
+		const BodyModuleInterface* body = obj ? obj->getBodyModule() : nullptr;
+		Real target = 0.0f;
+		if (body && body->getMaxHealth() > 0.0f)
+			target = 1.0f - body->getHealth() / body->getMaxHealth();
+		if (target < 0.0f) target = 0.0f;
+		if (target > 1.0f) target = 1.0f;
+		const Real EASE = 0.06f;
+		m_damageLook += (target - m_damageLook) * EASE;
+		m_renderObject->Set_Damage_Look(m_damageLook);
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

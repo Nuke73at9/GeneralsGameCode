@@ -436,6 +436,10 @@ public:
 	float							Get_ObjectScale() const { return ObjectScale; };
  	void							Set_ObjectColor(unsigned int color) { ObjectColor=color;}	//the color that was used to modify the asset for player team color (for Generals). -MW
 	unsigned int					Get_ObjectColor() const { return ObjectColor; };
+	// Tiberium Project @feature How damaged the object should look, 0 (pristine) to 1 (wrecked). Renderers
+	// that support C&C4-style procedural damage scorch and hole the meshes inside it accordingly.
+	void							Set_Damage_Look(float amount) { DamageLook=amount; }
+	float							Get_Damage_Look() const { return DamageLook; }
 
    virtual int						Get_Sort_Level() const													{ return 0; /* SORT_LEVEL_NONE */ }
    virtual void					Set_Sort_Level(int level)													{ }
@@ -530,6 +534,7 @@ protected:
 	Matrix3D							Transform;
  	float						ObjectScale;					//user applied scaling factor inside Transform matrix.
 	unsigned int				ObjectColor;					//user applied coloring to the asset/prototype used to make this robj. - For Generals -MW
+	float						DamageLook;						// Tiberium Project: see Set_Damage_Look
 	mutable SphereClass			CachedBoundingSphere;
 	mutable AABoxClass			CachedBoundingBox;
 	float								NativeScreenSize;		// The screen size at which the object was designed to be viewed (used in texture resizing).

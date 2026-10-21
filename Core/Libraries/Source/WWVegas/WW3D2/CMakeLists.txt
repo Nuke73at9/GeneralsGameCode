@@ -243,6 +243,9 @@ if(SAGE_USE_D3D9)
     list(APPEND WW3D2_SRC
         d3d9compat/d3d8on9.cpp
         d3d9compat/d3d8on9.h
+        damagelook.cpp
+        damagelook.h
+        shaders/damagelook_ps.h
     )
 endif()
 

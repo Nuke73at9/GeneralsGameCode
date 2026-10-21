@@ -42,24 +42,35 @@ The Direct3D 8 build is unchanged; the option is off by default. Windows: `abram
 1. **Port** (in progress): the renderer builds and runs on Direct3D 9 with the same picture as
    Direct3D 8. Linux build compiles `z_ww3d2` and the Direct3D-heavy device files; Windows build
    and in-game comparison by the user.
-2. **C&C4 procedural damage prototype** on the Crawlers (below).
+2. **C&C4 procedural damage** on the Crawlers (below): first version in, in-game tuning next.
 3. Normal / specular maps, house colour (`RecolorColor`), environment cube; then the rest of
    C&C4's object shader.
 
-## C&C4 procedural damage (findings)
+## C&C4 procedural damage
 
-From `Data/Shaders.big`, `shaders/compiled/cnc4_object_gdi_proceduraldamage.fxo` (RefPack
-compressed `fx_2_0` effect; disassembles with MojoShader's `testparse d3d`):
+What C&C4 does (`Data/Shaders.big`, `cnc4_object_*_proceduraldamage.fxo`, read with MojoShader's
+`testparse d3d`):
 
-- Techniques `Default` / `Default_M` / `Default_L` (quality levels) plus shadow and depth passes;
-  shaders are `vs_3_0` / `ps_3_0` (and `ps_2_0` for low quality).
-- Damage inputs: `DamagedTexture` (the unit's damage decal sheet, e.g. `GUObject_Holes`),
-  `FilteredNoise` (WW3D.FilteredNoise), and `RenderBuffEffectB` (WW3D.RenderBuffEffectB, a
-  per-object value; very likely the damage amount). Damage is therefore procedural from the
-  object's health (noise thresholded by the damage amount reveals scorch and holes), not per hit.
-- Next: read the high-quality pixel shader to confirm how `RenderBuffEffectB` and the noise are
-  combined, then write the equivalent `ps_3_0` (or use C&C4's bytecode, loaded from the player's
-  own install like the art) with the object's damage fed in as a constant.
+- The pixel shader samples `DamagedTexture` (`GUObject_Holes`) with the second UV set and does
+  `colour *= lerp(sheet, 1, vertex alpha)`; the sheet's alpha (the holes) ends up in the output
+  alpha for alpha testing. The vertex shader passes the vertex colour's alpha through unchanged, and
+  the models ship it at 1, so the game writes per-vertex damage weights at run time.
+- `RenderBuffEffectB`, `FilteredNoise` and `Time` belong to buff effects (shield shimmer), not damage.
+- The second UV set places each panel inside one of the sheet's nine blobs (per panel the UVs span
+  only a few percent of the sheet).
+
+Ours (`WW3D2/damagelook.*`, `WW3D2/shaders/damagelook.asm`):
+
+- `ps_2_0` with fixed-function vertex processing, so W3D's lighting, fog and skinning are untouched.
+- Per-pixel weight from noise instead of per-vertex weights: coarse noise on the damage UVs picks
+  when each panel starts burning, fine noise on the base UVs roughens edges; the blob grows from its
+  core, embers glow on the growing edge, holes burn through (`texkill`) from 60% damage.
+- Amount per object from `RenderObjClass::Set_Damage_Look`, set by `W3DModelDraw`
+  (`ProceduralDamage = Yes`), easing toward the real damage.
+- Tuning constants are in `damagelook.cpp`; the extractor's `dmg_preview.py` renders the same
+  maths offline.
+
+Later: real hit positions (scorch where the shots land), interior faces through holes, normal maps.
 
 ## Testing
 

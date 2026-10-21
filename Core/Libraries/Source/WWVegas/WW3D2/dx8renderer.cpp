@@ -60,6 +60,9 @@
 #include "camera.h"
 #include "stripoptimizer.h"
 #include "meshgeometry.h"
+#ifdef RTS_RENDERER_D3D9
+#include "damagelook.h"
+#endif
 
 /*
 ** Global Instance of the DX8MeshRender
@@ -1936,6 +1939,15 @@ void DX8TextureCategoryClass::Render()
 				DX8Wrapper::Set_Material(nullptr);	//force a reset of vertex material since we secretly changed opacity
 				DX8Wrapper::Set_Material(vmaterial);	//restore previous material.
 			}
+#ifdef RTS_RENDERER_D3D9
+			// Tiberium Project @feature C&C4-style procedural damage: a damaged object's meshes that carry a
+			// damage sheet in texture stage 1 are drawn with the damage shader.
+			else if (DamageLookClass::Begin(mesh, Peek_Texture(1)))
+			{
+				renderer->Render(mesh->Get_Base_Vertex_Offset());
+				DamageLookClass::End();
+			}
+#endif
 			else
 				renderer->Render(mesh->Get_Base_Vertex_Offset());
 		}

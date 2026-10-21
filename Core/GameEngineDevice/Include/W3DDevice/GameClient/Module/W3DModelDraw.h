@@ -300,6 +300,7 @@ public:
 	StaticGameLODLevel								m_minLODRequired;				///< minumum game LOD level necessary to use this module.
 	ModelConditionFlags								m_ignoreConditionStates;
 	Bool															m_okToChangeModelColor;
+	Bool															m_proceduralDamage;		///< Tiberium Project: draw C&C4-style procedural damage (Direct3D 9 renderer)
 	Bool															m_animationsRequirePower;///< Should UnderPowered disable type pause animations in this draw module?
 #ifdef CACHE_ATTACH_BONE
 	mutable Bool											m_attachToDrawableBoneOffsetValid;
@@ -507,6 +508,7 @@ private:
 	Bool													m_hideHeadlights;
 	Bool													m_pauseAnimation;
 	Int														m_animationMode;
+	Real													m_damageLook;	///< Tiberium Project: shown damage 0..1, easing toward the real damage
 
 	void adjustAnimation(const ModelConditionInfo* prevState, Real prevAnimFraction);
 	Real getCurrentAnimFraction() const;

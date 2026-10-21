@@ -51,6 +51,9 @@
 #endif
 
 #include "dx8wrapper.h"
+#ifdef RTS_RENDERER_D3D9
+#include "damagelook.h"
+#endif
 // GeneralsX @build BenderAI 10/02/2026 - Need LoadLibrary/GetProcAddress/FreeLibrary for dynamic loading
 #ifndef _WIN32
 #include "module_compat.h"
@@ -1143,6 +1146,10 @@ void DX8Wrapper::Release_Device()
 	Pillarbox_Cleanup();
 
 	if (D3DDevice) {
+
+#ifdef RTS_RENDERER_D3D9
+		DamageLookClass::Shutdown();	// Tiberium Project @feature procedural damage shader and noise texture
+#endif
 
 		for (int a=0;a<MAX_TEXTURE_STAGES;++a)
 		{
