@@ -41,7 +41,7 @@
 #include "WWLib/always.h"
 #include "ww3dformat.h"
 
-struct IDirect3DSurface8;
+#include "d3d8fwd.h"
 class Vector2i;
 class Vector3;
 

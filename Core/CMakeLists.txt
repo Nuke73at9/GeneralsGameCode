@@ -16,6 +16,16 @@ if(NOT TARGET d3d8lib)
     add_library(d3d8lib INTERFACE)
 endif()
 
+# Tiberium Project @feature Direct3D 9 renderer: <d3d8.h> resolves to the Direct3D 8 adapter over Direct3D 9
+if(SAGE_USE_D3D9)
+    if(SAGE_USE_DX8 AND NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+        message(FATAL_ERROR "SAGE_USE_D3D9 needs a 64-bit build (DXVK's Direct3D 9)")
+    endif()
+    target_include_directories(d3d8lib BEFORE INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/WWVegas/WW3D2/d3d9compat")
+    target_compile_definitions(d3d8lib INTERFACE RTS_RENDERER_D3D9=1)
+    message(STATUS "Renderer: Direct3D 9 (through the Direct3D 8 adapter)")
+endif()
+
 target_include_directories(corei_gameengine_include INTERFACE "GameEngine/Include")
 target_include_directories(corei_libraries_source_wwvegas INTERFACE "Libraries/Source/WWVegas")
 target_include_directories(corei_platform INTERFACE "Libraries/Source/Platform")

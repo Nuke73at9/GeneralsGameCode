@@ -180,8 +180,14 @@ Int copyRect(unsigned char *buf, Int bufSize, int oX, int oY, int width, int hei
 
  	tempSurface->GetDesc(&desc);
 
+#ifdef RTS_RENDERER_D3D9
+	// Tiberium Project @feature Direct3D 9's surface description has no Size
+	if (D3D8On9_Surface_Size(desc) < bufSize)
+		bufSize = D3D8On9_Surface_Size(desc);
+#else
 	if (desc.Size < bufSize)
 		bufSize = desc.Size;
+#endif
 
 	memcpy(buf,lrect.pBits,bufSize);
 	result = bufSize;

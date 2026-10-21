@@ -1038,7 +1038,11 @@ unsigned TextureClass::Get_Texture_Memory_Usage() const
 	{
 		D3DSURFACE_DESC desc;
 		DX8_ErrorCode(Peek_D3D_Texture()->GetLevelDesc(i,&desc));
+#ifdef RTS_RENDERER_D3D9
+		size+=D3D8On9_Surface_Size(desc);	// Tiberium Project @feature Direct3D 9's surface description has no Size
+#else
 		size+=desc.Size;
+#endif
 	}
 	return size;
 }
@@ -1330,7 +1334,11 @@ unsigned ZTextureClass::Get_Texture_Memory_Usage() const
 	{
 		D3DSURFACE_DESC desc;
 		DX8_ErrorCode(Peek_D3D_Texture()->GetLevelDesc(i,&desc));
+#ifdef RTS_RENDERER_D3D9
+		size+=D3D8On9_Surface_Size(desc);	// Tiberium Project @feature Direct3D 9's surface description has no Size
+#else
 		size+=desc.Size;
+#endif
 	}
 	return size;
 }

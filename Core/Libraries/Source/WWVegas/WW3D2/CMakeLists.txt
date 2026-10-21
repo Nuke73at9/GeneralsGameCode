@@ -238,6 +238,14 @@ set(WW3D2_SRC
     ww3dtrig.h
 )
 
+# Tiberium Project @feature Direct3D 9 renderer: the Direct3D 8 adapter over Direct3D 9
+if(SAGE_USE_D3D9)
+    list(APPEND WW3D2_SRC
+        d3d9compat/d3d8on9.cpp
+        d3d9compat/d3d8on9.h
+    )
+endif()
+
 if(WIN32)
     list(APPEND WW3D2_SRC
         FramGrab.cpp

@@ -345,6 +345,17 @@
                 "RTS_BUILD_GENERALS_TOOLS": "OFF",
                 "SAGE_USE_NGMP": "ON"
             }
+        },
+        {
+            "name": "abram-win64-d3d9",
+            "inherits": "abram-win64",
+            "displayName": "Abram's Personal Test - Windows 64bit Release, Direct3D 9 renderer",
+            "description": "The 64-bit build drawing with Direct3D 9 (DXVK's d3d9.dll) instead of Direct3D 8: the Tiberium Project's renderer for C&C4 shaders. abram_build64.bat d3d9 builds it. Zero Hour only for now (the Generals base game is not ported yet).",
+            "binaryDir": "${sourceDir}/build/abram-win64-d3d9",
+            "cacheVariables": {
+                "SAGE_USE_D3D9": "ON",
+                "RTS_BUILD_GENERALS": "OFF"
+            }
         }
     ],
     "buildPresets": [
@@ -473,6 +484,12 @@
             "name": "abram-win64",
             "configurePreset": "abram-win64",
             "displayName": "Build Abram's Personal Test Windows 64bit Release",
+            "configuration": "Release"
+        },
+        {
+            "name": "abram-win64-d3d9",
+            "configurePreset": "abram-win64-d3d9",
+            "displayName": "Build Abram's Personal Test Windows 64bit Release, Direct3D 9 renderer",
             "configuration": "Release"
         }
     ],
@@ -695,6 +712,19 @@
                 {
                     "type": "build",
                     "name": "abram-win64"
+                }
+            ]
+        },
+        {
+            "name": "abram-win64-d3d9",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "abram-win64-d3d9"
+                },
+                {
+                    "type": "build",
+                    "name": "abram-win64-d3d9"
                 }
             ]
         }

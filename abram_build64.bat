@@ -27,16 +27,20 @@ rem To use another folder, set ABRAM_ZEROHOUR_PATH before running this script.
 if not defined ABRAM_ZEROHOUR_PATH set "ABRAM_ZEROHOUR_PATH=C:\Program Files (x86)\Steam\steamapps\common\Command & Conquer Generals - Zero Hour"
 set "ABRAM_GENERALS_PATH=C:\Program Files (x86)\Steam\steamapps\common\Command and Conquer Generals"
 
+rem Tiberium Project: "abram_build64.bat d3d9" builds the Direct3D 9 renderer (for the C&C4 shaders).
+set "ABRAM_PRESET=abram-win64"
+if /i "%~1"=="d3d9" set "ABRAM_PRESET=abram-win64-d3d9"
+
 cd /d "%~dp0"
 
 echo.
-echo === Building 64-bit (Release) ===
-cmake --workflow --preset abram-win64
+echo === Building 64-bit (Release, %ABRAM_PRESET%) ===
+cmake --workflow --preset %ABRAM_PRESET%
 if errorlevel 1 goto :fail
 
 echo.
 echo === Installing into the game folder ===
-cmake --install build/abram-win64 --config Release
+cmake --install build/%ABRAM_PRESET% --config Release
 if errorlevel 1 goto :fail
 
 echo.

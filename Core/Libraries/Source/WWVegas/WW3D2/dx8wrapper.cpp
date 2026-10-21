@@ -485,6 +485,71 @@ typedef IDirect3D8* (WINAPI *Direct3DCreate8Type) (UINT SDKVersion);
 Direct3DCreate8Type	Direct3DCreate8Ptr = nullptr;
 HINSTANCE D3D8Lib = nullptr;
 
+#ifdef RTS_RENDERER_D3D9
+// Tiberium Project @feature Direct3D 9 renderer: load DXVK's Direct3D 9 (Direct3D 9 to Vulkan) and put
+// the Direct3D 8 adapter in front of it. Like the Direct3D 8 library, it stays loaded until the process
+// ends: some textures are released after DX8Wrapper::Shutdown.
+static IDirect3D8* Create_D3D9_Interface()
+{
+	typedef IDirect3D9* (WINAPI *Direct3DCreate9Type)(UINT SDKVersion);
+	HINSTANCE lib = nullptr;
+#if defined(_WIN32)
+	char path[MAX_PATH];
+	DWORD len = GetModuleFileNameA(nullptr, path, MAX_PATH);
+	char* lastSlash = (len > 0 && len < MAX_PATH) ? strrchr(path, '\\') : nullptr;
+	if (lastSlash != nullptr && (size_t)(lastSlash - path) + sizeof("\\dxvk\\d3d9.dll") < MAX_PATH)
+	{
+		strcpy(lastSlash, "\\dxvk\\d3d9.dll");
+		lib = LoadLibraryExA(path, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+	}
+	if (lib == nullptr)
+	{
+		fprintf(stderr, "WARNING: DX8Wrapper::Init() - dxvk\\d3d9.dll not found next to the game, trying the system d3d9.dll\n");
+		fflush(stderr);
+		lib = LoadLibrary("D3D9.DLL");
+	}
+	if (lib != nullptr)
+	{
+		HMODULE pinned = nullptr;
+		GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+			reinterpret_cast<LPCSTR>(lib), &pinned);
+	}
+#elif defined(__APPLE__)
+	lib = LoadLibrary("libdxvk_d3d9.dylib");
+#else
+	lib = LoadLibrary("libdxvk_d3d9.so");
+#endif
+	if (lib == nullptr)
+	{
+		fprintf(stderr, "ERROR: DX8Wrapper::Init() - Failed to load the Direct3D 9 library\n");
+		fflush(stderr);
+		return nullptr;
+	}
+	Direct3DCreate9Type create = (Direct3DCreate9Type)GetProcAddress(lib, "Direct3DCreate9");
+	if (create == nullptr)
+	{
+		fprintf(stderr, "ERROR: DX8Wrapper::Init() - Direct3DCreate9 not found\n");
+		fflush(stderr);
+		return nullptr;
+	}
+	IDirect3D9* d3d9 = nullptr;
+	{
+		// TheSuperHackers @bugfix xezon 13/06/2025 Front load the system dbghelp.dll (see the Direct3D 8 path)
+		DbgHelpGuard dbgHelpGuard;
+		d3d9 = create(D3D_SDK_VERSION);
+	}
+	if (d3d9 == nullptr)
+	{
+		fprintf(stderr, "ERROR: DX8Wrapper::Init() - Direct3DCreate9 returned NULL\n");
+		fflush(stderr);
+		return nullptr;
+	}
+	fprintf(stderr, "DX8Wrapper::Init() - drawing with Direct3D 9\n");
+	fflush(stderr);
+	return new D3D8On9Interface(d3d9);
+}
+#endif
+
 DX8_CleanupHook	 *DX8Wrapper::m_pCleanupHook=nullptr;
 #ifdef EXTENDED_STATS
 DX8_Stats	 DX8Wrapper::stats;
@@ -633,6 +698,12 @@ bool DX8Wrapper::Init(void * hwnd, bool lite)
 	Invalidate_Cached_Render_States();
 
 	if (!lite) {
+#ifdef RTS_RENDERER_D3D9
+		// Tiberium Project @feature Direct3D 9 renderer: DXVK's Direct3D 9, behind the Direct3D 8 adapter
+		D3DInterface = Create_D3D9_Interface();
+		if (D3DInterface == nullptr)
+			return false;
+#else
 		// GeneralsX @build BenderAI 10/02/2026 - Platform-specific DLL/SO/DYLIB loading (Phase 5: macOS)
 #if defined(_WIN64)
 		// Abram's Personal Test @feature 64-bit Windows has no d3d8.dll of its own. Load DXVK's 64-bit
@@ -719,6 +790,7 @@ bool DX8Wrapper::Init(void * hwnd, bool lite)
 			fprintf(stderr, "ERROR: DX8Wrapper::Init() - Direct3DCreate8 returned NULL (DXVK failed to create D3D8 interface)\n");
 			return(false);
 		}
+#endif // RTS_RENDERER_D3D9
 		IsInitted = true;
 
 		/*
