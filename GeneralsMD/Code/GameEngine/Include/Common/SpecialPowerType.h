@@ -127,6 +127,8 @@ enum SpecialPowerType CPP_11(: Int)
 
 	SPECIAL_BATTLESHIP_BOMBARDMENT,
 
+	SPECIAL_TOGGLE_DEPLOY,	///< Tiberium Project: deploy/pack up a ManualDeploy unit (DeployToggleSpecialPower)
+
 	SPECIALPOWER_COUNT,
 	// don't forget to add new strings to SpecialPowerMaskType::s_bitNameList[]
 };

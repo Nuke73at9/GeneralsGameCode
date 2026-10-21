@@ -52,6 +52,7 @@ public:
 	Bool						m_turretsFunctionOnlyWhenDeployed;
 	Bool						m_turretsMustCenterBeforePacking;
 	Bool						m_manualDeployAnimations;
+	Bool						m_manualDeploy;	///< Tiberium Project: deploys only when told to (DeployToggleSpecialPower), not to attack
 
 	DeployStyleAIUpdateModuleData()
 	{
@@ -61,6 +62,7 @@ public:
 		m_turretsFunctionOnlyWhenDeployed = false;
 		m_turretsMustCenterBeforePacking = FALSE;
 		m_manualDeployAnimations = FALSE;
+		m_manualDeploy = FALSE;
 	}
 
 	static void buildFieldParse(MultiIniFieldParse& p)
@@ -75,6 +77,7 @@ public:
 			{ "TurretsFunctionOnlyWhenDeployed", INI::parseBool,		nullptr, offsetof( DeployStyleAIUpdateModuleData, m_turretsFunctionOnlyWhenDeployed ) },
 			{ "TurretsMustCenterBeforePacking", INI::parseBool,			nullptr, offsetof( DeployStyleAIUpdateModuleData, m_turretsMustCenterBeforePacking ) },
 			{ "ManualDeployAnimations",	INI::parseBool,							nullptr, offsetof( DeployStyleAIUpdateModuleData, m_manualDeployAnimations ) },
+			{ "ManualDeploy",						INI::parseBool,							nullptr, offsetof( DeployStyleAIUpdateModuleData, m_manualDeploy ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 		p.add(dataFieldParse);
@@ -105,8 +108,17 @@ public:
 	Bool doTurretsHaveToCenterBeforePacking() const { return getDeployStyleAIUpdateModuleData()->m_turretsMustCenterBeforePacking; }
 	void setMyState( DeployStateTypes StateID, Bool reverseDeploy = FALSE );
 
+	// Tiberium Project @feature Manual deploy. With ManualDeploy = Yes the unit deploys and packs up
+	// only when toggled (or packs up when ordered to move); attacking never deploys it.
+	virtual DeployStyleAIUpdate* getDeployStyleAIUpdate() override { return this; }
+	virtual const DeployStyleAIUpdate* getDeployStyleAIUpdate() const override { return this; }
+	Bool isManualDeploy() const { return getDeployStyleAIUpdateModuleData()->m_manualDeploy; }
+	Bool isManualDeployRequested() const { return m_manualDeployRequested; }
+	void toggleManualDeploy( CommandSourceType cmdSource );
+
 protected:
 
 	DeployStateTypes				m_state;
 	UnsignedInt							m_frameToWaitForDeploy;
+	Bool										m_manualDeployRequested;	///< ManualDeploy: the player wants this unit deployed
 };

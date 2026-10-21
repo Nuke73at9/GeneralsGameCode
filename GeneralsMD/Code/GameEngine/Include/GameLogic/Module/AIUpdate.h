@@ -55,6 +55,7 @@ class WorkerAIInterface;
 class HackInternetAIInterface;
 class AssaultTransportAIInterface;
 class JetAIUpdate;
+class DeployStyleAIUpdate;
 
 enum AIStateType CPP_11(: Int);
 enum HordeActionType CPP_11(: Int);
@@ -320,6 +321,9 @@ public:
 	virtual const AssaultTransportAIInterface* getAssaultTransportAIInterface() const { return nullptr; }
 	virtual JetAIUpdate* getJetAIUpdate() { return nullptr; }
 	virtual const JetAIUpdate* getJetAIUpdate() const { return nullptr; }
+	// Tiberium Project @feature Deploy-style AI, for the manual deploy toggle special power
+	virtual DeployStyleAIUpdate* getDeployStyleAIUpdate() { return nullptr; }
+	virtual const DeployStyleAIUpdate* getDeployStyleAIUpdate() const { return nullptr; }
 
 #ifdef ALLOW_SURRENDER
 	void setSurrendered( const Object *objWeSurrenderedTo, Bool surrendered );

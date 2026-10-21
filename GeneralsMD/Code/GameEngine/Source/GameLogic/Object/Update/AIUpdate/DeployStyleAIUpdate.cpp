@@ -56,6 +56,57 @@ DeployStyleAIUpdate::DeployStyleAIUpdate( Thing *thing, const ModuleData* module
 {
 	m_state = READY_TO_MOVE;
 	m_frameToWaitForDeploy = 0;
+	m_manualDeployRequested = FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature Commands that send a manually deployed unit somewhere else, so it packs up.
+// Attacks and guarding don't count: a deployed unit fights from where it stands.
+static Bool isRelocationCommand( AICommandType cmd )
+{
+	switch( cmd )
+	{
+		case AICMD_MOVE_TO_POSITION:
+		case AICMD_MOVE_TO_OBJECT:
+		case AICMD_TIGHTEN_TO_POSITION:
+		case AICMD_MOVE_TO_POSITION_AND_EVACUATE:
+		case AICMD_MOVE_TO_POSITION_AND_EVACUATE_AND_EXIT:
+		case AICMD_MOVE_TO_POSITION_EVEN_IF_SLEEPING:
+		case AICMD_FOLLOW_WAYPOINT_PATH:
+		case AICMD_FOLLOW_WAYPOINT_PATH_AS_TEAM:
+		case AICMD_FOLLOW_WAYPOINT_PATH_EXACT:
+		case AICMD_FOLLOW_WAYPOINT_PATH_AS_TEAM_EXACT:
+		case AICMD_FOLLOW_USER_PATH:
+		case AICMD_FOLLOW_PATH:
+		case AICMD_FOLLOW_PATH_APPEND:
+		case AICMD_FOLLOW_EXITPRODUCTION_PATH:
+		case AICMD_ATTACKMOVE_TO_POSITION:
+		case AICMD_ATTACKFOLLOW_WAYPOINT_PATH:
+		case AICMD_ATTACKFOLLOW_WAYPOINT_PATH_AS_TEAM:
+		case AICMD_HUNT:
+		case AICMD_ENTER:
+		case AICMD_DOCK:
+		case AICMD_GET_HEALED:
+		case AICMD_GET_REPAIRED:
+		case AICMD_WANDER:
+			return TRUE;
+		default:
+			return FALSE;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void DeployStyleAIUpdate::toggleManualDeploy( CommandSourceType cmdSource )
+{
+	if( !isManualDeploy() )
+		return;
+
+	m_manualDeployRequested = !m_manualDeployRequested;
+	if( m_manualDeployRequested )
+	{
+		// stop where we are; update() deploys once nothing is moving us
+		aiIdle( cmdSource );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -74,6 +125,12 @@ void DeployStyleAIUpdate::aiDoCommand( const AICommandParms* parms )
 {
 	if (!isAllowedToRespondToAiCommands(parms))
 		return;
+
+	// Tiberium Project @feature Being sent somewhere packs a manually deployed unit up first.
+	if( isManualDeploy() && isRelocationCommand( parms->m_cmd ) )
+	{
+		m_manualDeployRequested = FALSE;
+	}
 
 	/*
 	//Hack code to allow follow waypoint scripts to be converted to attack follow waypoint scripts
@@ -146,11 +203,27 @@ UpdateSleepTime DeployStyleAIUpdate::update()
 	// TheSuperHackers @bugfix Caball009 27/07/2026 The pathfinding code may use a stricter attack range check than used
 	// in this function, so the range check is insufficient. Objects are not allowed to deploy and attack if they're moving.
 #if RETAIL_COMPATIBLE_CRC
-	if (isInRange || isInGuardIdleState)
+	Bool wantsToDeploy = isInRange || isInGuardIdleState;
 #else
 	// @todo Simplify the code by moving the second branch up so 'isTryingToMove' is checked first.
-	if (!isTryingToMove && (isInRange || isInGuardIdleState))
+	Bool wantsToDeploy = !isTryingToMove && (isInRange || isInGuardIdleState);
 #endif
+	Bool wantsToMove = isTryingToMove;
+
+	// Tiberium Project @feature Manual deploy: the toggle alone decides. A deployed unit holds its
+	// ground, so movement the AI starts on its own (chasing a target out of range) is cancelled.
+	if( data->m_manualDeploy )
+	{
+		if( m_manualDeployRequested && isTryingToMove )
+		{
+			aiIdle( CMD_FROM_AI );
+			isTryingToMove = FALSE;
+		}
+		wantsToDeploy = m_manualDeployRequested;
+		wantsToMove = !m_manualDeployRequested;
+	}
+
+	if( wantsToDeploy )
 	{
 		switch( m_state )
 		{
@@ -177,7 +250,7 @@ UpdateSleepTime DeployStyleAIUpdate::update()
 				break;
 		}
 	}
-	else if( isTryingToMove )
+	else if( wantsToMove )
 	{
 		switch( m_state )
 		{
@@ -436,12 +509,14 @@ void DeployStyleAIUpdate::crc( Xfer *xfer )
 	* 1: Initial version
 	* 2: Added support for attack move
 	* 3: Added improved support for guard, and support for hunt AI
+	* 4: Saves the deploy state
+	* 5: Tiberium Project: saves the manual deploy request
  **/
 // ------------------------------------------------------------------------------------------------
 void DeployStyleAIUpdate::xfer( Xfer *xfer )
 {
   // version
-  XferVersion currentVersion = 4;
+  XferVersion currentVersion = 5;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
 
@@ -452,6 +527,10 @@ void DeployStyleAIUpdate::xfer( Xfer *xfer )
 	{
 		xfer->xferUser(&m_state, sizeof(m_state));
 		xfer->xferUnsignedInt(&m_frameToWaitForDeploy);
+		if( version >= 5 )
+		{
+			xfer->xferBool(&m_manualDeployRequested);
+		}
 	}
 	else if( xfer->getXferMode() == XFER_LOAD )
 	{
