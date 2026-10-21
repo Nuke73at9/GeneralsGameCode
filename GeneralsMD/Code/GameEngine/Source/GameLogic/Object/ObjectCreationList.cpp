@@ -751,6 +751,7 @@ public:
     m_minHealth(1.0f),
 		m_maxHealth(1.0f),
 		m_orientInForceDirection(false),
+		m_throwAwayFromCenter(false),
 		m_spreadFormation(false),
 		m_minDistanceAFormation(0.0f),
 		m_minDistanceBFormation(0.0f),
@@ -819,6 +820,9 @@ public:
 			{ "Count",						INI::parseInt,						nullptr, offsetof( GenericObjectCreationNugget, m_debrisToGenerate ) },
 			{ "IgnorePrimaryObstacle", INI::parseBool, nullptr, offsetof(GenericObjectCreationNugget, m_ignorePrimaryObstacle) },
 			{ "OrientInForceDirection", INI::parseBool, nullptr, offsetof(GenericObjectCreationNugget, m_orientInForceDirection) },
+			// Tiberium Project @feature With RANDOM_FORCE, throw the object away from the source's centre,
+			// along its Offset, instead of in a random direction (wreck pieces blown outwards)
+			{ "ThrowAwayFromCenter", INI::parseBool, nullptr, offsetof(GenericObjectCreationNugget, m_throwAwayFromCenter) },
 			{ "ExtraBounciness",				INI::parseReal,						nullptr, offsetof( GenericObjectCreationNugget, m_extraBounciness ) },
 			{ "ExtraFriction",				parseFrictionPerSec,						nullptr, offsetof( GenericObjectCreationNugget, m_extraFriction ) },
 			{ "Offset",						INI::parseCoord3D,				nullptr, offsetof( GenericObjectCreationNugget, m_offset ) },
@@ -1187,6 +1191,25 @@ protected:
 				else
 				{
 					calcRandomForce(m_minMag, m_maxMag, m_minPitch, m_maxPitch, &force);
+					// Tiberium Project @feature ThrowAwayFromCenter: keep the random strength and pitch, but
+					// aim the horizontal push along the offset, with a little of the random direction left in
+					Real offsetLen = WWMath::SqrtfOrigin(offset.x * offset.x + offset.y * offset.y);
+					if (m_throwAwayFromCenter && offsetLen > 0.01f)
+					{
+						Real horiz = WWMath::SqrtfOrigin(force.x * force.x + force.y * force.y);
+						if (horiz > 0.0f)
+						{
+							const Real SCATTER = 0.35f;
+							Real dirX = offset.x / offsetLen + SCATTER * force.x / horiz;
+							Real dirY = offset.y / offsetLen + SCATTER * force.y / horiz;
+							Real dirLen = WWMath::SqrtfOrigin(dirX * dirX + dirY * dirY);
+							if (dirLen > 0.0f)
+							{
+								force.x = horiz * dirX / dirLen;
+								force.y = horiz * dirY / dirLen;
+							}
+						}
+					}
 					DUMPREAL(m_minMag);
 					DUMPREAL(m_maxMag);
 					DUMPREAL(m_minPitch);
@@ -1499,6 +1522,7 @@ private:
 	Bool											m_nameAreObjects;
 	Bool											m_okToChangeModelColor;
 	Bool											m_orientInForceDirection;
+	Bool											m_throwAwayFromCenter;		///< Tiberium Project: RANDOM_FORCE pushes along Offset, away from the source
 	Bool											m_spreadFormation;
 	Bool											m_fadeIn;
 	Bool											m_fadeOut;

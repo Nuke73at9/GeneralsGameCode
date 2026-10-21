@@ -134,6 +134,14 @@ PhysicsBehaviorModuleData::PhysicsBehaviorModuleData()
 		but defaulting it to 2 is, in fact, the right thing for now... (srj)
 	*/
 	m_pitchRollYawFactor = 2.0f;
+	// Tiberium Project @feature Rigid-body debris: off unless RigidBodyHalfExtents is set. The
+	// defaults follow the C&C4 collapse pieces (restitution 0.3, ground friction 0.6 per second).
+	m_rigidBodyHalfExtents.zero();
+	m_rigidBodyRestitution = 0.3f;
+	m_rigidBodyGroundFriction = 0.12f;
+	m_rigidBodySpinDamping = 0.5f;
+	m_rigidBodyTipRate = 0.12f;
+	m_rigidBodyGravityScale = 1.0f;
 	m_vehicleCrashesIntoBuildingWeaponTemplate = TheWeaponStore->findWeaponTemplate("VehicleCrashesIntoBuildingWeapon");
 	m_vehicleCrashesIntoNonBuildingWeaponTemplate = TheWeaponStore->findWeaponTemplate("VehicleCrashesIntoNonBuildingWeapon");
 
@@ -183,6 +191,13 @@ static void parseFrictionPerSec( INI* ini, void * /*instance*/, void *store, con
 		{ "MinFallHeightForDamage",			parseHeightToSpeed,		nullptr, offsetof( PhysicsBehaviorModuleData, m_minFallSpeedForDamage) },
 		{ "FallHeightDamageFactor",			INI::parseReal,		nullptr, offsetof( PhysicsBehaviorModuleData, m_fallHeightDamageFactor) },
 		{ "PitchRollYawFactor",			INI::parseReal,		nullptr, offsetof( PhysicsBehaviorModuleData, m_pitchRollYawFactor) },
+		// Tiberium Project @feature Rigid-body debris
+		{ "RigidBodyHalfExtents",		INI::parseCoord3D,	nullptr, offsetof( PhysicsBehaviorModuleData, m_rigidBodyHalfExtents) },
+		{ "RigidBodyRestitution",		INI::parseReal,			nullptr, offsetof( PhysicsBehaviorModuleData, m_rigidBodyRestitution) },
+		{ "RigidBodyGroundFriction",	INI::parseReal,		nullptr, offsetof( PhysicsBehaviorModuleData, m_rigidBodyGroundFriction) },
+		{ "RigidBodySpinDamping",		INI::parseReal,			nullptr, offsetof( PhysicsBehaviorModuleData, m_rigidBodySpinDamping) },
+		{ "RigidBodyTipRate",				INI::parseReal,			nullptr, offsetof( PhysicsBehaviorModuleData, m_rigidBodyTipRate) },
+		{ "RigidBodyGravityScale",	INI::parseReal,			nullptr, offsetof( PhysicsBehaviorModuleData, m_rigidBodyGravityScale) },
 
 		{ "VehicleCrashesIntoBuildingWeaponTemplate", INI::parseWeaponTemplate, nullptr, offsetof(PhysicsBehaviorModuleData, m_vehicleCrashesIntoBuildingWeaponTemplate) },
 		{ "VehicleCrashesIntoNonBuildingWeaponTemplate", INI::parseWeaponTemplate, nullptr, offsetof(PhysicsBehaviorModuleData, m_vehicleCrashesIntoNonBuildingWeaponTemplate) },
@@ -438,7 +453,11 @@ void PhysicsBehavior::resetDynamicPhysics()
 //-------------------------------------------------------------------------------------------------
 void PhysicsBehavior::applyGravitationalForces()
 {
-	m_accel.z += TheGlobalData->m_gravity;
+	// Tiberium Project @feature Rigid-body debris may fall faster than the global gravity
+	if (isRigidBody())
+		m_accel.z += TheGlobalData->m_gravity * getPhysicsBehaviorModuleData()->m_rigidBodyGravityScale;
+	else
+		m_accel.z += TheGlobalData->m_gravity;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -545,6 +564,160 @@ Bool PhysicsBehavior::handleBounce(Real oldZ, Real newZ, Real groundZ, Coord3D* 
 	{
 		bounceForce->zero();
 		return false;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature Rigid-body debris (C&C4 collapse pieces)
+//-------------------------------------------------------------------------------------------------
+Bool PhysicsBehavior::isRigidBody() const
+{
+	const Coord3D& h = getPhysicsBehaviorModuleData()->m_rigidBodyHalfExtents;
+	return h.x > 0.0f || h.y > 0.0f || h.z > 0.0f;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** How far the lowest corner of the box sits below the pivot, for the box turned by mtx. */
+static Real rigidBodyDepth(const Matrix3D& mtx, const Coord3D& h)
+{
+	return fabs(mtx[2][0]) * h.x + fabs(mtx[2][1]) * h.y + fabs(mtx[2][2]) * h.z;
+}
+
+//-------------------------------------------------------------------------------------------------
+static Bool normalizeVector(Vector3& v)
+{
+	Real len = WWMath::SqrtfOrigin(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
+	if (len < 1.0e-6f)
+		return false;
+	v.X /= len;
+	v.Y /= len;
+	v.Z /= len;
+	return true;
+}
+
+//-------------------------------------------------------------------------------------------------
+/**
+	Ground contact for a box-shaped piece. The box (RigidBodyHalfExtents, centred on the pivot)
+	is turned with the object, and its lowest corner, not the pivot, meets the ground: a falling
+	piece bounces (RigidBodyRestitution), loses spin on each bounce (RigidBodySpinDamping), slides
+	to a stop (RigidBodyGroundFriction), and tips over (RigidBodyTipRate) until it lies on a face
+	it can balance on, the way C&C4's collapse pieces settle. Everything here is game logic and
+	uses only the deterministic math helpers, so every player sees the same wreck.
+*/
+void PhysicsBehavior::handleRigidBodyGround(Matrix3D& mtx, Real groundZ)
+{
+	const PhysicsBehaviorModuleData* d = getPhysicsBehaviorModuleData();
+	const Coord3D& half = d->m_rigidBodyHalfExtents;
+
+	setFlag(RIGID_BODY_AT_REST, false);
+
+	Real depth = rigidBodyDepth(mtx, half);
+	if (mtx.Get_Z_Translation() - depth > groundZ)
+		return;	// still in the air
+
+	// bounce, or stop falling once the impact is too soft to bounce
+	const Real gravity = fabs(TheGlobalData->m_gravity * d->m_rigidBodyGravityScale);
+	if (m_vel.z < 0.0f)
+	{
+		Real impact = -m_vel.z;
+		if (impact > 2.0f * gravity)
+		{
+			m_vel.z = impact * d->m_rigidBodyRestitution;
+			applyYPRDamping(d->m_rigidBodySpinDamping);
+		}
+		else
+		{
+			m_vel.z = 0.0f;
+		}
+	}
+
+	// sliding and spinning against the ground slow down
+	Real keep = 1.0f - d->m_rigidBodyGroundFriction;
+	if (keep < 0.0f) keep = 0.0f;
+	m_vel.x *= keep;
+	m_vel.y *= keep;
+	applyYPRDamping(keep);
+	m_velMag = INVALID_VEL_MAG;
+
+	// tip over. Start from the face that points most nearly down; the piece stays on it if the
+	// line of gravity through its centre still falls inside that face, otherwise it topples
+	// toward the side it overhangs. A tall, thin piece therefore falls over, a flat one settles.
+	Vector3 axes[3] = { mtx.Get_X_Vector(), mtx.Get_Y_Vector(), mtx.Get_Z_Vector() };
+	Real downLocal[3] = { -axes[0].Z, -axes[1].Z, -axes[2].Z };	// world down in the piece's own axes
+	Real halfSize[3] = { half.x, half.y, half.z };
+	const Real MIN_HALF = 0.01f;
+	for (Int i = 0; i < 3; ++i)
+	{
+		if (halfSize[i] < MIN_HALF)
+			halfSize[i] = MIN_HALF;
+	}
+	Int base = 0;
+	for (Int i = 1; i < 3; ++i)
+	{
+		if (fabs(downLocal[i]) > fabs(downLocal[base]))
+			base = i;
+	}
+	Int target = base;
+	Real worst = 1.0f;
+	for (Int j = 0; j < 3; ++j)
+	{
+		if (j == base)
+			continue;
+		// where gravity's line leaves the base face, as a fraction of the face's half width
+		Real overhang = fabs(downLocal[j]) * halfSize[base] / (fabs(downLocal[base]) * halfSize[j]);
+		if (overhang > worst)
+		{
+			worst = overhang;
+			target = j;
+		}
+	}
+	Vector3 face = axes[target];
+	if (downLocal[target] < 0.0f)
+		face = -face;	// the side of that axis facing the ground
+	const Vector3 down(0.0f, 0.0f, -1.0f);
+	const Real FLAT = -0.9995f;	// within about 1.8 degrees of lying flat
+	Bool flat = (target == base) && face.Z <= FLAT;
+	Real step = flat ? 1.0f : d->m_rigidBodyTipRate;
+	if (step > 0.0f && face.Z > -1.0f)
+	{
+		Vector3 aim = face + (down - face) * step;
+		if (normalizeVector(aim))
+		{
+			Vector3 axis;
+			Vector3::Cross_Product(face, aim, &axis);
+			Real sine = WWMath::SqrtfOrigin(axis.X * axis.X + axis.Y * axis.Y + axis.Z * axis.Z);
+			Real cosine = Vector3::Dot_Product(face, aim);
+			if (sine > 1.0e-6f)
+			{
+				axis /= sine;
+				Matrix3D turn;
+				turn.Set(axis, sine, cosine);
+				Vector3 pos = mtx.Get_Translation();
+				mtx.Set_Translation(Vector3(0.0f, 0.0f, 0.0f));
+				Matrix3D turned;
+				Matrix3D::Multiply(turn, mtx, &turned);
+				turned.Set_Translation(pos);
+				mtx = turned;
+			}
+		}
+	}
+
+	// keep the lowest corner on the ground
+	depth = rigidBodyDepth(mtx, half);
+	mtx.Set_Z_Translation(groundZ + depth);
+
+	// at rest: lying flat, not sliding, not spinning
+	const Real STILL = 0.01f;
+	const Real STILL_SPIN = 0.002f;
+	if (flat && fabs(m_vel.x) < STILL && fabs(m_vel.y) < STILL && fabs(m_vel.z) < STILL &&
+			fabs(m_yawRate) < STILL_SPIN && fabs(m_pitchRate) < STILL_SPIN && fabs(m_rollRate) < STILL_SPIN)
+	{
+		m_vel.zero();
+		m_velMag = INVALID_VEL_MAG;
+		setYawRate(0.0f);
+		setPitchRate(0.0f);
+		setRollRate(0.0f);
+		setFlag(RIGID_BODY_AT_REST, true);
 	}
 }
 
@@ -754,63 +927,73 @@ UpdateSleepTime PhysicsBehavior::update()
 		{
 			groundZ += obj->getCarrierDeckHeight();
 		}
-		gotBounceForce = handleBounce(oldPosZ, mtx.Get_Z_Translation(), groundZ, &bounceForce);
-
-		// remember our z-vel prior to doing ground-slam adjustment
-		activeVelZ = m_vel.z;
-		if (mtx.Get_Z_Translation() <= groundZ)
+		// Tiberium Project @feature Rigid-body debris lands on its box, not its pivot
+		if (isRigidBody())
 		{
-			// Note - when vehicles are going down a slope, they will maintain a small negative
-			// z velocity as they go down.  So don't slam it to 0 if they aren't slamming into the
-			// ground.
-			Real dz = groundZ - mtx.Get_Z_Translation();  // Our excess z velocity.
-			m_vel.z += dz;							// Remove the excess z velocity.
-			if (m_vel.z > 0.0f)
-				m_vel.z = 0.0f;
-
-			m_velMag = INVALID_VEL_MAG;
-
-			mtx.Set_Z_Translation(groundZ);
-
-			// this flag is ALWAYS cleared once we hit the ground.
-			setFlag(ALLOW_TO_FALL, false);
-
-			// When a stunned object hits the ground the first time, change it's model state from stunned flailing to just stunned.
-			if (getFlag(IS_STUNNED))
-			{
-				obj->clearModelConditionState(MODELCONDITION_STUNNED_FLAILING);
-				obj->setModelConditionState(MODELCONDITION_STUNNED);
-			}
-		}
-		else if (mtx.Get_Z_Translation() > groundZ)
-		{
-			if (getFlag(IS_IN_FREEFALL))
-			{
-				obj->setDisabled(DISABLED_FREEFALL);
-				obj->setModelConditionState(MODELCONDITION_FREEFALL);
-			}
-			else if (getFlag(STICK_TO_GROUND) && !getFlag(ALLOW_TO_FALL))
-			{
-				mtx.Set_Z_Translation(groundZ);
-			}
-		}
-
-		if (gotBounceForce)
-		{
-			// Right the object after the bounce since the pitch and roll may have been affected
-			Real yawAngle = getObject()->getTransformMatrix()->Get_Z_Rotation();
-			setAngles(yawAngle, 0.0f, 0.0f);
-
-			// Set the translation of the after bounce matrix to the one calculated above
-			Matrix3D afterBounceMatrix = *getObject()->getTransformMatrix();
-			afterBounceMatrix.Set_Translation(mtx.Get_Translation());
-
-			// Set the result of the after bounce matrix as the object's final matrix
-			obj->setTransformMatrix(&afterBounceMatrix);
+			activeVelZ = m_vel.z;
+			handleRigidBodyGround(mtx, groundZ);
+			obj->setTransformMatrix(&mtx);
 		}
 		else
 		{
-			obj->setTransformMatrix(&mtx);
+			gotBounceForce = handleBounce(oldPosZ, mtx.Get_Z_Translation(), groundZ, &bounceForce);
+
+			// remember our z-vel prior to doing ground-slam adjustment
+			activeVelZ = m_vel.z;
+			if (mtx.Get_Z_Translation() <= groundZ)
+			{
+				// Note - when vehicles are going down a slope, they will maintain a small negative
+				// z velocity as they go down.  So don't slam it to 0 if they aren't slamming into the
+				// ground.
+				Real dz = groundZ - mtx.Get_Z_Translation();  // Our excess z velocity.
+				m_vel.z += dz;							// Remove the excess z velocity.
+				if (m_vel.z > 0.0f)
+					m_vel.z = 0.0f;
+
+				m_velMag = INVALID_VEL_MAG;
+
+				mtx.Set_Z_Translation(groundZ);
+
+				// this flag is ALWAYS cleared once we hit the ground.
+				setFlag(ALLOW_TO_FALL, false);
+
+				// When a stunned object hits the ground the first time, change it's model state from stunned flailing to just stunned.
+				if (getFlag(IS_STUNNED))
+				{
+					obj->clearModelConditionState(MODELCONDITION_STUNNED_FLAILING);
+					obj->setModelConditionState(MODELCONDITION_STUNNED);
+				}
+			}
+			else if (mtx.Get_Z_Translation() > groundZ)
+			{
+				if (getFlag(IS_IN_FREEFALL))
+				{
+					obj->setDisabled(DISABLED_FREEFALL);
+					obj->setModelConditionState(MODELCONDITION_FREEFALL);
+				}
+				else if (getFlag(STICK_TO_GROUND) && !getFlag(ALLOW_TO_FALL))
+				{
+					mtx.Set_Z_Translation(groundZ);
+				}
+			}
+
+			if (gotBounceForce)
+			{
+				// Right the object after the bounce since the pitch and roll may have been affected
+				Real yawAngle = getObject()->getTransformMatrix()->Get_Z_Rotation();
+				setAngles(yawAngle, 0.0f, 0.0f);
+
+				// Set the translation of the after bounce matrix to the one calculated above
+				Matrix3D afterBounceMatrix = *getObject()->getTransformMatrix();
+				afterBounceMatrix.Set_Translation(mtx.Get_Translation());
+
+				// Set the result of the after bounce matrix as the object's final matrix
+				obj->setTransformMatrix(&afterBounceMatrix);
+			}
+			else
+			{
+				obj->setTransformMatrix(&mtx);
+			}
 		}
 	}
 
@@ -916,6 +1099,17 @@ UpdateSleepTime PhysicsBehavior::update()
 UpdateSleepTime PhysicsBehavior::calcSleepTime() const
 {
 #ifdef SLEEPY_PHYSICS
+	// Tiberium Project @feature Rigid-body debris rests with its pivot above the ground (a
+	// piece lying on its side), so "not above terrain" can't tell that it has stopped.
+	if (getFlag(RIGID_BODY_AT_REST) &&
+			isZero3D(m_vel) &&
+			isZero3D(m_accel) &&
+			!getFlag(HAS_PITCHROLLYAW) &&
+			getCurrentOverlap() == INVALID_ID &&
+			getPreviousOverlap() == INVALID_ID)
+	{
+		return UPDATE_SLEEP_FOREVER;
+	}
 	if (isZero3D(m_vel) &&
 			isZero3D(m_accel) &&
 			!getFlag(HAS_PITCHROLLYAW) &&

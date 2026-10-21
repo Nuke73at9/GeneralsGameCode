@@ -35,6 +35,7 @@
 #include "GameLogic/Module/CollideModule.h"
 
 enum ObjectID CPP_11(: Int);
+class Matrix3D;
 
 enum PhysicsTurningType CPP_11(: Int)
 {
@@ -63,6 +64,18 @@ public:
 	Real	m_minFallSpeedForDamage;
 	Real	m_fallHeightDamageFactor;
 	Real	m_pitchRollYawFactor;
+
+	// Tiberium Project @feature Rigid-body debris (C&C4 collapse pieces). With a box set, the
+	// object lands on the box's lowest corner instead of its pivot, bounces, slides, and tips
+	// over onto whichever face is nearest the ground, so a wreck piece comes to rest lying on
+	// a side instead of standing on its center point. Zero extents (the default) keep the
+	// original physics untouched.
+	Coord3D	m_rigidBodyHalfExtents;		///< half size of the piece's box around its pivot; zero = off
+	Real	m_rigidBodyRestitution;			///< fraction of the falling speed kept as bounce
+	Real	m_rigidBodyGroundFriction;	///< fraction of sliding speed and spin lost per frame on the ground
+	Real	m_rigidBodySpinDamping;			///< fraction of the spin kept on each bounce
+	Real	m_rigidBodyTipRate;					///< fraction of the remaining tilt removed per frame while tipping onto a face
+	Real	m_rigidBodyGravityScale;		///< gravity multiplier, so heavy wreckage drops instead of floating
 
 	const WeaponTemplate* m_vehicleCrashesIntoBuildingWeaponTemplate;
 	const WeaponTemplate* m_vehicleCrashesIntoNonBuildingWeaponTemplate;
@@ -227,6 +240,9 @@ protected:
 	void applyGravitationalForces();
 	void applyFrictionalForces();
 	Bool handleBounce(Real oldZ, Real newZ, Real groundZ, Coord3D* bounceForce);
+	// Tiberium Project @feature Rigid-body debris ground contact (see m_rigidBodyHalfExtents)
+	Bool isRigidBody() const;
+	void handleRigidBodyGround(Matrix3D& mtx, Real groundZ);
 	void applyYPRDamping(Real factor);
 	UpdateSleepTime calcSleepTime() const;
 
@@ -253,6 +269,7 @@ private:
 		IS_IN_FREEFALL									= 0x0200,
 		IS_IN_UPDATE										= 0x0400,
 		IS_STUNNED											= 0x0800, // Added in Zero Hour
+		RIGID_BODY_AT_REST							= 0x1000, // Tiberium Project: rigid-body debris lying still on a face
 	};
 
 	/*
