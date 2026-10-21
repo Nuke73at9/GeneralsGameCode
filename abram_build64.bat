@@ -23,9 +23,8 @@ if not exist "%VCPKG_ROOT%\vcpkg.exe" goto :novcpkg
 echo Using vcpkg from %VCPKG_ROOT%
 
 rem Install into these game folders. Change them here if your games are somewhere else.
-rem The 64-bit Zero Hour goes into its own copy of the game, not the Steam folder.
 rem To use another folder, set ABRAM_ZEROHOUR_PATH before running this script.
-if not defined ABRAM_ZEROHOUR_PATH set "ABRAM_ZEROHOUR_PATH=D:\Command & Conquer Generals - Zero Hour (x64)"
+if not defined ABRAM_ZEROHOUR_PATH set "ABRAM_ZEROHOUR_PATH=C:\Program Files (x86)\Steam\steamapps\common\Command & Conquer Generals - Zero Hour"
 set "ABRAM_GENERALS_PATH=C:\Program Files (x86)\Steam\steamapps\common\Command and Conquer Generals"
 
 cd /d "%~dp0"
