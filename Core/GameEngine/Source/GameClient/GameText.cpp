@@ -449,19 +449,43 @@ void GameTextManager::init()
 	// GeneralsX @bugfix UnicodeApocalypse 10/09/2026 Merge data/patch.str, the retail patch's plain-text
 	// string overlay (e.g. Custom Missions, v1.05) that never got folded into generals.csf. Missing on
 	// unpatched installs, and expected to be absent then.
+	// Tiberium Project @feature data/tiberium.str, the Tiberium mod's strings (shipped in its .big),
+	// is merged the same way, after the patch overlay.
 	{
-		const Char *PATCH_STR_FILE = "data/patch.str";
+		const Char *OVERLAY_FILES[] = { "data/patch.str", "data/tiberium.str" };
+		const Int OVERLAY_COUNT = ARRAY_SIZE(OVERLAY_FILES);
 
-		// GeneralsX @bugfix UnicodeApocalypse 10/09/2026 getStringCount() pads by 500; actualPatchCount below is the real check.
-		Int patchCount = 0;
-		if ( getStringCount( PATCH_STR_FILE, patchCount ) )
+		// GeneralsX @bugfix UnicodeApocalypse 10/09/2026 getStringCount() pads by 500; the parsed count below is the real check.
+		Int overlayCounts[OVERLAY_COUNT];
+		Int totalCount = 0;
+		for ( Int i = 0; i < OVERLAY_COUNT; ++i )
 		{
-			m_patchStringInfo = NEW StringInfo[patchCount];
+			overlayCounts[i] = 0;
+			if ( !getStringCount( OVERLAY_FILES[i], overlayCounts[i] ) )
+				overlayCounts[i] = 0;
+			totalCount += overlayCounts[i];
+		}
+		if ( totalCount > 0 )
+		{
+			m_patchStringInfo = NEW StringInfo[totalCount];
 
 			if ( m_patchStringInfo != nullptr )
 			{
 				Int actualPatchCount = 0;
-				if ( parseStringFile( PATCH_STR_FILE, m_patchStringInfo, &actualPatchCount ) && actualPatchCount > 0 )
+				for ( Int i = 0; i < OVERLAY_COUNT; ++i )
+				{
+					if ( overlayCounts[i] <= 0 )
+						continue;
+					StringInfo *parsed = NEW StringInfo[overlayCounts[i]];
+					Int parsedCount = 0;
+					if ( parsed != nullptr && parseStringFile( OVERLAY_FILES[i], parsed, &parsedCount ) )
+					{
+						for ( Int k = 0; k < parsedCount && actualPatchCount < totalCount; ++k )
+							m_patchStringInfo[actualPatchCount++] = parsed[k];
+					}
+					delete [] parsed;
+				}
+				if ( actualPatchCount > 0 )
 				{
 					m_patchTextCount = actualPatchCount;
 					m_patchStringLUT = buildSortedLUT( m_patchStringInfo, m_patchTextCount );

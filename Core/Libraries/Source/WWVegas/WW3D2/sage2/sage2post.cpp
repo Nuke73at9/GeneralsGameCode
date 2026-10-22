@@ -90,6 +90,20 @@ namespace
 			&& s_techAccumulate >= 0 && s_techAccumulateFinal >= 0 && s_techLookup >= 0;
 	}
 
+	bool Read_File(const std::string& path, std::vector<unsigned char>& data)
+	{
+		data.clear();
+		file_auto_ptr file(_TheFileFactory, path.c_str());
+		if (!file->Is_Available() || !file->Open())
+			return false;
+		data.resize((size_t)file->Size());
+		bool ok = !data.empty() && file->Read(&data[0], (int)data.size()) == (int)data.size();
+		file->Close();
+		if (!ok)
+			data.clear();
+		return ok;
+	}
+
 	// A C&C4 grading table: a DDS volume texture, 32-bit colour, one level
 	IDirect3DVolumeTexture9* Load_Lookup_Texture(IDirect3DDevice9* device, const std::string& name)
 	{
@@ -97,12 +111,16 @@ namespace
 		if (it != s_lookupTextures.end())
 			return it->second;
 		IDirect3DVolumeTexture9* texture = nullptr;
-		std::string path = "Art\\Textures\\" + name + ".dds";
-		file_auto_ptr file(_TheFileFactory, path.c_str());
-		if (file->Is_Available() && file->Open())
+		// the game's file factory puts .dds names under Art\Textures itself; a plain one needs the path
+		std::string path = name + ".dds";
+		std::vector<unsigned char> data;
+		if (!Read_File(path, data))
 		{
-			std::vector<unsigned char> data((size_t)file->Size());
-			if (data.size() > 128 && file->Read(&data[0], (int)data.size()) == (int)data.size() && memcmp(&data[0], "DDS ", 4) == 0)
+			path = "Art\\Textures\\" + name + ".dds";
+			Read_File(path, data);
+		}
+		{
+			if (data.size() > 128 && memcmp(&data[0], "DDS ", 4) == 0)
 			{
 				const unsigned* h = (const unsigned*)&data[4];	// the DDS header, after the magic
 				unsigned flags = h[1], height = h[2], width = h[3], depth = h[5];
@@ -127,7 +145,6 @@ namespace
 				else
 					Sage2_Log("post: %s is not a 32-bit volume texture (flags %x, pixel format %x/%x/%u)", path.c_str(), flags, pfFlags, fourCC, bits);
 			}
-			file->Close();
 		}
 		Sage2_Log("post: grading table %s %s", path.c_str(), texture ? "loaded" : "not loaded");
 		s_lookupTextures[name] = texture;
