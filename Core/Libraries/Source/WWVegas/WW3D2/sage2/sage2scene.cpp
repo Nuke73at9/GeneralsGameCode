@@ -277,6 +277,18 @@ bool Sage2SceneClass::Light_Mesh(Sage2EffectClass& effect, int prepassTechnique,
 	}
 	Sage2GlobalsClass::Set_Frame_Buffer_Size(desc.Width, desc.Height);
 
+	// Direct3D 9 resets the viewport (and scissor rectangle) to the whole target on every
+	// SetRenderTarget; the scene's viewport may be smaller than the frame (the 3D view above the
+	// control bar, letterboxing), so it is kept for every pass here and put back at the end, or
+	// everything drawn after this mesh would land stretched and shifted
+	D3DVIEWPORT9 viewport;
+	device->GetViewport(&viewport);
+	RECT scissor = { 0, 0, 0, 0 };
+	DWORD scissorEnabled = FALSE;
+	device->GetRenderState(D3DRS_SCISSORTESTENABLE, &scissorEnabled);
+	if (scissorEnabled)
+		device->GetScissorRect(&scissor);
+
 	IDirect3DSurface9* sNormalSpec = Surface(s_normalSpec);
 	IDirect3DSurface9* sDepth = Surface(s_depth);
 	IDirect3DSurface9* sDepthLinear = Surface(s_depthLinear);
@@ -287,6 +299,7 @@ bool Sage2SceneClass::Light_Mesh(Sage2EffectClass& effect, int prepassTechnique,
 	device->SetRenderTarget(0, sNormalSpec);
 	device->SetRenderTarget(1, sDepth);
 	device->SetDepthStencilSurface(s_prepassDepth);
+	device->SetViewport(&viewport);
 	if (!s_clearedThisFrame)
 	{
 		device->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, 0xFFFFFFFF, 1.0f, 0);
@@ -315,15 +328,20 @@ bool Sage2SceneClass::Light_Mesh(Sage2EffectClass& effect, int prepassTechnique,
 	Sage2GlobalsClass::Apply(*s_lighting, draw);
 	device->SetDepthStencilSurface(nullptr);
 	device->SetRenderTarget(0, sDepthLinear);
+	device->SetViewport(&viewport);
 	Draw_Rect(device, *s_linearDepth, s_linearDepthTechnique, x0, y0, x1, y1);
 	device->SetRenderTarget(0, sDiffuse);
 	device->SetRenderTarget(1, sSpecular);
+	device->SetViewport(&viewport);
 	Draw_Rect(device, *s_lighting, s_lightingTechnique, x0, y0, x1, y1);
 	device->SetRenderTarget(1, nullptr);
 
 	// 3. back to the frame, with the mesh's streams as the caller had them
 	device->SetRenderTarget(0, target);
 	device->SetDepthStencilSurface(depth);
+	device->SetViewport(&viewport);
+	if (scissorEnabled)
+		device->SetScissorRect(&scissor);
 	device->SetVertexDeclaration(meshDeclaration);
 	device->SetStreamSource(0, meshBuffer, 0, meshStride);
 	Sage2GlobalsClass::Set_Scene_Textures(s_diffuseLight, s_specularLight, s_depthLinear, s_normalSpec);
