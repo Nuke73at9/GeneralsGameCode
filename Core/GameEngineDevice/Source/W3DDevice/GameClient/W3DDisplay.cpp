@@ -106,6 +106,7 @@ static void drawFramerateBar();
 #include "WW3D2/postprocess.h"
 #include "WW3D2/sage2/sage2scene.h"
 #include "WW3D2/sage2/sage2lighting.h"
+#include "WW3D2/sage2/sage2post.h"
 #endif
 #include "Common/OptionPreferences.h"
 #include "WW3D2/dx8webbrowser.h"
@@ -2266,6 +2267,8 @@ AGAIN:
 						OptionPreferences prefs;
 						PostProcessClass::Set_Enabled(prefs.getBool("PostProcess", TRUE));
 						Sage2SceneClass::Set_Enabled(prefs.getBool("Sage2Deferred", TRUE));	// Tiberium Project @feature C&C4 deferred lighting
+						Sage2PostClass::Set_Enabled(prefs.getBool("Sage2Post", TRUE));		// Tiberium Project @feature C&C4's own post chain (bloom, grading table)
+						Sage2PostClass::Set_Exposure(prefs.getReal("Sage2Exposure", 1.0f));
 						s_postProcessChecked = TRUE;
 					}
 					PostProcessClass::Apply();

@@ -23,7 +23,8 @@
 // lights terrain and objects alike. The presets below are those values read out of C&C4's own
 // skirmish maps, so a Zero Hour map can be lit the way C&C4 lights its maps: the preset replaces
 // the map's lights when it is loaded, for terrain, fixed-function objects and the SAGE 2 effects
-// alike (they all read W3D's lights).
+// alike (they all read W3D's lights). Each preset also carries the map's post-processing look
+// (grading table, blend and bloom intensity, from its PostEffectsChunk) for Sage2PostClass.
 
 #pragma once
 
@@ -36,6 +37,10 @@ struct Sage2LightingPreset
 		float diffuse[3];
 		float direction[3];		// the way the light travels (map convention), unit length
 	} light[3];
+	// the map's post-processing look (its PostEffectsChunk): grading table, blend, bloom
+	const char* lookupTexture;
+	float lookupBlend;
+	float bloomIntensity;
 };
 
 class Sage2LightingClass

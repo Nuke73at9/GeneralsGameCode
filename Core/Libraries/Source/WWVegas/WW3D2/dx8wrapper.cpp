@@ -55,6 +55,7 @@
 #include "damagelook.h"
 #include "sage2/sage2material.h"
 #include "sage2/sage2scene.h"
+#include "sage2/sage2post.h"
 #include "postprocess.h"
 #endif
 // GeneralsX @build BenderAI 10/02/2026 - Need LoadLibrary/GetProcAddress/FreeLibrary for dynamic loading
@@ -1100,6 +1101,7 @@ bool DX8Wrapper::Reset_Device(bool reload_assets)
 		WW3D::_Invalidate_Textures();
 #ifdef RTS_RENDERER_D3D9
 		PostProcessClass::Release_Resources();	// Tiberium Project @feature post-processing render targets
+		Sage2PostClass::Release_Resources();	// Tiberium Project @feature C&C4 post chain targets
 		Sage2SceneClass::Release_Resources();	// Tiberium Project @feature deferred lighting buffers
 #endif
 
@@ -1158,6 +1160,7 @@ void DX8Wrapper::Release_Device()
 		DamageLookClass::Shutdown();	// Tiberium Project @feature procedural damage shader and noise texture
 		Sage2MaterialClass::Shutdown();	// Tiberium Project @feature C&C4 object shaders and normal map cache
 		PostProcessClass::Shutdown();	// Tiberium Project @feature post-processing targets and shaders
+		Sage2PostClass::Shutdown();	// Tiberium Project @feature C&C4 post chain
 #endif
 
 		for (int a=0;a<MAX_TEXTURE_STAGES;++a)

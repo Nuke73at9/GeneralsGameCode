@@ -257,6 +257,8 @@ if(SAGE_USE_D3D9)
         sage2/sage2lighting.h
         sage2/sage2material.cpp
         sage2/sage2material.h
+        sage2/sage2post.cpp
+        sage2/sage2post.h
         sage2/sage2scene.cpp
         sage2/sage2scene.h
         shaders/damagelook_ps.h

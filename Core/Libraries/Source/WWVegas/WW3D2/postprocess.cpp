@@ -22,6 +22,7 @@
 
 #include "dx8caps.h"
 #include "dx8wrapper.h"
+#include "sage2/sage2post.h"
 
 #include "shaders/postprocess_vs.h"	// from shaders/postprocess.hlsl (shaders/build_shaders.py)
 #include "shaders/postprocess_bright_ps.h"
@@ -141,6 +142,8 @@ namespace
 void PostProcessClass::Apply()
 {
 	if (!Enabled)
+		return;
+	if (Sage2PostClass::Apply())	// Tiberium Project @feature C&C4's own bloom and grading when its effects are in the mod
 		return;
 	if (s_state == NOT_TRIED)
 		Init();
