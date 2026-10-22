@@ -81,6 +81,37 @@ technique, constants, texture names). W3D readers that don't know it skip it.
 7. **Older SAGE art (C&C3 / KW / ZH)**: convert their materials to the SAGE 2 effects
    (normal / spec maps generated where missing) so everything renders through one pipeline.
 
+## Graphics import: what is left, and the direction agreed on 21/10/2026
+
+Done and in the build: the Crawlers and Predator through C&C4's own object effects (deferred
+lighting, bump, specular, procedural damage, team colour, faction reflection cubes); C&C4 map
+lighting matched to each Zero Hour map; C&C4's bloom, tone curve and grading tables; the cloud
+layer; the terrain through a terrain effect built from C&C4's terrain shader sources.
+
+1. **Terrain textures** - inventory the terrain sets of ZH, Tiberium Wars, Kane's Wrath and
+   C&C4, map each ZH tile to its C&C4 counterpart (with the normal map), compare against C&C4
+   itself. Where C&C4 has nothing that substitutes, the texture gets updated to fit the theme
+   rather than left as ZH's. Takes away the albedo lift.
+2. **Shadow map** - C&C4's own shadow map (`shadow.fxo`) feeding the deferred pass
+   (`IsShadowMapEnabled`), replacing ZH's shadow volumes and decals on everything.
+3. **Water** - ZH's water planes through C&C4's water effects (reflection, refraction,
+   normal-mapped ripples).
+4. **Trees and props** - through C&C4's tree effect and the object effect, with Kane's Wrath or
+   C&C4 textures.
+5. **Roads, scorches, tracks, decals** - find what C&C4 does for each (`TerrainRoad`,
+   `TerrainScorch`, `TerrainTracks`, decals) and compare with ZH's handling of each before
+   choosing; the method matters, not just the look.
+6. **ZH art** - the aim is to replace all of it with C&C4 art. Structures are the odd ones out
+   (C&C4 has few traditional structures), so every structure model gets updated to Kane's
+   Wrath / Tiberium Wars / RA3 / C&C4 art.
+7. **Particles** - worked on together; the pre-war setting needs its own integration work, so
+   not an automated import.
+8. **Macro texture and SSAO** - C&C4's large-scale variation layer and ambient occlusion,
+   as polish once the above is in.
+
+Also pending: the in-game Options page with "Enable C&C4 style" (the `CNC4Style` key exists),
+since the Options menu drops unknown Options.ini keys on save.
+
 ## Done so far (reference)
 
 - `tools/fxo_parse.py`: the effect format reader (Python), used to study the effects.
