@@ -20,7 +20,6 @@
 
 #include "sage2post.h"
 
-#include <map>
 #include <string>
 #include <string.h>
 #include <vector>
@@ -29,8 +28,7 @@
 #include "sage2effect.h"
 #include "sage2globals.h"
 #include "sage2material.h"
-#include "WWLib/ffactory.h"
-#include "WWLib/WWFILE.h"
+#include "sage2texture.h"
 
 namespace
 {
@@ -49,9 +47,6 @@ namespace
 	Sage2EffectClass* s_lookup = nullptr;
 	int s_techDownsampleInitial = -1, s_techDownsample4x4 = -1, s_techBlurU = -1, s_techBlurV = -1;
 	int s_techAccumulate = -1, s_techAccumulateFinal = -1, s_techLookup = -1;
-
-	// the grading tables, by name (kept for the session; they are small)
-	std::map<std::string, IDirect3DVolumeTexture9*> s_lookupTextures;
 
 	// render targets, made for the frame size
 	UINT s_width = 0, s_height = 0;
@@ -88,67 +83,6 @@ namespace
 		s_techLookup = s_lookup->Find_Technique("Default");
 		return s_techDownsampleInitial >= 0 && s_techDownsample4x4 >= 0 && s_techBlurU >= 0 && s_techBlurV >= 0
 			&& s_techAccumulate >= 0 && s_techAccumulateFinal >= 0 && s_techLookup >= 0;
-	}
-
-	bool Read_File(const std::string& path, std::vector<unsigned char>& data)
-	{
-		data.clear();
-		file_auto_ptr file(_TheFileFactory, path.c_str());
-		if (!file->Is_Available() || !file->Open())
-			return false;
-		data.resize((size_t)file->Size());
-		bool ok = !data.empty() && file->Read(&data[0], (int)data.size()) == (int)data.size();
-		file->Close();
-		if (!ok)
-			data.clear();
-		return ok;
-	}
-
-	// A C&C4 grading table: a DDS volume texture, 32-bit colour, one level
-	IDirect3DVolumeTexture9* Load_Lookup_Texture(IDirect3DDevice9* device, const std::string& name)
-	{
-		std::map<std::string, IDirect3DVolumeTexture9*>::iterator it = s_lookupTextures.find(name);
-		if (it != s_lookupTextures.end())
-			return it->second;
-		IDirect3DVolumeTexture9* texture = nullptr;
-		// the game's file factory puts .dds names under Art\Textures itself; a plain one needs the path
-		std::string path = name + ".dds";
-		std::vector<unsigned char> data;
-		if (!Read_File(path, data))
-		{
-			path = "Art\\Textures\\" + name + ".dds";
-			Read_File(path, data);
-		}
-		{
-			if (data.size() > 128 && memcmp(&data[0], "DDS ", 4) == 0)
-			{
-				const unsigned* h = (const unsigned*)&data[4];	// the DDS header, after the magic
-				unsigned flags = h[1], height = h[2], width = h[3], depth = h[5];
-				unsigned pfFlags = h[19], fourCC = h[20], bits = h[21];
-				const unsigned DDSD_DEPTH = 0x800000, DDPF_FOURCC = 0x4;
-				if ((flags & DDSD_DEPTH) && !(pfFlags & DDPF_FOURCC) && fourCC == 0 && bits == 32
-					&& data.size() >= 128 + (size_t)width * height * depth * 4
-					&& SUCCEEDED(device->CreateVolumeTexture(width, height, depth, 1, 0, D3DFMT_X8R8G8B8, D3DPOOL_MANAGED, &texture, nullptr)))
-				{
-					D3DLOCKED_BOX box;
-					if (SUCCEEDED(texture->LockBox(0, &box, nullptr, 0)))
-					{
-						const unsigned char* src = &data[128];
-						for (unsigned z = 0; z < depth; ++z)
-							for (unsigned y = 0; y < height; ++y)
-								memcpy((char*)box.pBits + z * box.SlicePitch + y * box.RowPitch, src + ((size_t)z * height + y) * width * 4, (size_t)width * 4);
-						texture->UnlockBox(0);
-					}
-					else
-						Release(texture);
-				}
-				else
-					Sage2_Log("post: %s is not a 32-bit volume texture (flags %x, pixel format %x/%x/%u)", path.c_str(), flags, pfFlags, fourCC, bits);
-			}
-		}
-		Sage2_Log("post: grading table %s %s", path.c_str(), texture ? "loaded" : "not loaded");
-		s_lookupTextures[name] = texture;
-		return texture;
 	}
 
 	IDirect3DTexture9* Make_Target(IDirect3DDevice9* device, UINT w, UINT h, D3DFORMAT format)
@@ -336,7 +270,7 @@ bool Sage2PostClass::Apply()
 		frame->Release();
 		return false;
 	}
-	IDirect3DVolumeTexture9* lookup = s_lookupName.empty() ? nullptr : Load_Lookup_Texture(device, s_lookupName);
+	IDirect3DBaseTexture9* lookup = s_lookupName.empty() ? nullptr : Sage2TextureClass::Get(s_lookupName.c_str());
 
 	if (s_savedState == nullptr && FAILED(device->CreateStateBlock(D3DSBT_ALL, &s_savedState)))
 	{
@@ -440,9 +374,6 @@ void Sage2PostClass::Shutdown()
 {
 	Release_Resources();
 	Release(s_quadDeclaration);
-	for (std::map<std::string, IDirect3DVolumeTexture9*>::iterator it = s_lookupTextures.begin(); it != s_lookupTextures.end(); ++it)
-		Release(it->second);
-	s_lookupTextures.clear();
 	s_bloom = s_lookup = nullptr;	// owned by the effect cache
 	s_state = NOT_TRIED;
 }

@@ -56,6 +56,7 @@
 #include "sage2/sage2material.h"
 #include "sage2/sage2scene.h"
 #include "sage2/sage2post.h"
+#include "sage2/sage2texture.h"
 #include "postprocess.h"
 #endif
 // GeneralsX @build BenderAI 10/02/2026 - Need LoadLibrary/GetProcAddress/FreeLibrary for dynamic loading
@@ -1161,6 +1162,7 @@ void DX8Wrapper::Release_Device()
 		Sage2MaterialClass::Shutdown();	// Tiberium Project @feature C&C4 object shaders and normal map cache
 		PostProcessClass::Shutdown();	// Tiberium Project @feature post-processing targets and shaders
 		Sage2PostClass::Shutdown();	// Tiberium Project @feature C&C4 post chain
+		Sage2TextureClass::Shutdown();	// Tiberium Project @feature C&C4 cube, volume and plain textures
 #endif
 
 		for (int a=0;a<MAX_TEXTURE_STAGES;++a)
