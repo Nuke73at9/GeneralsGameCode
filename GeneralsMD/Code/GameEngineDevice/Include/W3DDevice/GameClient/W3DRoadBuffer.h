@@ -172,6 +172,7 @@ public:
 	Int getUniqueID() {return m_uniqueID;};
 	DX8VertexBufferClass	*getVB() {return m_vertexRoad;};
 	DX8IndexBufferClass		*getIB() {return m_indexRoad;}
+	TextureClass *getTexture() {return m_roadTexture;}	///< Tiberium Project: for the C&C4-style road pass
 	Int getNumVertices() {return m_numRoadVertices;}
 	void setNumIndices(Int num) {m_numRoadIndices=num;}
 	void setNumVertices(Int num) {m_numRoadVertices=num;}

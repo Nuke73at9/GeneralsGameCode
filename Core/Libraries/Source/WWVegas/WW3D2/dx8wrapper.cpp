@@ -59,6 +59,7 @@
 #include "sage2/sage2texture.h"
 #include "sage2/sage2terrain.h"
 #include "sage2/sage2shadow.h"
+#include "sage2/sage2road.h"
 #include "sage2/sage2topview.h"
 #include "sage2/sage2terrainatlas.h"
 #include "postprocess.h"
@@ -1173,6 +1174,7 @@ void DX8Wrapper::Release_Device()
 		Sage2TerrainClass::Shutdown();	// Tiberium Project @feature C&C4-style terrain
 		Sage2ShadowClass::Shutdown();	// Tiberium Project @feature the shadow map
 		Sage2TopViewClass::Shutdown();	// Tiberium Project @feature the terrain top view
+		Sage2RoadClass::Shutdown();	// Tiberium Project @feature C&C4-style roads
 		Sage2TerrainAtlasClass::Release();	// Tiberium Project @feature C&C4 terrain texture atlases
 #endif
 

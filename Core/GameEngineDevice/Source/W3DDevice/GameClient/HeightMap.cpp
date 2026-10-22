@@ -2101,6 +2101,7 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 		// Tiberium Project @feature The main view's terrain goes through the C&C4-style terrain effect
 		// (deferred pre-pass, C&C4's lights, linear light, the cloud layer) when it is available; the
 		// reflection pass and the untextured modes keep the fixed-function passes below.
+		Sage2TerrainClass::Reset_Draw();	// the roads ask afterwards whether the effect drew the terrain
 		if (!m_disableTextures && !ShaderClass::Is_Backface_Culling_Inverted() && Is_Hidden() == 0 && m_sideNormals)
 		{
 			// the scorch marks, painted into the top view texture the effect reads, when they changed

@@ -110,6 +110,7 @@ static void drawFramerateBar();
 #include "WW3D2/sage2/sage2terrain.h"
 #include "WW3D2/sage2/sage2shadow.h"
 #include "WW3D2/sage2/sage2topview.h"
+#include "WW3D2/sage2/sage2road.h"
 #endif
 #include "Common/OptionPreferences.h"
 #include "WW3D2/dx8webbrowser.h"
@@ -976,6 +977,7 @@ void W3DDisplay::init()
 			Sage2ShadowClass::Set_Soft(prefs.getReal("Sage2ShadowSoft", 1.0f), prefs.getReal("Sage2ShadowJitter", 0.5f));	// C&C4's soft kernel step and jitter, in texels
 			Sage2TopViewClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2TopView", TRUE));	// scorch marks baked into the ground, C&C4's way
 			Sage2TopViewClass::Set_Size((unsigned)prefs.getInt("Sage2TopViewSize", 2048));
+			Sage2RoadClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Roads", TRUE));	// roads lit as the terrain, C&C4's way
 		}
 #endif
 		setTimeOfDay( TheGlobalData->m_timeOfDay );	//set each light to correct values for given time

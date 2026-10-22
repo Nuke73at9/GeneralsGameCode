@@ -43,6 +43,8 @@ namespace
 	float s_albedoScale = 1.6f;
 	float s_tileWorldSize = 80.0f;		// a C&C4 texture spans eight cells
 	float s_bumpSign = 1.0f;			// -1 reads the normal maps' green channel flipped
+	bool s_drew = false, s_drewDeferred = false;	// the last Draw()
+	Sage2TerrainClass::Shroud s_shroud = { nullptr, 0.0f, 0.0f, 0.0f, 0.0f };
 	float s_bumpScale = 0.75f;			// C&C4's terrain, High
 	InitState s_state = NOT_TRIED;
 	Sage2EffectClass* s_effect = nullptr;
@@ -237,6 +239,10 @@ bool Sage2TerrainClass::Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuff
 	DX8Wrapper::Invalidate_Shader_Constants();
 	ShaderClass::Invalidate();
 
+	s_drew = true;
+	s_drewDeferred = deferred;
+	s_shroud = shroud;
+
 	static bool logged = false;
 	if (!logged)
 	{
@@ -245,6 +251,12 @@ bool Sage2TerrainClass::Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuff
 	}
 	return true;
 }
+
+//-------------------------------------------------------------------------------------------------
+bool Sage2TerrainClass::Drew_This_Frame() { return s_drew; }
+bool Sage2TerrainClass::Drew_Deferred() { return s_drew && s_drewDeferred; }
+const Sage2TerrainClass::Shroud& Sage2TerrainClass::Get_Shroud() { return s_shroud; }
+void Sage2TerrainClass::Reset_Draw() { s_drew = false; s_drewDeferred = false; s_shroud.texture = nullptr; }
 
 //-------------------------------------------------------------------------------------------------
 bool Sage2TerrainClass::Draw_Shadow(DX8IndexBufferClass* indexBuffer, const Tile* tiles, int tileCount, unsigned vertexCount, unsigned polygonCount)

@@ -15,7 +15,7 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-EFFECTS = ["tiberium_terrain.fx", "tiberium_topview.fx"]
+EFFECTS = ["tiberium_terrain.fx", "tiberium_topview.fx", "tiberium_road.fx", "tiberium_tracks.fx"]
 
 
 def main():

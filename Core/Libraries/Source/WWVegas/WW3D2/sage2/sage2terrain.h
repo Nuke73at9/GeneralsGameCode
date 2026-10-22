@@ -79,6 +79,14 @@ public:
 	static bool Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuffer, const Tile* tiles, int tileCount,
 		unsigned vertexCount, unsigned polygonCount, const Shroud& shroud);
 
+	/// What the last Draw() did, for the passes drawn over the terrain afterwards (the roads): whether
+	/// the effect drew it this frame, deferred-lit (the light buffers hold the terrain's light) or
+	/// forward, and the shroud it used. Reset_Draw() clears it before the terrain is drawn again.
+	static bool Drew_This_Frame();
+	static bool Drew_Deferred();
+	static const Shroud& Get_Shroud();
+	static void Reset_Draw();
+
 	/// The terrain as a shadow caster: the tiles drawn depth-only with the effect's _CreateShadowMap
 	/// technique (the shadow map's camera is set). False when the effect is not available.
 	static bool Draw_Shadow(DX8IndexBufferClass* indexBuffer, const Tile* tiles, int tileCount, unsigned vertexCount, unsigned polygonCount);

@@ -269,6 +269,8 @@ if(SAGE_USE_D3D9)
         sage2/sage2shadow.h
         sage2/sage2topview.cpp
         sage2/sage2topview.h
+        sage2/sage2road.cpp
+        sage2/sage2road.h
         sage2/sage2texture.cpp
         sage2/sage2texture.h
         shaders/damagelook_ps.h

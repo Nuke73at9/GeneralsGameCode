@@ -66,6 +66,9 @@
 #include "WW3D2/dx8renderer.h"
 #include "WW3D2/mesh.h"
 #include "WW3D2/meshmdl.h"
+#ifdef RTS_RENDERER_D3D9
+#include "WW3D2/sage2/sage2road.h"	// Tiberium Project @feature C&C4-style roads
+#endif
 
 static const Real TEE_WIDTH_ADJUSTMENT = 1.03f;
 
@@ -3337,6 +3340,14 @@ void W3DRoadBuffer::drawRoads(CameraClass * camera, TextureClass *cloudTexture, 
 				DX8Wrapper::Set_Texture(0,nullptr);
 			} else {
 				m_roadTypes[i].applyTexture();
+#ifdef RTS_RENDERER_D3D9
+				// Tiberium Project @feature the road type through the C&C4-style road effect, lit as
+				// the terrain effect lit the terrain this frame; else the fixed-function passes below
+				if (m_roadTypes[i].getVB() && m_roadTypes[i].getIB()
+					&& Sage2RoadClass::Draw(Sage2RoadClass::ROAD, m_roadTypes[i].getVB()->Get_DX8_Vertex_Buffer(), m_roadTypes[i].getIB()->Get_DX8_Index_Buffer(),
+						m_roadTypes[i].getTexture(), m_roadTypes[i].getNumVertices(), m_roadTypes[i].getNumIndices() / 3))
+					continue;
+#endif
 			}
 	#ifdef RTS_DEBUG
 			//DX8Wrapper::Set_Shader(detailShader); // shows clipping.

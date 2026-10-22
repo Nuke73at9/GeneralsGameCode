@@ -59,6 +59,9 @@
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Object.h"
 #include "GameClient/Drawable.h"
+#ifdef RTS_RENDERER_D3D9
+#include "WW3D2/sage2/sage2road.h"	// Tiberium Project @feature C&C4-style tracks
+#endif
 
 
 #define BRIDGE_OFFSET_FACTOR	0.25f	//amount to raise tracks above bridges.
@@ -911,6 +914,17 @@ Try improving the fit to vertical surfaces like cliffs.
 		{
 			if (mod->m_activeEdgeCount >= 2 && mod->Is_Really_Visible())
 			{
+#ifdef RTS_RENDERER_D3D9
+				// Tiberium Project @feature the marks through the C&C4-style tracks effect, lit as the
+				// terrain effect lit the ground this frame; else the fixed-function draw below
+				if (Sage2RoadClass::Draw(Sage2RoadClass::TRACKS, m_vertexBuffer->Get_DX8_Vertex_Buffer(), m_indexBuffer->Get_DX8_Index_Buffer(),
+					mod->m_stageZeroTexture, mod->m_activeEdgeCount*2, (mod->m_activeEdgeCount-1)*2, trackStartIndex))
+				{
+					trackStartIndex += mod->m_activeEdgeCount*2;
+					mod=mod->m_nextSystem;
+					continue;
+				}
+#endif
 				DX8Wrapper::Set_Texture(0,mod->m_stageZeroTexture);
 				DX8Wrapper::Set_Index_Buffer_Index_Offset(trackStartIndex);
 				DX8Wrapper::Draw_Triangles(	0,(mod->m_activeEdgeCount-1)*2, 0, mod->m_activeEdgeCount*2);
