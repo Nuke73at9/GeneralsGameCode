@@ -163,6 +163,9 @@ protected:
 	void drawCurrentDebugDisplay();			///< draws current debug display
 	void calculateTerrainLOD();						///< Calculate terrain LOD.
 	void renderLetterBox(UnsignedInt time);							///< draw letter box border
+#ifdef RTS_RENDERER_D3D9
+	void renderShadowMap();									///< Tiberium Project @feature C&C4's shadow map, before the frame
+#endif
 	void updateAverageFPS();	///< calculate the average fps over the last 30 frames.
 	void setup2DRenderState(TextureClass *tex, DrawImageMode mode, Bool grayscale);
 	virtual void onBeginBatch() override;

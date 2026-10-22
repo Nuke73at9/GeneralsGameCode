@@ -79,6 +79,10 @@ public:
 	static bool Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuffer, const Tile* tiles, int tileCount,
 		unsigned vertexCount, unsigned polygonCount, const Shroud& shroud);
 
+	/// The terrain as a shadow caster: the tiles drawn depth-only with the effect's _CreateShadowMap
+	/// technique (the shadow map's camera is set). False when the effect is not available.
+	static bool Draw_Shadow(DX8IndexBufferClass* indexBuffer, const Tile* tiles, int tileCount, unsigned vertexCount, unsigned polygonCount);
+
 	/// Frees the normal stream (before a device reset or a new map); made again on the next Draw().
 	static void Release_Resources();
 	/// Frees everything (before the device goes away).

@@ -46,7 +46,7 @@ namespace
 	float s_bumpScale = 0.75f;			// C&C4's terrain, High
 	InitState s_state = NOT_TRIED;
 	Sage2EffectClass* s_effect = nullptr;
-	int s_techDefault = -1, s_techForward = -1, s_techPrepass = -1;
+	int s_techDefault = -1, s_techForward = -1, s_techPrepass = -1, s_techShadow = -1;
 
 	const unsigned TERRAIN_STRIDE = 32;		// x y z, diffuse, u1 v1, u2 v2
 	const unsigned NORMAL_STREAM = 1;
@@ -75,6 +75,7 @@ namespace
 		s_techDefault = s_effect->Find_Technique("Default");
 		s_techForward = s_effect->Find_Technique("Default_M");
 		s_techPrepass = s_effect->Find_Technique("_CreateDepthNormalMap");
+		s_techShadow = s_effect->Find_Technique("_CreateShadowMap");
 		if (s_techForward < 0)
 			return false;
 		D3DVERTEXELEMENT9 el[] =
@@ -242,6 +243,38 @@ bool Sage2TerrainClass::Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuff
 		logged = true;
 		Sage2_Log("terrain: %d tiles drawn with tiberium_terrain %s", tileCount, deferred ? "Default (deferred, sRGB)" : "Default_M (forward)");
 	}
+	return true;
+}
+
+//-------------------------------------------------------------------------------------------------
+bool Sage2TerrainClass::Draw_Shadow(DX8IndexBufferClass* indexBuffer, const Tile* tiles, int tileCount, unsigned vertexCount, unsigned polygonCount)
+{
+	if (!s_enabled || tileCount <= 0 || indexBuffer == nullptr)
+		return false;
+	IDirect3DDevice8* device8 = DX8Wrapper::_Get_D3D_Device8();
+	if (device8 == nullptr || !Make_Effect() || s_techShadow < 0)
+		return false;
+	IDirect3DDevice9* device = device8->Get_D3D9();
+	if (!Update_Normals(device, tiles, tileCount, vertexCount))	// the declaration wants the side stream bound
+		return false;
+	DX8Wrapper::Apply_Render_State_Changes();
+	Sage2DrawState drawState;
+	Sage2GlobalsClass::Apply(*s_effect, drawState);
+	device8->Set_Vertex_Declaration_Override(s_declaration);
+	device->SetVertexDeclaration(s_declaration);
+	for (int pass = 0; pass < s_effect->Get_Pass_Count(s_techShadow); ++pass)
+	{
+		if (!s_effect->Begin(device, s_techShadow, pass))
+			continue;
+		Draw_Tiles(device, indexBuffer->Get_DX8_Index_Buffer(), tiles, tileCount, vertexCount, polygonCount);
+		s_effect->End(device);
+	}
+	device->SetStreamSource(NORMAL_STREAM, nullptr, 0, 0);
+	device->SetStreamSource(0, nullptr, 0, 0);
+	device8->Set_Vertex_Declaration_Override(nullptr);
+	DX8Wrapper::Set_Vertex_Buffer((VertexBufferClass*)nullptr);
+	DX8Wrapper::Invalidate_Shader_Constants();
+	ShaderClass::Invalidate();
 	return true;
 }
 

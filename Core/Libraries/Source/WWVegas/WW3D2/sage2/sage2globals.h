@@ -81,6 +81,9 @@ enum Sage2Binding
 	SAGE2_BIND_FOG,						// zero while W3D fog is off
 	SAGE2_BIND_CLOUD_MULTIPLIER,		// Cloud_WorldPositionMultiplier_XYZZ: world position to cloud texture coordinates
 	SAGE2_BIND_CLOUD_OFFSET,			// Cloud_CurrentOffsetUV: the clouds' drift
+	SAGE2_BIND_SHADOW_WORLD_TO_SHADOW,	// ShadowMapWorldToShadow: world -> shadow map texture coordinates and depth
+	SAGE2_BIND_SHADOW_MAP_TEXEL,		// Shadowmap_Zero_Zero_OneOverMapSize_OneOverMapSize
+	SAGE2_BIND_SOFT_SHADOW_PARMS,		// SoftShadowParms: kernel size, jitter
 
 	// textures the scene provides (stand-ins until the matching passes exist)
 	SAGE2_BIND_TEXTURE_WHITE,			// shadow map, cloud, macro, shroud: "no effect"
@@ -90,6 +93,7 @@ enum Sage2Binding
 	SAGE2_BIND_TEXTURE_ENV_GDI,			// GDI faction reflection cube
 	SAGE2_BIND_TEXTURE_ENV_NOD,			// Nod faction reflection cube
 	SAGE2_BIND_TEXTURE_CLOUD,			// cloud shadow layer
+	SAGE2_BIND_TEXTURE_SHADOW_MAP,		// the sun's shadow map (white while there is none)
 	SAGE2_BIND_TEXTURE_DEFERRED_DIFFUSE,
 	SAGE2_BIND_TEXTURE_DEFERRED_SPECULAR,
 	SAGE2_BIND_TEXTURE_DEPTH,

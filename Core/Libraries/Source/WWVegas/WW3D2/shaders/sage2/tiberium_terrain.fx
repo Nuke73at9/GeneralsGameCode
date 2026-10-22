@@ -276,6 +276,34 @@ technique _CreateDepthNormalMap
 }
 
 // ============================================================================
+// _CreateShadowMap: the terrain as a shadow caster (depth only, as C&C4's terrain)
+// ============================================================================
+float4 VS_CreateShadowMap(float3 Position : POSITION) : POSITION
+{
+	return mul(float4(Position, 1), ViewProjection);
+}
+
+float4 PS_CreateShadowMap() : COLOR
+{
+	return float4(1, 1, 1, 1);
+}
+
+technique _CreateShadowMap
+{
+	pass P0
+	{
+		VertexShader = compile VS_3_0 VS_CreateShadowMap();
+		PixelShader = compile PS_3_0 PS_CreateShadowMap();
+		ZEnable = true;
+		ZWriteEnable = true;
+		ZFunc = ZFUNC_INFRONT;
+		CullMode = None;
+		AlphaBlendEnable = false;
+		AlphaTestEnable = false;
+	}
+}
+
+// ============================================================================
 // Default: the C&C4 High path, lit from the deferred light buffers
 // ============================================================================
 struct VSOutputDefault

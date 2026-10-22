@@ -40,6 +40,7 @@
 #include "sage2effect.h"
 #include "sage2globals.h"
 #include "sage2scene.h"
+#include "sage2shadow.h"
 #include "texture.h"
 #include "textureloader.h"
 #include "vertmaterial.h"
@@ -118,9 +119,10 @@ namespace
 		int technique;			// the material's technique (deferred-lit when it is a High one)
 		int forwardTechnique;	// its "_M" variant (per-pixel lighting without the deferred light buffers), or the same
 		int prepassTechnique;	// _CreateDepthNormalMap, or -1
+		int shadowTechnique;	// _CreateShadowMap (the mesh as a shadow caster), or -1
 		std::vector<MaterialTexture> textures;
 		std::vector<MaterialValue> values;
-		MeshMaterial() : effect(nullptr), technique(-1), forwardTechnique(-1), prepassTechnique(-1) {}
+		MeshMaterial() : effect(nullptr), technique(-1), forwardTechnique(-1), prepassTechnique(-1), shadowTechnique(-1) {}
 	};
 	// mesh model (held) -> its material; a model without one is entered with effect == nullptr
 	std::map<MeshModelClass*, MeshMaterial> s_materials;
@@ -233,6 +235,7 @@ namespace
 		if (mat.forwardTechnique < 0)
 			mat.forwardTechnique = technique;
 		mat.prepassTechnique = mat.forwardTechnique != technique ? effect->Find_Technique("_CreateDepthNormalMap") : -1;
+		mat.shadowTechnique = effect->Find_Technique("_CreateShadowMap");
 		Sage2_Log("mesh %s: %s, technique %s (forward %s, pre-pass %d), %u textures, %u values", model->Get_Name(), effectName.c_str(),
 			effect->Get_Technique_Name(technique), effect->Get_Technique_Name(mat.forwardTechnique), mat.prepassTechnique,
 			(unsigned)mat.textures.size(), (unsigned)mat.values.size());
@@ -519,6 +522,8 @@ bool Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const
 	const HTreeClass* skinTree = (skin && mesh->Get_Container()) ? mesh->Get_Container()->Get_HTree() : nullptr;
 	if (mat.effect == nullptr || (skin && (skinTree == nullptr || (unsigned)mesh->Get_Base_Vertex_Offset() == VERTEX_BUFFER_OVERFLOW_OFFSET)))
 	{
+		if (Sage2ShadowClass::Is_Rendering())
+			return false;	// a caster through W3D's fixed-function draw
 		s_builtin = Sage2BuiltinMaterialClass::Begin(mesh, base, damageSheet, material);
 		return s_builtin;
 	}
@@ -575,10 +580,23 @@ bool Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const
 	device->SetStreamSource(SIDE_STREAM, side, 0, SIDE_STRIDE);
 
 	// the High technique lights from the light buffers the scene computes for this mesh (in linear
-	// space, so the frame buffer takes sRGB writes for it); otherwise the forward-lit one
+	// space, so the frame buffer takes sRGB writes for it); otherwise the forward-lit one. In the
+	// shadow pass the mesh is a caster: its effect's own depth-only, alpha-tested technique
 	int technique = mat.forwardTechnique;
 	s_srgb = false;
-	if (mat.prepassTechnique >= 0 && Sage2SceneClass::Is_Enabled() && Sage2SceneClass::Supports_SRGB_Write())
+	if (Sage2ShadowClass::Is_Rendering())
+	{
+		if (mat.shadowTechnique < 0)
+		{
+			// no caster technique: W3D's fixed-function draw writes the depth
+			device->SetStreamSource(SIDE_STREAM, nullptr, 0, 0);
+			device8->Set_Vertex_Declaration_Override(nullptr);
+			DX8Wrapper::Invalidate_Shader_Constants();
+			return false;
+		}
+		technique = mat.shadowTechnique;
+	}
+	else if (mat.prepassTechnique >= 0 && Sage2SceneClass::Is_Enabled() && Sage2SceneClass::Supports_SRGB_Write())
 	{
 		IDirect3DVertexBuffer9* meshBuffer = static_cast<DX8VertexBufferClass*>(state.vertex_buffers[0])->Get_DX8_Vertex_Buffer();
 		unsigned meshStride = state.vertex_buffers[0]->FVF_Info().Get_FVF_Size();
@@ -590,7 +608,7 @@ bool Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const
 		}
 	}
 	static std::map<MeshModelClass*, int> s_loggedPath;
-	if (s_loggedPath[model] != (s_srgb ? 2 : 1))
+	if (!Sage2ShadowClass::Is_Rendering() && s_loggedPath[model] != (s_srgb ? 2 : 1))
 	{
 		s_loggedPath[model] = s_srgb ? 2 : 1;
 		Sage2_Log("mesh %s: drawn %s with technique %s", model->Get_Name(), s_srgb ? "deferred-lit" : "forward-lit", mat.effect->Get_Technique_Name(technique));

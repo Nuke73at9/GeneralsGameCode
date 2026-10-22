@@ -88,6 +88,9 @@ enum
 #include "WW3D2/mesh.h"
 #include "WW3D2/meshmdl.h"
 #include "d3dx8tex.h"
+#ifdef RTS_RENDERER_D3D9
+#include "WW3D2/sage2/sage2shadow.h"	// Tiberium Project @feature C&C4's shadow map
+#endif
 
 
 // If TEST_AND_BLEND is defined, it will do an alpha test and blend.  Otherwise just alpha test. jba. [5/30/2003]
@@ -1527,13 +1530,27 @@ void W3DTreeBuffer::drawTrees(CameraClass * camera, RefRenderObjListIterator *pD
 	if (m_treeTexture==nullptr) {
 		return;
 	}
+#ifdef RTS_RENDERER_D3D9
+	// Tiberium Project @feature In the shadow map pass the trees are casters, drawn from the sun's
+	// camera: that camera must not take the view's cull and sort (the view re-culls after it),
+	// and the trees' own shadow decals stay off while the shadow map shades the ground
+	const Bool shadowPass = Sage2ShadowClass::Is_Rendering();
+	const Bool zhTreeShadows = !shadowPass && !Sage2ShadowClass::Is_Available();
+	if (m_updateAllKeys) {
+		cull(camera);
+		if (shadowPass)
+			m_updateAllKeys = true;
+	}
+#else
+	const Bool zhTreeShadows = TRUE;
 	if (m_updateAllKeys) {
 		cull(camera);
 	}
+#endif
 
 	Int curTree;
 	// Draw tree shadows.
-	if (m_shadow && TheW3DProjectedShadowManager && TheGlobalData->m_useShadowDecals) {
+	if (zhTreeShadows && m_shadow && TheW3DProjectedShadowManager && TheGlobalData->m_useShadowDecals) {
 		for (curTree=0; curTree<m_numTrees; curTree++) {
 			Int type = m_trees[curTree].treeType;
 			// GeneralsX @bugfix fbraz3 01/10/2026 Issue #347: Bounds check type

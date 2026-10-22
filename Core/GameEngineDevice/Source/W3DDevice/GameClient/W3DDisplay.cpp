@@ -108,6 +108,7 @@ static void drawFramerateBar();
 #include "WW3D2/sage2/sage2lighting.h"
 #include "WW3D2/sage2/sage2post.h"
 #include "WW3D2/sage2/sage2terrain.h"
+#include "WW3D2/sage2/sage2shadow.h"
 #endif
 #include "Common/OptionPreferences.h"
 #include "WW3D2/dx8webbrowser.h"
@@ -969,6 +970,9 @@ void W3DDisplay::init()
 			Sage2TerrainClass::Set_Tile_World_Size(prefs.getReal("Sage2TerrainTileSize", 80.0f));	// world units per C&C4 terrain texture
 			Sage2TerrainClass::Set_Bump(prefs.getBool("Sage2TerrainBumpFlip", FALSE), prefs.getReal("Sage2TerrainBumpScale", 0.75f));	// normal map green flipped; bump strength
 			Sage2PostClass::Set_Exposure(prefs.getReal("Sage2Exposure", 1.0f));
+			Sage2ShadowClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Shadows", TRUE));	// C&C4's shadow map in place of ZH's shadows
+			Sage2ShadowClass::Set_Map_Size((unsigned)prefs.getInt("Sage2ShadowMapSize", 2048));
+			Sage2ShadowClass::Set_Soft(prefs.getReal("Sage2ShadowSoft", 1.0f), prefs.getReal("Sage2ShadowJitter", 0.5f));	// C&C4's soft kernel step and jitter, in texels
 		}
 #endif
 		setTimeOfDay( TheGlobalData->m_timeOfDay );	//set each light to correct values for given time
@@ -2220,6 +2224,13 @@ AGAIN:
 
 			TheParticleSystemManager->DRAW();
 
+#ifdef RTS_RENDERER_D3D9
+			// Tiberium Project @feature C&C4's shadow map: the scene drawn from the sun into a depth
+			// texture before the frame (as the water's reflection is), over the terrain window the
+			// view draws and whatever stands on it; the effects read it through Sage2GlobalsClass
+			renderShadowMap();
+#endif
+
 			if (TheWaterRenderObj && TheGlobalData->m_waterType == 2)
 				TheWaterRenderObj->updateRenderTargetTextures(primaryW3DView->get3DCamera());	//do a render into each texture
 
@@ -2535,6 +2546,52 @@ void W3DDisplay::enableLetterBox(Bool enable)
 		}
 	}
 }
+
+#ifdef RTS_RENDERER_D3D9
+// W3DDisplay::renderShadowMap ================================================
+/** Tiberium Project @feature C&C4's shadow map: every caster drawn from the sun into the depth
+  * texture the lighting passes compare against. Covers the terrain window the view draws (its
+  * heights, plus room for what stands on it, plus a margin for casters just outside it whose
+  * shadows reach in). */
+//=============================================================================
+void W3DDisplay::renderShadowMap()
+{
+	if (!Sage2ShadowClass::Is_Enabled() || m_3DScene == nullptr || TheTerrainRenderObject == nullptr || TheGlobalData == nullptr)
+		return;
+	WorldHeightMap* map = TheTerrainRenderObject->getMap();
+	if (map == nullptr)
+		return;
+	Int border = map->getBorderSize();
+	Int x0 = map->getDrawOrgX(), y0 = map->getDrawOrgY();
+	Int x1 = x0 + map->getDrawWidth(), y1 = y0 + map->getDrawHeight();
+	if (x0 < 0) x0 = 0;
+	if (y0 < 0) y0 = 0;
+	if (x1 > map->getXExtent()) x1 = map->getXExtent();
+	if (y1 > map->getYExtent()) y1 = map->getYExtent();
+	if (x1 <= x0 || y1 <= y0)
+		return;
+	Int hMin = 255, hMax = 0;
+	for (Int y = y0; y < y1; y++)
+		for (Int x = x0; x < x1; x++)
+		{
+			Int h = map->getHeight(x, y);
+			if (h < hMin) hMin = h;
+			if (h > hMax) hMax = h;
+		}
+	const Real margin = 200.0f;		// casters outside the window whose shadows reach in; the tallest structures
+	Vector3 boxMin((x0 - border) * MAP_XY_FACTOR - margin, (y0 - border) * MAP_XY_FACTOR - margin, hMin * MAP_HEIGHT_SCALE - 10.0f);
+	Vector3 boxMax((x1 - border) * MAP_XY_FACTOR + margin, (y1 - border) * MAP_XY_FACTOR + margin, hMax * MAP_HEIGHT_SCALE + margin);
+	const GlobalData::TerrainLighting& sun = TheGlobalData->m_terrainObjectsLighting[TheGlobalData->m_timeOfDay][0];
+	if (!Sage2ShadowClass::Begin(Vector3(sun.lightPos.x, sun.lightPos.y, sun.lightPos.z), boxMin, boxMax))
+		return;
+	if (WW3D::Begin_Render(false, false, Vector3(0.0f, 0.0f, 0.0f)) == WW3D_ERROR_OK)
+	{
+		WW3D::Render(m_3DScene, Sage2ShadowClass::Get_Camera());
+		WW3D::End_Render(false);
+	}
+	Sage2ShadowClass::End();
+}
+#endif
 
 // W3DDisplay::setTimeOfDay ===================================================
 /** */

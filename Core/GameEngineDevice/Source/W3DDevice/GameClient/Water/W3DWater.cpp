@@ -68,6 +68,9 @@
 #include "W3DDevice/GameClient/W3DPoly.h"
 #include "W3DDevice/GameClient/W3DScene.h"
 #include "W3DDevice/GameClient/W3DCustomScene.h"
+#ifdef RTS_RENDERER_D3D9
+#include "WW3D2/sage2/sage2shadow.h"	// Tiberium Project @feature C&C4's shadow map
+#endif
 
 
 
@@ -1551,6 +1554,11 @@ void WaterRenderObjClass::Render(RenderInfoClass & rinfo)
 	//USE_PERF_TIMER(Water)
 	if (TheTerrainRenderObject && !TheTerrainRenderObject->getMap())
 		return;	//no map has been loaded yet.
+
+#ifdef RTS_RENDERER_D3D9
+	if (Sage2ShadowClass::Is_Rendering())
+		return;	// Tiberium Project: the water casts no shadow (the shadow map pass draws casters only)
+#endif
 
 	if (((RTS3DScene *)rinfo.Camera.Get_User_Data())->getCustomPassMode() == SCENE_PASS_ALPHA_MASK ||
 		((SceneClass *)rinfo.Camera.Get_User_Data())->Get_Extra_Pass_Polygon_Mode() == SceneClass::EXTRA_PASS_CLEAR_LINE)

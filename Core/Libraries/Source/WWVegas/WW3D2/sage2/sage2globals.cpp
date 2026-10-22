@@ -19,6 +19,7 @@
 // Tiberium Project @feature The engine-side values SAGE 2 effects ask for (see sage2globals.h)
 
 #include "sage2globals.h"
+#include "sage2shadow.h"
 #include "sage2texture.h"
 
 #include <stdarg.h>
@@ -92,7 +93,10 @@ namespace
 		{ "IsShadowMapEnabled", SAGE2_BIND_IS_SHADOW_MAP_ENABLED },
 		{ "HasShadow", SAGE2_BIND_HAS_SHADOW },
 		{ "Fog", SAGE2_BIND_FOG },
-		{ "ShadowMap", SAGE2_BIND_TEXTURE_WHITE },
+		{ "ShadowMap", SAGE2_BIND_TEXTURE_SHADOW_MAP },
+		{ "ShadowMapWorldToShadow", SAGE2_BIND_SHADOW_WORLD_TO_SHADOW },
+		{ "Shadowmap_Zero_Zero_OneOverMapSize_OneOverMapSize", SAGE2_BIND_SHADOW_MAP_TEXEL },
+		{ "SoftShadowParms", SAGE2_BIND_SOFT_SHADOW_PARMS },
 		{ "CloudTexture", SAGE2_BIND_TEXTURE_CLOUD },
 		{ "CloudSampler", SAGE2_BIND_TEXTURE_CLOUD },
 		{ "Cloud_WorldPositionMultiplier_XYZZ", SAGE2_BIND_CLOUD_MULTIPLIER },
@@ -131,7 +135,11 @@ namespace
 		{ "PostEffect.DepthBufferTexture", SAGE2_BIND_TEXTURE_DEPTH_BUFFER },
 		{ "WW3D.FilteredNoise", SAGE2_BIND_TEXTURE_GREY },
 		{ "WW3D.Noise", SAGE2_BIND_TEXTURE_GREY },
-		{ "Sas.Shadow[0].ShadowMap", SAGE2_BIND_TEXTURE_WHITE },
+		{ "Sas.Shadow[0].ShadowMap", SAGE2_BIND_TEXTURE_SHADOW_MAP },
+		{ "Sas.Shadow[0].WorldToShadow", SAGE2_BIND_SHADOW_WORLD_TO_SHADOW },
+		{ "Sas.Shadow[0].Zero_Zero_OneOverMapSize_OneOverMapSize", SAGE2_BIND_SHADOW_MAP_TEXEL },
+		{ "WW3D.SoftShadowParms", SAGE2_BIND_SOFT_SHADOW_PARMS },
+		{ "Sas.HasShadow", SAGE2_BIND_HAS_SHADOW },
 		{ "Terrain.Cloud.Texture", SAGE2_BIND_TEXTURE_CLOUD },
 		{ "Terrain.Cloud.WorldPositionMultiplier_XYZZ", SAGE2_BIND_CLOUD_MULTIPLIER },
 		{ "Terrain.Cloud.CurrentOffsetUV", SAGE2_BIND_CLOUD_OFFSET },
@@ -176,6 +184,7 @@ namespace
 			case SAGE2_BIND_TEXTURE_ENV_GDI: effect.Set_Texture(i, Texture_Or("gdi_env_cube", s_environment)); return true;
 			case SAGE2_BIND_TEXTURE_ENV_NOD: effect.Set_Texture(i, Texture_Or("nod_env_cube", s_environment)); return true;
 			case SAGE2_BIND_TEXTURE_CLOUD: effect.Set_Texture(i, Texture_Or("tscloudmed", s_white)); return true;
+			case SAGE2_BIND_TEXTURE_SHADOW_MAP: effect.Set_Texture(i, Sage2ShadowClass::Is_Available() ? Sage2ShadowClass::Get_Texture() : s_white); return true;
 			case SAGE2_BIND_TEXTURE_DEFERRED_DIFFUSE: effect.Set_Texture(i, s_deferredDiffuse ? s_deferredDiffuse : s_grey); return true;
 			case SAGE2_BIND_TEXTURE_DEFERRED_SPECULAR: effect.Set_Texture(i, s_deferredSpecular ? s_deferredSpecular : s_black); return true;
 			case SAGE2_BIND_TEXTURE_DEPTH: effect.Set_Texture(i, s_depth ? s_depth : s_white); return true;
@@ -493,9 +502,29 @@ void Sage2GlobalsClass::Apply(Sage2EffectClass& effect, const Sage2DrawState& dr
 				break;
 			case SAGE2_BIND_RENDER_BUFF_A:
 			case SAGE2_BIND_RENDER_BUFF_B:
+			case SAGE2_BIND_FOG:
+				effect.Set_Float(i, v, 4);
+				break;
 			case SAGE2_BIND_IS_SHADOW_MAP_ENABLED:
 			case SAGE2_BIND_HAS_SHADOW:
-			case SAGE2_BIND_FOG:
+				v[0] = Sage2ShadowClass::Is_Available() ? 1.0f : 0.0f;
+				effect.Set_Float(i, v, 1);
+				break;
+			case SAGE2_BIND_SHADOW_WORLD_TO_SHADOW:
+				if (Sage2ShadowClass::Is_Available())
+					effect.Set_Matrix(p.name.c_str(), Sage2ShadowClass::Get_World_To_Shadow());
+				break;
+			case SAGE2_BIND_SHADOW_MAP_TEXEL:
+			{
+				float size = (float)Sage2ShadowClass::Get_Map_Size();
+				v[0] = v[1] = 0.0f;
+				v[2] = v[3] = size > 0.0f ? 1.0f / size : 0.0f;
+				effect.Set_Float(i, v, 4);
+				break;
+			}
+			case SAGE2_BIND_SOFT_SHADOW_PARMS:
+				Sage2ShadowClass::Get_Soft(v[0], v[1]);
+				v[2] = 1.0f;	// ENABLE_SOFTSHADOW_TOGGLE builds: soft on
 				effect.Set_Float(i, v, 4);
 				break;
 			case SAGE2_BIND_CLOUD_MULTIPLIER:

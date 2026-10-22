@@ -72,6 +72,10 @@
 extern void PrepareShadows();
 extern void DoTrees(RenderInfoClass & rinfo);
 extern void DoShadows(RenderInfoClass & rinfo, Bool stencilPass);
+#ifdef RTS_RENDERER_D3D9
+#include "WW3D2/sage2/sage2shadow.h"	// Tiberium Project @feature C&C4's shadow map
+#endif
+
 extern void DoParticles(RenderInfoClass & rinfo);
 
 // No texturing, no zbuffer reading/writing, primary gradient, no
@@ -848,8 +852,15 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 	// shadow draw calls. Originally just drawing shadows for trees would not properly prepare shadows.
 	PrepareShadows();
 
+#ifdef RTS_RENDERER_D3D9
+	// Tiberium Project @feature With C&C4's shadow map the lighting passes shade everything; Zero
+	// Hour's own decal and stencil shadows stay off, and nothing of theirs draws into the map
+	const Bool zhShadows = !Sage2ShadowClass::Is_Rendering() && !Sage2ShadowClass::Is_Available();
+#else
+	const Bool zhShadows = TRUE;
+#endif
 	//don't draw shadows in this mode because they interfere with destination alpha or are invisible (wireframe)
-	if (m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
+	if (zhShadows && m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
 		DoShadows(rinfo, false);	//draw all non-stencil shadows (decals) since they fall under other objects.
 
 	TheDX8MeshRenderer.Flush();	//draw all non-translucent objects.
@@ -869,7 +880,7 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 	DoTrees(rinfo);
 
 	//don't draw shadows in this mode because they interfere with destination alpha
-	if (m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
+	if (zhShadows && m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
 		DoShadows(rinfo, true);	//draw all stencil shadows
 
 	WW3D::Render_And_Clear_Static_Sort_Lists(rinfo);	//draws things like water
@@ -881,7 +892,11 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 		//USE_PERF_TIMER(translucentRender)
 
 		//don't draw transparent in this mode because they interfere with destination alpha
-		if (m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
+		if (m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE
+#ifdef RTS_RENDERER_D3D9
+			&& !Sage2ShadowClass::Is_Rendering()	// Tiberium Project: particles cast no shadow
+#endif
+			)
 			DoParticles(rinfo);	//queue up particles for rendering.
 
 		SortingRendererClass::Flush();	//draw sorted translucent polygons like particles.
@@ -1129,7 +1144,11 @@ void RTS3DScene::Customized_Render( RenderInfoClass &rinfo )
 		RenderObjClass * robj = it.Peek_Obj();
 		if (robj->Class_ID() == RenderObjClass::CLASSID_TILEMAP)
 			terrainObject=robj;	//found terrain object, store for later.
-		if (!ShaderClass::Is_Backface_Culling_Inverted()) {
+		if (!ShaderClass::Is_Backface_Culling_Inverted()
+#ifdef RTS_RENDERER_D3D9
+			&& !Sage2ShadowClass::Is_Rendering()	// Tiberium Project: the shadow map pass is another render of the same frame
+#endif
+			) {
 			// If we are doing water mirror, we draw with backface culling inverted.  In this case,
 			// we only want to call On_Frame_Update if we aren't drawing water, as otherwise
 			// we get 2 frame updates per frame, and it screws up the particle emitters.

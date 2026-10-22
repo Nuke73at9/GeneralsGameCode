@@ -92,6 +92,7 @@
 #include <vector>
 #ifdef RTS_RENDERER_D3D9
 #include "WW3D2/sage2/sage2terrain.h"	// Tiberium Project @feature the terrain drawn the C&C4 way
+#include "WW3D2/sage2/sage2shadow.h"	// Tiberium Project @feature the terrain as a shadow caster
 #endif
 
 
@@ -1962,6 +1963,25 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 		m_treeBuffer->setIsTerrain();
 	}
 
+#ifdef RTS_RENDERER_D3D9
+	// Tiberium Project @feature The shadow map pass: the terrain is a caster (hills shade the
+	// ground below, as in C&C4), drawn depth-only from the sun; nothing else of the terrain's draws
+	if (Sage2ShadowClass::Is_Rendering())
+	{
+		if (m_sideNormals && Is_Hidden() == 0 && m_numVertexBufferTiles > 0)
+		{
+			std::vector<Sage2TerrainClass::Tile> tiles(m_numVertexBufferTiles);
+			for (Int t = 0; t < m_numVertexBufferTiles; t++)
+			{
+				tiles[t].vertexBuffer = m_vertexBufferTiles[t];
+				tiles[t].normals = &m_sideNormals[t * HEIGHTMAP_VERTEX_NUM].normal.X;
+				tiles[t].version = m_sideNormalVersions[t];
+			}
+			Sage2TerrainClass::Draw_Shadow(m_indexBuffer, &tiles[0], m_numVertexBufferTiles, HEIGHTMAP_VERTEX_NUM, HEIGHTMAP_POLYGON_NUM);
+		}
+		return;
+	}
+#endif
 
 #ifdef DO_UNIT_TIMINGS
 #pragma MESSAGE("*** WARNING *** DOING DO_UNIT_TIMINGS!!!!")
