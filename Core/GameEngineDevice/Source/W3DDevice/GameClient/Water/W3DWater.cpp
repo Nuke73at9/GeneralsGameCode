@@ -70,6 +70,7 @@
 #include "W3DDevice/GameClient/W3DCustomScene.h"
 #ifdef RTS_RENDERER_D3D9
 #include "WW3D2/sage2/sage2shadow.h"	// Tiberium Project @feature C&C4's shadow map
+#include "WW3D2/sage2/sage2water.h"	// Tiberium Project @feature C&C4-style water
 #endif
 
 
@@ -1218,6 +1219,9 @@ void WaterRenderObjClass::enableWaterGrid(Bool state)
 	m_doWaterGrid = state;
 
 	m_drawingRiver = false;
+#ifdef RTS_RENDERER_D3D9
+	m_sage2Water = false;
+#endif
 	m_disableRiver = false;
 
 	if (state && m_meshData == nullptr)
@@ -1589,7 +1593,14 @@ void WaterRenderObjClass::Render(RenderInfoClass & rinfo)
 		case WATER_TYPE_0_TRANSLUCENT:
 		case WATER_TYPE_3_GRIDMESH:
 			//Draw the water surface as a bunch of alpha blended tiles covering areas where water is visible
+#ifdef RTS_RENDERER_D3D9
+			m_sage2Water = Sage2WaterClass::Begin();	// Tiberium Project @feature C&C4-style water: the frame copied for its refraction
+#endif
 			renderWater();
+#ifdef RTS_RENDERER_D3D9
+			Sage2WaterClass::End();
+			m_sage2Water = false;
+#endif
 			if (!m_drawingRiver || m_disableRiver) {
 				renderWaterMesh();	//Draw water surface as 3D deforming mesh if it's enabled on this map.
 			}
@@ -2061,7 +2072,11 @@ void WaterRenderObjClass::renderWater()
 					points[2].Set(pt2.x, pt2.y, pt2.z);
 					points[3].Set(pt3.x, pt3.y, pt3.z);
 
-					if ( TheGlobalData->m_featherWater )
+					if ( TheGlobalData->m_featherWater
+#ifdef RTS_RENDERER_D3D9
+						&& !m_sage2Water	// Tiberium Project: the effect fades its own edge; one surface
+#endif
+						)
 					{
 						for (int r = 0; r < TheGlobalData->m_featherWater; ++r)
 						{
@@ -3307,6 +3322,12 @@ void WaterRenderObjClass::drawTrapezoidWater(Vector3 points[4])
 	DX8Wrapper::Set_Transform(D3DTS_WORLD,tm);	//position the water surface
 	DX8Wrapper::Set_Index_Buffer(ib_access,0);
 	DX8Wrapper::Set_Vertex_Buffer(vb_access);
+#ifdef RTS_RENDERER_D3D9
+	// Tiberium Project @feature the surface through the C&C4-style water effect (refraction, ripples,
+	// sparkle, foam, shroud); else the fixed-function passes below
+	if (Sage2WaterClass::Draw((rectangleCount+1)*2, rectangleCount*2))
+		return;
+#endif
 
 	setupFlatWaterShader();// lorenzen sez use the alpha shader
 

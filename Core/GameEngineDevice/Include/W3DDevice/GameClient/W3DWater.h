@@ -213,6 +213,7 @@ protected:
 	Real m_riverXOffset;
 	Real m_riverYOffset;
 	Bool m_drawingRiver;
+	Bool m_sage2Water;	///< Tiberium Project: this draw goes through the C&C4-style water effect
 	Bool m_disableRiver;
 	TextureClass *m_riverAlphaEdge;
 
