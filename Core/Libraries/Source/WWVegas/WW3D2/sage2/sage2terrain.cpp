@@ -42,6 +42,8 @@ namespace
 	bool s_enabled = true;
 	float s_albedoScale = 1.6f;
 	float s_tileWorldSize = 80.0f;		// a C&C4 texture spans eight cells
+	float s_bumpSign = 1.0f;			// -1 reads the normal maps' green channel flipped
+	float s_bumpScale = 0.75f;			// C&C4's terrain, High
 	InitState s_state = NOT_TRIED;
 	Sage2EffectClass* s_effect = nullptr;
 	int s_techDefault = -1, s_techForward = -1, s_techPrepass = -1;
@@ -165,6 +167,7 @@ void Sage2TerrainClass::Set_Enabled(bool enabled) { s_enabled = enabled; }
 bool Sage2TerrainClass::Is_Enabled() { return s_enabled; }
 void Sage2TerrainClass::Set_Albedo_Scale(float scale) { s_albedoScale = scale > 0.0f ? scale : 1.0f; }
 void Sage2TerrainClass::Set_Tile_World_Size(float size) { s_tileWorldSize = size > 1.0f ? size : 80.0f; }
+void Sage2TerrainClass::Set_Bump(bool flipY, float scale) { s_bumpSign = flipY ? -1.0f : 1.0f; s_bumpScale = scale >= 0.0f ? scale : 0.75f; }
 
 //-------------------------------------------------------------------------------------------------
 bool Sage2TerrainClass::Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuffer, const Tile* tiles, int tileCount,
@@ -195,6 +198,8 @@ bool Sage2TerrainClass::Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuff
 	float atlasParams[4] = { (float)Sage2TerrainAtlasClass::Get_Slots_Per_Row(), Sage2TerrainAtlasClass::Get_Slot_Size(),
 		Sage2TerrainAtlasClass::Get_Slot_Border(), s_tileWorldSize };
 	s_effect->Set_Float("AtlasParams", atlasParams, 4);
+	float bumpParams[2] = { s_bumpSign, s_bumpScale };
+	s_effect->Set_Float("BumpParams", bumpParams, 2);
 	// the shroud, over the white stand-in the globals bound
 	IDirect3DBaseTexture9* shroudTexture = D3D_Texture(shroud.texture);
 	if (shroudTexture != nullptr)

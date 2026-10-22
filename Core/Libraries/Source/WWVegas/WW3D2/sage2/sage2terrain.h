@@ -57,6 +57,9 @@ public:
 	static void Set_Albedo_Scale(float scale);
 	/// World units one C&C4 terrain texture spans (80: eight cells, as in C&C4)
 	static void Set_Tile_World_Size(float size);
+	/// The bumps: 'flipY' reads the normal maps' green channel the other way round (if the ridges
+	/// come out lit from the wrong side), 'scale' their strength (0.75 as C&C4, 0 flat)
+	static void Set_Bump(bool flipY, float scale);
 
 	/// The map's shroud, multiplied over the terrain at the end of the pass (Zero Hour draws it
 	/// as an extra pass that needs an equal depth, which a different vertex pipeline cannot

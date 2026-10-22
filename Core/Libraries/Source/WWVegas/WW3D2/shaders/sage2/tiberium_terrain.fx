@@ -73,7 +73,13 @@ float4 AtlasParams
 	string SasBindAddress = "Terrain.CNC4.AtlasParams";
 > = float4(7, 0.125, 0.00390625, 80);
 
-static const float BumpScale = 0.75;	// C&C4's terrain, High
+// x: the sign of the normal maps' green channel (1 as stored, -1 to flip the convention),
+// y: bump scale (0.75: C&C4's terrain, High; 0 flattens the bumps)
+float2 BumpParams
+<
+	string UIWidget = "None";
+	string SasBindAddress = "Terrain.CNC4.BumpParams";
+> = float2(1, 0.75);
 
 SAMPLER_2D_BEGIN( CloudTexture,
 	string UIWidget = "None";
@@ -169,6 +175,7 @@ void SampleC4(float slot, float2 worldXY, out float3 color, out float spec, out 
 	color = GammaToLinear(c.xyz);
 	spec = c.w;
 	normalTS = n.xyz * 2.0 - 1.0;
+	normalTS.y *= BumpParams.x;
 }
 
 // The ground at a pixel: Zero Hour's base tile and blend tile from the atlas, each replaced by its
@@ -205,7 +212,7 @@ float3 BumpedNormal(float3 normalTS, float3 worldNormal)
 	float3 n = normalize(worldNormal);
 	float3 tangent = cross(n, float3(-1, 0, 0));
 	float3 binormal = cross(n, float3(0, 1, 0));
-	normalTS.xy *= BumpScale;
+	normalTS.xy *= BumpParams.y;
 	return normalize(mul(normalTS, float3x3(-binormal, -tangent, n)));
 }
 
