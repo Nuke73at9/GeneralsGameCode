@@ -965,6 +965,7 @@ void W3DDisplay::init()
 			Sage2LightingClass::Select(cnc4Style ? prefs.getAsciiString("Sage2Lighting", "auto").str() : "map");
 			Sage2PostClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Post", TRUE));
 			Sage2TerrainClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Terrain", TRUE));	// the terrain through the C&C4-style effect
+			Sage2TerrainClass::Set_Albedo_Scale(prefs.getReal("Sage2TerrainAlbedo", 1.6f));		// ZH's tiles lifted for linear light
 			Sage2PostClass::Set_Exposure(prefs.getReal("Sage2Exposure", 1.0f));
 		}
 #endif

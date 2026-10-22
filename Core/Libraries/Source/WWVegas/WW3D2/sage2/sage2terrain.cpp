@@ -39,6 +39,7 @@ namespace
 	enum InitState { NOT_TRIED, READY, UNAVAILABLE };
 
 	bool s_enabled = true;
+	float s_albedoScale = 1.6f;
 	InitState s_state = NOT_TRIED;
 	Sage2EffectClass* s_effect = nullptr;
 	int s_techDefault = -1, s_techForward = -1, s_techPrepass = -1;
@@ -159,6 +160,7 @@ namespace
 //-------------------------------------------------------------------------------------------------
 void Sage2TerrainClass::Set_Enabled(bool enabled) { s_enabled = enabled; }
 bool Sage2TerrainClass::Is_Enabled() { return s_enabled; }
+void Sage2TerrainClass::Set_Albedo_Scale(float scale) { s_albedoScale = scale > 0.0f ? scale : 1.0f; }
 
 //-------------------------------------------------------------------------------------------------
 bool Sage2TerrainClass::Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuffer, const Tile* tiles, int tileCount,
@@ -180,6 +182,7 @@ bool Sage2TerrainClass::Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuff
 	Sage2DrawState drawState;
 	Sage2GlobalsClass::Apply(*s_effect, drawState);
 	s_effect->Set_Texture("BaseSampler", atlasTexture);
+	s_effect->Set_Float1("AlbedoScale", s_albedoScale);
 	device8->Set_Vertex_Declaration_Override(s_declaration);
 
 	// the deferred chain over the whole terrain, then the tiles lit from the light buffers

@@ -62,6 +62,14 @@ SAMPLER_2D_BEGIN( MacroSampler,
 	AddressV = Wrap;
 SAMPLER_2D_END
 
+// Zero Hour's tiles were painted for its gamma-space fixed-function lighting; lit in linear light
+// they read dark next to C&C4's art, so their albedo is lifted (1 = as painted)
+float AlbedoScale
+<
+	string UIWidget = "None";
+	string SasBindAddress = "Terrain.AlbedoScale";
+> = 1.6;
+
 // world units per macro texture repeat
 float MacroScale
 <
@@ -81,12 +89,13 @@ struct VSInput
 	float3 Normal : NORMAL;
 };
 
-// the atlas, base tile blended with the alpha-edged blend tile, as Zero Hour's fixed-function path does it
-float4 SampleTerrain(float2 baseTexCoord, float2 blendTexCoord)
+// the atlas: the base tile, then the blend tile over it by the product of its alpha edge and the
+// vertex alpha (how Zero Hour's second fixed-function pass blends it)
+float4 SampleTerrain(float2 baseTexCoord, float2 blendTexCoord, float vertexAlpha)
 {
 	float4 base = tex2D(SAMPLER(BaseSampler), baseTexCoord);
 	float4 blend = tex2D(SAMPLER(BaseSampler), blendTexCoord);
-	return float4(lerp(base.xyz, blend.xyz, blend.w), 1.0);
+	return float4(lerp(base.xyz, blend.xyz, blend.w * vertexAlpha), 1.0);
 }
 
 // ============================================================================
@@ -145,7 +154,7 @@ struct VSOutputDefault
 {
 	float4 Position : POSITION;
 	float4 BaseTexCoord_BlendTexCoord : TEXCOORD0;
-	float4 MacroTexCoord_Fog : TEXCOORD1;
+	float4 MacroTexCoord_Fog_BlendAlpha : TEXCOORD1;
 };
 
 VSOutputDefault VS_Default(VSInput In)
@@ -153,22 +162,22 @@ VSOutputDefault VS_Default(VSInput In)
 	VSOutputDefault Out;
 	Out.Position = mul(float4(In.Position, 1), ViewProjection);
 	Out.BaseTexCoord_BlendTexCoord = float4(In.BaseTexCoord, In.BlendTexCoord);
-	Out.MacroTexCoord_Fog.xy = In.Position.xy * MacroScale;
-	Out.MacroTexCoord_Fog.z = CalculateFog(Fog, In.Position, EyePosition);
-	Out.MacroTexCoord_Fog.w = 0;
+	Out.MacroTexCoord_Fog_BlendAlpha.xy = In.Position.xy * MacroScale;
+	Out.MacroTexCoord_Fog_BlendAlpha.z = CalculateFog(Fog, In.Position, EyePosition);
+	Out.MacroTexCoord_Fog_BlendAlpha.w = In.Color.w;
 	return Out;
 }
 
 float4 PS_Default(VSOutputDefault In, float2 vPos : PIXELLOC) : COLOR
 {
-	float4 terrain = SampleTerrain(In.BaseTexCoord_BlendTexCoord.xy, In.BaseTexCoord_BlendTexCoord.zw);
-	float3 baseColor = GammaToLinear(terrain.xyz);
+	float4 terrain = SampleTerrain(In.BaseTexCoord_BlendTexCoord.xy, In.BaseTexCoord_BlendTexCoord.zw, In.MacroTexCoord_Fog_BlendAlpha.w);
+	float3 baseColor = GammaToLinear(terrain.xyz) * AlbedoScale;
 	float2 screenTexCoord = GetScreenTexcoordCoord(vPos);
 	float3 color = (SampleDiffuseLight(screenTexCoord) + AmbientLightColor) * baseColor
 		+ SampleSpecularLight(screenTexCoord) * SpecularColor * 0.15;
-	float3 macro = GammaToLinear(tex2D(SAMPLER(MacroSampler), In.MacroTexCoord_Fog.xy).xyz);
+	float3 macro = GammaToLinear(tex2D(SAMPLER(MacroSampler), In.MacroTexCoord_Fog_BlendAlpha.xy).xyz);
 	color *= macro;
-	color = lerp(Fog.Color.xyz, color, In.MacroTexCoord_Fog.z);
+	color = lerp(Fog.Color.xyz, color, In.MacroTexCoord_Fog_BlendAlpha.z);
 	return float4(color, 1.0);
 }
 
@@ -196,7 +205,7 @@ struct VSOutput_M
 	float4 BaseTexCoord_BlendTexCoord : TEXCOORD0;
 	float4 CloudTexCoord_MacroTexCoord : TEXCOORD1;
 	float4 Normal_Fog : TEXCOORD2;
-	float3 WorldPosition : TEXCOORD3;
+	float4 WorldPosition_BlendAlpha : TEXCOORD3;
 };
 
 VSOutput_M VS_Default_M(VSInput In)
@@ -208,14 +217,14 @@ VSOutput_M VS_Default_M(VSInput In)
 	Out.CloudTexCoord_MacroTexCoord.zw = In.Position.xy * MacroScale;
 	Out.Normal_Fog.xyz = In.Normal;
 	Out.Normal_Fog.w = CalculateFog(Fog, In.Position, EyePosition);
-	Out.WorldPosition = In.Position;
+	Out.WorldPosition_BlendAlpha = float4(In.Position, In.Color.w);
 	return Out;
 }
 
 float4 PS_Default_M(VSOutput_M In) : COLOR
 {
-	float4 terrain = SampleTerrain(In.BaseTexCoord_BlendTexCoord.xy, In.BaseTexCoord_BlendTexCoord.zw);
-	float3 baseColor = GammaToLinear(terrain.xyz);
+	float4 terrain = SampleTerrain(In.BaseTexCoord_BlendTexCoord.xy, In.BaseTexCoord_BlendTexCoord.zw, In.WorldPosition_BlendAlpha.w);
+	float3 baseColor = GammaToLinear(terrain.xyz) * AlbedoScale;
 	float3 normal = normalize(In.Normal_Fog.xyz);
 	float3 cloud = GammaToLinear(tex2D(SAMPLER(CloudTexture), In.CloudTexCoord_MacroTexCoord.xy).xyz);
 	float3 light = AmbientLightColor

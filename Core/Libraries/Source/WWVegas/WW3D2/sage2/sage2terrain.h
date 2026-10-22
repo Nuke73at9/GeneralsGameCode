@@ -48,6 +48,8 @@ public:
 
 	static void Set_Enabled(bool enabled);
 	static bool Is_Enabled();
+	/// How much Zero Hour's tile colours are lifted for linear-light rendering (1 = as painted)
+	static void Set_Albedo_Scale(float scale);
 
 	/// Draws the tiles (all with 'vertexCount' vertices and 'polygonCount' triangles, sharing the
 	/// index buffer) textured from the atlas. Returns false when the effect is not available, in
