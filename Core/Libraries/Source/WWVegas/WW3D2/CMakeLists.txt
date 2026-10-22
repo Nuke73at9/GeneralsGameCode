@@ -253,6 +253,8 @@ if(SAGE_USE_D3D9)
         sage2/sage2effect.h
         sage2/sage2globals.cpp
         sage2/sage2globals.h
+        sage2/sage2lighting.cpp
+        sage2/sage2lighting.h
         sage2/sage2material.cpp
         sage2/sage2material.h
         sage2/sage2scene.cpp

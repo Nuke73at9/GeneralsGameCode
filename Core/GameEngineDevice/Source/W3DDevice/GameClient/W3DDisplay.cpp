@@ -105,6 +105,7 @@ static void drawFramerateBar();
 #ifdef RTS_RENDERER_D3D9
 #include "WW3D2/postprocess.h"
 #include "WW3D2/sage2/sage2scene.h"
+#include "WW3D2/sage2/sage2lighting.h"
 #endif
 #include "Common/OptionPreferences.h"
 #include "WW3D2/dx8webbrowser.h"
@@ -951,6 +952,14 @@ void W3DDisplay::init()
 		{	m_myLight[lindex] = NEW_REF( LightClass, (LightClass::DIRECTIONAL) );
 		}
 
+#ifdef RTS_RENDERER_D3D9
+		{
+			// Tiberium Project @feature Options.ini: Sage2Lighting = temperate | evening | arctic | arctic_day |
+			// junktown | junktown_day | night lights every map with that C&C4 lighting; "map" keeps the maps' own.
+			OptionPreferences prefs;
+			Sage2LightingClass::Select(prefs.getAsciiString("Sage2Lighting", "temperate").str());
+		}
+#endif
 		setTimeOfDay( TheGlobalData->m_timeOfDay );	//set each light to correct values for given time
 
 		for (lindex=0; lindex<TheGlobalData->m_numGlobalLights; lindex++)

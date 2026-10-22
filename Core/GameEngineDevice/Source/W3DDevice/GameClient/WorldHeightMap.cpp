@@ -50,6 +50,9 @@
 #include "W3DDevice/GameClient/HeightMap.h"
 #include "W3DDevice/GameClient/TerrainTex.h"
 #include "W3DDevice/GameClient/W3DShadow.h"
+#ifdef RTS_RENDERER_D3D9
+#include "WW3D2/sage2/sage2lighting.h"	// Tiberium Project @feature C&C4 map lighting presets
+#endif
 
 #include "Common/file.h"
 
@@ -810,6 +813,28 @@ Bool WorldHeightMap::ParseLightingDataChunk(DataChunkInput &file, DataChunkInfo 
 			}
 		}
 	DEBUG_ASSERTCRASH(file.atEndOfChunk(), ("Unexpected data left over."));
+#ifdef RTS_RENDERER_D3D9
+		// Tiberium Project @feature Light the map the way C&C4 lights its maps: the chosen C&C4
+		// lighting preset replaces the map's lights (terrain and objects, every time of day).
+		if (const Sage2LightingPreset* preset = Sage2LightingClass::Get_Selected()) {
+			for (i=0; i<4; i++) {
+				for (Int j=0; j<MAX_GLOBAL_LIGHTS && j<3; j++) {
+					GlobalData::TerrainLighting light;
+					light.ambient.red = j == 0 ? preset->ambient[0] : 0.0f;
+					light.ambient.green = j == 0 ? preset->ambient[1] : 0.0f;
+					light.ambient.blue = j == 0 ? preset->ambient[2] : 0.0f;
+					light.diffuse.red = preset->light[j].diffuse[0];
+					light.diffuse.green = preset->light[j].diffuse[1];
+					light.diffuse.blue = preset->light[j].diffuse[2];
+					light.lightPos.x = preset->light[j].direction[0];
+					light.lightPos.y = preset->light[j].direction[1];
+					light.lightPos.z = preset->light[j].direction[2];
+					TheWritableGlobalData->m_terrainObjectsLighting[i+TIME_OF_DAY_FIRST][j] = light;
+					TheWritableGlobalData->m_terrainLighting[i+TIME_OF_DAY_FIRST][j] = light;
+				}
+			}
+		}
+#endif
 	return true;
 }
 
