@@ -139,6 +139,7 @@ namespace
 		{ "WW3D.NOD_Env_cube", SAGE2_BIND_TEXTURE_ENV_NOD },
 		{ "Objects.LightSpaceEnvironmentMap", SAGE2_BIND_TEXTURE_ENVIRONMENT },
 		{ "Terrain.Macro.Texture", SAGE2_BIND_TEXTURE_WHITE },
+		{ "Terrain.MacroTexture", SAGE2_BIND_TEXTURE_WHITE },
 		{ "WW3D.Shroud", SAGE2_BIND_TEXTURE_WHITE },
 		{ "WW3D.EnvironmentTexture", SAGE2_BIND_TEXTURE_ENVIRONMENT },
 		{ "WW3D.FactionEnvCube", SAGE2_BIND_TEXTURE_ENVIRONMENT },

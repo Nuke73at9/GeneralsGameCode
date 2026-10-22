@@ -89,6 +89,10 @@
 #include "W3DDevice/GameClient/W3DCustomScene.h"
 
 #include "Common/UnitTimings.h" //Contains the DO_UNIT_TIMINGS define jba.
+#include <vector>
+#ifdef RTS_RENDERER_D3D9
+#include "WW3D2/sage2/sage2terrain.h"	// Tiberium Project @feature the terrain drawn the C&C4 way
+#endif
 
 
 #define no_OPTIMIZED_HEIGHTMAP_LIGHTING	01
@@ -134,6 +138,13 @@ void HeightMapRenderObjClass::freeIndexVertexBuffers()
 
 	delete[] m_vertexBufferBackup;
 	m_vertexBufferBackup = nullptr;
+#ifdef RTS_RENDERER_D3D9
+	delete[] m_sideNormals;
+	m_sideNormals = nullptr;
+	delete[] m_sideNormalVersions;
+	m_sideNormalVersions = nullptr;
+	Sage2TerrainClass::Release_Resources();
+#endif
 
 	m_numVertexBufferTiles = 0;
 }
@@ -327,6 +338,14 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, VERTEX_FORMAT *
 		DX8VertexBufferClass::WriteLockClass lockVtxBuffer(pVB);
 		VERTEX_FORMAT *vbHardware = (VERTEX_FORMAT*)lockVtxBuffer.Get_Vertex_Array();
 		VERTEX_FORMAT *vBase = data;
+#ifdef RTS_RENDERER_D3D9
+		// Tiberium Project @feature the normals are kept beside the backup, same layout; the tile's version moves on
+		Vector3 *sideNormalBase = m_sideNormals + (data - m_vertexBufferBackup);
+		m_sideNormalVersions[(data - m_vertexBufferBackup) / HEIGHTMAP_VERTEX_NUM]++;
+#define STORE_SIDE_NORMAL(v) (sideNormalBase[(v) - vBase] = normalAtTexel)
+#else
+#define STORE_SIDE_NORMAL(v) ((void)0)
+#endif
 		// Note that we are building the vertex buffer data in the memory buffer, data.
 		// At the bottom, we will copy the final vertex data for one cell into the
 		// hardware vertex buffer.
@@ -386,6 +405,7 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, VERTEX_FORMAT *
 				vb->u2=UA[0];
 				vb->v2=VA[0];
 				doTheLight(vb, lightRay, &normalAtTexel, pLightsIterator, alpha[0]);
+				STORE_SIDE_NORMAL(vb);
 				vb++;
 
 				//top-right sample
@@ -408,6 +428,7 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, VERTEX_FORMAT *
 				vb->u2=UA[1];
 				vb->v2=VA[1];
 				doTheLight(vb, lightRay, &normalAtTexel, pLightsIterator, alpha[1]);
+				STORE_SIDE_NORMAL(vb);
 				vb++;
 
 				//bottom-right sample
@@ -434,6 +455,7 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, VERTEX_FORMAT *
 				vb->u2=UA[2];
 				vb->v2=VA[2];
 				doTheLight(vb, lightRay, &normalAtTexel, pLightsIterator, alpha[2]);
+				STORE_SIDE_NORMAL(vb);
 				vb++;
 
 				//bottom-left sample
@@ -465,6 +487,7 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, VERTEX_FORMAT *
 				vb->u2=UA[3];
 				vb->v2=VA[3];
 				doTheLight(vb, lightRay, &normalAtTexel, pLightsIterator, alpha[3]);
+				STORE_SIDE_NORMAL(vb);
 				vb++;
 
 				VERTEX_FORMAT *pCurVertices = vb-4;
@@ -476,6 +499,14 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, VERTEX_FORMAT *
 					pCurVertices[1] = pCurVertices[2];
 					pCurVertices[2] = pCurVertices[3];
 					pCurVertices[3] = tmpVertex;
+#ifdef RTS_RENDERER_D3D9
+					Vector3 *normals = sideNormalBase + (pCurVertices - vBase);	// Tiberium Project @feature the normals turn with the vertices
+					Vector3 tmpNormal = normals[0];
+					normals[0] = normals[1];
+					normals[1] = normals[2];
+					normals[2] = normals[3];
+					normals[3] = tmpNormal;
+#endif
 				}
 #endif
 
@@ -538,6 +569,7 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, VERTEX_FORMAT *
 	}
 	return -1;
 }
+#undef STORE_SIDE_NORMAL
 
 //=============================================================================
 // HeightMapRenderObjClass::updateVBForLight
@@ -1047,6 +1079,10 @@ m_numVisibleExtraBlendTiles(0),
 m_extraBlendTilePositionsSize(0),
 m_vertexBufferTiles(nullptr),
 m_vertexBufferBackup(nullptr),
+#ifdef RTS_RENDERER_D3D9
+m_sideNormals(nullptr),
+m_sideNormalVersions(nullptr),
+#endif
 m_originX(0),
 m_originY(0),
 m_desiredDrawWidth(WorldHeightMap::NORMAL_DRAW_WIDTH),
@@ -1327,6 +1363,14 @@ Int HeightMapRenderObjClass::initHeightData(Int x, Int y, WorldHeightMap *pMap, 
 
 		m_vertexBufferTiles = NEW DX8VertexBufferClass*[m_numVertexBufferTiles];
 		m_vertexBufferBackup = NEW VERTEX_FORMAT [m_numVertexBufferTiles * HEIGHTMAP_VERTEX_NUM];
+#ifdef RTS_RENDERER_D3D9
+		m_sideNormals = NEW Vector3 [m_numVertexBufferTiles * HEIGHTMAP_VERTEX_NUM];
+		m_sideNormalVersions = NEW UnsignedInt [m_numVertexBufferTiles];
+		for (i=0; i<m_numVertexBufferTiles * HEIGHTMAP_VERTEX_NUM; i++)
+			m_sideNormals[i].Set(0, 0, 1);
+		for (i=0; i<m_numVertexBufferTiles; i++)
+			m_sideNormalVersions[i] = 0;
+#endif
 
 		for (i=0; i<m_numVertexBufferTiles; i++) {
 #ifdef USE_NORMALS
@@ -2021,6 +2065,24 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 		//Disable writes to destination alpha channel (if there is one)
 		if (DX8Wrapper::getBackBufferFormat() == WW3D_FORMAT_A8R8G8B8)
 			DX8Wrapper::Set_DX8_Render_State(D3DRS_COLORWRITEENABLE,D3DCOLORWRITEENABLE_BLUE|D3DCOLORWRITEENABLE_GREEN|D3DCOLORWRITEENABLE_RED);
+
+#ifdef RTS_RENDERER_D3D9
+		// Tiberium Project @feature The main view's terrain goes through the C&C4-style terrain effect
+		// (deferred pre-pass, C&C4's lights, linear light, the cloud layer) when it is available; the
+		// reflection pass and the untextured modes keep the fixed-function passes below.
+		if (!m_disableTextures && !ShaderClass::Is_Backface_Culling_Inverted() && Is_Hidden() == 0 && m_sideNormals)
+		{
+			std::vector<Sage2TerrainClass::Tile> tiles(m_numVertexBufferTiles);
+			for (Int t = 0; t < m_numVertexBufferTiles; t++)
+			{
+				tiles[t].vertexBuffer = m_vertexBufferTiles[t];
+				tiles[t].normals = &m_sideNormals[t * HEIGHTMAP_VERTEX_NUM].X;
+				tiles[t].version = m_sideNormalVersions[t];
+			}
+			if (Sage2TerrainClass::Draw(m_stageZeroTexture, m_indexBuffer, &tiles[0], m_numVertexBufferTiles, HEIGHTMAP_VERTEX_NUM, HEIGHTMAP_POLYGON_NUM))
+				devicePasses = 0;	// drawn; the shoreline, blend, road and shroud passes below still run
+		}
+#endif
 	}
 
 	Int pass;

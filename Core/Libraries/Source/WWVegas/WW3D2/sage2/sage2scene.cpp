@@ -251,6 +251,32 @@ void Sage2SceneClass::Begin_Frame()
 bool Sage2SceneClass::Light_Mesh(Sage2EffectClass& effect, int prepassTechnique, MeshClass* mesh, DX8PolygonRendererClass* renderer,
 	IDirect3DVertexBuffer9* meshBuffer, unsigned meshStride, IDirect3DVertexDeclaration9* meshDeclaration)
 {
+	class MeshDraw : public PrepassDrawClass
+	{
+	public:
+		MeshDraw(MeshClass* m, DX8PolygonRendererClass* r) : mesh(m), renderer(r) {}
+		virtual void Draw(IDirect3DDevice9*) { renderer->Render(mesh->Get_Base_Vertex_Offset()); }
+		MeshClass* mesh;
+		DX8PolygonRendererClass* renderer;
+	};
+	if (!s_enabled || !Is_Available() || prepassTechnique < 0)
+		return false;
+	float x0, y0, x1, y1;
+	Screen_Rect(mesh, x0, y0, x1, y1);
+	MeshDraw draw(mesh, renderer);
+	if (!Light_Batch(effect, prepassTechnique, draw, x0, y0, x1, y1))
+		return false;
+	// the mesh's streams as the caller had them
+	IDirect3DDevice9* device = DX8Wrapper::_Get_D3D_Device8()->Get_D3D9();
+	device->SetVertexDeclaration(meshDeclaration);
+	device->SetStreamSource(0, meshBuffer, 0, meshStride);
+	Sage2GlobalsClass::Apply_Scene_Textures(effect);
+	return true;
+}
+
+//-------------------------------------------------------------------------------------------------
+bool Sage2SceneClass::Light_Batch(Sage2EffectClass& effect, int prepassTechnique, PrepassDrawClass& draw, float x0, float y0, float x1, float y1)
+{
 	if (!s_enabled || !Is_Available() || prepassTechnique < 0)
 		return false;
 	IDirect3DDevice8* device8 = DX8Wrapper::_Get_D3D_Device8();
@@ -295,7 +321,7 @@ bool Sage2SceneClass::Light_Mesh(Sage2EffectClass& effect, int prepassTechnique,
 	IDirect3DSurface9* sDiffuse = Surface(s_diffuseLight);
 	IDirect3DSurface9* sSpecular = Surface(s_specularLight);
 
-	// 1. the mesh's depth / normal pre-pass
+	// 1. the depth / normal pre-pass
 	device->SetRenderTarget(0, sNormalSpec);
 	device->SetRenderTarget(1, sDepth);
 	device->SetDepthStencilSurface(s_prepassDepth);
@@ -313,19 +339,17 @@ bool Sage2SceneClass::Light_Mesh(Sage2EffectClass& effect, int prepassTechnique,
 		if (!effect.Begin(device, prepassTechnique, pass))
 			continue;
 		device->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
-		renderer->Render(mesh->Get_Base_Vertex_Offset());
+		draw.Draw(device);
 		effect.End(device);
 	}
 	device->SetRenderTarget(1, nullptr);
 
-	// 2. linear depth and the directional light over the mesh's rectangle
-	float x0, y0, x1, y1;
-	Screen_Rect(mesh, x0, y0, x1, y1);
-	Sage2DrawState draw;
+	// 2. linear depth and the directional light over the rectangle
+	Sage2DrawState drawState;
 	Sage2GlobalsClass::Set_Scene_Textures(nullptr, nullptr, s_depthLinear, s_normalSpec);
 	Sage2GlobalsClass::Set_Depth_Buffer_Texture(s_depth);
-	Sage2GlobalsClass::Apply(*s_linearDepth, draw);
-	Sage2GlobalsClass::Apply(*s_lighting, draw);
+	Sage2GlobalsClass::Apply(*s_linearDepth, drawState);
+	Sage2GlobalsClass::Apply(*s_lighting, drawState);
 	device->SetDepthStencilSurface(nullptr);
 	device->SetRenderTarget(0, sDepthLinear);
 	device->SetViewport(&viewport);
@@ -336,14 +360,13 @@ bool Sage2SceneClass::Light_Mesh(Sage2EffectClass& effect, int prepassTechnique,
 	Draw_Rect(device, *s_lighting, s_lightingTechnique, x0, y0, x1, y1);
 	device->SetRenderTarget(1, nullptr);
 
-	// 3. back to the frame, with the mesh's streams as the caller had them
+	// 3. back to the frame
 	device->SetRenderTarget(0, target);
 	device->SetDepthStencilSurface(depth);
 	device->SetViewport(&viewport);
 	if (scissorEnabled)
 		device->SetScissorRect(&scissor);
-	device->SetVertexDeclaration(meshDeclaration);
-	device->SetStreamSource(0, meshBuffer, 0, meshStride);
+	device->SetStreamSource(0, nullptr, 0, 0);
 	Sage2GlobalsClass::Set_Scene_Textures(s_diffuseLight, s_specularLight, s_depthLinear, s_normalSpec);
 	Sage2GlobalsClass::Apply_Scene_Textures(effect);
 

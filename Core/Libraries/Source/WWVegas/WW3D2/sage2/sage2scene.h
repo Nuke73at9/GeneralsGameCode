@@ -55,6 +55,19 @@ public:
 	static bool Light_Mesh(Sage2EffectClass& effect, int prepassTechnique, MeshClass* mesh, DX8PolygonRendererClass* renderer,
 		IDirect3DVertexBuffer9* meshBuffer, unsigned meshStride, IDirect3DVertexDeclaration9* meshDeclaration);
 
+	/// What a pre-pass draws: the caller's geometry, with the effect's pass already begun
+	class PrepassDrawClass
+	{
+	public:
+		virtual ~PrepassDrawClass() {}
+		virtual void Draw(IDirect3DDevice9* device) = 0;
+	};
+	/// The same for any batch of geometry (the terrain): the pre-pass draws through 'draw', the
+	/// lighting runs over the clip-space rectangle (x0,y0)-(x1,y1), the whole screen for the terrain.
+	/// On return the frame's targets and viewport are back, the light buffers are bound, and no
+	/// vertex streams are set.
+	static bool Light_Batch(Sage2EffectClass& effect, int prepassTechnique, PrepassDrawClass& draw, float x0, float y0, float x1, float y1);
+
 	/// sRGB writes make the linear-space High techniques come out right on the ordinary frame buffer.
 	static bool Supports_SRGB_Write();
 

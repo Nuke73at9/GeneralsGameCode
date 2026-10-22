@@ -107,6 +107,7 @@ static void drawFramerateBar();
 #include "WW3D2/sage2/sage2scene.h"
 #include "WW3D2/sage2/sage2lighting.h"
 #include "WW3D2/sage2/sage2post.h"
+#include "WW3D2/sage2/sage2terrain.h"
 #endif
 #include "Common/OptionPreferences.h"
 #include "WW3D2/dx8webbrowser.h"
@@ -963,6 +964,7 @@ void W3DDisplay::init()
 			Bool cnc4Style = prefs.getBool("CNC4Style", TRUE);
 			Sage2LightingClass::Select(cnc4Style ? prefs.getAsciiString("Sage2Lighting", "auto").str() : "map");
 			Sage2PostClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Post", TRUE));
+			Sage2TerrainClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Terrain", TRUE));	// the terrain through the C&C4-style effect
 			Sage2PostClass::Set_Exposure(prefs.getReal("Sage2Exposure", 1.0f));
 		}
 #endif

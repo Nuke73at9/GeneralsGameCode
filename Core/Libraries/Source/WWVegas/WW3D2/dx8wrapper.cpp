@@ -57,6 +57,7 @@
 #include "sage2/sage2scene.h"
 #include "sage2/sage2post.h"
 #include "sage2/sage2texture.h"
+#include "sage2/sage2terrain.h"
 #include "postprocess.h"
 #endif
 // GeneralsX @build BenderAI 10/02/2026 - Need LoadLibrary/GetProcAddress/FreeLibrary for dynamic loading
@@ -1104,6 +1105,7 @@ bool DX8Wrapper::Reset_Device(bool reload_assets)
 		PostProcessClass::Release_Resources();	// Tiberium Project @feature post-processing render targets
 		Sage2PostClass::Release_Resources();	// Tiberium Project @feature C&C4 post chain targets
 		Sage2SceneClass::Release_Resources();	// Tiberium Project @feature deferred lighting buffers
+		Sage2TerrainClass::Release_Resources();	// Tiberium Project @feature terrain normal stream
 #endif
 
 		for (unsigned i=0;i<MAX_VERTEX_STREAMS;++i)
@@ -1163,6 +1165,7 @@ void DX8Wrapper::Release_Device()
 		PostProcessClass::Shutdown();	// Tiberium Project @feature post-processing targets and shaders
 		Sage2PostClass::Shutdown();	// Tiberium Project @feature C&C4 post chain
 		Sage2TextureClass::Shutdown();	// Tiberium Project @feature C&C4 cube, volume and plain textures
+		Sage2TerrainClass::Shutdown();	// Tiberium Project @feature C&C4-style terrain
 #endif
 
 		for (int a=0;a<MAX_TEXTURE_STAGES;++a)
