@@ -1989,6 +1989,9 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	DX8Wrapper::Set_Index_Buffer(m_indexBuffer,0);
 
 	Bool doMultiPassWireFrame=FALSE;
+#ifdef RTS_RENDERER_D3D9
+	Bool sage2Drew = FALSE;	// Tiberium Project: the C&C4-style terrain effect drew the tiles (and the shroud)
+#endif
 
 	if (((RTS3DScene *)rinfo.Camera.Get_User_Data())->getCustomPassMode() == SCENE_PASS_ALPHA_MASK ||
 		((SceneClass *)rinfo.Camera.Get_User_Data())->Get_Extra_Pass_Polygon_Mode() == SceneClass::EXTRA_PASS_CLEAR_LINE)
@@ -2086,8 +2089,24 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 				tiles[t].normals = &m_sideNormals[t * HEIGHTMAP_VERTEX_NUM].normal.X;
 				tiles[t].version = m_sideNormalVersions[t];
 			}
-			if (Sage2TerrainClass::Draw(m_stageZeroTexture, m_indexBuffer, &tiles[0], m_numVertexBufferTiles, HEIGHTMAP_VERTEX_NUM, HEIGHTMAP_POLYGON_NUM))
-				devicePasses = 0;	// drawn; the shoreline, blend, road and shroud passes below still run
+			// the shroud goes into the same pass: Zero Hour's own shroud pass needs a depth equal to
+			// the terrain's, which the fixed-function transform does not reproduce bit for bit
+			Sage2TerrainClass::Shroud shroud = { nullptr, 0.0f, 0.0f, 0.0f, 0.0f };
+			if (m_shroud && m_shroud->getShroudTexture() && m_shroud->getCellWidth() > 0.0f && m_shroud->getCellHeight() > 0.0f
+				&& m_shroud->getTextureWidth() > 0 && m_shroud->getTextureHeight() > 0)
+			{
+				// as ShroudTextureShader::set: the origin is shifted by a cell for the unused border texels
+				shroud.texture = m_shroud->getShroudTexture();
+				shroud.offsetX = -m_shroud->getDrawOriginX() + m_shroud->getCellWidth();
+				shroud.offsetY = -m_shroud->getDrawOriginY() + m_shroud->getCellHeight();
+				shroud.scaleX = 1.0f / (m_shroud->getCellWidth() * m_shroud->getTextureWidth());
+				shroud.scaleY = 1.0f / (m_shroud->getCellHeight() * m_shroud->getTextureHeight());
+			}
+			if (Sage2TerrainClass::Draw(m_stageZeroTexture, m_indexBuffer, &tiles[0], m_numVertexBufferTiles, HEIGHTMAP_VERTEX_NUM, HEIGHTMAP_POLYGON_NUM, shroud))
+			{
+				devicePasses = 0;	// drawn, shroud included; the shoreline, blend and road passes below still run
+				sage2Drew = TRUE;
+			}
 		}
 #endif
 	}
@@ -2139,12 +2158,25 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 		if (pass)	//shader was applied at least once?
  			W3DShaderManager::resetShader(st);
 
+#ifdef RTS_RENDERER_D3D9
+		// Tiberium Project @feature The shoreline and three-way blend passes draw the terrain's
+		// own vertices again, fixed-function, depth-tested less-or-equal against the depth the
+		// terrain effect wrote; the two transforms differ in the last bit, so they get a depth
+		// bias (one unit, as the water tracks use eight). Folding them into the terrain effect
+		// (the third texture, the shoreline alpha) is the next step: it also lights them alike
+		if (sage2Drew)
+			DX8Wrapper::Set_DX8_Render_State(D3DRS_ZBIAS, 1);
+#endif
 		//Draw feathered shorelines
 		renderShoreLines(&rinfo.Camera);
 
 		//Do additional pass over any tiles that have 3 textures blended together.
 		if (TheGlobalData->m_use3WayTerrainBlends)
 			renderExtraBlendTiles();
+#ifdef RTS_RENDERER_D3D9
+		if (sage2Drew)
+			DX8Wrapper::Set_DX8_Render_State(D3DRS_ZBIAS, 0);
+#endif
 
 		Int yCoordMin = m_map->getDrawOrgY();
 		Int yCoordMax = m_y+m_map->getDrawOrgY()-1;
@@ -2186,7 +2218,11 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 		if (TheTerrainTracksRenderObjClassSystem)
 			TheTerrainTracksRenderObjClassSystem->flush();
 
-		if (m_shroud && rinfo.Additional_Pass_Count())
+		if (m_shroud && rinfo.Additional_Pass_Count()
+#ifdef RTS_RENDERER_D3D9
+			&& !sage2Drew	// Tiberium Project: the terrain effect multiplied the shroud in already
+#endif
+			)
 		{
 			rinfo.Peek_Additional_Pass(0)->Install_Materials();
 			renderTerrainPass(&rinfo.Camera);

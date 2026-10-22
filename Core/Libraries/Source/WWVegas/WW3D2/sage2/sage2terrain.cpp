@@ -168,7 +168,7 @@ void Sage2TerrainClass::Set_Tile_World_Size(float size) { s_tileWorldSize = size
 
 //-------------------------------------------------------------------------------------------------
 bool Sage2TerrainClass::Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuffer, const Tile* tiles, int tileCount,
-	unsigned vertexCount, unsigned polygonCount)
+	unsigned vertexCount, unsigned polygonCount, const Shroud& shroud)
 {
 	if (!s_enabled || tileCount <= 0 || atlas == nullptr || indexBuffer == nullptr)
 		return false;
@@ -195,6 +195,14 @@ bool Sage2TerrainClass::Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuff
 	float atlasParams[4] = { (float)Sage2TerrainAtlasClass::Get_Slots_Per_Row(), Sage2TerrainAtlasClass::Get_Slot_Size(),
 		Sage2TerrainAtlasClass::Get_Slot_Border(), s_tileWorldSize };
 	s_effect->Set_Float("AtlasParams", atlasParams, 4);
+	// the shroud, over the white stand-in the globals bound
+	IDirect3DBaseTexture9* shroudTexture = D3D_Texture(shroud.texture);
+	if (shroudTexture != nullptr)
+	{
+		s_effect->Set_Texture("ShroudTexture", shroudTexture);
+		float shroudParams[4] = { shroud.offsetX, shroud.offsetY, shroud.scaleX, shroud.scaleY };
+		s_effect->Set_Float("ShroudParams", shroudParams, 4);
+	}
 	device8->Set_Vertex_Declaration_Override(s_declaration);
 
 	// the deferred chain over the whole terrain, then the tiles lit from the light buffers

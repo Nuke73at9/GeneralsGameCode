@@ -7,6 +7,7 @@
 // the height-field normal the engine adds. The deferred pre-pass writes the normal and depth,
 // the Default pass reads C&C4's light buffers; Default_M lights forward with the three
 // directional lights and the cloud layer. Same lighting and gamma handling as C&C4's terrain.
+// Zero Hour's shroud is multiplied in at the end of both.
 //
 // Compiled with shaders/sage2/build_effects.py (the C preprocessor, then fxc) to
 // tiberium_terrain.fxo, packed into the mod as Art\Shaders\tiberium_terrain.fxo.
@@ -95,6 +96,32 @@ SAMPLER_2D_BEGIN( MacroSampler,
 	AddressU = Wrap;
 	AddressV = Wrap;
 SAMPLER_2D_END
+
+// Zero Hour's shroud (one texel a cell, black beyond the map's border, grey under fog of war):
+// Zero Hour multiplies it over the finished terrain in an extra pass that needs an equal depth,
+// so it is folded into this pass instead. White when the map has none.
+SAMPLER_2D_BEGIN( ShroudTexture,
+	string UIWidget = "None";
+	string SasBindAddress = "Terrain.Shroud.Texture";
+	)
+	MinFilter = Linear;
+	MagFilter = Linear;
+	MipFilter = None;
+	AddressU = Clamp;
+	AddressV = Clamp;
+SAMPLER_2D_END
+
+// xy: added to the world position, zw: then scaled by, to reach the shroud texel
+float4 ShroudParams
+<
+	string UIWidget = "None";
+	string SasBindAddress = "Terrain.Shroud.Params";
+> = float4(0, 0, 0, 0);
+
+float2 ShroudUV(float2 worldXY)
+{
+	return (worldXY + ShroudParams.xy) * ShroudParams.zw;
+}
 
 // Zero Hour's tiles were painted for its gamma-space fixed-function lighting; lit in linear light
 // they read dark next to C&C4's art, so their albedo is lifted (1 = as painted)
@@ -250,6 +277,7 @@ struct VSOutputDefault
 	float4 BaseTexCoord_BlendTexCoord : TEXCOORD0;
 	float4 MacroTexCoord_Fog_BlendAlpha : TEXCOORD1;
 	float4 WorldXY_Slots : TEXCOORD2;
+	float2 ShroudTexCoord : TEXCOORD3;
 };
 
 VSOutputDefault VS_Default(VSInput In)
@@ -261,6 +289,7 @@ VSOutputDefault VS_Default(VSInput In)
 	Out.MacroTexCoord_Fog_BlendAlpha.z = CalculateFog(Fog, In.Position, EyePosition);
 	Out.MacroTexCoord_Fog_BlendAlpha.w = In.Color.w;
 	Out.WorldXY_Slots = float4(In.Position.xy, In.Slots);
+	Out.ShroudTexCoord = ShroudUV(In.Position.xy);
 	return Out;
 }
 
@@ -276,6 +305,7 @@ float4 PS_Default(VSOutputDefault In, float2 vPos : PIXELLOC) : COLOR
 	float3 macro = GammaToLinear(tex2D(SAMPLER(MacroSampler), In.MacroTexCoord_Fog_BlendAlpha.xy).xyz);
 	color *= macro;
 	color = lerp(Fog.Color.xyz, color, In.MacroTexCoord_Fog_BlendAlpha.z);
+	color *= GammaToLinear(tex2D(SAMPLER(ShroudTexture), In.ShroudTexCoord).xyz);
 	return float4(color, 1.0);
 }
 
@@ -305,6 +335,7 @@ struct VSOutput_M
 	float4 Normal_Fog : TEXCOORD2;
 	float4 WorldPosition_BlendAlpha : TEXCOORD3;
 	float2 Slots : TEXCOORD4;
+	float2 ShroudTexCoord : TEXCOORD5;
 };
 
 VSOutput_M VS_Default_M(VSInput In)
@@ -318,6 +349,7 @@ VSOutput_M VS_Default_M(VSInput In)
 	Out.Normal_Fog.w = CalculateFog(Fog, In.Position, EyePosition);
 	Out.WorldPosition_BlendAlpha = float4(In.Position, In.Color.w);
 	Out.Slots = In.Slots;
+	Out.ShroudTexCoord = ShroudUV(In.Position.xy);
 	return Out;
 }
 
@@ -337,6 +369,7 @@ float4 PS_Default_M(VSOutput_M In) : COLOR
 	float3 macro = GammaToLinear(tex2D(SAMPLER(MacroSampler), In.CloudTexCoord_MacroTexCoord.zw).xyz);
 	color *= macro;
 	color = lerp(Fog.Color.xyz, color, In.Normal_Fog.w);
+	color *= GammaToLinear(tex2D(SAMPLER(ShroudTexture), In.ShroudTexCoord).xyz);
 	return float4(color, 1.0);
 }
 

@@ -141,6 +141,7 @@ namespace
 		{ "Terrain.Macro.Texture", SAGE2_BIND_TEXTURE_WHITE },
 		{ "Terrain.MacroTexture", SAGE2_BIND_TEXTURE_WHITE },
 		{ "WW3D.Shroud", SAGE2_BIND_TEXTURE_WHITE },
+		{ "Terrain.Shroud.Texture", SAGE2_BIND_TEXTURE_WHITE },	// the terrain effect sets the map's shroud over it
 		{ "WW3D.EnvironmentTexture", SAGE2_BIND_TEXTURE_ENVIRONMENT },
 		{ "WW3D.FactionEnvCube", SAGE2_BIND_TEXTURE_ENVIRONMENT },
 	};

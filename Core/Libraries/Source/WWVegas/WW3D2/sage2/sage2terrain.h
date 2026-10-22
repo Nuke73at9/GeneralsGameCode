@@ -58,11 +58,23 @@ public:
 	/// World units one C&C4 terrain texture spans (80: eight cells, as in C&C4)
 	static void Set_Tile_World_Size(float size);
 
+	/// The map's shroud, multiplied over the terrain at the end of the pass (Zero Hour draws it
+	/// as an extra pass that needs an equal depth, which a different vertex pipeline cannot
+	/// give it): the texture, one texel a cell, and how a world position reaches its texel:
+	/// (world.xy + offset) * scale. No texture: no shroud.
+	struct Shroud
+	{
+		TextureClass* texture;
+		float offsetX, offsetY;
+		float scaleX, scaleY;
+	};
+
 	/// Draws the tiles (all with 'vertexCount' vertices and 'polygonCount' triangles, sharing the
-	/// index buffer) textured from the atlas. Returns false when the effect is not available, in
-	/// which case the caller draws the terrain its own way. Leaves no vertex streams bound.
+	/// index buffer) textured from the atlas, with the shroud over them. Returns false when the
+	/// effect is not available, in which case the caller draws the terrain its own way. Leaves no
+	/// vertex streams bound.
 	static bool Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuffer, const Tile* tiles, int tileCount,
-		unsigned vertexCount, unsigned polygonCount);
+		unsigned vertexCount, unsigned polygonCount, const Shroud& shroud);
 
 	/// Frees the normal stream (before a device reset or a new map); made again on the next Draw().
 	static void Release_Resources();
