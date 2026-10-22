@@ -48,10 +48,13 @@ class Sage2LightingClass
 public:
 	/// The preset of that name, or null (names are compared without case)
 	static const Sage2LightingPreset* Find(const char* name);
-	/// Chooses the preset every map gets from now on; "map" or an unknown name keeps the maps' own lights
-	static void Select(const char* name);
-	/// The chosen preset, null when the maps' own lights are used
-	static const Sage2LightingPreset* Get_Selected();
+	/// How maps are lit from now on: "auto" picks the C&C4 preset matching each map's own time of
+	/// day and weather (the C&C4 style), a preset name forces that one, "map" keeps the maps' lights.
+	static void Select(const char* mode);
+	/// The preset for a map being loaded (its Zero Hour time of day, 1 = morning .. 4 = night, and
+	/// whether it is a snow map), under the selected mode; null to keep the map's lights. Also sets
+	/// the post-processing look that goes with it.
+	static const Sage2LightingPreset* Choose(int timeOfDay, bool snowy);
 	/// The preset names, for diagnostics
 	static int Get_Preset_Count();
 	static const Sage2LightingPreset& Get_Preset(int index);

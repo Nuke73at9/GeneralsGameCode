@@ -814,9 +814,9 @@ Bool WorldHeightMap::ParseLightingDataChunk(DataChunkInput &file, DataChunkInfo 
 		}
 	DEBUG_ASSERTCRASH(file.atEndOfChunk(), ("Unexpected data left over."));
 #ifdef RTS_RENDERER_D3D9
-		// Tiberium Project @feature Light the map the way C&C4 lights its maps: the chosen C&C4
-		// lighting preset replaces the map's lights (terrain and objects, every time of day).
-		if (const Sage2LightingPreset* preset = Sage2LightingClass::Get_Selected()) {
+		// Tiberium Project @feature Light the map the way C&C4 lights its maps: the C&C4 lighting
+		// preset matching the map's theme replaces its lights (terrain and objects, every time of day).
+		if (const Sage2LightingPreset* preset = Sage2LightingClass::Choose((Int)TheGlobalData->m_timeOfDay, TheGlobalData->m_weather == WEATHER_SNOWY)) {
 			for (i=0; i<4; i++) {
 				for (Int j=0; j<MAX_GLOBAL_LIGHTS && j<3; j++) {
 					GlobalData::TerrainLighting light;

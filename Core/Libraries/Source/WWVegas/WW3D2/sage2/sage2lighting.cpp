@@ -68,7 +68,9 @@ namespace
 	};
 	const int PRESET_COUNT = sizeof(PRESETS) / sizeof(PRESETS[0]);
 
-	const Sage2LightingPreset* s_selected = nullptr;
+	enum Mode { MODE_MAP, MODE_AUTO, MODE_FIXED };
+	Mode s_mode = MODE_AUTO;
+	const Sage2LightingPreset* s_fixed = nullptr;
 
 	bool Equals_No_Case(const char* a, const char* b)
 	{
@@ -96,24 +98,51 @@ const Sage2LightingPreset* Sage2LightingClass::Find(const char* name)
 }
 
 //-------------------------------------------------------------------------------------------------
-void Sage2LightingClass::Select(const char* name)
+void Sage2LightingClass::Select(const char* mode)
 {
-	s_selected = Find(name);
-	if (s_selected != nullptr)
-		Sage2PostClass::Set_Look(s_selected->lookupTexture, s_selected->lookupBlend, s_selected->bloomIntensity);
-	if (s_selected != nullptr)
-		Sage2_Log("lighting: C&C4 preset '%s' replaces the maps' lights: ambient (%.2f %.2f %.2f), sun (%.2f %.2f %.2f) along (%.3f %.3f %.3f)",
-			s_selected->name, s_selected->ambient[0], s_selected->ambient[1], s_selected->ambient[2],
-			s_selected->light[0].diffuse[0], s_selected->light[0].diffuse[1], s_selected->light[0].diffuse[2],
-			s_selected->light[0].direction[0], s_selected->light[0].direction[1], s_selected->light[0].direction[2]);
+	s_fixed = Find(mode);
+	if (s_fixed != nullptr)
+		s_mode = MODE_FIXED;
+	else if (mode != nullptr && Equals_No_Case(mode, "map"))
+		s_mode = MODE_MAP;
 	else
-		Sage2_Log("lighting: the maps' own lights ('%s')", name != nullptr ? name : "");
+		s_mode = MODE_AUTO;
+	Sage2_Log("lighting: %s", s_mode == MODE_FIXED ? s_fixed->name : s_mode == MODE_MAP ? "the maps' own lights" : "C&C4 style, matched to each map");
 }
 
 //-------------------------------------------------------------------------------------------------
-const Sage2LightingPreset* Sage2LightingClass::Get_Selected()
+const Sage2LightingPreset* Sage2LightingClass::Choose(int timeOfDay, bool snowy)
 {
-	return s_selected;
+	const Sage2LightingPreset* preset = nullptr;
+	if (s_mode == MODE_FIXED)
+		preset = s_fixed;
+	else if (s_mode == MODE_AUTO)
+	{
+		// Zero Hour's map themes to C&C4's: snow maps are Arctic, the rest Pan-America; the map's
+		// time of day picks the set, as it does in C&C4 (1 morning, 2 afternoon, 3 evening, 4 night)
+		const char* name;
+		if (snowy)
+			name = timeOfDay == 4 ? "arctic" : "arctic_day";
+		else if (timeOfDay == 3)
+			name = "evening";
+		else if (timeOfDay == 4)
+			name = "night";
+		else
+			name = "temperate";
+		preset = Find(name);
+	}
+	if (preset != nullptr)
+	{
+		Sage2PostClass::Set_Look(preset->lookupTexture, preset->lookupBlend, preset->bloomIntensity);
+		Sage2_Log("lighting: map (time of day %d%s) gets C&C4 preset '%s': ambient (%.2f %.2f %.2f), sun (%.2f %.2f %.2f) along (%.3f %.3f %.3f), table %s %.2f, bloom %.2f",
+			timeOfDay, snowy ? ", snow" : "", preset->name, preset->ambient[0], preset->ambient[1], preset->ambient[2],
+			preset->light[0].diffuse[0], preset->light[0].diffuse[1], preset->light[0].diffuse[2],
+			preset->light[0].direction[0], preset->light[0].direction[1], preset->light[0].direction[2],
+			preset->lookupTexture, preset->lookupBlend, preset->bloomIntensity);
+	}
+	else
+		Sage2_Log("lighting: map (time of day %d%s) keeps its own lights", timeOfDay, snowy ? ", snow" : "");
+	return preset;
 }
 
 //-------------------------------------------------------------------------------------------------

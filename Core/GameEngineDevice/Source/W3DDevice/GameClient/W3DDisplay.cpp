@@ -955,10 +955,15 @@ void W3DDisplay::init()
 
 #ifdef RTS_RENDERER_D3D9
 		{
-			// Tiberium Project @feature Options.ini: Sage2Lighting = temperate | evening | arctic | arctic_day |
-			// junktown | junktown_day | night lights every map with that C&C4 lighting; "map" keeps the maps' own.
+			// Tiberium Project @feature Options.ini: CNC4Style = yes lights every map with the C&C4 lighting
+			// matching its theme (snow maps Arctic, the rest Pan-America, by time of day) and runs C&C4's
+			// post chain; no keeps the maps' own lights and the plain renderer. Sage2Lighting = <preset name>
+			// (temperate | evening | arctic | arctic_day | junktown | junktown_day | night) forces one preset.
 			OptionPreferences prefs;
-			Sage2LightingClass::Select(prefs.getAsciiString("Sage2Lighting", "temperate").str());
+			Bool cnc4Style = prefs.getBool("CNC4Style", TRUE);
+			Sage2LightingClass::Select(cnc4Style ? prefs.getAsciiString("Sage2Lighting", "auto").str() : "map");
+			Sage2PostClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Post", TRUE));
+			Sage2PostClass::Set_Exposure(prefs.getReal("Sage2Exposure", 1.0f));
 		}
 #endif
 		setTimeOfDay( TheGlobalData->m_timeOfDay );	//set each light to correct values for given time
@@ -2267,8 +2272,6 @@ AGAIN:
 						OptionPreferences prefs;
 						PostProcessClass::Set_Enabled(prefs.getBool("PostProcess", TRUE));
 						Sage2SceneClass::Set_Enabled(prefs.getBool("Sage2Deferred", TRUE));	// Tiberium Project @feature C&C4 deferred lighting
-						Sage2PostClass::Set_Enabled(prefs.getBool("Sage2Post", TRUE));		// Tiberium Project @feature C&C4's own post chain (bloom, grading table)
-						Sage2PostClass::Set_Exposure(prefs.getReal("Sage2Exposure", 1.0f));
 						s_postProcessChecked = TRUE;
 					}
 					PostProcessClass::Apply();
