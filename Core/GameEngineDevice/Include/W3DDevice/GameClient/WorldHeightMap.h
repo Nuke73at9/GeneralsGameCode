@@ -179,6 +179,10 @@ protected:
 	 Use GetUVData to get the mapping info for height cells to map into the
 	 texture. */
 	TerrainTextureClass *m_terrainTex;
+#ifdef RTS_RENDERER_D3D9
+	Int m_cnc4Slots[NUM_TEXTURE_CLASSES];	///< Tiberium Project @feature atlas slot per texture class, -1 for none
+	Bool m_cnc4Atlas;						///< the atlases were built for this map
+#endif
 	Int	m_terrainTexHeight; /// Height of m_terrainTex allocated.
 	/** The texture that contains the alpha edge tiles that get blended on
 			top of the base texture. getAlphaUVData does the mapping. */
@@ -206,6 +210,7 @@ protected:
 	void getUVForNdx(Int ndx, float *minU, float *minV, float *maxU, float*maxV);
 	Bool getUVForTileIndex(Int ndx, Short tileNdx, float U[4], float V[4]);
 	Int getTextureClassFromNdx(Int tileNdx);
+	Int getTextureClassIndexFromNdx(Int tileNdx);	///< Tiberium Project @feature the map's own class index
 	void readTexClass(TXTextureClass *texClass, TileData **tileData);
 	Int updateTileTexturePositions(Int *edgeHeight); ///< Places each tile in the texture.
 	void initCliffFlagsFromHeights();
@@ -300,6 +305,12 @@ public:  // tile and texture info.
 	Bool getExtraAlphaUVData(Int xIndex, Int yIndex, float U[4], float V[4], UnsignedByte alpha[4], Bool *flip, Bool *cliff);
 	/// UV mapping data for a cell to map into the alpha terrain texture.
 	void getAlphaUVData(Int xIndex, Int yIndex, float U[4], float V[4], UnsignedByte alpha[4], Bool *flip);
+#ifdef RTS_RENDERER_D3D9
+	// Tiberium Project @feature The C&C4 texture atlas slots of a cell's base terrain and of the terrain it
+	// blends towards (-1: keep the Zero Hour tile); valid once getTerrainTexture() has run.
+	void getCNC4Slots(Int xIndex, Int yIndex, Int *baseSlot, Int *blendSlot);
+	Bool hasCNC4Textures() const { return m_cnc4Atlas; }
+#endif
 	void getTerrainColorAt(Real x, Real y, RGBColor *pColor);
 	AsciiString getTerrainNameAt(Real x, Real y);
 	Bool isCliffMappedTexture(Int xIndex, Int yIndex);

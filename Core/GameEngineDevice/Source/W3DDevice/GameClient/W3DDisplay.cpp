@@ -966,6 +966,7 @@ void W3DDisplay::init()
 			Sage2PostClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Post", TRUE));
 			Sage2TerrainClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Terrain", TRUE));	// the terrain through the C&C4-style effect
 			Sage2TerrainClass::Set_Albedo_Scale(prefs.getReal("Sage2TerrainAlbedo", 1.6f));		// ZH's tiles lifted for linear light
+			Sage2TerrainClass::Set_Tile_World_Size(prefs.getReal("Sage2TerrainTileSize", 80.0f));	// world units per C&C4 terrain texture
 			Sage2PostClass::Set_Exposure(prefs.getReal("Sage2Exposure", 1.0f));
 		}
 #endif

@@ -52,6 +52,7 @@
 #include "W3DDevice/GameClient/W3DShadow.h"
 #ifdef RTS_RENDERER_D3D9
 #include "WW3D2/sage2/sage2lighting.h"	// Tiberium Project @feature C&C4 map lighting presets
+#include "WW3D2/sage2/sage2terrainatlas.h"	// Tiberium Project @feature C&C4 terrain textures
 #endif
 
 #include "Common/file.h"
@@ -450,6 +451,10 @@ WorldHeightMap::WorldHeightMap():
 		m_sourceTiles[i] = nullptr;
 		m_edgeTiles[i] = nullptr;
 	}
+#ifdef RTS_RENDERER_D3D9
+	m_cnc4Atlas = FALSE;
+	for (i=0; i<NUM_TEXTURE_CLASSES; i++) m_cnc4Slots[i] = -1;
+#endif
 
 	TheSidesList->validateSides();
 	setupAlphaTiles();
@@ -490,6 +495,10 @@ WorldHeightMap::WorldHeightMap(ChunkInputStream *pStrm, Bool logicalDataOnly):
 		m_sourceTiles[i]=nullptr;
 		m_edgeTiles[i]=nullptr;
 	}
+#ifdef RTS_RENDERER_D3D9
+	m_cnc4Atlas = FALSE;
+	for (i=0; i<NUM_TEXTURE_CLASSES; i++) m_cnc4Slots[i] = -1;
+#endif
 
 	DataChunkInput file( pStrm );
 
@@ -2220,6 +2229,31 @@ void WorldHeightMap::getAlphaUVData(Int xIndex, Int yIndex, float U[4], float V[
 #endif
 }
 
+#ifdef RTS_RENDERER_D3D9
+//-------------------------------------------------------------------------------------------------
+void WorldHeightMap::getCNC4Slots(Int xIndex, Int yIndex, Int *baseSlot, Int *blendSlot)
+{
+	*baseSlot = -1;
+	*blendSlot = -1;
+	if (!m_cnc4Atlas)
+		return;
+	xIndex += m_drawOriginX;
+	yIndex += m_drawOriginY;
+	Int ndx = (yIndex*m_width)+xIndex;
+	if (ndx < 0 || ndx >= m_dataSize || !m_tileNdxes)
+		return;
+	Int baseClass = getTextureClassIndexFromNdx(m_tileNdxes[ndx]);
+	if (baseClass >= 0)
+		*baseSlot = m_cnc4Slots[baseClass];
+	Short blendNdx = m_blendTileNdxes[ndx];
+	if (blendNdx != 0 && m_blendedTiles[blendNdx].customBlendEdgeClass < 0) {
+		Int blendClass = getTextureClassIndexFromNdx(m_blendedTiles[blendNdx].blendNdx);
+		if (blendClass >= 0)
+			*blendSlot = m_cnc4Slots[blendClass];
+	}
+}
+#endif
+
 void WorldHeightMap::setTextureLOD(Int lod)
 {
 	if (m_terrainTex)
@@ -2243,6 +2277,15 @@ TextureClass *WorldHeightMap::getTerrainTexture()
 		DEBUG_LOG((buf));
 		REF_PTR_RELEASE(m_alphaTerrainTex);
 		m_alphaTerrainTex = MSGNEW("WorldHeightMap_getTerrainTexture") AlphaTerrainTextureClass(m_terrainTex);
+#ifdef RTS_RENDERER_D3D9
+		{
+			// Tiberium Project @feature the C&C4 textures standing in for this map's terrains
+			const char *names[NUM_TEXTURE_CLASSES];
+			for (Int i=0; i<NUM_TEXTURE_CLASSES; i++)
+				names[i] = i < m_numTextureClasses ? m_textureClasses[i].name.str() : "";
+			m_cnc4Atlas = Sage2TerrainAtlasClass::Build(names, m_numTextureClasses, m_cnc4Slots);
+		}
+#endif
 
 		pow2Height = 1;
 		while (pow2Height<edgeHeight) {
@@ -2423,6 +2466,22 @@ Int WorldHeightMap::getTextureClassFromNdx(Int tileNdx)
 		}
 	}
 	return(-1);
+}
+
+// Tiberium Project @feature the map's own texture-class index (not the global Terrain.ini one) of a tile
+Int WorldHeightMap::getTextureClassIndexFromNdx(Int tileNdx)
+{
+	tileNdx = tileNdx>>2;
+	for (Int i=0; i<m_numTextureClasses; i++) {
+		if (m_textureClasses[i].firstTile<0) {
+			continue;
+		}
+		if (tileNdx >= m_textureClasses[i].firstTile &&
+			tileNdx < m_textureClasses[i].firstTile+m_textureClasses[i].numTiles) {
+			return i;
+		}
+	}
+	return -1;
 }
 
 TXTextureClass WorldHeightMap::getTextureFromIndex( Int textureIndex )

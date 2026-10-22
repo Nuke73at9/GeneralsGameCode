@@ -58,6 +58,7 @@
 #include "sage2/sage2post.h"
 #include "sage2/sage2texture.h"
 #include "sage2/sage2terrain.h"
+#include "sage2/sage2terrainatlas.h"
 #include "postprocess.h"
 #endif
 // GeneralsX @build BenderAI 10/02/2026 - Need LoadLibrary/GetProcAddress/FreeLibrary for dynamic loading
@@ -1166,6 +1167,7 @@ void DX8Wrapper::Release_Device()
 		Sage2PostClass::Shutdown();	// Tiberium Project @feature C&C4 post chain
 		Sage2TextureClass::Shutdown();	// Tiberium Project @feature C&C4 cube, volume and plain textures
 		Sage2TerrainClass::Shutdown();	// Tiberium Project @feature C&C4-style terrain
+		Sage2TerrainAtlasClass::Release();	// Tiberium Project @feature C&C4 terrain texture atlases
 #endif
 
 		for (int a=0;a<MAX_TEXTURE_STAGES;++a)

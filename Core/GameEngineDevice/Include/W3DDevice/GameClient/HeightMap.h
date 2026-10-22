@@ -93,9 +93,11 @@ protected:
 	DX8VertexBufferClass **m_vertexBufferTiles; ///<collection of smaller vertex buffers that make up 1 heightmap
 	VERTEX_FORMAT *m_vertexBufferBackup; ///< In memory copy of the vertex buffer data for quick update of dynamic lighting.
 #ifdef RTS_RENDERER_D3D9
-	// Tiberium Project @feature the height-field normal of every vertex (parallel to m_vertexBufferBackup)
-	// and, per tile, a count of rewrites, for the C&C4-style terrain's normal stream
-	Vector3 *m_sideNormals;
+	// Tiberium Project @feature per vertex (parallel to m_vertexBufferBackup): the height-field normal
+	// and the C&C4 atlas slots of the cell's base and blend terrains, the C&C4-style terrain's second
+	// vertex stream; per tile, a count of rewrites
+	struct SideVertex { Vector3 normal; Real baseSlot; Real blendSlot; };
+	SideVertex *m_sideNormals;
 	UnsignedInt *m_sideNormalVersions;
 #endif
 	Int m_originX; ///<  Origin point in the grid.  Slides around.

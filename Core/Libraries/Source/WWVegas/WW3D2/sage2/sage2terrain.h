@@ -24,7 +24,9 @@
 // C&C4's own terrain shader): the deferred depth/normal pre-pass over every tile, C&C4's
 // directional light over the screen, then the tiles lit from the light buffers in linear light
 // with the cloud layer, written sRGB like the objects. The height-field normal the renderer
-// computes for each vertex rides in a second vertex stream kept here.
+// computes for each vertex rides in a second vertex stream kept here, with the atlas slots of
+// the C&C4 textures that stand in for the cell's terrains (Sage2TerrainAtlasClass), which the
+// effect samples world-aligned, every eight cells, as C&C4 does.
 
 #pragma once
 
@@ -37,7 +39,8 @@ class TextureClass;
 class Sage2TerrainClass
 {
 public:
-	/// One vertex buffer tile of the terrain and the normals of its vertices (3 floats each);
+	/// One vertex buffer tile of the terrain and its side data: per vertex the normal (3 floats)
+	/// and the C&C4 atlas slots of the cell's base and blend terrains (2 floats, -1 for none);
 	/// 'version' changes whenever the renderer rewrote the tile's vertices
 	struct Tile
 	{
@@ -45,11 +48,15 @@ public:
 		const float* normals;
 		unsigned version;
 	};
+	/// floats per vertex in 'normals'
+	enum { SIDE_FLOATS = 5 };
 
 	static void Set_Enabled(bool enabled);
 	static bool Is_Enabled();
 	/// How much Zero Hour's tile colours are lifted for linear-light rendering (1 = as painted)
 	static void Set_Albedo_Scale(float scale);
+	/// World units one C&C4 terrain texture spans (80: eight cells, as in C&C4)
+	static void Set_Tile_World_Size(float size);
 
 	/// Draws the tiles (all with 'vertexCount' vertices and 'polygonCount' triangles, sharing the
 	/// index buffer) textured from the atlas. Returns false when the effect is not available, in

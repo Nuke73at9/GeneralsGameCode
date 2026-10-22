@@ -24,6 +24,7 @@
 #pragma once
 
 #include <d3d9.h>
+#include <vector>
 
 class Sage2TextureClass
 {
@@ -31,6 +32,9 @@ public:
 	/// The texture of that name (<name>.dds through the game's file factory), or null when it is
 	/// missing or in a format not handled; a missing texture is asked for only once.
 	static IDirect3DBaseTexture9* Get(const char* name);
+	/// The top level of a 2D texture (<name>.dds) as 8-bit BGRA pixels, decoded from 32-bit or DXT1/3/5
+	/// data; false when it is missing or in another format. Not cached.
+	static bool Load_Pixels(const char* name, unsigned& width, unsigned& height, std::vector<unsigned char>& bgra);
 	/// Releases every texture (before the device goes away).
 	static void Shutdown();
 };

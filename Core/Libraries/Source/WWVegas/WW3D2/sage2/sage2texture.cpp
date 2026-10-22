@@ -221,6 +221,123 @@ namespace
 	}
 }
 
+namespace
+{
+	void Decode_565(unsigned c, unsigned char* rgb)
+	{
+		rgb[0] = (unsigned char)(((c >> 11) & 31) * 255 / 31);
+		rgb[1] = (unsigned char)(((c >> 5) & 63) * 255 / 63);
+		rgb[2] = (unsigned char)((c & 31) * 255 / 31);
+	}
+
+	// one DXT1 colour block (8 bytes) into 4x4 BGRA pixels; alphaBlock: the DXT5 alpha block or null
+	void Decode_Block(const unsigned char* block, const unsigned char* alphaBlock, bool dxt1, unsigned char* dst, unsigned pitch)
+	{
+		unsigned c0 = block[0] | (block[1] << 8), c1 = block[2] | (block[3] << 8);
+		unsigned char pal[4][4];
+		Decode_565(c0, pal[0]); Decode_565(c1, pal[1]);
+		bool fourColour = !dxt1 || c0 > c1;
+		for (int k = 0; k < 3; ++k)
+		{
+			pal[2][k] = fourColour ? (unsigned char)((2 * pal[0][k] + pal[1][k]) / 3) : (unsigned char)((pal[0][k] + pal[1][k]) / 2);
+			pal[3][k] = fourColour ? (unsigned char)((pal[0][k] + 2 * pal[1][k]) / 3) : 0;
+		}
+		pal[0][3] = pal[1][3] = pal[2][3] = 255;
+		pal[3][3] = fourColour ? 255 : 0;
+		unsigned bits = block[4] | (block[5] << 8) | (block[6] << 16) | ((unsigned)block[7] << 24);
+		unsigned char alpha[16];
+		if (alphaBlock != nullptr)
+		{
+			unsigned a0 = alphaBlock[0], a1 = alphaBlock[1];
+			unsigned char ramp[8];
+			ramp[0] = (unsigned char)a0; ramp[1] = (unsigned char)a1;
+			if (a0 > a1)
+				for (int i = 1; i < 7; ++i) ramp[i + 1] = (unsigned char)(((7 - i) * a0 + i * a1) / 7);
+			else
+			{
+				for (int i = 1; i < 5; ++i) ramp[i + 1] = (unsigned char)(((5 - i) * a0 + i * a1) / 5);
+				ramp[6] = 0; ramp[7] = 255;
+			}
+			unsigned long long abits = 0;
+			for (int i = 0; i < 6; ++i)
+				abits |= (unsigned long long)alphaBlock[2 + i] << (8 * i);
+			for (int i = 0; i < 16; ++i)
+				alpha[i] = ramp[(abits >> (3 * i)) & 7];
+		}
+		for (int y = 0; y < 4; ++y)
+			for (int x = 0; x < 4; ++x)
+			{
+				const unsigned char* p = pal[(bits >> (2 * (y * 4 + x))) & 3];
+				unsigned char* o = dst + y * pitch + x * 4;
+				o[0] = p[2]; o[1] = p[1]; o[2] = p[0];
+				o[3] = alphaBlock != nullptr ? alpha[y * 4 + x] : p[3];
+			}
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+bool Sage2TextureClass::Load_Pixels(const char* name, unsigned& width, unsigned& height, std::vector<unsigned char>& bgra)
+{
+	bgra.clear();
+	if (name == nullptr || name[0] == '\0')
+		return false;
+	std::string key(name);
+	for (size_t i = 0; i < key.size(); ++i)
+		key[i] = (char)tolower((unsigned char)key[i]);
+	std::vector<unsigned char> data;
+	if (!Read_File(key + ".dds", data) && !Read_File("Art\\Textures\\" + key + ".dds", data))
+		return false;
+	if (data.size() < 128 || memcmp(&data[0], "DDS ", 4) != 0)
+		return false;
+	const unsigned* h = (const unsigned*)&data[4];
+	height = h[2]; width = h[3];
+	D3DFORMAT format = Pixel_Format(h[19], h[20], h[21], h[22], h[23], h[24], h[25]);
+	const unsigned char* src = &data[128];
+	size_t left = data.size() - 128;
+	if (width == 0 || height == 0)
+		return false;
+	bgra.resize((size_t)width * height * 4);
+	if (format == D3DFMT_A8R8G8B8 || format == D3DFMT_X8R8G8B8)
+	{
+		if (left < bgra.size())
+			return false;
+		memcpy(&bgra[0], src, bgra.size());
+		if (format == D3DFMT_X8R8G8B8)
+			for (size_t i = 3; i < bgra.size(); i += 4)
+				bgra[i] = 255;
+		return true;
+	}
+	if (format == D3DFMT_DXT1 || format == D3DFMT_DXT3 || format == D3DFMT_DXT5)
+	{
+		bool dxt1 = format == D3DFMT_DXT1;
+		unsigned blockBytes = dxt1 ? 8 : 16;
+		unsigned bw = (width + 3) / 4, bh = (height + 3) / 4;
+		if (left < (size_t)bw * bh * blockBytes || (width % 4) != 0 || (height % 4) != 0)
+			return false;
+		for (unsigned by = 0; by < bh; ++by)
+			for (unsigned bx = 0; bx < bw; ++bx)
+			{
+				const unsigned char* block = src + ((size_t)by * bw + bx) * blockBytes;
+				unsigned char* dst = &bgra[((size_t)by * 4 * width + bx * 4) * 4];
+				if (format == D3DFMT_DXT3)
+				{
+					// 4-bit alpha, then the colour block
+					Decode_Block(block + 8, nullptr, false, dst, width * 4);
+					for (int y = 0; y < 4; ++y)
+						for (int x = 0; x < 4; ++x)
+						{
+							unsigned a = (block[y * 2 + x / 2] >> ((x & 1) * 4)) & 15;
+							dst[(y * width + x) * 4 + 3] = (unsigned char)(a * 17);
+						}
+				}
+				else
+					Decode_Block(dxt1 ? block : block + 8, dxt1 ? nullptr : block, dxt1, dst, width * 4);
+			}
+		return true;
+	}
+	return false;
+}
+
 //-------------------------------------------------------------------------------------------------
 IDirect3DBaseTexture9* Sage2TextureClass::Get(const char* name)
 {

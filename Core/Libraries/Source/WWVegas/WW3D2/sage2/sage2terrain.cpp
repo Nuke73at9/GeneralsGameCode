@@ -30,6 +30,7 @@
 #include "sage2globals.h"
 #include "sage2material.h"
 #include "sage2scene.h"
+#include "sage2terrainatlas.h"
 #include "shader.h"
 #include "texture.h"
 #include "textureloader.h"
@@ -40,13 +41,14 @@ namespace
 
 	bool s_enabled = true;
 	float s_albedoScale = 1.6f;
+	float s_tileWorldSize = 80.0f;		// a C&C4 texture spans eight cells
 	InitState s_state = NOT_TRIED;
 	Sage2EffectClass* s_effect = nullptr;
 	int s_techDefault = -1, s_techForward = -1, s_techPrepass = -1;
 
 	const unsigned TERRAIN_STRIDE = 32;		// x y z, diffuse, u1 v1, u2 v2
 	const unsigned NORMAL_STREAM = 1;
-	const unsigned NORMAL_STRIDE = 12;
+	const unsigned NORMAL_STRIDE = Sage2TerrainClass::SIDE_FLOATS * 4;	// normal, base slot, blend slot
 
 	IDirect3DVertexDeclaration9* s_declaration = nullptr;
 	IDirect3DVertexBuffer9* s_normals = nullptr;		// every tile's normals, one after the other
@@ -80,6 +82,7 @@ namespace
 			{ 0, 16, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
 			{ 0, 24, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 1 },
 			{ (WORD)NORMAL_STREAM, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL, 0 },
+			{ (WORD)NORMAL_STREAM, 12, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 2 },
 			D3DDECL_END()
 		};
 		if (FAILED(device->CreateVertexDeclaration(el, &s_declaration)))
@@ -161,6 +164,7 @@ namespace
 void Sage2TerrainClass::Set_Enabled(bool enabled) { s_enabled = enabled; }
 bool Sage2TerrainClass::Is_Enabled() { return s_enabled; }
 void Sage2TerrainClass::Set_Albedo_Scale(float scale) { s_albedoScale = scale > 0.0f ? scale : 1.0f; }
+void Sage2TerrainClass::Set_Tile_World_Size(float size) { s_tileWorldSize = size > 1.0f ? size : 80.0f; }
 
 //-------------------------------------------------------------------------------------------------
 bool Sage2TerrainClass::Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuffer, const Tile* tiles, int tileCount,
@@ -183,6 +187,14 @@ bool Sage2TerrainClass::Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuff
 	Sage2GlobalsClass::Apply(*s_effect, drawState);
 	s_effect->Set_Texture("BaseSampler", atlasTexture);
 	s_effect->Set_Float1("AlbedoScale", s_albedoScale);
+	// the C&C4 textures of this map, world-aligned by slot; none: every slot is -1 and the tiles show
+	IDirect3DBaseTexture9* c4Color = Sage2TerrainAtlasClass::Get_Color();
+	IDirect3DBaseTexture9* c4Normal = Sage2TerrainAtlasClass::Get_Normal();
+	s_effect->Set_Texture("AtlasColor", c4Color);
+	s_effect->Set_Texture("AtlasNormal", c4Normal);
+	float atlasParams[4] = { (float)Sage2TerrainAtlasClass::Get_Slots_Per_Row(), Sage2TerrainAtlasClass::Get_Slot_Size(),
+		Sage2TerrainAtlasClass::Get_Slot_Border(), s_tileWorldSize };
+	s_effect->Set_Float("AtlasParams", atlasParams, 4);
 	device8->Set_Vertex_Declaration_Override(s_declaration);
 
 	// the deferred chain over the whole terrain, then the tiles lit from the light buffers

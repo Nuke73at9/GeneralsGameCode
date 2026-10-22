@@ -40,6 +40,40 @@ SAMPLER_2D_BEGIN( BaseSampler,
 	AddressV = Clamp;
 SAMPLER_2D_END
 
+// C&C4's own terrain textures standing in for the map's terrains, one 256-pixel slot each with a
+// border (Sage2TerrainAtlasClass); sampled world-aligned by slot, every AtlasParams.w world units
+SAMPLER_2D_BEGIN( AtlasColor,
+	string UIWidget = "None";
+	string SasBindAddress = "Terrain.CNC4.Color";
+	)
+	MinFilter = Linear;
+	MagFilter = Linear;
+	MipFilter = Linear;
+	AddressU = Clamp;
+	AddressV = Clamp;
+SAMPLER_2D_END
+
+SAMPLER_2D_BEGIN( AtlasNormal,
+	string UIWidget = "None";
+	string SasBindAddress = "Terrain.CNC4.Normal";
+	)
+	MinFilter = Linear;
+	MagFilter = Linear;
+	MipFilter = Linear;
+	AddressU = Clamp;
+	AddressV = Clamp;
+SAMPLER_2D_END
+
+// x: slots per atlas row, y: a slot's inner size, z: its border (both in atlas texture coordinates),
+// w: world units one texture spans (80 = eight cells, as in C&C4)
+float4 AtlasParams
+<
+	string UIWidget = "None";
+	string SasBindAddress = "Terrain.CNC4.AtlasParams";
+> = float4(7, 0.125, 0.00390625, 80);
+
+static const float BumpScale = 0.75;	// C&C4's terrain, High
+
 SAMPLER_2D_BEGIN( CloudTexture,
 	string UIWidget = "None";
 	string SasBindAddress = "Terrain.Cloud.Texture";
@@ -87,15 +121,65 @@ struct VSInput
 	float2 BaseTexCoord : TEXCOORD0;
 	float2 BlendTexCoord : TEXCOORD1;
 	float3 Normal : NORMAL;
+	float2 Slots : TEXCOORD2;		// C&C4 atlas slots of the base and blend terrains, -1 for none
 };
 
-// the atlas: the base tile, then the blend tile over it by the product of its alpha edge and the
-// vertex alpha (how Zero Hour's second fixed-function pass blends it)
-float4 SampleTerrain(float2 baseTexCoord, float2 blendTexCoord, float vertexAlpha)
+// one world-aligned C&C4 texture: colour (linear), specular mask and tangent-space normal
+void SampleC4(float slot, float2 worldXY, out float3 color, out float spec, out float3 normalTS)
 {
-	float4 base = tex2D(SAMPLER(BaseSampler), baseTexCoord);
-	float4 blend = tex2D(SAMPLER(BaseSampler), blendTexCoord);
-	return float4(lerp(base.xyz, blend.xyz, blend.w * vertexAlpha), 1.0);
+	float2 w = worldXY / AtlasParams.w;
+	float2 f = frac(w);
+	f.y = 1.0 - f.y;		// the texture's top row lies at the larger world y, as C&C4 maps it
+	float pitch = AtlasParams.y + 2.0 * AtlasParams.z;
+	float row = floor((slot + 0.5) / AtlasParams.x);
+	float col = slot - row * AtlasParams.x;
+	float2 uv = float2(col, row) * pitch + AtlasParams.z + f * AtlasParams.y;
+	// gradients from the unwrapped coordinate, so the mip level does not jump at the wrap
+	float2 dx = ddx(w) * AtlasParams.y;
+	float2 dy = ddy(w) * AtlasParams.y;
+	float4 c = tex2Dgrad(SAMPLER(AtlasColor), uv, dx, dy);
+	float4 n = tex2Dgrad(SAMPLER(AtlasNormal), uv, dx, dy);
+	color = GammaToLinear(c.xyz);
+	spec = c.w;
+	normalTS = n.xyz * 2.0 - 1.0;
+}
+
+// The ground at a pixel: Zero Hour's base tile and blend tile from the atlas, each replaced by its
+// C&C4 texture where the map's terrain has one, blended by the tile's alpha edge times the vertex
+// alpha (how Zero Hour's second fixed-function pass blends). Colour in linear light, with the
+// specular mask and the tangent-space normal (flat where a Zero Hour tile stays).
+void SampleGround(float2 baseTexCoord, float2 blendTexCoord, float vertexAlpha, float2 slots, float2 worldXY,
+	out float3 color, out float spec, out float3 normalTS)
+{
+	float4 zhBase = tex2D(SAMPLER(BaseSampler), baseTexCoord);
+	float4 zhBlend = tex2D(SAMPLER(BaseSampler), blendTexCoord);
+	float3 cBase, cBlend, nBase, nBlend;
+	float sBase, sBlend;
+	SampleC4(max(slots.x, 0.0), worldXY, cBase, sBase, nBase);
+	SampleC4(max(slots.y, 0.0), worldXY, cBlend, sBlend, nBlend);
+	float hasBase = slots.x >= 0.0 ? 1.0 : 0.0;
+	float hasBlend = slots.y >= 0.0 ? 1.0 : 0.0;
+	float3 flat = float3(0, 0, 1);
+	cBase = lerp(GammaToLinear(zhBase.xyz) * AlbedoScale, cBase, hasBase);
+	cBlend = lerp(GammaToLinear(zhBlend.xyz) * AlbedoScale, cBlend, hasBlend);
+	nBase = lerp(flat, nBase, hasBase);
+	nBlend = lerp(flat, nBlend, hasBlend);
+	sBase = lerp(0.0, sBase, hasBase);
+	sBlend = lerp(0.0, sBlend, hasBlend);
+	float w = zhBlend.w * vertexAlpha;
+	color = lerp(cBase, cBlend, w);
+	spec = lerp(sBase, sBlend, w);
+	normalTS = normalize(lerp(nBase, nBlend, w));
+}
+
+// the bumped world normal, with C&C4's terrain tangent frame
+float3 BumpedNormal(float3 normalTS, float3 worldNormal)
+{
+	float3 n = normalize(worldNormal);
+	float3 tangent = cross(n, float3(-1, 0, 0));
+	float3 binormal = cross(n, float3(0, 1, 0));
+	normalTS.xy *= BumpScale;
+	return normalize(mul(normalTS, float3x3(-binormal, -tangent, n)));
 }
 
 // ============================================================================
@@ -106,6 +190,9 @@ struct VSOutput_CreateDepthNormalMap
 	float4 Position : POSITION;
 	float3 Normal : TEXCOORD0;
 	float Depth : TEXCOORD1;
+	float4 BaseTexCoord_BlendTexCoord : TEXCOORD2;
+	float4 WorldXY_Slots : TEXCOORD3;
+	float BlendAlpha : TEXCOORD4;
 };
 
 struct PSOutput_CreateDepthNormalMap
@@ -120,13 +207,20 @@ VSOutput_CreateDepthNormalMap VS_CreateDepthNormalMap(VSInput In)
 	Out.Position = mul(float4(In.Position, 1), ViewProjection);
 	Out.Normal = In.Normal;
 	Out.Depth = Out.Position.z / Out.Position.w;
+	Out.BaseTexCoord_BlendTexCoord = float4(In.BaseTexCoord, In.BlendTexCoord);
+	Out.WorldXY_Slots = float4(In.Position.xy, In.Slots);
+	Out.BlendAlpha = In.Color.w;
 	return Out;
 }
 
 PSOutput_CreateDepthNormalMap PS_CreateDepthNormalMap(VSOutput_CreateDepthNormalMap In)
 {
 	PSOutput_CreateDepthNormalMap Out;
-	float3 normal = normalize(In.Normal);
+	float3 color, normalTS;
+	float spec;
+	SampleGround(In.BaseTexCoord_BlendTexCoord.xy, In.BaseTexCoord_BlendTexCoord.zw, In.BlendAlpha, In.WorldXY_Slots.zw, In.WorldXY_Slots.xy,
+		color, spec, normalTS);
+	float3 normal = BumpedNormal(normalTS, In.Normal);
 	Out.NormalSpec = float4((normal + 1.0f) * 0.5f, saturate(SpecularExponent / 255.0f));
 	Out.Depth = In.Depth;
 	return Out;
@@ -155,6 +249,7 @@ struct VSOutputDefault
 	float4 Position : POSITION;
 	float4 BaseTexCoord_BlendTexCoord : TEXCOORD0;
 	float4 MacroTexCoord_Fog_BlendAlpha : TEXCOORD1;
+	float4 WorldXY_Slots : TEXCOORD2;
 };
 
 VSOutputDefault VS_Default(VSInput In)
@@ -165,16 +260,19 @@ VSOutputDefault VS_Default(VSInput In)
 	Out.MacroTexCoord_Fog_BlendAlpha.xy = In.Position.xy * MacroScale;
 	Out.MacroTexCoord_Fog_BlendAlpha.z = CalculateFog(Fog, In.Position, EyePosition);
 	Out.MacroTexCoord_Fog_BlendAlpha.w = In.Color.w;
+	Out.WorldXY_Slots = float4(In.Position.xy, In.Slots);
 	return Out;
 }
 
 float4 PS_Default(VSOutputDefault In, float2 vPos : PIXELLOC) : COLOR
 {
-	float4 terrain = SampleTerrain(In.BaseTexCoord_BlendTexCoord.xy, In.BaseTexCoord_BlendTexCoord.zw, In.MacroTexCoord_Fog_BlendAlpha.w);
-	float3 baseColor = GammaToLinear(terrain.xyz) * AlbedoScale;
+	float3 baseColor, normalTS;
+	float spec;
+	SampleGround(In.BaseTexCoord_BlendTexCoord.xy, In.BaseTexCoord_BlendTexCoord.zw, In.MacroTexCoord_Fog_BlendAlpha.w,
+		In.WorldXY_Slots.zw, In.WorldXY_Slots.xy, baseColor, spec, normalTS);
 	float2 screenTexCoord = GetScreenTexcoordCoord(vPos);
 	float3 color = (SampleDiffuseLight(screenTexCoord) + AmbientLightColor) * baseColor
-		+ SampleSpecularLight(screenTexCoord) * SpecularColor * 0.15;
+		+ SampleSpecularLight(screenTexCoord) * SpecularColor * spec;
 	float3 macro = GammaToLinear(tex2D(SAMPLER(MacroSampler), In.MacroTexCoord_Fog_BlendAlpha.xy).xyz);
 	color *= macro;
 	color = lerp(Fog.Color.xyz, color, In.MacroTexCoord_Fog_BlendAlpha.z);
@@ -206,6 +304,7 @@ struct VSOutput_M
 	float4 CloudTexCoord_MacroTexCoord : TEXCOORD1;
 	float4 Normal_Fog : TEXCOORD2;
 	float4 WorldPosition_BlendAlpha : TEXCOORD3;
+	float2 Slots : TEXCOORD4;
 };
 
 VSOutput_M VS_Default_M(VSInput In)
@@ -218,14 +317,17 @@ VSOutput_M VS_Default_M(VSInput In)
 	Out.Normal_Fog.xyz = In.Normal;
 	Out.Normal_Fog.w = CalculateFog(Fog, In.Position, EyePosition);
 	Out.WorldPosition_BlendAlpha = float4(In.Position, In.Color.w);
+	Out.Slots = In.Slots;
 	return Out;
 }
 
 float4 PS_Default_M(VSOutput_M In) : COLOR
 {
-	float4 terrain = SampleTerrain(In.BaseTexCoord_BlendTexCoord.xy, In.BaseTexCoord_BlendTexCoord.zw, In.WorldPosition_BlendAlpha.w);
-	float3 baseColor = GammaToLinear(terrain.xyz) * AlbedoScale;
-	float3 normal = normalize(In.Normal_Fog.xyz);
+	float3 baseColor, normalTS;
+	float spec;
+	SampleGround(In.BaseTexCoord_BlendTexCoord.xy, In.BaseTexCoord_BlendTexCoord.zw, In.WorldPosition_BlendAlpha.w,
+		In.Slots, In.WorldPosition_BlendAlpha.xy, baseColor, spec, normalTS);
+	float3 normal = BumpedNormal(normalTS, In.Normal_Fog.xyz);
 	float3 cloud = GammaToLinear(tex2D(SAMPLER(CloudTexture), In.CloudTexCoord_MacroTexCoord.xy).xyz);
 	float3 light = AmbientLightColor
 		+ DirectionalLight_0_Color.xyz * cloud * max(0, dot(normal, DirectionalLight_0_Direction.xyz))

@@ -340,9 +340,10 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, VERTEX_FORMAT *
 		VERTEX_FORMAT *vBase = data;
 #ifdef RTS_RENDERER_D3D9
 		// Tiberium Project @feature the normals are kept beside the backup, same layout; the tile's version moves on
-		Vector3 *sideNormalBase = m_sideNormals + (data - m_vertexBufferBackup);
+		SideVertex *sideNormalBase = m_sideNormals + (data - m_vertexBufferBackup);
 		m_sideNormalVersions[(data - m_vertexBufferBackup) / HEIGHTMAP_VERTEX_NUM]++;
-#define STORE_SIDE_NORMAL(v) (sideNormalBase[(v) - vBase] = normalAtTexel)
+		Int cnc4Base = -1, cnc4Blend = -1;
+#define STORE_SIDE_NORMAL(v) (sideNormalBase[(v) - vBase].normal = normalAtTexel, sideNormalBase[(v) - vBase].baseSlot = (Real)cnc4Base, sideNormalBase[(v) - vBase].blendSlot = (Real)cnc4Blend)
 #else
 #define STORE_SIDE_NORMAL(v) ((void)0)
 #endif
@@ -384,6 +385,9 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, VERTEX_FORMAT *
 
 				pMap->getUVData(mapX, mapY, U, V);
 				pMap->getAlphaUVData(mapX, mapY, UA, VA, alpha, &flipForBlend);
+#ifdef RTS_RENDERER_D3D9
+				pMap->getCNC4Slots(mapX, mapY, &cnc4Base, &cnc4Blend);
+#endif
 
 				//top-left sample
 				l2r.Set(2*MAP_XY_FACTOR,0,MAP_HEIGHT_SCALE*(pMap->getDisplayHeight(mapX+cellOffset, mapY) - pMap->getDisplayHeight(un0, mapY)));
@@ -500,8 +504,8 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, VERTEX_FORMAT *
 					pCurVertices[2] = pCurVertices[3];
 					pCurVertices[3] = tmpVertex;
 #ifdef RTS_RENDERER_D3D9
-					Vector3 *normals = sideNormalBase + (pCurVertices - vBase);	// Tiberium Project @feature the normals turn with the vertices
-					Vector3 tmpNormal = normals[0];
+					SideVertex *normals = sideNormalBase + (pCurVertices - vBase);	// Tiberium Project @feature the normals turn with the vertices
+					SideVertex tmpNormal = normals[0];
 					normals[0] = normals[1];
 					normals[1] = normals[2];
 					normals[2] = normals[3];
@@ -1364,10 +1368,13 @@ Int HeightMapRenderObjClass::initHeightData(Int x, Int y, WorldHeightMap *pMap, 
 		m_vertexBufferTiles = NEW DX8VertexBufferClass*[m_numVertexBufferTiles];
 		m_vertexBufferBackup = NEW VERTEX_FORMAT [m_numVertexBufferTiles * HEIGHTMAP_VERTEX_NUM];
 #ifdef RTS_RENDERER_D3D9
-		m_sideNormals = NEW Vector3 [m_numVertexBufferTiles * HEIGHTMAP_VERTEX_NUM];
+		m_sideNormals = NEW SideVertex [m_numVertexBufferTiles * HEIGHTMAP_VERTEX_NUM];
 		m_sideNormalVersions = NEW UnsignedInt [m_numVertexBufferTiles];
-		for (i=0; i<m_numVertexBufferTiles * HEIGHTMAP_VERTEX_NUM; i++)
-			m_sideNormals[i].Set(0, 0, 1);
+		for (i=0; i<m_numVertexBufferTiles * HEIGHTMAP_VERTEX_NUM; i++) {
+			m_sideNormals[i].normal.Set(0, 0, 1);
+			m_sideNormals[i].baseSlot = -1.0f;
+			m_sideNormals[i].blendSlot = -1.0f;
+		}
 		for (i=0; i<m_numVertexBufferTiles; i++)
 			m_sideNormalVersions[i] = 0;
 #endif
@@ -2076,7 +2083,7 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 			for (Int t = 0; t < m_numVertexBufferTiles; t++)
 			{
 				tiles[t].vertexBuffer = m_vertexBufferTiles[t];
-				tiles[t].normals = &m_sideNormals[t * HEIGHTMAP_VERTEX_NUM].X;
+				tiles[t].normals = &m_sideNormals[t * HEIGHTMAP_VERTEX_NUM].normal.X;
 				tiles[t].version = m_sideNormalVersions[t];
 			}
 			if (Sage2TerrainClass::Draw(m_stageZeroTexture, m_indexBuffer, &tiles[0], m_numVertexBufferTiles, HEIGHTMAP_VERTEX_NUM, HEIGHTMAP_POLYGON_NUM))
