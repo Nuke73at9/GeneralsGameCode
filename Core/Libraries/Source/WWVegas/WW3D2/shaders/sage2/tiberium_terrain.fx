@@ -129,6 +129,29 @@ float2 ShroudUV(float2 worldXY)
 	return (worldXY + ShroudParams.xy) * ShroudParams.zw;
 }
 
+// C&C4's terrain top view: the scorch marks painted into a map-wide texture before the frame
+// (premultiplied, linear light), folded into the albedo here before lighting as Terrain.fxh does;
+// transparent when the map has none
+SAMPLER_2D_BEGIN( TopViewTexture,
+	string UIWidget = "None";
+	string SasBindAddress = "Terrain.TopViewTexture";
+	)
+	MinFilter = Linear;
+	MagFilter = Linear;
+	MipFilter = None;
+	AddressU = Clamp;
+	AddressV = Clamp;
+SAMPLER_2D_END
+
+// the ground's colour and specular with the marks over it (Terrain.fxh: no specular under a burn);
+// ScorchMarkUVOffsetMultiplier and CalcTerrainTopViewTexCoord are Common.fxh's
+void ApplyTopView(float2 worldXY, inout float3 color, inout float spec)
+{
+	float4 mark = tex2D(SAMPLER(TopViewTexture), CalcTerrainTopViewTexCoord(worldXY));
+	color = color * (1.0 - mark.w) + mark.xyz;
+	spec *= 1.0 - mark.w;
+}
+
 // Zero Hour's tiles were painted for its gamma-space fixed-function lighting; lit in linear light
 // they read dark next to C&C4's art, so their albedo is lifted (1 = as painted)
 float AlbedoScale
@@ -334,6 +357,7 @@ float4 PS_Default(VSOutputDefault In, float2 vPos : PIXELLOC) : COLOR
 	float spec;
 	SampleGround(In.BaseTexCoord_BlendTexCoord.xy, In.BaseTexCoord_BlendTexCoord.zw, In.MacroTexCoord_Fog_BlendAlpha.w,
 		In.WorldXY_Slots.zw, In.WorldXY_Slots.xy, baseColor, spec, normalTS);
+	ApplyTopView(In.WorldXY_Slots.xy, baseColor, spec);
 	float2 screenTexCoord = GetScreenTexcoordCoord(vPos);
 	float3 color = (SampleDiffuseLight(screenTexCoord) + AmbientLightColor) * baseColor
 		+ SampleSpecularLight(screenTexCoord) * SpecularColor * spec;
@@ -394,6 +418,7 @@ float4 PS_Default_M(VSOutput_M In) : COLOR
 	float spec;
 	SampleGround(In.BaseTexCoord_BlendTexCoord.xy, In.BaseTexCoord_BlendTexCoord.zw, In.WorldPosition_BlendAlpha.w,
 		In.Slots, In.WorldPosition_BlendAlpha.xy, baseColor, spec, normalTS);
+	ApplyTopView(In.WorldPosition_BlendAlpha.xy, baseColor, spec);
 	float3 normal = BumpedNormal(normalTS, In.Normal_Fog.xyz);
 	float3 cloud = GammaToLinear(tex2D(SAMPLER(CloudTexture), In.CloudTexCoord_MacroTexCoord.xy).xyz);
 	float3 light = AmbientLightColor

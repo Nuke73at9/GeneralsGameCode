@@ -21,6 +21,7 @@
 #include "sage2globals.h"
 #include "sage2shadow.h"
 #include "sage2texture.h"
+#include "sage2topview.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -97,6 +98,9 @@ namespace
 		{ "ShadowMapWorldToShadow", SAGE2_BIND_SHADOW_WORLD_TO_SHADOW },
 		{ "Shadowmap_Zero_Zero_OneOverMapSize_OneOverMapSize", SAGE2_BIND_SHADOW_MAP_TEXEL },
 		{ "SoftShadowParms", SAGE2_BIND_SOFT_SHADOW_PARMS },
+		{ "TopViewTexture", SAGE2_BIND_TEXTURE_TOP_VIEW },
+		{ "TerrainTopViewTexture", SAGE2_BIND_TEXTURE_TOP_VIEW },
+		{ "ScorchMarkUVOffsetMultiplier", SAGE2_BIND_SCORCH_UV },
 		{ "CloudTexture", SAGE2_BIND_TEXTURE_CLOUD },
 		{ "CloudSampler", SAGE2_BIND_TEXTURE_CLOUD },
 		{ "Cloud_WorldPositionMultiplier_XYZZ", SAGE2_BIND_CLOUD_MULTIPLIER },
@@ -140,6 +144,8 @@ namespace
 		{ "Sas.Shadow[0].Zero_Zero_OneOverMapSize_OneOverMapSize", SAGE2_BIND_SHADOW_MAP_TEXEL },
 		{ "WW3D.SoftShadowParms", SAGE2_BIND_SOFT_SHADOW_PARMS },
 		{ "Sas.HasShadow", SAGE2_BIND_HAS_SHADOW },
+		{ "Terrain.TopViewTexture", SAGE2_BIND_TEXTURE_TOP_VIEW },
+		{ "Terrain.ScorchMarkUVOffsetMultiplier", SAGE2_BIND_SCORCH_UV },
 		{ "Terrain.Cloud.Texture", SAGE2_BIND_TEXTURE_CLOUD },
 		{ "Terrain.Cloud.WorldPositionMultiplier_XYZZ", SAGE2_BIND_CLOUD_MULTIPLIER },
 		{ "Terrain.Cloud.CurrentOffsetUV", SAGE2_BIND_CLOUD_OFFSET },
@@ -164,6 +170,7 @@ namespace
 	IDirect3DTexture9* s_white = nullptr;
 	IDirect3DTexture9* s_black = nullptr;
 	IDirect3DTexture9* s_grey = nullptr;
+	IDirect3DTexture9* s_clear = nullptr;		// transparent black
 	IDirect3DCubeTexture9* s_environment = nullptr;
 
 	// the named C&C4 texture from the mod, or the stand-in when it is not there
@@ -185,6 +192,7 @@ namespace
 			case SAGE2_BIND_TEXTURE_ENV_NOD: effect.Set_Texture(i, Texture_Or("nod_env_cube", s_environment)); return true;
 			case SAGE2_BIND_TEXTURE_CLOUD: effect.Set_Texture(i, Texture_Or("tscloudmed", s_white)); return true;
 			case SAGE2_BIND_TEXTURE_SHADOW_MAP: effect.Set_Texture(i, Sage2ShadowClass::Is_Available() ? Sage2ShadowClass::Get_Texture() : s_white); return true;
+			case SAGE2_BIND_TEXTURE_TOP_VIEW: effect.Set_Texture(i, Sage2TopViewClass::Is_Available() ? Sage2TopViewClass::Get_Texture() : s_clear); return true;
 			case SAGE2_BIND_TEXTURE_DEFERRED_DIFFUSE: effect.Set_Texture(i, s_deferredDiffuse ? s_deferredDiffuse : s_grey); return true;
 			case SAGE2_BIND_TEXTURE_DEFERRED_SPECULAR: effect.Set_Texture(i, s_deferredSpecular ? s_deferredSpecular : s_black); return true;
 			case SAGE2_BIND_TEXTURE_DEPTH: effect.Set_Texture(i, s_depth ? s_depth : s_white); return true;
@@ -244,6 +252,7 @@ namespace
 		s_white = Make_Flat(device, 0xFFFFFFFF);
 		s_black = Make_Flat(device, 0xFF000000);
 		s_grey = Make_Flat(device, 0xFF808080);
+		s_clear = Make_Flat(device, 0x00000000);
 		s_environment = Make_Environment(device);
 	}
 
@@ -527,6 +536,11 @@ void Sage2GlobalsClass::Apply(Sage2EffectClass& effect, const Sage2DrawState& dr
 				v[2] = 1.0f;	// ENABLE_SOFTSHADOW_TOGGLE builds: soft on
 				effect.Set_Float(i, v, 4);
 				break;
+			case SAGE2_BIND_SCORCH_UV:
+				if (Sage2TopViewClass::Is_Available())
+					Sage2TopViewClass::Get_Mapping(v[0], v[1], v[2], v[3]);
+				effect.Set_Float(i, v, 4);
+				break;
 			case SAGE2_BIND_CLOUD_MULTIPLIER:
 				// C&C4's cloud layer: the texture repeats about every 1600 world units
 				v[0] = v[1] = 1.0f / 1600.0f; v[2] = v[3] = 0.0f;
@@ -572,8 +586,9 @@ void Sage2GlobalsClass::Shutdown()
 	if (s_white) s_white->Release();
 	if (s_black) s_black->Release();
 	if (s_grey) s_grey->Release();
+	if (s_clear) s_clear->Release();
 	if (s_environment) s_environment->Release();
-	s_white = s_black = s_grey = nullptr;
+	s_white = s_black = s_grey = s_clear = nullptr;
 	s_environment = nullptr;
 	s_standInsTried = false;
 	s_deferredDiffuse = s_deferredSpecular = s_depth = s_normalSpec = s_depthBuffer = nullptr;

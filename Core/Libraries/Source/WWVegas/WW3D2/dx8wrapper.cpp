@@ -59,6 +59,7 @@
 #include "sage2/sage2texture.h"
 #include "sage2/sage2terrain.h"
 #include "sage2/sage2shadow.h"
+#include "sage2/sage2topview.h"
 #include "sage2/sage2terrainatlas.h"
 #include "postprocess.h"
 #endif
@@ -1109,6 +1110,7 @@ bool DX8Wrapper::Reset_Device(bool reload_assets)
 		Sage2SceneClass::Release_Resources();	// Tiberium Project @feature deferred lighting buffers
 		Sage2TerrainClass::Release_Resources();	// Tiberium Project @feature terrain normal stream
 		Sage2ShadowClass::Release_Resources();	// Tiberium Project @feature the shadow map
+		Sage2TopViewClass::Release_Resources();	// Tiberium Project @feature the terrain top view
 #endif
 
 		for (unsigned i=0;i<MAX_VERTEX_STREAMS;++i)
@@ -1170,6 +1172,7 @@ void DX8Wrapper::Release_Device()
 		Sage2TextureClass::Shutdown();	// Tiberium Project @feature C&C4 cube, volume and plain textures
 		Sage2TerrainClass::Shutdown();	// Tiberium Project @feature C&C4-style terrain
 		Sage2ShadowClass::Shutdown();	// Tiberium Project @feature the shadow map
+		Sage2TopViewClass::Shutdown();	// Tiberium Project @feature the terrain top view
 		Sage2TerrainAtlasClass::Release();	// Tiberium Project @feature C&C4 terrain texture atlases
 #endif
 

@@ -93,6 +93,7 @@
 #ifdef RTS_RENDERER_D3D9
 #include "WW3D2/sage2/sage2terrain.h"	// Tiberium Project @feature the terrain drawn the C&C4 way
 #include "WW3D2/sage2/sage2shadow.h"	// Tiberium Project @feature the terrain as a shadow caster
+#include "WW3D2/sage2/sage2topview.h"	// Tiberium Project @feature scorch marks in the terrain top view
 #endif
 
 
@@ -2102,6 +2103,18 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 		// reflection pass and the untextured modes keep the fixed-function passes below.
 		if (!m_disableTextures && !ShaderClass::Is_Backface_Culling_Inverted() && Is_Hidden() == 0 && m_sideNormals)
 		{
+			// the scorch marks, painted into the top view texture the effect reads, when they changed
+			if (Sage2TopViewClass::Needs_Update() && m_map)
+			{
+				Int border = m_map->getBorderSizeInline();
+				Real minX = -border * MAP_XY_FACTOR, minY = -border * MAP_XY_FACTOR;
+				Real maxX = (m_map->getXExtent() - 1 - border) * MAP_XY_FACTOR, maxY = (m_map->getYExtent() - 1 - border) * MAP_XY_FACTOR;
+				if (Sage2TopViewClass::Begin(minX, minY, maxX, maxY))
+				{
+					drawScorches();
+					Sage2TopViewClass::End();
+				}
+			}
 			std::vector<Sage2TerrainClass::Tile> tiles(m_numVertexBufferTiles);
 			for (Int t = 0; t < m_numVertexBufferTiles; t++)
 			{
@@ -2127,6 +2140,8 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 				devicePasses = 0;	// drawn, shroud included; the shoreline, blend and road passes below still run
 				sage2Drew = TRUE;
 			}
+			else if (Sage2TopViewClass::Is_Available())
+				Sage2TopViewClass::Set_Enabled(FALSE);	// the fixed-function terrain cannot read the top view: the marks draw as quads again
 		}
 #endif
 	}

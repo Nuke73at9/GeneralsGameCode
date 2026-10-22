@@ -25,6 +25,9 @@
 #include "W3DDevice/GameClient/TerrainTex.h"
 #include "W3DDevice/GameClient/WorldHeightMap.h"
 #include "WW3D2/dx8wrapper.h"
+#ifdef RTS_RENDERER_D3D9
+#include "WW3D2/sage2/sage2topview.h"	// Tiberium Project @feature C&C4's terrain top view
+#endif
 
 W3DScorch::W3DScorch(bool deduplicateScorches)
   : m_vertexScorch(nullptr)
@@ -65,6 +68,9 @@ void W3DScorch::invalidateBuffers()
 	m_needBufferRecompute = true;
 	m_curNumScorchVertices = 0;
 	m_curNumScorchIndices = 0;
+#ifdef RTS_RENDERER_D3D9
+	Sage2TopViewClass::Invalidate();	// Tiberium Project: the top view is redrawn with the marks
+#endif
 }
 
 void W3DScorch::invalidateTexture()
@@ -122,6 +128,19 @@ void W3DScorch::drawScorches(WorldHeightMap& map)
 	{
 		return;
 	}
+#ifdef RTS_RENDERER_D3D9
+	// Tiberium Project @feature C&C4's way: the marks go into the terrain's top view texture,
+	// which the ground shaders bake into the albedo; while that texture exists nothing is drawn
+	// over the terrain
+	if (Sage2TopViewClass::Is_Rendering())
+	{
+		Sage2TopViewClass::Draw(m_vertexScorch->Get_DX8_Vertex_Buffer(), m_indexScorch->Get_DX8_Index_Buffer(), m_scorchTexture,
+			m_curNumScorchVertices, m_curNumScorchIndices / 3);
+		return;
+	}
+	if (Sage2TopViewClass::Is_Available())
+		return;
+#endif
 	DX8Wrapper::Set_Index_Buffer(m_indexScorch, 0);
 	DX8Wrapper::Set_Vertex_Buffer(m_vertexScorch);
 	DX8Wrapper::Set_Shader(ShaderClass::_PresetAlphaShader);
