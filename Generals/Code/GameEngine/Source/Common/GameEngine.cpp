@@ -39,6 +39,7 @@
 #include "Common/PlayerList.h"
 #include "Common/GameAudio.h"
 #include "Common/GameEngine.h"
+#include "Common/TiberiumTest.h"
 #include "Common/INI.h"
 #include "Common/INIException.h"
 #include "Common/MessageStream.h"
@@ -874,6 +875,9 @@ void GameEngine::update()
 				TheGameClient->step();
 			}
 		}
+
+		// Tiberium Project @feature Renderer test options, inert unless given on the command line
+		TiberiumTest::update();
 	}
 }
 

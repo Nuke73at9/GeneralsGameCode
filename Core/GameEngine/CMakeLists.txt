@@ -137,6 +137,7 @@ set(GAMEENGINE_SRC
     Include/Common/AbramImageConvert.h
     Include/Common/GameSwitcher.h
     Include/Common/AbramGameRules.h
+    Include/Common/TiberiumTest.h
     Include/Common/ModManager.h
 #    Include/Common/WellKnownKeys.h
     Include/Common/WorkerProcess.h
@@ -716,6 +717,7 @@ set(GAMEENGINE_SRC
     Source/Common/AbramImageConvert.cpp
     Source/Common/GameSwitcher.cpp
     Source/Common/AbramGameRules.cpp
+    Source/Common/TiberiumTest.cpp
     Source/Common/ModManager.cpp
     Source/Common/WorkerProcess.cpp
     Source/Common/WorkingDirectory.cpp

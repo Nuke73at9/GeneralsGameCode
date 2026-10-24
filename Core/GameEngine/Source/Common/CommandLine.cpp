@@ -34,6 +34,7 @@
 #include "Common/CommandLine.h"
 #include "Common/CRCDebug.h"
 #include "Common/LocalFileSystem.h"
+#include "Common/TiberiumTest.h"
 #include "Common/version.h"
 #include "Common/WorkingDirectory.h"
 #include "GameClient/ClientInstance.h"
@@ -823,6 +824,60 @@ Int parseNoShellMap(char *args[], int)
 	return 1;
 }
 
+// Tiberium Project @feature Renderer test options (see Common/TiberiumTest.h). A map given in the
+// short form Maps\Name.map becomes Maps\Name\Name.map, as -file does; a full path is kept.
+Int parseTestMap(char *args[], int num)
+{
+	if (num > 1)
+	{
+		AsciiString path = args[1];
+		Int separators = 0;
+		for (const char *c = path.str(); *c; ++c)
+			if (*c == '\\' || *c == '/')
+				++separators;
+		if (separators == 1)
+			ConvertShortMapPathToLongMapPath(path);
+		TheWritableGlobalData->m_initialFile = path;
+		TiberiumTest::setMap(path.str());
+	}
+	return 2;
+}
+
+Int parseTestCamera(char *args[], int num)
+{
+	if (num > 1)
+		TiberiumTest::setCameras(args[1]);
+	return 2;
+}
+
+Int parseTestShots(char *args[], int num)
+{
+	if (num > 1)
+		TiberiumTest::setShotInterval(atoi(args[1]));
+	return 2;
+}
+
+Int parseTestScorch(char *args[], int num)
+{
+	if (num > 1)
+		TiberiumTest::setScorchFrame(atoi(args[1]));
+	return 2;
+}
+
+Int parseTestCRC(char *args[], int num)
+{
+	if (num > 1)
+		TiberiumTest::setCRCFrame(atoi(args[1]));
+	return 2;
+}
+
+Int parseTestQuit(char *args[], int num)
+{
+	if (num > 1)
+		TiberiumTest::setQuitFrame(atoi(args[1]));
+	return 2;
+}
+
 Int parseNoShaders(char *args[], int)
 {
 	TheWritableGlobalData->m_chipSetType = 1;	//force to a voodoo card which uses least amount of features.
@@ -1210,6 +1265,15 @@ static CommandLineParam paramsForEngineInit[] =
 {
 	{ "-nologo", parseNoLogo }, // TheSuperHackers @tweak Is now available in Release builds.
 	{ "-noshellmap", parseNoShellMap },
+
+	// Tiberium Project @feature Renderer test options: load a map, move the camera, take screenshots,
+	// add scorch marks, log the logic CRC and quit, unattended (see Common/TiberiumTest.h)
+	{ "-testMap", parseTestMap },
+	{ "-testCamera", parseTestCamera },
+	{ "-testShots", parseTestShots },
+	{ "-testScorch", parseTestScorch },
+	{ "-testCRC", parseTestCRC },
+	{ "-testQuit", parseTestQuit },
 	{ "-noShellAnim", parseNoWindowAnimation }, // TheSuperHackers @tweak Is now available in Release builds.
 	{ "-xres", parseXRes },
 	{ "-yres", parseYRes },
