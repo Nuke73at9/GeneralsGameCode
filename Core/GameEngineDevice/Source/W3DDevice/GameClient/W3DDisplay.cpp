@@ -112,6 +112,8 @@ static void drawFramerateBar();
 #include "WW3D2/sage2/sage2topview.h"
 #include "WW3D2/sage2/sage2road.h"
 #include "WW3D2/sage2/sage2water.h"
+#include "WW3D2/sage2/sage2globals.h"
+static void feedSceneLights();
 #endif
 #include "Common/OptionPreferences.h"
 #include "WW3D2/dx8webbrowser.h"
@@ -2237,6 +2239,7 @@ AGAIN:
 			// texture before the frame (as the water's reflection is), over the terrain window the
 			// view draws and whatever stands on it; the effects read it through Sage2GlobalsClass
 			renderShadowMap();
+			feedSceneLights();
 #endif
 
 			if (TheWaterRenderObj && TheGlobalData->m_waterType == 2)
@@ -2557,6 +2560,39 @@ void W3DDisplay::enableLetterBox(Bool enable)
 }
 
 #ifdef RTS_RENDERER_D3D9
+// feedSceneLights =============================================================
+/** Tiberium Project @bugfix The map's terrain lights, for the C&C4 terrain, roads, tracks and
+  * water (Sage2GlobalsClass::Set_Scene_Lights): the device's lights belong to the last object
+  * drawn. Read every frame, so time-of-day changes and lighting scripts follow. */
+//=============================================================================
+static void feedSceneLights()
+{
+	if (TheGlobalData == nullptr)
+		return;
+	const Int tod = TheGlobalData->m_timeOfDay;
+	Int count = TheGlobalData->m_numGlobalLights;
+	if (count > 3) count = 3;
+	if (count < 1) count = 1;
+	float ambient[3] = { 0.0f, 0.0f, 0.0f };
+	float diffuse[3][3];
+	float toLight[3][3];
+	for (Int i = 0; i < count; ++i)
+	{
+		const GlobalData::TerrainLighting& light = TheGlobalData->m_terrainLighting[tod][i];
+		ambient[0] += light.ambient.red;
+		ambient[1] += light.ambient.green;
+		ambient[2] += light.ambient.blue;
+		diffuse[i][0] = light.diffuse.red;
+		diffuse[i][1] = light.diffuse.green;
+		diffuse[i][2] = light.diffuse.blue;
+		// the map stores the way the light travels; the effects want the way towards it
+		toLight[i][0] = -light.lightPos.x;
+		toLight[i][1] = -light.lightPos.y;
+		toLight[i][2] = -light.lightPos.z;
+	}
+	Sage2GlobalsClass::Set_Scene_Lights(ambient, diffuse, toLight, count);
+}
+
 // W3DDisplay::renderShadowMap ================================================
 /** Tiberium Project @feature C&C4's shadow map: every caster drawn from the sun into the depth
   * texture the lighting passes compare against. Covers the terrain window the view draws (its

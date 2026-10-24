@@ -309,6 +309,9 @@ public:  // tile and texture info.
 	// Tiberium Project @feature The C&C4 texture atlas slots of a cell's base terrain and of the terrain it
 	// blends towards (-1: keep the Zero Hour tile); valid once getTerrainTexture() has run.
 	void getCNC4Slots(Int xIndex, Int yIndex, Int *baseSlot, Int *blendSlot);
+	/// Tiberium Project: the C&C4 slot of the third terrain of a three-way blend cell (map indices, as
+	/// getExtraAlphaUVData), -1 when it has none
+	Int getCNC4ExtraSlot(Int xIndex, Int yIndex);
 	Bool hasCNC4Textures() const { return m_cnc4Atlas; }
 #endif
 	void getTerrainColorAt(Real x, Real y, RGBColor *pColor);

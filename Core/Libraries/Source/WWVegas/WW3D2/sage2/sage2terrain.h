@@ -87,6 +87,14 @@ public:
 	static const Shroud& Get_Shroud();
 	static void Reset_Draw();
 
+	/// Tiberium Project @bugfix Zero Hour's three-way blend cells (a third terrain over the base and
+	/// blend ones) the C&C4 way: the quads its extra blend pass just put in the current (dynamic)
+	/// vertex and index buffers, XYZNDUV2 with the tile coordinates in the first set and the third
+	/// terrain's C&C4 slot (or -1) in the second, drawn over the ground with 'tiles' (the pass's
+	/// tile texture, whose alpha with the vertex alpha blends them), lit from the light buffers of
+	/// this frame's terrain. Only after a deferred Draw(); false: the caller draws them its way.
+	static bool Draw_Extra_Blend(TextureClass* tiles, unsigned vertexCount, unsigned triangleCount);
+
 	/// The terrain as a shadow caster: the tiles drawn depth-only with the effect's _CreateShadowMap
 	/// technique (the shadow map's camera is set). False when the effect is not available.
 	static bool Draw_Shadow(DX8IndexBufferClass* indexBuffer, const Tile* tiles, int tileCount, unsigned vertexCount, unsigned polygonCount);

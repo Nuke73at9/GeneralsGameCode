@@ -48,6 +48,7 @@ namespace
 	IDirect3DSurface9* s_savedTarget = nullptr;
 	IDirect3DSurface9* s_savedDepth = nullptr;
 	D3DVIEWPORT9 s_savedViewport;
+	DWORD s_savedColorWrite = 0xF;
 
 	const unsigned VERTEX_STRIDE = 24;	// XYZDUV1: position, diffuse, one texture coordinate
 
@@ -141,6 +142,10 @@ bool Sage2TopViewClass::Begin(float minX, float minY, float maxX, float maxY)
 	surface->Release();
 	D3DVIEWPORT9 viewport = { 0, 0, s_madeSize, s_madeSize, 0.0f, 1.0f };
 	device->SetViewport(&viewport);
+	// Tiberium Project @bugfix the marks' coverage is the alpha channel: Zero Hour leaves colour
+	// writes at red, green and blue after its alpha-mask passes, which kept every mark out
+	device->GetRenderState(D3DRS_COLORWRITEENABLE, &s_savedColorWrite);
+	device->SetRenderState(D3DRS_COLORWRITEENABLE, 0xF);
 	device->Clear(0, nullptr, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0);
 
 	// world x,y -> clip: x to -1..1 across the map, y likewise (clip y up = texture v 0 at the
@@ -188,6 +193,12 @@ void Sage2TopViewClass::Draw(IDirect3DVertexBuffer9* vertices, IDirect3DIndexBuf
 	}
 	device->SetStreamSource(0, nullptr, 0, 0);
 	device8->Set_Vertex_Declaration_Override(nullptr);
+	static int logged = 0;
+	if (logged < 3)
+	{
+		++logged;
+		Sage2_Log("top view: %u mark triangles painted (%u vertices), mark texture %s", triangleCount, vertexCount, atlas != nullptr ? "ready" : "missing");
+	}
 	DX8Wrapper::Set_Vertex_Buffer((VertexBufferClass*)nullptr);
 	DX8Wrapper::Set_Index_Buffer((IndexBufferClass*)nullptr, 0);
 	DX8Wrapper::Invalidate_Shader_Constants();
@@ -203,6 +214,7 @@ void Sage2TopViewClass::End()
 	device->SetRenderTarget(0, s_savedTarget);
 	device->SetDepthStencilSurface(s_savedDepth);
 	device->SetViewport(&s_savedViewport);
+	device->SetRenderState(D3DRS_COLORWRITEENABLE, s_savedColorWrite);
 	Release(s_savedTarget);
 	Release(s_savedDepth);
 	s_rendering = false;

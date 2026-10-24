@@ -138,7 +138,7 @@ bool Sage2WaterClass::Begin()
 }
 
 //-------------------------------------------------------------------------------------------------
-bool Sage2WaterClass::Draw(unsigned vertexCount, unsigned triangleCount)
+bool Sage2WaterClass::Draw(unsigned vertexCount, unsigned triangleCount, TextureClass* waterTexture, float transparentDepth, float minOpacity)
 {
 	if (!s_begun || triangleCount == 0)
 		return false;
@@ -159,11 +159,15 @@ bool Sage2WaterClass::Draw(unsigned vertexCount, unsigned triangleCount)
 	unsigned baseVertex = state.vba_offset + state.index_base_offset;
 	unsigned startIndex = state.iba_offset;
 
+	Sage2SceneLightsScope sceneLights;	// the map's lights, not the last object's
 	Sage2DrawState drawState;
 	Sage2GlobalsClass::Apply(*s_effect, drawState);
 	s_effect->Set_Texture("RefractionTexture", s_refraction);
 	s_effect->Set_Texture("NormalTexture", Sage2TextureClass::Get("fxrivera_nrm"));
 	s_effect->Set_Texture("FoamTexture", Sage2TextureClass::Get("oceanfoam"));
+	s_effect->Set_Texture("WaterTexture", D3D_Texture(waterTexture));
+	float transparency[4] = { transparentDepth, minOpacity < 0.0f ? 0.0f : (minOpacity > 1.0f ? 1.0f : minOpacity), 0.0f, 0.0f };
+	s_effect->Set_Float("WaterTransparency", transparency, 4);
 	IDirect3DBaseTexture9* ocean = Sage2TextureClass::Get("fxoceancubemap");
 	if (ocean != nullptr)
 		s_effect->Set_Texture("EnvironmentTexture", ocean);

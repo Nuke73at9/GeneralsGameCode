@@ -274,10 +274,31 @@ namespace
 		effect.Set_Matrix(effect.Get_Param(param).name.c_str(), &m[0][0]);
 	}
 
+	// the map's lights (Set_Scene_Lights) and whether the draws now take them
+	bool s_sceneLightsValid = false;
+	bool s_useSceneLights = false;
+	int s_sceneLightCount = 0;
+	float s_sceneAmbient[3] = { 0.0f, 0.0f, 0.0f };
+	float s_sceneDiffuse[3][3];
+	float s_sceneToLight[3][3];
+
+	bool Scene_Lights_Active()
+	{
+		return s_useSceneLights && s_sceneLightsValid;
+	}
+
 	void Set_Light(Sage2EffectClass& effect, int param, unsigned light, bool color)
 	{
 		float v[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-		if (DX8Wrapper::Is_Light_Enabled(light))
+		if (Scene_Lights_Active())
+		{
+			if ((int)light < s_sceneLightCount)
+			{
+				const float* src = color ? s_sceneDiffuse[light] : s_sceneToLight[light];
+				v[0] = src[0]; v[1] = src[1]; v[2] = src[2]; v[3] = color ? 1.0f : 0.0f;
+			}
+		}
+		else if (DX8Wrapper::Is_Light_Enabled(light))
 		{
 			const D3DLIGHT8& l = DX8Wrapper::Peek_Light(light);
 			if (color)
@@ -346,8 +367,25 @@ void Sage2GlobalsClass::Set_Depth_Buffer_Texture(IDirect3DBaseTexture9* depthBuf
 void Sage2GlobalsClass::Apply_Scene_Textures(Sage2EffectClass& effect)
 {
 	Make_Stand_Ins();
+	// Tiberium Project @bugfix only the buffers the deferred passes change: the stand-ins (white,
+	// black, grey) are where the caller puts its own texture after Apply(), the terrain its shroud,
+	// and re-binding them here undid that (the terrain showed no shroud and no fog of war)
 	for (int i = 0; i < effect.Get_Param_Count(); ++i)
-		Apply_Scene_Texture(effect, i, effect.Get_Param(i).binding);
+	{
+		int binding = effect.Get_Param(i).binding;
+		switch (binding)
+		{
+			case SAGE2_BIND_TEXTURE_DEFERRED_DIFFUSE:
+			case SAGE2_BIND_TEXTURE_DEFERRED_SPECULAR:
+			case SAGE2_BIND_TEXTURE_DEPTH:
+			case SAGE2_BIND_TEXTURE_NORMAL_SPEC:
+			case SAGE2_BIND_TEXTURE_DEPTH_BUFFER:
+				Apply_Scene_Texture(effect, i, binding);
+				break;
+			default:
+				break;
+		}
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -355,6 +393,39 @@ bool Sage2GlobalsClass::Is_Deferred_Lighting_Available()
 {
 	return s_deferredDiffuse != nullptr && s_deferredSpecular != nullptr;
 }
+
+//-------------------------------------------------------------------------------------------------
+void Sage2GlobalsClass::Set_Scene_Lights(const float ambient[3], const float diffuse[][3], const float toLight[][3], int count)
+{
+	if (count < 0) count = 0;
+	if (count > 3) count = 3;
+	for (int c = 0; c < 3; ++c)
+		s_sceneAmbient[c] = ambient[c];
+	for (int l = 0; l < count; ++l)
+	{
+		Vector3 dir(toLight[l][0], toLight[l][1], toLight[l][2]);
+		float length = dir.Length();
+		if (length > 0.0f)
+			dir /= length;
+		for (int c = 0; c < 3; ++c)
+			s_sceneDiffuse[l][c] = diffuse[l][c];
+		s_sceneToLight[l][0] = dir.X; s_sceneToLight[l][1] = dir.Y; s_sceneToLight[l][2] = dir.Z;
+	}
+	s_sceneLightCount = count;
+	s_sceneLightsValid = true;
+}
+
+//-------------------------------------------------------------------------------------------------
+bool Sage2GlobalsClass::Use_Scene_Lights(bool use)
+{
+	bool previous = s_useSceneLights;
+	s_useSceneLights = use;
+	return previous;
+}
+
+//-------------------------------------------------------------------------------------------------
+Sage2SceneLightsScope::Sage2SceneLightsScope() : m_previous(Sage2GlobalsClass::Use_Scene_Lights(true)) {}
+Sage2SceneLightsScope::~Sage2SceneLightsScope() { Sage2GlobalsClass::Use_Scene_Lights(m_previous); }
 
 //-------------------------------------------------------------------------------------------------
 void Sage2GlobalsClass::Apply(Sage2EffectClass& effect, const Sage2DrawState& draw)
@@ -461,8 +532,15 @@ void Sage2GlobalsClass::Apply(Sage2EffectClass& effect, const Sage2DrawState& dr
 				break;
 			case SAGE2_BIND_AMBIENT:
 			{
-				DWORD a = DX8Wrapper::Get_DX8_Render_State(D3DRS_AMBIENT);
-				v[0] = ((a >> 16) & 0xFF) / 255.0f; v[1] = ((a >> 8) & 0xFF) / 255.0f; v[2] = (a & 0xFF) / 255.0f;
+				if (Scene_Lights_Active())
+				{
+					v[0] = s_sceneAmbient[0]; v[1] = s_sceneAmbient[1]; v[2] = s_sceneAmbient[2];
+				}
+				else
+				{
+					DWORD a = DX8Wrapper::Get_DX8_Render_State(D3DRS_AMBIENT);
+					v[0] = ((a >> 16) & 0xFF) / 255.0f; v[1] = ((a >> 8) & 0xFF) / 255.0f; v[2] = (a & 0xFF) / 255.0f;
+				}
 				effect.Set_Float(i, v, 3);
 				break;
 			}

@@ -49,7 +49,8 @@ namespace
 	float s_bumpScale = 0.75f;			// C&C4's terrain, High
 	InitState s_state = NOT_TRIED;
 	Sage2EffectClass* s_effect = nullptr;
-	int s_techDefault = -1, s_techForward = -1, s_techPrepass = -1, s_techShadow = -1;
+	int s_techDefault = -1, s_techForward = -1, s_techPrepass = -1, s_techShadow = -1, s_techExtraBlend = -1;
+	IDirect3DVertexDeclaration9* s_extraBlendDeclaration = nullptr;	// XYZNDUV2, the three-way blend quads
 
 	const unsigned TERRAIN_STRIDE = 32;		// x y z, diffuse, u1 v1, u2 v2
 	const unsigned NORMAL_STREAM = 1;
@@ -79,6 +80,7 @@ namespace
 		s_techForward = s_effect->Find_Technique("Default_M");
 		s_techPrepass = s_effect->Find_Technique("_CreateDepthNormalMap");
 		s_techShadow = s_effect->Find_Technique("_CreateShadowMap");
+		s_techExtraBlend = s_effect->Find_Technique("ExtraBlend");
 		if (s_techForward < 0)
 			return false;
 		D3DVERTEXELEMENT9 el[] =
@@ -93,6 +95,17 @@ namespace
 		};
 		if (FAILED(device->CreateVertexDeclaration(el, &s_declaration)))
 			return false;
+		D3DVERTEXELEMENT9 extra[] =
+		{
+			{ 0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
+			{ 0, 12, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL, 0 },
+			{ 0, 24, D3DDECLTYPE_D3DCOLOR, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_COLOR, 0 },
+			{ 0, 28, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
+			{ 0, 36, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 1 },
+			D3DDECL_END()
+		};
+		if (s_techExtraBlend >= 0 && FAILED(device->CreateVertexDeclaration(extra, &s_extraBlendDeclaration)))
+			s_techExtraBlend = -1;
 		s_state = READY;
 		Sage2_Log("terrain: C&C4-style terrain ready (deferred %s)", s_techPrepass >= 0 && s_techDefault >= 0 ? "yes" : "no");
 		return true;
@@ -188,8 +201,10 @@ bool Sage2TerrainClass::Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuff
 		return false;
 	IDirect3DIndexBuffer9* indices = indexBuffer->Get_DX8_Index_Buffer();
 
-	// the wrapper's pending state first, then the effect's own
+	// the wrapper's pending state first, then the effect's own; lit by the map's lights (the
+	// deferred light pass below too), not by the last object's
 	DX8Wrapper::Apply_Render_State_Changes();
+	Sage2SceneLightsScope sceneLights;
 	Sage2DrawState drawState;
 	Sage2GlobalsClass::Apply(*s_effect, drawState);
 	s_effect->Set_Texture("BaseSampler", atlasTexture);
@@ -256,6 +271,84 @@ bool Sage2TerrainClass::Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuff
 }
 
 //-------------------------------------------------------------------------------------------------
+bool Sage2TerrainClass::Draw_Extra_Blend(TextureClass* tiles, unsigned vertexCount, unsigned triangleCount)
+{
+	if (!s_enabled || !Drew_Deferred() || s_techExtraBlend < 0 || s_extraBlendDeclaration == nullptr || triangleCount == 0)
+		return false;
+	IDirect3DDevice8* device8 = DX8Wrapper::_Get_D3D_Device8();
+	if (device8 == nullptr)
+		return false;
+	IDirect3DDevice9* device = device8->Get_D3D9();
+	IDirect3DBaseTexture9* tileTexture = D3D_Texture(tiles);
+	if (tileTexture == nullptr)
+		return false;
+
+	// the quads the extra blend pass set as the wrapper's buffers
+	DX8Wrapper::Apply_Render_State_Changes();
+	RenderStateStruct state;
+	DX8Wrapper::Get_Render_State(state);
+	if (state.vertex_buffers[0] == nullptr || state.index_buffer == nullptr
+		|| (state.vertex_buffer_types[0] != BUFFER_TYPE_DYNAMIC_DX8 && state.vertex_buffer_types[0] != BUFFER_TYPE_DX8)
+		|| (state.index_buffer->Type() != BUFFER_TYPE_DYNAMIC_DX8 && state.index_buffer->Type() != BUFFER_TYPE_DX8))
+		return false;
+	IDirect3DVertexBuffer9* vb = static_cast<DX8VertexBufferClass*>(state.vertex_buffers[0])->Get_DX8_Vertex_Buffer();
+	IDirect3DIndexBuffer9* ib = static_cast<DX8IndexBufferClass*>(state.index_buffer)->Get_DX8_Index_Buffer();
+	if (vb == nullptr || ib == nullptr)
+		return false;
+	const unsigned EXTRA_STRIDE = 44;	// XYZNDUV2
+
+	Sage2SceneLightsScope sceneLights;
+	Sage2DrawState drawState;
+	Sage2GlobalsClass::Apply(*s_effect, drawState);
+	s_effect->Set_Texture("BaseSampler", tileTexture);
+	s_effect->Set_Float1("AlbedoScale", s_albedoScale);
+	s_effect->Set_Texture("AtlasColor", Sage2TerrainAtlasClass::Get_Color());
+	s_effect->Set_Texture("AtlasNormal", Sage2TerrainAtlasClass::Get_Normal());
+	float atlasParams[4] = { (float)Sage2TerrainAtlasClass::Get_Slots_Per_Row(), Sage2TerrainAtlasClass::Get_Slot_Size(),
+		Sage2TerrainAtlasClass::Get_Slot_Border(), s_tileWorldSize };
+	s_effect->Set_Float("AtlasParams", atlasParams, 4);
+	IDirect3DBaseTexture9* shroudTexture = D3D_Texture(s_shroud.texture);
+	if (shroudTexture != nullptr)
+	{
+		s_effect->Set_Texture("ShroudTexture", shroudTexture);
+		float shroudParams[4] = { s_shroud.offsetX, s_shroud.offsetY, s_shroud.scaleX, s_shroud.scaleY };
+		s_effect->Set_Float("ShroudParams", shroudParams, 4);
+	}
+
+	device8->Set_Vertex_Declaration_Override(s_extraBlendDeclaration);
+	device->SetVertexDeclaration(s_extraBlendDeclaration);
+	device->SetStreamSource(0, vb, 0, EXTRA_STRIDE);
+	device->SetIndices(ib);
+	for (int pass = 0; pass < s_effect->Get_Pass_Count(s_techExtraBlend); ++pass)
+	{
+		if (!s_effect->Begin(device, s_techExtraBlend, pass))
+			continue;
+		device->SetRenderState(D3DRS_SRGBWRITEENABLE, TRUE);	// linear light, as the terrain's own pass
+		// the same vertices as the ground's through the same transform, but built apart: a hair of bias
+		float bias = -0.00002f;
+		device->SetRenderState(D3DRS_DEPTHBIAS, *(DWORD*)&bias);
+		device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, (INT)(state.vba_offset + state.index_base_offset), 0, vertexCount,
+			state.iba_offset, triangleCount);
+		s_effect->End(device);
+	}
+	device->SetRenderState(D3DRS_DEPTHBIAS, 0);
+	device->SetRenderState(D3DRS_SRGBWRITEENABLE, FALSE);
+	device->SetStreamSource(0, nullptr, 0, 0);
+	device8->Set_Vertex_Declaration_Override(nullptr);
+	DX8Wrapper::Invalidate_Shader_Constants();
+	ShaderClass::Invalidate();
+	device8->Invalidate_State();
+
+	static bool logged = false;
+	if (!logged)
+	{
+		logged = true;
+		Sage2_Log("terrain: three-way blend cells drawn with tiberium_terrain ExtraBlend");
+	}
+	return true;
+}
+
+//-------------------------------------------------------------------------------------------------
 bool Sage2TerrainClass::Drew_This_Frame() { return s_drew; }
 bool Sage2TerrainClass::Drew_Deferred() { return s_drew && s_drewDeferred; }
 const Sage2TerrainClass::Shroud& Sage2TerrainClass::Get_Shroud() { return s_shroud; }
@@ -308,6 +401,8 @@ void Sage2TerrainClass::Shutdown()
 {
 	Release_Resources();
 	Release(s_declaration);
+	Release(s_extraBlendDeclaration);
+	s_techExtraBlend = -1;
 	s_effect = nullptr;	// owned by the effect cache
 	s_state = NOT_TRIED;
 }

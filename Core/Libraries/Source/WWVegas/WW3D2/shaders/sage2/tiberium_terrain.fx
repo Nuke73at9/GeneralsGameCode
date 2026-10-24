@@ -384,6 +384,81 @@ technique Default
 }
 
 // ============================================================================
+// ExtraBlend: Zero Hour's third texture where three terrains meet a cell
+// ============================================================================
+// Zero Hour draws those cells again, fixed-function, with the third terrain's tile and the
+// blend's vertex alpha. Here they are its quads (XYZNDUV2: the tile coordinates in the first
+// set, the third terrain's C&C4 slot in the second) drawn over the finished ground, lit from the
+// light buffers the terrain's own pass produced under them (the albedo is the only thing that
+// changes), with the same top view, macro, fog and shroud.
+struct VSInput_ExtraBlend
+{
+	float3 Position : POSITION;
+	float3 Normal : NORMAL;
+	float4 Color : COLOR0;
+	float2 TexCoord : TEXCOORD0;
+	float2 Slot : TEXCOORD1;		// x: the C&C4 atlas slot, -1 for none
+};
+
+struct VSOutput_ExtraBlend
+{
+	float4 Position : POSITION;
+	float4 TexCoord_WorldXY : TEXCOORD0;
+	float4 MacroTexCoord_Fog_Alpha : TEXCOORD1;
+	float4 ShroudTexCoord_Slot : TEXCOORD2;
+};
+
+VSOutput_ExtraBlend VS_ExtraBlend(VSInput_ExtraBlend In)
+{
+	VSOutput_ExtraBlend Out;
+	Out.Position = mul(float4(In.Position, 1), ViewProjection);
+	Out.TexCoord_WorldXY = float4(In.TexCoord, In.Position.xy);
+	Out.MacroTexCoord_Fog_Alpha.xy = In.Position.xy * MacroScale;
+	Out.MacroTexCoord_Fog_Alpha.z = CalculateFog(Fog, In.Position, EyePosition);
+	Out.MacroTexCoord_Fog_Alpha.w = In.Color.w;
+	Out.ShroudTexCoord_Slot = float4(ShroudUV(In.Position.xy), In.Slot.x, 0);
+	return Out;
+}
+
+float4 PS_ExtraBlend(VSOutput_ExtraBlend In, float2 vPos : PIXELLOC) : COLOR
+{
+	float4 zh = tex2D(SAMPLER(BaseSampler), In.TexCoord_WorldXY.xy);
+	float slot = In.ShroudTexCoord_Slot.z;
+	float3 c4, normalTS;
+	float spec;
+	SampleC4(max(slot, 0.0), In.TexCoord_WorldXY.zw, c4, spec, normalTS);
+	float hasC4 = slot >= 0.0 ? 1.0 : 0.0;
+	float3 baseColor = lerp(GammaToLinear(zh.xyz) * AlbedoScale, c4, hasC4);
+	spec = lerp(0.0, spec, hasC4);
+	ApplyTopView(In.TexCoord_WorldXY.zw, baseColor, spec);
+	float2 screenTexCoord = GetScreenTexcoordCoord(vPos);
+	float3 color = (SampleDiffuseLight(screenTexCoord) + AmbientLightColor) * baseColor
+		+ SampleSpecularLight(screenTexCoord) * SpecularColor * spec;
+	color *= GammaToLinear(tex2D(SAMPLER(MacroSampler), In.MacroTexCoord_Fog_Alpha.xy).xyz);
+	color = lerp(Fog.Color.xyz, color, In.MacroTexCoord_Fog_Alpha.z);
+	color *= GammaToLinear(tex2D(SAMPLER(ShroudTexture), In.ShroudTexCoord_Slot.xy).xyz);
+	// Zero Hour's blend: the tile's alpha by the vertex alpha
+	return float4(color, zh.w * In.MacroTexCoord_Fog_Alpha.w);
+}
+
+technique ExtraBlend
+{
+	pass P0
+	{
+		VertexShader = compile VS_3_0 VS_ExtraBlend();
+		PixelShader = compile PS_3_0 PS_ExtraBlend();
+		ZEnable = true;
+		ZWriteEnable = false;
+		ZFunc = ZFUNC_INFRONT;
+		CullMode = None;
+		AlphaBlendEnable = true;
+		SrcBlend = SrcAlpha;
+		DestBlend = InvSrcAlpha;
+		AlphaTestEnable = false;
+	}
+}
+
+// ============================================================================
 // Default_M: forward lighting, when the deferred buffers are not available
 // ============================================================================
 struct VSOutput_M

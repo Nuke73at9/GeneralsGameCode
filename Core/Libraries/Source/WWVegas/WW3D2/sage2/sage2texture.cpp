@@ -95,6 +95,10 @@ namespace
 		}
 		if ((pfFlags & DDPF_RGB) && bits == 32 && rMask == 0x00FF0000 && gMask == 0x0000FF00 && bMask == 0x000000FF)
 			return ((pfFlags & DDPF_ALPHAPIXELS) && aMask == 0xFF000000) ? D3DFMT_A8R8G8B8 : D3DFMT_X8R8G8B8;
+		// Tiberium Project @bugfix 24-bit RGB (C&C4's FXOceanCubeMap): expanded to X8R8G8B8 on load,
+		// Direct3D 9 devices do not take R8G8B8 textures
+		if ((pfFlags & DDPF_RGB) && bits == 24 && rMask == 0x00FF0000 && gMask == 0x0000FF00 && bMask == 0x000000FF)
+			return D3DFMT_R8G8B8;
 		return D3DFMT_UNKNOWN;
 	}
 
@@ -131,6 +135,21 @@ namespace
 		{
 			what = "pixel format not handled";
 			return nullptr;
+		}
+		if (format == D3DFMT_R8G8B8)
+		{
+			// tightly packed blue, green, red triples (every level, every face) to four bytes each
+			std::vector<unsigned char> expanded(128 + (data.size() - 128) / 3 * 4);
+			memcpy(&expanded[0], &data[0], 128);
+			const unsigned char* in = &data[128];
+			unsigned char* out = &expanded[128];
+			for (size_t i = 0, n = (data.size() - 128) / 3; i < n; ++i, in += 3, out += 4)
+			{
+				out[0] = in[0]; out[1] = in[1]; out[2] = in[2]; out[3] = 0xFF;
+			}
+			data.swap(expanded);
+			h = (const unsigned*)&data[4];
+			format = D3DFMT_X8R8G8B8;
 		}
 		if (!(flags & DDSD_MIPMAPCOUNT) || mips == 0)
 			mips = 1;

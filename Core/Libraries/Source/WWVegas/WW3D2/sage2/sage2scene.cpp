@@ -326,7 +326,13 @@ bool Sage2SceneClass::Light_Batch(Sage2EffectClass& effect, int prepassTechnique
 	IDirect3DSurface9* sDiffuse = Surface(s_diffuseLight);
 	IDirect3DSurface9* sSpecular = Surface(s_specularLight);
 
-	// 1. the depth / normal pre-pass
+	// 1. the depth / normal pre-pass; every channel written (the specular power is the normal
+	// buffer's alpha), whatever colour mask Zero Hour's own passes left
+	DWORD savedColorWrite = 0xF, savedColorWrite1 = 0xF;
+	device->GetRenderState(D3DRS_COLORWRITEENABLE, &savedColorWrite);
+	device->GetRenderState(D3DRS_COLORWRITEENABLE1, &savedColorWrite1);
+	device->SetRenderState(D3DRS_COLORWRITEENABLE, 0xF);
+	device->SetRenderState(D3DRS_COLORWRITEENABLE1, 0xF);
 	device->SetRenderTarget(0, sNormalSpec);
 	device->SetRenderTarget(1, sDepth);
 	device->SetDepthStencilSurface(s_prepassDepth);
@@ -366,6 +372,8 @@ bool Sage2SceneClass::Light_Batch(Sage2EffectClass& effect, int prepassTechnique
 	device->SetRenderTarget(1, nullptr);
 
 	// 3. back to the frame
+	device->SetRenderState(D3DRS_COLORWRITEENABLE, savedColorWrite);
+	device->SetRenderState(D3DRS_COLORWRITEENABLE1, savedColorWrite1);
 	device->SetRenderTarget(0, target);
 	device->SetDepthStencilSurface(depth);
 	device->SetViewport(&viewport);

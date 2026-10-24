@@ -2385,6 +2385,13 @@ void HeightMapRenderObjClass::renderExtraBlendTiles()
 				//this tile is inside visible region and has 3rd blend layer.
 
 				Int idx = x+y*xExtent;
+#ifdef RTS_RENDERER_D3D9
+				// Tiberium Project @bugfix the third terrain's C&C4 texture, for the C&C4 pass below (the
+				// second texture coordinate set is unused by Zero Hour's own pass)
+				const Real extraSlot = (Real)m_map->getCNC4ExtraSlot(x, y);
+#else
+				const Real extraSlot = 0;
+#endif
 
 				Real p0=data[idx]*MAP_HEIGHT_SCALE;
 				Real p1=data[idx+1]*MAP_HEIGHT_SCALE;
@@ -2402,7 +2409,7 @@ void HeightMapRenderObjClass::renderExtraBlendTiles()
 				vb->diffuse=(alpha[0]<<24)|(getStaticDiffuse(x,y) & 0x00ffffff);
 				vb->u1=U[0];
 				vb->v1=V[0];
-				vb->u2=0;
+				vb->u2=extraSlot;
 				vb->v2=0;
 				vb++;
 
@@ -2415,7 +2422,7 @@ void HeightMapRenderObjClass::renderExtraBlendTiles()
 				vb->diffuse=(alpha[1]<<24)|(getStaticDiffuse(x+1,y) & 0x00ffffff);
 				vb->u1=U[1];
 				vb->v1=V[1];
-				vb->u2=0;
+				vb->u2=extraSlot;
 				vb->v2=0;
 				vb++;
 
@@ -2428,7 +2435,7 @@ void HeightMapRenderObjClass::renderExtraBlendTiles()
 				vb->diffuse=(alpha[2]<<24)|(getStaticDiffuse(x+1,y+1) & 0x00ffffff);
 				vb->u1=U[2];
 				vb->v1=V[2];
-				vb->u2=0;
+				vb->u2=extraSlot;
 				vb->v2=0;
 				vb++;
 
@@ -2441,7 +2448,7 @@ void HeightMapRenderObjClass::renderExtraBlendTiles()
 				vb->diffuse=(alpha[3]<<24)|(getStaticDiffuse(x,y+1) & 0x00ffffff);
 				vb->u1=U[3];
 				vb->v1=V[3];
-				vb->u2=0;
+				vb->u2=extraSlot;
 				vb->v2=0;
 				vb++;
 
@@ -2479,6 +2486,16 @@ void HeightMapRenderObjClass::renderExtraBlendTiles()
 		ShaderClass::Invalidate();	//invalidate to force shader to reset since we directly changed states
 		DX8Wrapper::Set_Index_Buffer(ib_access,0);
 		DX8Wrapper::Set_Vertex_Buffer(vb_access);
+#ifdef RTS_RENDERER_D3D9
+		// Tiberium Project @bugfix with the C&C4 terrain, the third terrain is drawn by its effect:
+		// Zero Hour's tile over the C&C4 ground, lit its own way, showed as mismatched patches
+		if (TheGlobalData->m_use3WayTerrainBlends != 2 && Is_Hidden() == 0
+			&& Sage2TerrainClass::Draw_Extra_Blend(m_stageOneTexture, vertexCount, indexCount/3))
+		{
+			m_numVisibleExtraBlendTiles += indexCount/6;
+			return;
+		}
+#endif
 		VertexMaterialClass *vmat=VertexMaterialClass::Get_Preset(VertexMaterialClass::PRELIT_DIFFUSE);
 		DX8Wrapper::Set_Material(vmat);
 		REF_PTR_RELEASE(vmat);

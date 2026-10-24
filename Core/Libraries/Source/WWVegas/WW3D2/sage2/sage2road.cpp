@@ -104,6 +104,7 @@ bool Sage2RoadClass::Draw(Kind kind, IDirect3DVertexBuffer9* vertices, IDirect3D
 	Sage2EffectClass* s_effect = k.effect;
 
 	DX8Wrapper::Apply_Render_State_Changes();
+	Sage2SceneLightsScope sceneLights;	// the map's lights, not the last object's
 	Sage2DrawState drawState;
 	Sage2GlobalsClass::Apply(*s_effect, drawState);
 	s_effect->Set_Texture("BaseSampler", D3D_Texture(texture));

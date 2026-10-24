@@ -115,6 +115,16 @@ struct Sage2DrawState
 	Sage2DrawState() : opacity(1.0f), houseColor(0), damage(0.0f), stealth(false) {}
 };
 
+/// Lights the draws made while it lives with the map's lights (Sage2GlobalsClass::Set_Scene_Lights)
+class Sage2SceneLightsScope
+{
+public:
+	Sage2SceneLightsScope();
+	~Sage2SceneLightsScope();
+private:
+	bool m_previous;
+};
+
 /// Diagnostics: a few lines in Sage2.log next to the game (what loaded, what path each mesh took).
 void Sage2_Log(const char* format, ...);
 
@@ -140,6 +150,17 @@ public:
 
 	/// Fills every bound parameter of the effect from W3D's current state and the draw's values.
 	static void Apply(Sage2EffectClass& effect, const Sage2DrawState& draw);
+
+	/// Tiberium Project @bugfix The map's own lights, for the terrain and what lies on it (roads,
+	/// tracks, water, and the deferred light pass behind them). The terrain draws without a light
+	/// environment, so W3D leaves the lights of the last object drawn on the device; read from
+	/// there, the ground took the lights of whatever unit, building or placement ghost came before
+	/// it (red under a red "can't build here" ghost, washed out under a highlighted building). The
+	/// display feeds the map's lights every frame (ambient, then up to three lights: colour and the
+	/// direction towards the light); while Use_Scene_Lights(true) is in force, Apply() takes the
+	/// ambient and directional lights from them. Use_Scene_Lights returns the previous setting.
+	static void Set_Scene_Lights(const float ambient[3], const float diffuse[][3], const float toLight[][3], int count);
+	static bool Use_Scene_Lights(bool use);
 
 	/// Releases the stand-in textures (before the device goes away).
 	static void Shutdown();

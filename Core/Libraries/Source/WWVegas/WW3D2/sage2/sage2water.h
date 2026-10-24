@@ -32,6 +32,8 @@
 
 #include <d3d9.h>
 
+class TextureClass;
+
 class Sage2WaterClass
 {
 public:
@@ -43,8 +45,10 @@ public:
 	/// draws its own way this frame (off, no deferred buffers, no effect)
 	static bool Begin();
 	/// Draws the polygons the water renderer set as the current vertex and index buffers
-	/// (XYZNDUV2, dynamic) with the water effect; false when Begin() did not succeed
-	static bool Draw(unsigned vertexCount, unsigned triangleCount);
+	/// (XYZNDUV2, dynamic) with the water effect; false when Begin() did not succeed. The water's
+	/// colour is Zero Hour's standing-water texture; transparentDepth and minOpacity are its
+	/// WaterTransparency settings (how clear the water is, how much of the floor it may hide).
+	static bool Draw(unsigned vertexCount, unsigned triangleCount, TextureClass* waterTexture, float transparentDepth, float minOpacity);
 	static void End();
 
 	/// Frees the frame copy (before a device reset); made again on the next Begin()

@@ -2254,6 +2254,23 @@ void WorldHeightMap::getCNC4Slots(Int xIndex, Int yIndex, Int *baseSlot, Int *bl
 }
 #endif
 
+#ifdef RTS_RENDERER_D3D9
+//-------------------------------------------------------------------------------------------------
+Int WorldHeightMap::getCNC4ExtraSlot(Int xIndex, Int yIndex)
+{
+	if (!m_cnc4Atlas || !m_tileNdxes || !m_extraBlendTileNdxes)
+		return -1;
+	Int ndx = (yIndex*m_width)+xIndex;
+	if (ndx < 0 || ndx >= m_dataSize)
+		return -1;
+	Short blendNdx = m_extraBlendTileNdxes[ndx];
+	if (blendNdx == 0 || m_blendedTiles[blendNdx].customBlendEdgeClass >= 0)
+		return -1;
+	Int extraClass = getTextureClassIndexFromNdx(m_blendedTiles[blendNdx].blendNdx);
+	return extraClass >= 0 ? m_cnc4Slots[extraClass] : -1;
+}
+#endif
+
 void WorldHeightMap::setTextureLOD(Int lod)
 {
 	if (m_terrainTex)

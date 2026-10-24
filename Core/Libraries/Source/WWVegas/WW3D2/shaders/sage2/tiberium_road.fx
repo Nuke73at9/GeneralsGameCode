@@ -90,7 +90,9 @@ VSOutput VS_Road(VSInput In)
 	Out.TexCoord_WorldXY = float4(In.TexCoord, In.Position.xy);
 	Out.ShroudTexCoord_Fog.xy = (In.Position.xy + ShroudParams.xy) * ShroudParams.zw;
 	Out.ShroudTexCoord_Fog.z = CalculateFog(Fog, In.Position, EyePosition);
-	Out.ShroudTexCoord_Fog.w = 0;
+	// Zero Hour modulates the road texture's alpha by the vertex alpha (its road shader's stage 0):
+	// where a road ends, joins another or is faded out, the vertices carry it
+	Out.ShroudTexCoord_Fog.w = In.Color.w;
 	return Out;
 }
 
@@ -99,7 +101,7 @@ void RoadSurface(VSOutput In, out float3 color, out float opacity)
 {
 	float4 road = tex2D(SAMPLER(BaseSampler), In.TexCoord_WorldXY.xy);
 	color = GammaToLinear(road.xyz) * AlbedoScale;
-	opacity = road.w;
+	opacity = road.w * In.ShroudTexCoord_Fog.w;
 	float4 mark = tex2D(SAMPLER(TopViewTexture), CalcTerrainTopViewTexCoord(In.TexCoord_WorldXY.zw));
 	color = color * (1.0 - mark.w) + mark.xyz;
 }

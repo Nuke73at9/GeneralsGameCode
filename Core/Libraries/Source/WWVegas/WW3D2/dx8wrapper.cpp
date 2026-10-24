@@ -2593,6 +2593,10 @@ void DX8Wrapper::Draw(
 	// Debug feature to disable triangle drawing...
 	if (!_Is_Triangle_Draw_Enabled()) return;
 
+#ifdef RTS_RENDERER_D3D9
+	Sage2ShadowClass::Count_Fixed_Function(polygon_count);	// Tiberium Project: the shadow map's diagnostics
+#endif
+
 #ifdef DEBUG_LOGGING
 	if (WW3D::Is_Snapshot_Activated()) {
 		DWORD passes=0;		// GeneralsX @build BenderAI 10/02/2026 - Use DWORD (32-bit) instead of unsigned long (platform-dependent)

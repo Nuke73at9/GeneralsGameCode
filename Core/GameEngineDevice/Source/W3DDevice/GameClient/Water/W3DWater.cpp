@@ -3325,7 +3325,8 @@ void WaterRenderObjClass::drawTrapezoidWater(Vector3 points[4])
 #ifdef RTS_RENDERER_D3D9
 	// Tiberium Project @feature the surface through the C&C4-style water effect (refraction, ripples,
 	// sparkle, foam, shroud); else the fixed-function passes below
-	if (Sage2WaterClass::Draw((rectangleCount+1)*2, rectangleCount*2))
+	if (Sage2WaterClass::Draw((rectangleCount+1)*2, rectangleCount*2, m_riverTexture,
+		TheWaterTransparency->m_transparentWaterDepth, TheWaterTransparency->m_minWaterOpacity))
 		return;
 #endif
 

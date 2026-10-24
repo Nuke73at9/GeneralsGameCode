@@ -25,7 +25,6 @@
 #include "camera.h"
 #include "dx8wrapper.h"
 #include "sage2globals.h"
-#include "statistics.h"
 #include "WWMath/matrix3d.h"
 #include "WWMath/matrix4.h"
 #include "WWMath/vector3.h"
@@ -53,6 +52,7 @@ namespace
 	bool s_debug = false;
 	int s_passesLogged = 0;
 	int s_effectDraws = 0;
+	unsigned s_fixedFunctionDraws = 0, s_fixedFunctionPolygons = 0;	// DX8Wrapper::Draw calls during the pass
 	bool s_terrainDrawn = false;
 	DWORD s_savedColorWrite = 0xF;
 
@@ -208,6 +208,8 @@ bool Sage2ShadowClass::Begin(const Vector3& sunTravel, const Vector3& boxMin, co
 			s_worldToShadow[r * 4 + c] = worldToShadow[r][c];
 	s_rendering = true;
 	s_effectDraws = 0;
+	s_fixedFunctionDraws = 0;
+	s_fixedFunctionPolygons = 0;
 	s_terrainDrawn = false;
 
 	static bool logged = false;
@@ -233,12 +235,11 @@ void Sage2ShadowClass::End()
 	if (s_passesLogged < 3)
 	{
 		++s_passesLogged;
-		// the polygon count covers the fixed-function draws since this pass's Begin_Render
 		DWORD scissor = 0, zenable = 0;
 		device->GetRenderState(D3DRS_SCISSORTESTENABLE, &scissor);
 		device->GetRenderState(D3DRS_ZENABLE, &zenable);
-		Sage2_Log("shadow pass %d: %d fixed-function polygons, %d drawn with their own effect, terrain %s (scissor %u, z %u)",
-			s_passesLogged, Debug_Statistics::Get_DX8_Polygons(), s_effectDraws, s_terrainDrawn ? "drawn" : "not drawn",
+		Sage2_Log("shadow pass %d: %u fixed-function draws (%u polygons), %d drawn with their own effect, terrain %s (scissor %u, z %u)",
+			s_passesLogged, s_fixedFunctionDraws, s_fixedFunctionPolygons, s_effectDraws, s_terrainDrawn ? "drawn" : "not drawn",
 			(unsigned)scissor, (unsigned)zenable);
 	}
 }
@@ -251,6 +252,15 @@ void Sage2ShadowClass::Count_Draw(bool terrain)
 	++s_effectDraws;
 	if (terrain)
 		s_terrainDrawn = true;
+}
+
+//-------------------------------------------------------------------------------------------------
+void Sage2ShadowClass::Count_Fixed_Function(unsigned polygons)
+{
+	if (!s_rendering)
+		return;
+	++s_fixedFunctionDraws;
+	s_fixedFunctionPolygons += polygons;
 }
 
 void Sage2ShadowClass::Set_Debug(bool enabled) { s_debug = enabled; }
