@@ -42,6 +42,7 @@ namespace
 	// the look
 	std::string s_lookupName = "pan_am_lut_vol";
 	float s_lookupBlend = 0.745f;
+	float s_lookupStrength = 1.0f;		// Sage2LookupStrength
 	float s_bloomIntensity = 0.09f;
 	float s_exposure = 1.0f;
 	float s_autoStrength = 0.5f;		// Sage2AutoExposure
@@ -267,6 +268,12 @@ void Sage2PostClass::Set_Keep_Black(bool enabled)
 }
 
 //-------------------------------------------------------------------------------------------------
+void Sage2PostClass::Set_Lookup_Strength(float strength)
+{
+	s_lookupStrength = strength < 0.0f ? 0.0f : (strength > 2.0f ? 2.0f : strength);
+}
+
+//-------------------------------------------------------------------------------------------------
 void Sage2PostClass::Set_Exposure(float exposure)
 {
 	s_exposure = exposure > 0.0f ? exposure : 1.0f;
@@ -378,7 +385,8 @@ bool Sage2PostClass::Apply()
 	grade.Set_Texture("FrameBufferSampler", s_linear);
 	grade.Set_Texture("LookupTexture", lookup);
 	grade.Set_Float("ExposureLevel", one, 3);
-	float blend[4] = { lookup ? s_lookupBlend : 0.0f, 0.0f, 0.0f, 0.0f };
+	float strength = s_lookupBlend * s_lookupStrength;
+	float blend[4] = { lookup ? (strength > 1.0f ? 1.0f : strength) : 0.0f, 0.0f, 0.0f, 0.0f };
 	grade.Set_Float("BlendFactor", blend, 4);
 	grade.Set_Bool("ApplyLUT", lookup != nullptr);
 	grade.Set_Bool("ApplyOverlay", false);

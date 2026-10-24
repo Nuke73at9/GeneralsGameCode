@@ -39,6 +39,9 @@ public:
 	static void Set_Look(const char* lookupTexture, float lookupBlend, float bloomIntensity);
 	/// Exposure applied before the tone curve (1 = as C&C4)
 	static void Set_Exposure(float exposure);
+	/// Tiberium Project @feature How strongly the grading table applies, against the map look's own
+	/// blend (Options.ini Sage2LookupStrength: 0 none, 1 as the look sets it, up to 2)
+	static void Set_Lookup_Strength(float strength);
 	/// Tiberium Project @feature exposure for the map's ground, the way a photographer exposes for
 	/// snow: the map's average albedo (linear luminance, weighted by how much of the map each
 	/// texture covers, -1 unknown). A map brighter than a mid-grey key is exposed down by

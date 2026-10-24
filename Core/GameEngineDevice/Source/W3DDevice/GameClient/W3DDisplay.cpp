@@ -988,6 +988,7 @@ void W3DDisplay::init()
 			// the fills' highlight on the ground: RA3's terrain takes the sun's alone, C&C4's light pass all three
 			Sage2TerrainClass::Set_Fill_Specular(prefs.getReal("Sage2TerrainFillSpecular", Sage2LightingClass::Is_RA3_Look() ? 0.0f : 1.0f));
 			Sage2PostClass::Set_Exposure(prefs.getReal("Sage2Exposure", 1.0f));
+			Sage2PostClass::Set_Lookup_Strength(prefs.getReal("Sage2LookupStrength", 1.0f));	// the grading table: 0 none, 1 as the look sets it
 			Sage2PostClass::Set_Auto_Exposure(prefs.getReal("Sage2AutoExposure", 0.5f));	// exposure for each map's ground: 0..1
 			Sage2PostClass::Set_Keep_Black(prefs.getBool("Sage2KeepBlack", TRUE));	// black past the map's edge stays black under the grade
 			Sage2ShadowClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Shadows", TRUE));	// C&C4's shadow map in place of ZH's shadows
