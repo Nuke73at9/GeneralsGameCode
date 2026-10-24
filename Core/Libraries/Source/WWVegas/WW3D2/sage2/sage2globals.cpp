@@ -19,6 +19,7 @@
 // Tiberium Project @feature The engine-side values SAGE 2 effects ask for (see sage2globals.h)
 
 #include "sage2globals.h"
+#include "sage2scene.h"
 #include "sage2shadow.h"
 #include "sage2texture.h"
 #include "sage2topview.h"
@@ -615,6 +616,14 @@ void Sage2GlobalsClass::Apply(Sage2EffectClass& effect, const Sage2DrawState& dr
 					v[0] = ((a >> 16) & 0xFF) / 255.0f; v[1] = ((a >> 8) & 0xFF) / 255.0f; v[2] = (a & 0xFF) / 255.0f;
 				}
 				Light_Color(v);
+				if (!Scene_Lights_Active())
+				{
+					// Tiberium Project @feature fires and lit buildings nearby brighten the object
+					const float position[3] = { world[0][3], world[1][3], world[2][3] };
+					float pointAmbient[3];
+					Sage2SceneClass::Get_Point_Light_Ambient(position, pointAmbient);
+					v[0] += pointAmbient[0]; v[1] += pointAmbient[1]; v[2] += pointAmbient[2];
+				}
 				effect.Set_Float(i, v, 3);
 				break;
 			}

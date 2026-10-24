@@ -44,8 +44,11 @@ public:
 	static bool Is_Enabled();
 	/// Options.ini: Sage2WaterDepthScale (how much deeper the depth table takes the water to be:
 	/// Zero Hour's water is shallower than RA3's), Sage2WaterTint (how much the water's own colour
-	/// tints it; below 0: 0.15 with the depth table, C&C4's 0.4 without), Sage2WaterCaustics
+	/// tints it; below 0: 0.3 with the depth table, C&C4's 0.4 without), Sage2WaterCaustics
 	static void Set_Look(float depthScale, float tint, float caustics);
+	/// Options.ini: Sage2WaterShallow, the depth in RA3's table that Zero Hour's shallow water is
+	/// tinted at least as (reached over its first three units of depth; 0: as deep as it is)
+	static void Set_Shallow(float tableDepth);
 	/// Options.ini: Sage2WaterSky, how much of the sky the water reflects (by the Fresnel term)
 	static void Set_Sky_Strength(float strength);
 	/// The sky the water reflects this frame: Zero Hour's sky texture for the time of day, its

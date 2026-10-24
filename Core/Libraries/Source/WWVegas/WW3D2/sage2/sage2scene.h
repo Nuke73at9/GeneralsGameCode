@@ -78,12 +78,16 @@ public:
 		float color[3];		///< at the centre, as the lights' colours are
 		float innerRadius;	///< full strength inside this
 		float outerRadius;	///< nothing beyond this (C&C4: a smooth step between the two)
+		bool lightsObjects;	///< also brightens forward-lit objects nearby (lights Zero Hour's light environment does not carry already)
 	};
 	static void Clear_Point_Lights();
 	static void Add_Point_Light(const PointLight& light);
 	static unsigned Get_Point_Light_Count();
 	/// Options.ini: Sage2PointLights, how strong they are (0: none)
 	static void Set_Point_Light_Strength(float strength);
+	/// The light a forward-lit object at 'position' takes from the lights that light objects, as ambient
+	/// (it lights every side alike, as Zero Hour's light environment adds a light pulse's ambient)
+	static void Get_Point_Light_Ambient(const float position[3], float ambient[3]);
 	static float Get_Point_Light_Strength();
 
 	/// sRGB writes make the linear-space High techniques come out right on the ordinary frame buffer.

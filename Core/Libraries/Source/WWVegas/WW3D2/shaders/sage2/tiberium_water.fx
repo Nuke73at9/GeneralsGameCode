@@ -215,6 +215,13 @@ float4 WaterDepthLut
 	string UIWidget = "None";
 > = float4(0, 0.005, 0, 1);
 
+// shallow water: x the depth in the table (after the scale) its colour reaches at least, y over how
+// many units of the floor's depth it gets there
+float4 WaterShallow
+<
+	string UIWidget = "None";
+> = float4(0, 3, 0, 0);
+
 // the sky's reflection (RA3's ocean adds half its reflection texture), by the Fresnel term: x strength (0: none), y the
 // sky texture's repeats per world unit, zw its scroll per second
 float4 WaterSky
@@ -372,10 +379,16 @@ float4 PS_Water(VSOutput In, uniform bool hasShadow, float2 vPos : PIXELLOC) : C
 	{
 		// RA3 and C&C4: the floor times the depth table, plus the caustics, the surface opaque
 		// (it carries the floor)
-		float lutCoord = (1.0 + floorDepth * WaterDepthLut.w) * WaterDepthLut.y;
+		// the table's colour at the floor's depth, Zero Hour's shallow water tinted at least as the
+		// table is some way down (reached over the first units of depth, so the shore still blends)
+		float tableDepth = floorDepth * WaterDepthLut.w + WaterShallow.x * saturate(floorDepth / max(WaterShallow.y, 0.1));
+		float lutCoord = (1.0 + tableDepth) * WaterDepthLut.y;
 		float4 lut = tex2Dlod(SAMPLER(DepthLutTexture), float4(lutCoord, lutCoord, 0, 0));
+		// the caustics as strong as the table says at the floor's own depth
+		float causticsCoord = (1.0 + floorDepth * WaterDepthLut.w) * WaterDepthLut.y;
+		float causticsStrength = tex2Dlod(SAMPLER(DepthLutTexture), float4(causticsCoord, causticsCoord, 0, 0)).w;
 		float3 floorNormal = normalize(cross(ddy(floorPosition), ddx(floorPosition)));
-		float3 caustics = Caustics(floorPosition, floorNormal, lut.w) * WaterDepthLut.z * shroud;
+		float3 caustics = Caustics(floorPosition, floorNormal, causticsStrength) * WaterDepthLut.z * shroud;
 		underwater = refraction * GammaToLinear(lut.xyz) + caustics;
 		opacity = 1.0;
 	}

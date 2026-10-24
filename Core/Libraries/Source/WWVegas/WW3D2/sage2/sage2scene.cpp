@@ -532,6 +532,31 @@ float Sage2SceneClass::Get_Point_Light_Strength()
 	return s_pointLightStrength;
 }
 
+void Sage2SceneClass::Get_Point_Light_Ambient(const float position[3], float ambient[3])
+{
+	ambient[0] = ambient[1] = ambient[2] = 0.0f;
+	if (s_pointLightStrength <= 0.0f)
+		return;
+	for (size_t i = 0; i < s_pointLights.size(); ++i)
+	{
+		const PointLight& light = s_pointLights[i];
+		if (!light.lightsObjects)
+			continue;
+		const float dx = position[0] - light.position[0], dy = position[1] - light.position[1], dz = position[2] - light.position[2];
+		const float d2 = dx * dx + dy * dy + dz * dz;
+		const float outer2 = light.outerRadius * light.outerRadius, inner2 = light.innerRadius * light.innerRadius;
+		if (d2 >= outer2)
+			continue;
+		// C&C4's smooth step between the radii, half as strong as on the ground: it lights every side
+		float t = outer2 > inner2 ? (outer2 - d2) / (outer2 - inner2) : 1.0f;
+		t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+		const float k = t * t * (3.0f - 2.0f * t) * 0.5f * s_pointLightStrength;
+		ambient[0] += light.color[0] * k;
+		ambient[1] += light.color[1] * k;
+		ambient[2] += light.color[2] * k;
+	}
+}
+
 //-------------------------------------------------------------------------------------------------
 void Sage2SceneClass::Release_Resources()
 {

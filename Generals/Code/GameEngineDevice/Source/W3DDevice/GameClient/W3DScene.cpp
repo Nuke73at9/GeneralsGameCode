@@ -1711,6 +1711,7 @@ void RTS3DScene::gatherSage2PointLights()
 		point.color[2] = diffuse.Z * intensity;
 		point.innerRadius = (float)attenStart;
 		point.outerRadius = (float)attenEnd;
+		point.lightsObjects = false;	// the light environment adds a pulse's ambient to the objects it reaches
 		Sage2SceneClass::Add_Point_Light(point);
 	}
 	gatherSage2FireLights();
@@ -1748,8 +1749,9 @@ static Bool hasNightLights(RenderObjClass *robj, Int depth)
 //=============================================================================
 /** Tiberium Project @feature Lights on at night: in the evening and at night, each visible building
 	whose model has a lit-window pass (Zero Hour's night models) spills a soft warm light onto the
-	ground around it, and each street lamp lights the ground under it. Zero Hour drew the windows and
-	lamps but they lit nothing. Visual only. */
+	ground around it, each street lamp lights the ground under it, and each vehicle with its headlight
+	cones showing lights the ground ahead. Zero Hour drew the windows, lamps and cones but they lit
+	nothing. Visual only. */
 //=============================================================================
 void RTS3DScene::gatherSage2NightLights()
 {
@@ -1784,6 +1786,49 @@ void RTS3DScene::gatherSage2NightLights()
 			point.color[2] = 0.45f * 0.6f * dusk;
 			point.innerRadius = 15.0f;
 			point.outerRadius = 100.0f;
+			point.lightsObjects = true;
+			Sage2SceneClass::Add_Point_Light(point);
+			continue;
+		}
+		if (draw->isKindOf(KINDOF_VEHICLE))
+		{
+			// a vehicle's headlights: Zero Hour shows its "HEADLIGHT" cones at night; light the
+			// ground they reach, at the middle of the visible cones
+			Coord3D middle = { 0.0f, 0.0f, 0.0f };
+			Real reach = 0.0f;
+			Int cones = 0;
+			for (DrawModule **dm = draw->getDrawModules(); *dm != nullptr; ++dm)
+			{
+				ObjectDrawInterface *odi = (*dm)->getObjectDrawInterface();
+				RenderObjClass *robj = odi != nullptr ? static_cast<W3DModelDraw *>(odi)->getRenderObject() : nullptr;
+				if (robj == nullptr)
+					continue;
+				for (Int i = 0; i < robj->Get_Num_Sub_Objects(); ++i)
+				{
+					RenderObjClass *sub = robj->Get_Sub_Object(i);
+					if (sub != nullptr && !sub->Is_Hidden() && strstr(sub->Get_Name(), "HEADLIGHT") != nullptr)
+					{
+						const SphereClass &sphere = sub->Get_Bounding_Sphere();
+						middle.x += sphere.Center.X;
+						middle.y += sphere.Center.Y;
+						middle.z += sphere.Center.Z;
+						reach = max(reach, sphere.Radius);
+						++cones;
+					}
+					REF_PTR_RELEASE(sub);
+				}
+			}
+			if (cones == 0)
+				continue;
+			point.position[0] = middle.x / cones;
+			point.position[1] = middle.y / cones;
+			point.position[2] = middle.z / cones + 8.0f;
+			point.color[0] = 1.0f * 0.5f * dusk;
+			point.color[1] = 0.92f * 0.5f * dusk;
+			point.color[2] = 0.75f * 0.5f * dusk;
+			point.innerRadius = 10.0f;
+			point.outerRadius = min(120.0f, reach * 1.5f + 25.0f);
+			point.lightsObjects = true;
 			Sage2SceneClass::Add_Point_Light(point);
 			continue;
 		}
@@ -1808,6 +1853,7 @@ void RTS3DScene::gatherSage2NightLights()
 		point.color[2] = 0.5f * 0.35f * dusk;
 		point.innerRadius = radius * 0.8f;
 		point.outerRadius = min(260.0f, radius + 60.0f);
+		point.lightsObjects = false;	// its own windows already glow; the light is for the street
 		Sage2SceneClass::Add_Point_Light(point);
 	}
 }
@@ -1891,6 +1937,7 @@ void RTS3DScene::gatherSage2FireLights()
 		point.color[2] = blue * 0.30f * strength * flicker;
 		point.innerRadius = 10.0f + spread;
 		point.outerRadius = min(240.0f, max(60.0f, 40.0f + spread * 2.0f + WWMath::Sqrt(weight) * 4.0f));
+		point.lightsObjects = true;
 		Sage2SceneClass::Add_Point_Light(point);
 	}
 }

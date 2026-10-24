@@ -51,7 +51,8 @@ namespace
 	float s_depthScale = 2.5f;	// Zero Hour's rivers and lakes are a third as deep as RA3's shores
 	float s_tint = -1.0f;
 	float s_caustics = 0.6f;
-	float s_skyStrength = 1.0f;
+	float s_skyStrength = 0.6f;
+	float s_shallow = 20.0f;	// RA3's table twenty units down: teal
 	TextureClass* s_sky = nullptr;	// the water renderer's, for this frame
 	float s_skyParams[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 	float s_skyColor[4] = { 1.0f, 1.0f, 1.0f, 400.0f };
@@ -124,6 +125,11 @@ namespace
 //-------------------------------------------------------------------------------------------------
 void Sage2WaterClass::Set_Enabled(bool enabled) { s_enabled = enabled; }
 bool Sage2WaterClass::Is_Enabled() { return s_enabled; }
+
+void Sage2WaterClass::Set_Shallow(float tableDepth)
+{
+	s_shallow = tableDepth < 0.0f ? 0.0f : (tableDepth > 150.0f ? 150.0f : tableDepth);
+}
 
 void Sage2WaterClass::Set_Sky_Strength(float strength)
 {
@@ -214,7 +220,9 @@ bool Sage2WaterClass::Draw(unsigned vertexCount, unsigned triangleCount, Texture
 	s_effect->Set_Float("WaterDepthLut", lutParams, 4);
 	// how much the water's own colour tints it: C&C4's 0.4 over its PuddleColor; with the table
 	// (which carries the water's colour, as RA3's ocean has none of its own) a touch of the map's
-	float tint = s_tint >= 0.0f ? s_tint : (depthLut != nullptr ? 0.15f : 0.4f);
+	float tint = s_tint >= 0.0f ? s_tint : (depthLut != nullptr ? 0.3f : 0.4f);
+	float shallow[4] = { s_shallow, 3.0f, 0.0f, 0.0f };
+	s_effect->Set_Float("WaterShallow", shallow, 4);
 	float look[4] = { tint, 2.0f, 0.2f, 0.0f };
 	s_effect->Set_Float("WaterLook", look, 4);
 	IDirect3DBaseTexture9* sky = D3D_Texture(s_sky);
