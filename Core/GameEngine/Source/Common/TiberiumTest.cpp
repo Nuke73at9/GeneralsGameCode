@@ -276,6 +276,9 @@ void TiberiumTest::update()
 				TheTacticalView->setPitch( step.pitchDegrees * PI / 180.0f );
 			if ( step.hasAngle )
 				TheTacticalView->setAngle( step.angleDegrees * PI / 180.0f );
+			// the control bar again: the game's start may still set its own after the first time
+			if ( s_controlBarSet && TheControlBar != nullptr )
+				TheControlBar->switchControlBarStage( (ControlBarStages)s_controlBarStage );
 			const Coord3D pos = TheTacticalView->getPosition();
 			log( "frame %d: camera zoom %.2f pitch %.1f angle %.0f at %.0f %.0f", (int)s_frame, TheTacticalView->getZoom(),
 				TheTacticalView->getPitch() * 180.0f / PI, TheTacticalView->getAngle() * 180.0f / PI, pos.x, pos.y );
