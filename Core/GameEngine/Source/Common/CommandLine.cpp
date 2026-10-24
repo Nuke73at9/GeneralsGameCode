@@ -857,6 +857,13 @@ Int parseTestControlBar(char *args[], int num)
 	return 2;
 }
 
+Int parseTestTour(char *args[], int num)
+{
+	if (num > 1)
+		TiberiumTest::setTour(atoi(args[1]));
+	return 2;
+}
+
 Int parseTestShots(char *args[], int num)
 {
 	if (num > 1)
@@ -1278,6 +1285,7 @@ static CommandLineParam paramsForEngineInit[] =
 	{ "-testMap", parseTestMap },
 	{ "-testCamera", parseTestCamera },
 	{ "-testControlBar", parseTestControlBar },
+	{ "-testTour", parseTestTour },
 	{ "-testShots", parseTestShots },
 	{ "-testScorch", parseTestScorch },
 	{ "-testCRC", parseTestCRC },

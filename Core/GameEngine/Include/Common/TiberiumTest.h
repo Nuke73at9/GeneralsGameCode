@@ -30,6 +30,10 @@
 //                                                        x, y, angle; "-" keeps a value)
 //   -testControlBar low                                  the control bar lowered, as its green arrow does:
 //                                                        the world drawn full height (hidden only hides it)
+//   -testTour 3                                          a tour of the map: a 3 x 3 grid of stops, each seen
+//                                                        close up, at the usual height, from afar and from low
+//                                                        down, turned a quarter each time; a screenshot of each
+//                                                        view, then quit
 //   -testShots 100                                       a PNG screenshot every 100 frames
 //   -testScorch 50                                       a field of scorch marks around the view at frame 50
 //   -testCRC 300                                         log the logic CRC at logic frame 300
@@ -49,6 +53,7 @@ public:
 	static void setMap( const char *path );
 	static void setCameras( const char *spec );
 	static void setControlBar( const char *stage );
+	static void setTour( Int size );
 	static void setShotInterval( Int frames );
 	static void setScorchFrame( Int frame );
 	static void setCRCFrame( Int frame );

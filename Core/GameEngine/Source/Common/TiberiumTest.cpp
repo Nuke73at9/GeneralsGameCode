@@ -37,6 +37,7 @@
 #include "GameClient/GameClient.h"
 #include "GameClient/View.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/TerrainLogic.h"
 
 namespace
 {
@@ -52,8 +53,12 @@ namespace
 	std::string s_map;
 	std::vector<CameraStep> s_cameras;
 	Int s_shotInterval = 0;
+	Int s_shotStart = 0;		// no screenshot before this frame (a tour's first view)
 	Int s_scorchFrame = -1;
 	Int s_controlBarStage = -1;	// ControlBarStages, or -1: as it is
+	Int s_tourSize = 0;			// a tour of the map: a grid of tourSize x tourSize stops
+	Bool s_tourBuilt = FALSE;
+	const Int TOUR_VIEW_FRAMES = 45;	// per view: the camera moves, a moment later the screenshot
 	Bool s_controlBarSet = FALSE;
 	Int s_crcFrame = -1;
 	Bool s_crcLogged = FALSE;
@@ -171,6 +176,15 @@ void TiberiumTest::setControlBar( const char *stage )
 }
 
 //-------------------------------------------------------------------------------------------------
+void TiberiumTest::setTour( Int size )
+{
+	if ( size <= 0 )
+		return;
+	s_tourSize = size > 6 ? 6 : size;
+	s_active = TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
 void TiberiumTest::setShotInterval( Int frames ) { if ( frames > 0 ) { s_shotInterval = frames; s_active = TRUE; } }
 void TiberiumTest::setScorchFrame( Int frame ) { if ( frame >= 0 ) { s_scorchFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setCRCFrame( Int frame ) { if ( frame >= 0 ) { s_crcFrame = frame; s_active = TRUE; } }
@@ -193,9 +207,47 @@ void TiberiumTest::update()
 
 	const Bool inGame = TheGameLogic != nullptr && TheGameLogic->isInGame();
 
+	// the map tour: once in game, a grid of stops over the playable map, each seen close up, at the
+	// default height, from afar and from low down, turned a quarter each time; a screenshot of each
+	// view, then quit (unless a quit frame was given)
+	Region3D extent;
+	if ( s_tourSize > 0 && !s_tourBuilt && inGame && TheTerrainLogic != nullptr
+		&& ( TheTerrainLogic->getExtent( &extent ), extent.hi.x > extent.lo.x && extent.hi.y > extent.lo.y ) )	// once the map is in
+	{
+		s_tourBuilt = TRUE;
+		const Real views[4][3] = { { 0.3f, 37.5f, 0.0f }, { 0.6f, 37.5f, 90.0f }, { 1.2f, 37.5f, 180.0f }, { 0.5f, 20.0f, 270.0f } };
+		const Int base = ( s_frame / TOUR_VIEW_FRAMES + 1 ) * TOUR_VIEW_FRAMES;
+		Int n = 0;
+		for ( Int row = 0; row < s_tourSize; ++row )
+		{
+			for ( Int col = 0; col < s_tourSize; ++col )
+			{
+				for ( Int v = 0; v < 4; ++v )
+				{
+					CameraStep step;
+					step.frame = base + n * TOUR_VIEW_FRAMES + TOUR_VIEW_FRAMES / 4;
+					step.hasZoom = step.hasPitch = step.hasPosition = step.hasAngle = TRUE;
+					step.zoom = views[v][0];
+					step.pitchDegrees = views[v][1];
+					step.angleDegrees = views[v][2];
+					step.x = extent.lo.x + ( col + 0.5f ) * ( extent.hi.x - extent.lo.x ) / s_tourSize;
+					step.y = extent.lo.y + ( row + 0.5f ) * ( extent.hi.y - extent.lo.y ) / s_tourSize;
+					s_cameras.push_back( step );
+					++n;
+				}
+			}
+		}
+		s_shotInterval = TOUR_VIEW_FRAMES;
+		s_shotStart = base + TOUR_VIEW_FRAMES;
+		if ( s_quitFrame <= 0 )
+			s_quitFrame = base + n * TOUR_VIEW_FRAMES + 1;
+		log( "frame %d: tour of %d views over (%.0f %.0f)-(%.0f %.0f), screenshots from frame %d, quit at %d", (int)s_frame, (int)n,
+			extent.lo.x, extent.lo.y, extent.hi.x, extent.hi.y, (int)( base + TOUR_VIEW_FRAMES ), (int)s_quitFrame );
+	}
+
 	// the control bar lowered or hidden, for a full view of the world (the interface only); a
 	// moment into the game, as the game's start sets up its own bar
-	if ( s_controlBarStage >= 0 && !s_controlBarSet && inGame && s_frame >= 5 && TheControlBar != nullptr )
+	if ( s_controlBarStage >= 0 && !s_controlBarSet && inGame && s_frame >= 30 && TheControlBar != nullptr )
 	{
 		s_controlBarSet = TRUE;
 		TheControlBar->switchControlBarStage( (ControlBarStages)s_controlBarStage );
@@ -262,7 +314,7 @@ void TiberiumTest::update()
 	}
 	// (none from the quit frame on: on a fast machine more would keep the quit waiting forever)
 	const Bool quitReached = s_quitFrame > 0 && s_frame >= s_quitFrame;
-	if ( s_shotInterval > 0 && TheDisplay != nullptr && s_frame % s_shotInterval == 0 && !quitReached )
+	if ( s_shotInterval > 0 && TheDisplay != nullptr && s_frame % s_shotInterval == 0 && s_frame >= s_shotStart && !quitReached )
 	{
 		double msPerFrame = 0.0;
 		if ( s_spanStartFrame > 0 && s_frame > s_spanStartFrame )
