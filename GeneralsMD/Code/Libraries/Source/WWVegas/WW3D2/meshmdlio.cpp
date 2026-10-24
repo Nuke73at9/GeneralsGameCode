@@ -1684,6 +1684,47 @@ void MeshModelClass::post_process()
 	if (WW3D::Is_Overbright_Modify_On_Load_Enabled()) {
 		modify_for_overbright();
 	}
+
+	// Tiberium Project @feature lights on at night
+	if (WW3D::Is_Night_Lights_On_Load_Enabled()) {
+		modify_for_night_lights();
+	}
+}
+
+/***********************************************************************************************
+ * MeshModelClass::modify_for_night_lights -- the lit windows of a night model, self-lit         *
+ *                                                                                             *
+ * Tiberium Project @feature Zero Hour's buildings at night are two-pass models: their texture,   *
+ * then an additive pass (source one, destination one) of a night texture that is black but     *
+ * for the lit windows and lamps, with a vertex material named "W3D Night". That pass is lit by   *
+ * the scene's lights like the rest (no emissive), so under a dark night the "lit" windows were  *
+ * as dark as the walls. Here such a pass's materials get an emissive colour equal to their     *
+ * diffuse: the windows show at their texture's brightness whatever the light, and the bloom    *
+ * picks them up. Visual only.                                                                  *
+ *=============================================================================================*/
+void MeshModelClass::modify_for_night_lights()
+{
+	for (int pass = 1; pass < DefMatDesc->PassCount; pass++) {
+		if (DefMatDesc->ShaderArray[pass]) {
+			continue;
+		}
+		const ShaderClass &shader = DefMatDesc->Shader[pass];
+		if (shader.Get_Src_Blend_Func() != ShaderClass::SRCBLEND_ONE || shader.Get_Dst_Blend_Func() != ShaderClass::DSTBLEND_ONE
+			|| shader.Get_Texturing() != ShaderClass::TEXTURING_ENABLE) {
+			continue;
+		}
+		const int count = DefMatDesc->MaterialArray[pass] ? VertexCount : 1;
+		for (int i = 0; i < count; i++) {
+			VertexMaterialClass *material = DefMatDesc->MaterialArray[pass] ? DefMatDesc->MaterialArray[pass]->Peek_Element(i)
+				: DefMatDesc->Material[pass];
+			if (material == nullptr || material->Get_Name() == nullptr || stricmp(material->Get_Name(), "W3D Night") != 0) {
+				continue;
+			}
+			Vector3 diffuse;
+			material->Get_Diffuse(&diffuse);
+			material->Set_Emissive(diffuse);
+		}
+	}
 }
 
 void MeshModelClass::post_process_fog()

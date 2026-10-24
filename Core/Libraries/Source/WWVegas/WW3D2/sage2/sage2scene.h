@@ -68,6 +68,24 @@ public:
 	/// vertex streams are set.
 	static bool Light_Batch(Sage2EffectClass& effect, int prepassTechnique, PrepassDrawClass& draw, float x0, float y0, float x1, float y1);
 
+	/// Tiberium Project @feature point lights, RA3's and C&C4's way: drawn after the directional
+	/// light into the light buffers with C&C4's own PointLight technique (deferredlighting.fxo),
+	/// one screen rectangle each, so the ground and every deferred mesh take them. The scene
+	/// gathers them each frame (Zero Hour's light pulses: explosions, muzzle flashes, ...).
+	struct PointLight
+	{
+		float position[3];
+		float color[3];		///< at the centre, as the lights' colours are
+		float innerRadius;	///< full strength inside this
+		float outerRadius;	///< nothing beyond this (C&C4: a smooth step between the two)
+	};
+	static void Clear_Point_Lights();
+	static void Add_Point_Light(const PointLight& light);
+	static unsigned Get_Point_Light_Count();
+	/// Options.ini: Sage2PointLights, how strong they are (0: none)
+	static void Set_Point_Light_Strength(float strength);
+	static float Get_Point_Light_Strength();
+
 	/// sRGB writes make the linear-space High techniques come out right on the ordinary frame buffer.
 	static bool Supports_SRGB_Write();
 

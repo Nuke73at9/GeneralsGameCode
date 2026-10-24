@@ -337,9 +337,23 @@ namespace
 		return s_useSceneLights && s_sceneLightsValid;
 	}
 
+	// Tiberium Project @bugfix the device light that is the effect's n-th directional light. Zero
+	// Hour's light environment ranks an object's lights by strength, an explosion's point light
+	// among them; taken slot for slot, a point light took the sun's place (DirectionalLight_0, the
+	// shadowed one) or a fill's with no direction at all, and the object went flat while it lasted
+	int Directional_Device_Light(unsigned n)
+	{
+		unsigned found = 0;
+		for (unsigned i = 0; i < 4; ++i)
+			if (DX8Wrapper::Is_Light_Enabled(i) && DX8Wrapper::Peek_Light(i).Type == D3DLIGHT_DIRECTIONAL && found++ == n)
+				return (int)i;
+		return -1;
+	}
+
 	void Set_Light(Sage2EffectClass& effect, int param, unsigned light, bool color)
 	{
 		float v[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+		const int device = Scene_Lights_Active() ? -1 : Directional_Device_Light(light);
 		if (Scene_Lights_Active())
 		{
 			if ((int)light < s_sceneLightCount)
@@ -350,9 +364,9 @@ namespace
 					Light_Color(v);
 			}
 		}
-		else if (DX8Wrapper::Is_Light_Enabled(light))
+		else if (device >= 0)
 		{
-			const D3DLIGHT8& l = DX8Wrapper::Peek_Light(light);
+			const D3DLIGHT8& l = DX8Wrapper::Peek_Light((unsigned)device);
 			if (color)
 			{
 				v[0] = l.Diffuse.r; v[1] = l.Diffuse.g; v[2] = l.Diffuse.b; v[3] = 1.0f;

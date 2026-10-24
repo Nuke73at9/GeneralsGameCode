@@ -1608,6 +1608,20 @@ void WaterRenderObjClass::Render(RenderInfoClass & rinfo)
 			//Draw the water surface as a bunch of alpha blended tiles covering areas where water is visible
 #ifdef RTS_RENDERER_D3D9
 			m_sage2Water = Sage2WaterClass::Begin();	// Tiberium Project @feature C&C4-style water: the frame copied for its refraction
+			if (m_sage2Water)
+			{
+				// the sky it reflects: the time of day's sky texture, scroll and corner colours
+				const Setting& sky = m_settings[m_tod];
+				float skyColor[3] = { 0.0f, 0.0f, 0.0f };
+				const DWORD corners[4] = { sky.vertex00Diffuse, sky.vertex10Diffuse, sky.vertex11Diffuse, sky.vertex01Diffuse };
+				for (Int c = 0; c < 4; ++c)
+				{
+					skyColor[0] += ((corners[c] >> 16) & 0xff) / (4.0f * 255.0f);
+					skyColor[1] += ((corners[c] >> 8) & 0xff) / (4.0f * 255.0f);
+					skyColor[2] += (corners[c] & 0xff) / (4.0f * 255.0f);
+				}
+				Sage2WaterClass::Set_Sky(sky.skyTexture, sky.skyTexelsPerUnit, sky.uScrollPerMs * 1000.0f, sky.vScrollPerMs * 1000.0f, skyColor);
+			}
 #endif
 			renderWater();
 #ifdef RTS_RENDERER_D3D9
@@ -2902,6 +2916,11 @@ void WaterRenderObjClass::drawRiverWater(PolygonTrigger *pTrig)
 		// TheSuperHackers @bugfix afc-afc0 14/04/2026 Apply shroud per-vertex to avoid double-darkening
 		// at river borders.
 		W3DShroud *shroud = TheTerrainRenderObject ? TheTerrainRenderObject->getShroud() : nullptr;
+#ifdef RTS_RENDERER_D3D9
+		// Tiberium Project: the SAGE 2 water shades by the shroud texture itself, as it does the floor
+		if (m_sage2Water)
+			shroud = nullptr;
+#endif
 
 		for (i=0; i<(pTrig->getNumPoints()/2); i++)
 		{
@@ -2969,6 +2988,21 @@ void WaterRenderObjClass::drawRiverWater(PolygonTrigger *pTrig)
 	DX8Wrapper::Set_Transform(D3DTS_WORLD,tm);	//position the water surface
 	DX8Wrapper::Set_Index_Buffer(ib_access,0);
 	DX8Wrapper::Set_Vertex_Buffer(vb_access);
+#ifdef RTS_RENDERER_D3D9
+	// Tiberium Project @feature the river through the SAGE 2 water too (refraction, Red Alert 3's
+	// depth table and caustics, sparkle, foam), its ripples along the river: across it the texture's
+	// u runs 0..HEIGHT_TO_USE over the river's width (endLen), along it v runs one unit per width
+	if (m_sage2Water && endLen > 0.0f)
+	{
+		Sage2WaterClass::River river;
+		river.worldPerU = endLen / HEIGHT_TO_USE;
+		river.worldPerV = endLen;
+		river.edgeTexture = m_riverAlphaEdge;
+		if (Sage2WaterClass::Draw((rectangleCount+1)*2, rectangleCount*2, m_riverTexture,
+			TheWaterTransparency->m_transparentWaterDepth, TheWaterTransparency->m_minWaterOpacity, &river))
+			return;
+	}
+#endif
 	DX8Wrapper::Set_Texture(0,m_riverTexture);	//set to blue
 
 	setupJbaWaterShader();

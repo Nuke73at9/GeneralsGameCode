@@ -308,6 +308,7 @@ protected:
 	unsigned int get_sort_flags() const;
 	void compute_static_sort_levels();
 	void modify_for_overbright();
+	void modify_for_night_lights();	///< Tiberium Project: night models' lit windows self-lit
 
 	// mat info support
 	void install_materials(MeshLoadContextClass * loadinfo);

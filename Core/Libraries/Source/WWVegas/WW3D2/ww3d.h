@@ -331,6 +331,10 @@ public:
 	*/
 	static void					Enable_Overbright_Modify_On_Load(bool onoff)	{ OverbrightModifyOnLoad = onoff; }
 	static bool					Is_Overbright_Modify_On_Load_Enabled()	{ return OverbrightModifyOnLoad; }
+	// Tiberium Project @feature lights on at night: the additive night pass of Zero Hour's buildings
+	// (their "W3D Night" lit-window layer) made self-lit on load, so the windows glow in the dark
+	static void					Enable_Night_Lights_On_Load(bool onoff)	{ NightLightsOnLoad = onoff; }
+	static bool					Is_Night_Lights_On_Load_Enabled()	{ return NightLightsOnLoad; }
 
 	static bool					Is_Snapshot_Activated()						{ return SnapshotActivated; }
 	static void					Activate_Snapshot(bool b)					{ SnapshotActivated=b; }
@@ -395,6 +399,7 @@ private:
 	static bool							MungeSortOnLoad;
 
 	static bool							OverbrightModifyOnLoad;
+	static bool							NightLightsOnLoad;
 
 	static FrameGrabClass *			Movie;
 	static bool							PauseRecord;

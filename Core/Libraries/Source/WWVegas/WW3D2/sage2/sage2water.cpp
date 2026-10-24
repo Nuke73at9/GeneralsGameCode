@@ -47,6 +47,14 @@ namespace
 	unsigned s_width = 0, s_height = 0;
 	bool s_begun = false;
 	bool s_logged = false;
+	bool s_loggedRiver = false;
+	float s_depthScale = 2.5f;	// Zero Hour's rivers and lakes are a third as deep as RA3's shores
+	float s_tint = -1.0f;
+	float s_caustics = 0.6f;
+	float s_skyStrength = 1.0f;
+	TextureClass* s_sky = nullptr;	// the water renderer's, for this frame
+	float s_skyParams[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	float s_skyColor[4] = { 1.0f, 1.0f, 1.0f, 400.0f };
 
 	bool Make_Effect(IDirect3DDevice9* device)
 	{
@@ -117,6 +125,29 @@ namespace
 void Sage2WaterClass::Set_Enabled(bool enabled) { s_enabled = enabled; }
 bool Sage2WaterClass::Is_Enabled() { return s_enabled; }
 
+void Sage2WaterClass::Set_Sky_Strength(float strength)
+{
+	s_skyStrength = strength < 0.0f ? 0.0f : (strength > 2.0f ? 2.0f : strength);
+}
+
+void Sage2WaterClass::Set_Sky(TextureClass* sky, float texelsPerUnit, float uScrollPerSecond, float vScrollPerSecond, const float color[3])
+{
+	s_sky = sky;
+	s_skyParams[1] = texelsPerUnit;
+	s_skyParams[2] = uScrollPerSecond * texelsPerUnit;
+	s_skyParams[3] = vScrollPerSecond * texelsPerUnit;
+	s_skyColor[0] = color[0];
+	s_skyColor[1] = color[1];
+	s_skyColor[2] = color[2];
+}
+
+void Sage2WaterClass::Set_Look(float depthScale, float tint, float caustics)
+{
+	s_depthScale = depthScale < 0.1f ? 0.1f : (depthScale > 10.0f ? 10.0f : depthScale);
+	s_tint = tint > 1.0f ? 1.0f : tint;
+	s_caustics = caustics < 0.0f ? 0.0f : (caustics > 4.0f ? 4.0f : caustics);
+}
+
 //-------------------------------------------------------------------------------------------------
 bool Sage2WaterClass::Begin()
 {
@@ -138,7 +169,8 @@ bool Sage2WaterClass::Begin()
 }
 
 //-------------------------------------------------------------------------------------------------
-bool Sage2WaterClass::Draw(unsigned vertexCount, unsigned triangleCount, TextureClass* waterTexture, float transparentDepth, float minOpacity)
+bool Sage2WaterClass::Draw(unsigned vertexCount, unsigned triangleCount, TextureClass* waterTexture, float transparentDepth, float minOpacity,
+	const River* river)
 {
 	if (!s_begun || triangleCount == 0)
 		return false;
@@ -171,6 +203,32 @@ bool Sage2WaterClass::Draw(unsigned vertexCount, unsigned triangleCount, Texture
 	IDirect3DBaseTexture9* ocean = Sage2TextureClass::Get("fxoceancubemap");
 	if (ocean != nullptr)
 		s_effect->Set_Texture("EnvironmentTexture", ocean);
+	// RA3's and C&C4's underwater: the depth table and the caustics (the absorption without them)
+	IDirect3DBaseTexture9* depthLut = Sage2TextureClass::Get("fxdepthlut");
+	IDirect3DBaseTexture9* caustics = Sage2TextureClass::Get("fxcaustics");
+	if (depthLut != nullptr)
+		s_effect->Set_Texture("DepthLutTexture", depthLut);
+	if (caustics != nullptr)
+		s_effect->Set_Texture("CausticsTexture", caustics);
+	float lutParams[4] = { depthLut != nullptr ? 1.0f : 0.0f, 1.0f / 200.0f, caustics != nullptr ? s_caustics : 0.0f, s_depthScale };
+	s_effect->Set_Float("WaterDepthLut", lutParams, 4);
+	// how much the water's own colour tints it: C&C4's 0.4 over its PuddleColor; with the table
+	// (which carries the water's colour, as RA3's ocean has none of its own) a touch of the map's
+	float tint = s_tint >= 0.0f ? s_tint : (depthLut != nullptr ? 0.15f : 0.4f);
+	float look[4] = { tint, 2.0f, 0.2f, 0.0f };
+	s_effect->Set_Float("WaterLook", look, 4);
+	IDirect3DBaseTexture9* sky = D3D_Texture(s_sky);
+	if (sky != nullptr)
+		s_effect->Set_Texture("SkyTexture", sky);
+	float skyParams[4] = { sky != nullptr ? s_skyStrength : 0.0f, s_skyParams[1], s_skyParams[2], s_skyParams[3] };
+	s_effect->Set_Float("WaterSky", skyParams, 4);
+	s_effect->Set_Float("WaterSkyColor", s_skyColor, 4);
+	IDirect3DBaseTexture9* edge = river != nullptr ? D3D_Texture(river->edgeTexture) : nullptr;
+	if (edge != nullptr)
+		s_effect->Set_Texture("EdgeTexture", edge);
+	float riverParams[4] = { river != nullptr ? 1.0f : 0.0f, river != nullptr ? river->worldPerU : 0.0f,
+		river != nullptr ? river->worldPerV : 0.0f, edge != nullptr ? 1.0f : 0.0f };
+	s_effect->Set_Float("WaterRiver", riverParams, 4);
 	const Sage2TerrainClass::Shroud& shroud = Sage2TerrainClass::Get_Shroud();
 	IDirect3DBaseTexture9* shroudTexture = D3D_Texture(shroud.texture);
 	if (shroudTexture != nullptr)
@@ -202,7 +260,16 @@ bool Sage2WaterClass::Draw(unsigned vertexCount, unsigned triangleCount, Texture
 	if (!s_logged)
 	{
 		s_logged = true;
-		Sage2_Log("water: drawn with tiberium_water %s", technique == s_techDefault ? "(shadowed)" : "(no shadow map)");
+		Sage2_Log("water: drawn with tiberium_water %s, %s", technique == s_techDefault ? "(shadowed)" : "(no shadow map)",
+			depthLut != nullptr ? (caustics != nullptr ? "depth table and caustics" : "depth table, no caustics") : "no depth table (absorption)");
+		Sage2_Log("water: the sky reflected at %.2f (%s), colour (%.2f %.2f %.2f), %.4f repeats a unit", skyParams[0],
+			sky != nullptr ? "sky texture" : "no sky texture", s_skyColor[0], s_skyColor[1], s_skyColor[2], s_skyParams[1]);
+	}
+	if (river != nullptr && !s_loggedRiver)
+	{
+		s_loggedRiver = true;
+		Sage2_Log("water: rivers drawn with tiberium_water (%.0f x %.0f world units a texture unit, %s)", river->worldPerU, river->worldPerV,
+			edge != nullptr ? "edge texture" : "no edge texture");
 	}
 	return true;
 }
@@ -226,6 +293,7 @@ void Sage2WaterClass::Release_Resources()
 void Sage2WaterClass::Shutdown()
 {
 	Release_Resources();
+	s_sky = nullptr;
 	if (s_declaration) s_declaration->Release();
 	s_declaration = nullptr;
 	s_effect = nullptr;	// owned by the effect cache

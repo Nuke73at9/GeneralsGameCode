@@ -878,6 +878,27 @@ Int parseTestScorch(char *args[], int num)
 	return 2;
 }
 
+Int parseTestLights(char *args[], int num)
+{
+	if (num > 1)
+		TiberiumTest::setLightsFrame(atoi(args[1]));
+	return 2;
+}
+
+Int parseTestFire(char *args[], int num)
+{
+	if (num > 1)
+		TiberiumTest::setFireFrame(atoi(args[1]));
+	return 2;
+}
+
+Int parseTestReveal(char *args[], int num)
+{
+	if (num > 1)
+		TiberiumTest::setReveal(atoi(args[1]) != 0);
+	return 2;
+}
+
 Int parseTestCRC(char *args[], int num)
 {
 	if (num > 1)
@@ -1288,6 +1309,9 @@ static CommandLineParam paramsForEngineInit[] =
 	{ "-testTour", parseTestTour },
 	{ "-testShots", parseTestShots },
 	{ "-testScorch", parseTestScorch },
+	{ "-testLights", parseTestLights },
+	{ "-testFire", parseTestFire },
+	{ "-testReveal", parseTestReveal },
 	{ "-testCRC", parseTestCRC },
 	{ "-testQuit", parseTestQuit },
 	{ "-noShellAnim", parseNoWindowAnimation }, // TheSuperHackers @tweak Is now available in Release builds.

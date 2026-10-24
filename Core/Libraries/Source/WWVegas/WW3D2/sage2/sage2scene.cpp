@@ -21,6 +21,7 @@
 #include "sage2scene.h"
 
 #include <string.h>
+#include <vector>
 
 #include "camera.h"
 #include "dx8polygonrenderer.h"
@@ -51,7 +52,14 @@ namespace
 	Sage2EffectClass* s_lighting = nullptr;
 	Sage2EffectClass* s_linearDepth = nullptr;
 	int s_lightingTechnique = -1, s_linearDepthTechnique = -1;
+	int s_pointLightTechnique = -1;
 	bool s_clearedThisFrame = false;
+
+	// Tiberium Project @feature this frame's point lights
+	const unsigned MAX_POINT_LIGHTS = 64;
+	std::vector<Sage2SceneClass::PointLight> s_pointLights;
+	float s_pointLightStrength = 2.0f;	// Zero Hour lit the ground with a pulse's ambient and diffuse both
+	bool s_pointLightsLogged = false;
 
 	IDirect3DSurface9* Surface(IDirect3DTexture9* t)
 	{
@@ -120,6 +128,7 @@ namespace
 			return false;
 		s_lightingTechnique = s_lighting->Find_Technique("Directional");
 		s_linearDepthTechnique = s_linearDepth->Find_Technique("LinearDepth");
+		s_pointLightTechnique = s_lighting->Find_Technique("PointLight");	// optional: no point lights without it
 		return s_lightingTechnique >= 0 && s_linearDepthTechnique >= 0;
 	}
 
@@ -200,6 +209,83 @@ namespace
 			device->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
 			device->DrawPrimitive(D3DPT_TRIANGLESTRIP, 0, 2);
 			effect.End(device);
+		}
+	}
+
+	// Tiberium Project @feature the clip-space rectangle a point light's sphere covers on screen;
+	// false when it is off screen. A sphere that reaches behind the eye covers the whole screen.
+	bool Light_Rect(const Matrix4x4& viewProjection, const Sage2SceneClass::PointLight& light, float& x0, float& y0, float& x1, float& y1)
+	{
+		const float r = light.outerRadius;
+		float minX = 1e9f, minY = 1e9f, maxX = -1e9f, maxY = -1e9f;
+		for (int c = 0; c < 8; ++c)
+		{
+			const float x = light.position[0] + ((c & 1) ? r : -r);
+			const float y = light.position[1] + ((c & 2) ? r : -r);
+			const float z = light.position[2] + ((c & 4) ? r : -r);
+			const float cx = viewProjection[0][0] * x + viewProjection[0][1] * y + viewProjection[0][2] * z + viewProjection[0][3];
+			const float cy = viewProjection[1][0] * x + viewProjection[1][1] * y + viewProjection[1][2] * z + viewProjection[1][3];
+			const float cw = viewProjection[3][0] * x + viewProjection[3][1] * y + viewProjection[3][2] * z + viewProjection[3][3];
+			if (cw <= 0.001f)
+			{
+				x0 = y0 = -1.0f;
+				x1 = y1 = 1.0f;
+				return true;
+			}
+			const float px = cx / cw, py = cy / cw;
+			if (px < minX) minX = px;
+			if (px > maxX) maxX = px;
+			if (py < minY) minY = py;
+			if (py > maxY) maxY = py;
+		}
+		x0 = minX < -1.0f ? -1.0f : minX;
+		y0 = minY < -1.0f ? -1.0f : minY;
+		x1 = maxX > 1.0f ? 1.0f : maxX;
+		y1 = maxY > 1.0f ? 1.0f : maxY;
+		return x0 < x1 && y0 < y1;
+	}
+
+	// Tiberium Project @feature this frame's point lights into the bound light buffers (diffuse,
+	// specular), added over what the directional light wrote, each over its own rectangle within
+	// the batch's (x0,y0)-(x1,y1): C&C4's PointLight technique, its volume a screen rectangle (the
+	// vertex shader's transform set to identity; the pixel shader works from the pixel position)
+	void Draw_Point_Lights(IDirect3DDevice9* device, float x0, float y0, float x1, float y1)
+	{
+		if (s_pointLights.empty() || s_pointLightTechnique < 0 || s_pointLightStrength <= 0.0f)
+			return;
+		Matrix4x4 view, projection;
+		DX8Wrapper::Get_Transform(D3DTS_VIEW, view);
+		DX8Wrapper::Get_Transform(D3DTS_PROJECTION, projection);
+		const Matrix4x4 viewProjection = projection * view;
+		const float identity[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+		s_lighting->Set_Float("WorldViewProjection", identity, 16);
+		unsigned drawn = 0;
+		for (size_t i = 0; i < s_pointLights.size(); ++i)
+		{
+			const Sage2SceneClass::PointLight& light = s_pointLights[i];
+			float lx0, ly0, lx1, ly1;
+			if (!Light_Rect(viewProjection, light, lx0, ly0, lx1, ly1))
+				continue;
+			if (lx0 < x0) lx0 = x0;
+			if (ly0 < y0) ly0 = y0;
+			if (lx1 > x1) lx1 = x1;
+			if (ly1 > y1) ly1 = y1;
+			if (lx0 >= lx1 || ly0 >= ly1)
+				continue;
+			const float position[4] = { light.position[0], light.position[1], light.position[2], light.innerRadius * light.innerRadius };
+			const float color[4] = { light.color[0] * s_pointLightStrength, light.color[1] * s_pointLightStrength,
+				light.color[2] * s_pointLightStrength, light.outerRadius * light.outerRadius };
+			s_lighting->Set_Float("PointLightPosition", position, 4);
+			s_lighting->Set_Float("PointLightColor", color, 4);
+			Draw_Rect(device, *s_lighting, s_pointLightTechnique, lx0, ly0, lx1, ly1);
+			++drawn;
+		}
+		if (!s_pointLightsLogged && drawn > 0)
+		{
+			s_pointLightsLogged = true;
+			const Sage2SceneClass::PointLight& l = s_pointLights[0];
+			Sage2_Log("point lights: %u drawn into the light buffers (of %u this frame); the first at (%.0f %.0f %.0f), colour (%.2f %.2f %.2f), radius %.0f..%.0f",
+				drawn, (unsigned)s_pointLights.size(), l.position[0], l.position[1], l.position[2], l.color[0], l.color[1], l.color[2], l.innerRadius, l.outerRadius);
 		}
 	}
 }
@@ -398,6 +484,7 @@ bool Sage2SceneClass::Light_Batch(Sage2EffectClass& effect, int prepassTechnique
 	device->SetRenderTarget(1, sSpecular);
 	device->SetViewport(&viewport);
 	Draw_Rect(device, *s_lighting, s_lightingTechnique, x0, y0, x1, y1);
+	Draw_Point_Lights(device, x0, y0, x1, y1);
 	device->SetRenderTarget(1, nullptr);
 
 	// 3. back to the frame
@@ -416,6 +503,33 @@ bool Sage2SceneClass::Light_Batch(Sage2EffectClass& effect, int prepassTechnique
 	target->Release();
 	if (depth) depth->Release();
 	return true;
+}
+
+//-------------------------------------------------------------------------------------------------
+void Sage2SceneClass::Clear_Point_Lights()
+{
+	s_pointLights.clear();
+}
+
+void Sage2SceneClass::Add_Point_Light(const PointLight& light)
+{
+	if (s_pointLights.size() < MAX_POINT_LIGHTS && light.outerRadius > 0.0f)
+		s_pointLights.push_back(light);
+}
+
+unsigned Sage2SceneClass::Get_Point_Light_Count()
+{
+	return (unsigned)s_pointLights.size();
+}
+
+void Sage2SceneClass::Set_Point_Light_Strength(float strength)
+{
+	s_pointLightStrength = strength < 0.0f ? 0.0f : (strength > 4.0f ? 4.0f : strength);
+}
+
+float Sage2SceneClass::Get_Point_Light_Strength()
+{
+	return s_pointLightStrength;
 }
 
 //-------------------------------------------------------------------------------------------------

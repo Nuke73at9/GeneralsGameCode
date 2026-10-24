@@ -316,6 +316,7 @@ protected:
 	// post-processing
 	void post_process();
 	void post_process_fog();
+	void modify_for_night_lights();	///< Tiberium Project: night models' lit windows self-lit
 
 	unsigned int get_sort_flags(int pass) const;
 	unsigned int get_sort_flags() const;

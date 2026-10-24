@@ -35,9 +35,13 @@
 #include "GameClient/ControlBar.h"
 #include "GameClient/Display.h"
 #include "GameClient/GameClient.h"
+#include "GameClient/ParticleSys.h"
 #include "GameClient/View.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/TerrainLogic.h"
+#include "Common/Player.h"
+#include "Common/PlayerList.h"
+#include "GameLogic/PartitionManager.h"
 
 namespace
 {
@@ -55,6 +59,10 @@ namespace
 	Int s_shotInterval = 0;
 	Int s_shotStart = 0;		// no screenshot before this frame (a tour's first view)
 	Int s_scorchFrame = -1;
+	Int s_lightsFrame = -1;
+	Int s_fireFrame = -1;
+	Bool s_reveal = FALSE;
+	Bool s_revealed = FALSE;
 	Int s_controlBarStage = -1;	// ControlBarStages, or -1: as it is
 	Int s_tourSize = 0;			// a tour of the map: a grid of tourSize x tourSize stops
 	Bool s_tourBuilt = FALSE;
@@ -304,6 +312,9 @@ void TiberiumTest::setTour( Int size )
 //-------------------------------------------------------------------------------------------------
 void TiberiumTest::setShotInterval( Int frames ) { if ( frames > 0 ) { s_shotInterval = frames; s_active = TRUE; } }
 void TiberiumTest::setScorchFrame( Int frame ) { if ( frame >= 0 ) { s_scorchFrame = frame; s_active = TRUE; } }
+void TiberiumTest::setLightsFrame( Int frame ) { if ( frame >= 0 ) { s_lightsFrame = frame; s_active = TRUE; } }
+void TiberiumTest::setFireFrame( Int frame ) { if ( frame >= 0 ) { s_fireFrame = frame; s_active = TRUE; } }
+void TiberiumTest::setReveal( Bool reveal ) { s_reveal = reveal; if ( reveal ) s_active = TRUE; }
 void TiberiumTest::setCRCFrame( Int frame ) { if ( frame >= 0 ) { s_crcFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setQuitFrame( Int frame ) { if ( frame > 0 ) { s_quitFrame = frame; s_active = TRUE; } }
 Bool TiberiumTest::isActive() { return s_active; }
@@ -431,6 +442,55 @@ void TiberiumTest::update()
 		}
 		log( "frame %d: 121 scorch marks around %.0f %.0f", (int)s_frame, center.x, center.y );
 	}
+
+	// light pulses around the view that never fade (fire orange, white, blue), client side only
+	if ( s_lightsFrame >= 0 && s_frame == s_lightsFrame && TheDisplay != nullptr && TheTacticalView != nullptr )
+	{
+		const Coord3D center = TheTacticalView->getPosition();
+		const RGBColor colors[3] = { { 1.0f, 0.55f, 0.2f }, { 1.0f, 1.0f, 1.0f }, { 0.3f, 0.5f, 1.0f } };
+		for ( Int k = 0; k < 9; ++k )
+		{
+			Coord3D p = center;
+			p.x += ( k % 3 - 1 ) * 160.0f;
+			p.y += ( k / 3 - 1 ) * 160.0f;
+			p.z = ( TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( p.x, p.y ) : 0.0f ) + 20.0f;
+			TheDisplay->createLightPulse( &p, &colors[k % 3], 30.0f, 60.0f, 0, 0 );
+		}
+		log( "frame %d: 9 light pulses around %.0f %.0f", (int)s_frame, center.x, center.y );
+	}
+
+	// the map revealed to the local player (particle systems do not emit under the shroud)
+	if ( s_reveal && !s_revealed && inGame && ThePartitionManager != nullptr && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
+	{
+		s_revealed = TRUE;
+		ThePartitionManager->revealMapForPlayer( ThePlayerList->getLocalPlayer()->getPlayerIndex() );
+		log( "frame %d: the map revealed to the local player", (int)s_frame );
+	}
+
+	// fires around the view (Zero Hour's own lasting fire particle systems), client side only
+	if ( s_fireFrame >= 0 && s_frame == s_fireFrame && TheParticleSystemManager != nullptr && TheTacticalView != nullptr )
+	{
+		static const char *const FIRES[] = { "FireBuildingSmall", "AutoFireLarge01", "FireToxicMedium", "SmolderingFireLarge", "FireTreeSmall" };
+		const Coord3D center = TheTacticalView->getPosition();
+		Int made = 0;
+		for ( Int k = 0; k < 5; ++k )
+		{
+			const ParticleSystemTemplate *tmpl = TheParticleSystemManager->findTemplate( FIRES[k] );
+			ParticleSystem *sys = tmpl != nullptr ? TheParticleSystemManager->createParticleSystem( tmpl ) : nullptr;
+			if ( sys == nullptr )
+				continue;
+			Coord3D p = center;
+			p.x += ( k - 2 ) * 120.0f;
+			p.y += ( k % 2 ) * 120.0f - 60.0f;
+			p.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( p.x, p.y ) : 0.0f;
+			sys->setPosition( &p );
+			++made;
+		}
+		log( "frame %d: %d fires around %.0f %.0f", (int)s_frame, (int)made, center.x, center.y );
+	}
+	if ( s_fireFrame >= 0 && s_frame == s_fireFrame + 30 && TheParticleSystemManager != nullptr )
+		log( "frame %d: %u particles in %u systems", (int)s_frame, (unsigned)TheParticleSystemManager->getParticleCount(),
+			(unsigned)TheParticleSystemManager->getAllParticleSystems().size() );
 
 	// the logic's CRC, read only
 	if ( s_crcFrame >= 0 && !s_crcLogged && inGame && (Int)TheGameLogic->getFrame() >= s_crcFrame )

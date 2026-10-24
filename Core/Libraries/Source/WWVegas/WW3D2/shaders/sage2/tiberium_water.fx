@@ -6,16 +6,23 @@
 // from the frame drawn so far (the refraction, offset by the ripples), tinted by the water's
 // colour; the sun's sparkle from the light-space environment cube by the Fresnel term, shadowed
 // by the shadow map; foam from the foam texture where the water is shallow; the shroud over the
-// lit terms, fog over all. C&C4 darkens what lies under its water by depth before the water
-// draws (UnderwaterDeferred.fx and its depth table); here that is folded into the water: the
-// floor fades into the water's colour with the depth under the pixel, red first, as light
-// fades in water. Zero Hour's parts: the surface is its water polygons (position, normal,
-// vertex colour = its lit water colour and opacity by time of day, two texture coordinates),
-// the water's colour is its standing-water texture (C&C4's PuddleColor texture), its
+// lit terms, fog over all. Red Alert 3 and C&C4 tint what lies under their water before the
+// water draws (UnderwaterDeferred.fx, CommonUnderwater.fxh): the floor is multiplied by a depth
+// table (FXDepthLut: white at the surface, teal by twenty units, near black by two hundred) and
+// lit by caustics (FXCaustics: two drifting, crossed samples of its pattern, split per colour,
+// strongest some ten to thirty units down, as the table's alpha says). Here that is folded into
+// the water, at the floor seen under each pixel (the scene's linear depth along the eye ray);
+// without the table the floor fades into the water's colour by an absorption per colour,
+// red first. Zero Hour's parts: the surface is its water polygons (position, normal, vertex
+// colour = its lit water colour and opacity by time of day, two texture coordinates), the
+// water's colour is its standing-water texture (C&C4's PuddleColor texture), its
 // TransparentWaterDepth sets how clear the water is and TransparentWaterMinOpacity how much the
-// floor may vanish, and the depth comes from the scene's linear depth under the pixel (C&C4
-// authors foam heights into its water meshes). No reflection texture: C&C4 adds at most a tenth
-// of a dim one, the cube carries the sky.
+// floor may vanish (both only without the table), and the shallows come from the same depth
+// (C&C4 authors foam heights into its water meshes). Rivers are the same water: their ripples
+// and foam run along the river's own texture coordinates, which Zero Hour scrolls as the river
+// flows (as RiverWater.fx does), and their banks fade by Zero Hour's river edge texture
+// (TWAlphaEdge). No reflection texture: C&C4 adds at most a tenth of a dim one, the cube
+// carries the sky.
 //
 // Compiled with shaders/sage2/build_effects.py to tiberium_water.fxo, packed into the mod as
 // Art\Shaders\tiberium_water.fxo.
@@ -102,6 +109,53 @@ SAMPLER_CUBE_BEGIN( EnvironmentTexture,
 	AddressW = Clamp;
 SAMPLER_CUBE_END
 
+// the colour of what lies under the water by its depth (RA3's and C&C4's FXDepthLut): v = (1 +
+// depth) / 200, alpha = how strong the caustics are there
+SAMPLER_2D_BEGIN( DepthLutTexture,
+	string UIWidget = "None";
+	string SasBindAddress = "Water.DepthLutTexture";
+	)
+	MinFilter = Linear;
+	MagFilter = Linear;
+	MipFilter = Linear;
+	AddressU = Clamp;
+	AddressV = Clamp;
+SAMPLER_2D_END
+
+// the caustics (FXCaustics): rgb a normal map that bends them, alpha the pattern
+SAMPLER_2D_BEGIN( CausticsTexture,
+	string UIWidget = "None";
+	string SasBindAddress = "Water.CausticsTexture";
+	)
+	MinFilter = Linear;
+	MagFilter = Linear;
+	MipFilter = Linear;
+	AddressU = Wrap;
+	AddressV = Wrap;
+SAMPLER_2D_END
+
+// the sky the water reflects: Zero Hour's sky texture for the time of day (its reflective water's)
+SAMPLER_2D_BEGIN( SkyTexture,
+	string UIWidget = "None";
+	)
+	MinFilter = Linear;
+	MagFilter = Linear;
+	MipFilter = Linear;
+	AddressU = Wrap;
+	AddressV = Wrap;
+SAMPLER_2D_END
+
+// a river's banks: Zero Hour's TWAlphaEdge, alpha across the river (its second coordinates)
+SAMPLER_2D_BEGIN( EdgeTexture,
+	string UIWidget = "None";
+	)
+	MinFilter = Linear;
+	MagFilter = Linear;
+	MipFilter = Linear;
+	AddressU = Wrap;
+	AddressV = Wrap;
+SAMPLER_2D_END
+
 SAMPLER_2D_BEGIN( ShroudTexture,
 	string UIWidget = "None";
 	string SasBindAddress = "Terrain.Shroud.Texture";
@@ -153,6 +207,35 @@ float4 WaterLook
 	string UIWidget = "None";
 > = float4(0.4, 2, 0.2, 0);
 
+// x: 1 with the depth table bound (else the absorption above), y: the table per unit of depth
+// (RA3 and C&C4: 1/200, their water level), z: caustics strength (0 without the texture), w: how
+// much deeper the table takes Zero Hour's water to be (its rivers and lakes are shallower)
+float4 WaterDepthLut
+<
+	string UIWidget = "None";
+> = float4(0, 0.005, 0, 1);
+
+// the sky's reflection (RA3's ocean adds half its reflection texture), by the Fresnel term: x strength (0: none), y the
+// sky texture's repeats per world unit, zw its scroll per second
+float4 WaterSky
+<
+	string UIWidget = "None";
+> = float4(0, 0, 0, 0);
+
+// the sky's colour for the time of day (rgb, Zero Hour's sky corner colours), w the height of the
+// sky plane over the water, in world units
+float4 WaterSkyColor
+<
+	string UIWidget = "None";
+> = float4(1, 1, 1, 400);
+
+// a river: x 1 (else still water), y world units per unit of its first u (across), z per unit of
+// v (along), w 1 with the edge texture bound
+float4 WaterRiver
+<
+	string UIWidget = "None";
+> = float4(0, 0, 0, 0);
+
 float4 OneOverFrameBufferSizeW
 <
 	string UIWidget = "None";
@@ -188,20 +271,26 @@ VSOutput VS_Water(VSInput In)
 	Out.Position = mul(float4(worldPosition, 1), ViewProjection);
 	Out.Color = In.Color;
 
-	// C&C4's two octaves: the ripple coordinates rotated 55 degrees either way, drifting
-	float octaveSpeed = Time * WaterScales.y;
-	float2 ripple = worldPosition.xy * WaterScales.x;
+	// where the ripples and foam lie: still water by its world position; a river by its own
+	// texture coordinates in world units (across, along), which Zero Hour scrolls as it flows
+	float isRiver = WaterRiver.x;
+	float2 surface = lerp(worldPosition.xy, In.TexCoord0 * WaterRiver.yz, isRiver);
+
+	// C&C4's two octaves: the ripple coordinates rotated 55 degrees either way, drifting (still
+	// water; a river's drift is its flow)
+	float octaveSpeed = Time * WaterScales.y * (1.0 - isRiver);
+	float2 ripple = surface * WaterScales.x;
 	float2x2 rotate = { 0.573576436351f, -0.819152044288f, 0.819152044288f, 0.573576436351f };
 	float2 diverge = mul(ripple, rotate);
 	diverge.x += octaveSpeed;
 	float2 divergeInv = mul(ripple, transpose(rotate));
 	divergeInv.x += octaveSpeed;
 	Out.RippleTexCoords = float4(diverge, divergeInv);
-	Out.RippleTexCoords_Body = float4(0, 0, In.TexCoord0);
+	Out.RippleTexCoords_Body = float4(In.TexCoord1, In.TexCoord0);	// xy: a river's edge texture, zw: the water texture
 
 	// the foam, two drifts
-	float4 foamSpeeds = Time * WaterScales.w * float4(1.0, 0.0, -1.0, 0.0);
-	Out.FoamTexCoords = worldPosition.xyxy * WaterScales.z + foamSpeeds;
+	float4 foamSpeeds = Time * WaterScales.w * float4(1.0, 0.0, -1.0, 0.0) * (1.0 - isRiver);
+	Out.FoamTexCoords = surface.xyxy * WaterScales.z + foamSpeeds;
 
 	Out.WorldPosition_ViewZ.xyz = worldPosition;
 	Out.WorldPosition_ViewZ.w = mul(float4(worldPosition, 1), View).z;
@@ -211,6 +300,33 @@ VSOutput VS_Water(VSInput In)
 	Out.ScreenPosition = Out.Position;
 	Out.ShadowMapTexCoord = CalculateShadowMapTexCoord(worldPosition, SHADOWMAP_SAMPLE_DEFAULT);
 	return Out;
+}
+
+// RA3's and C&C4's caustics (CommonUnderwater.fxh, GetCausticsColor), on the floor at
+// floorPosition: the pattern cast along the sun, two crossed drifting samples bent by the
+// texture's own normals, split per colour; lutAlpha is the depth table's alpha there
+float3 Caustics(float3 floorPosition, float3 floorNormal, float lutAlpha)
+{
+	float3 toSun = DirectionalLight_0_Direction.xyz;
+	float2 causticTexCoord = (floorPosition.xy - floorPosition.z * toSun.xy / max(toSun.z, 0.1)) * 0.004;
+	float2x2 rotate = { 0.406736643f, -0.913545458f, 0.913545458f, 0.406736643f };	// 66 degrees
+	float2 diverge = mul(causticTexCoord, rotate);
+	diverge.x += Time * 0.12;
+	float2 divergeInv = mul(causticTexCoord, transpose(rotate));
+	divergeInv.x += Time * 0.12;
+	float2 distort = tex2D(SAMPLER(CausticsTexture), diverge).xy + tex2D(SAMPLER(CausticsTexture), divergeInv).xy;
+	distort = (distort - 1.0) * 0.3;
+	float3 samp;
+	samp.x = tex2D(SAMPLER(CausticsTexture), diverge + distort * 0.9).w;
+	samp.y = tex2D(SAMPLER(CausticsTexture), diverge + distort).w;
+	samp.z = tex2D(SAMPLER(CausticsTexture), diverge + distort * 1.1).w;
+	samp.x *= tex2D(SAMPLER(CausticsTexture), -divergeInv - distort * 0.9).w;
+	samp.y *= tex2D(SAMPLER(CausticsTexture), -divergeInv - distort).w;
+	samp.z *= tex2D(SAMPLER(CausticsTexture), -divergeInv - distort * 1.1).w;
+	samp = pow(samp, 2);
+	float sunFalloff = max(0, dot(floorNormal, toSun));
+	float3 caustics = samp * lutAlpha * lerp(DirectionalLight_0_Color.xyz, float3(1, 1, 1), 0.75) * sunFalloff;
+	return GammaToLinear(caustics * 5);
 }
 
 float4 PS_Water(VSOutput In, uniform bool hasShadow, float2 vPos : PIXELLOC) : COLOR
@@ -228,10 +344,13 @@ float4 PS_Water(VSOutput In, uniform bool hasShadow, float2 vPos : PIXELLOC) : C
 	float2 screenTexCoord = In.ScreenPosition.xy / In.ScreenPosition.w * float2(0.5, -0.5) + 0.5 + 0.5 * OneOverFrameBufferSizeW.xy;
 	float2 refractedTexCoord = screenTexCoord + Nn.xy * WaterParams.y;
 
-	// the water's depth under this pixel: the scene behind it against the surface
+	// the water under this pixel: the scene behind the surface along the eye ray (view depth
+	// for the shallows, as tuned), and that floor's place and height below the surface
 	float waterViewZ = abs(In.WorldPosition_ViewZ.w);
 	float sceneViewZ = abs(tex2D(SAMPLER(DepthTexture), screenTexCoord).x);
 	float depth = max(sceneViewZ - waterViewZ, 0.0);
+	float3 floorPosition = EyePosition + (worldPosition - EyePosition) * (max(sceneViewZ, waterViewZ) / max(waterViewZ, 0.001));
+	float floorDepth = max(worldPosition.z - floorPosition.z, 0.0);
 	// something in front of the surface at the refracted pixel (a unit standing in the water):
 	// take the undistorted colour, as C&C4 guards its refraction
 	float refractedSceneZ = abs(tex2D(SAMPLER(DepthTexture), refractedTexCoord).x);
@@ -240,12 +359,33 @@ float4 PS_Water(VSOutput In, uniform bool hasShadow, float2 vPos : PIXELLOC) : C
 	// the frame holds display (sRGB) values: back to linear light, as everything here is
 	float3 refraction = GammaToLinear(tex2D(SAMPLER(RefractionTexture), refractedTexCoord).xyz);
 
-	// the water's colour: Zero Hour's water texture lit as its water polygons are
-	float3 body = GammaToLinear(tex2D(SAMPLER(WaterTexture), In.RippleTexCoords_Body.zw).xyz * In.Color.xyz);
+	float shroud = GammaToLinear(tex2D(SAMPLER(ShroudTexture), In.ShroudTexCoord_Fog.xy).xyz).x;
 
-	// the floor fades into the water's colour with depth (C&C4's underwater depth table, folded in)
-	float3 floorSeen = exp(-depth * WaterAbsorption.xyz / max(WaterTransparency.x, 0.5));
-	float3 underwater = lerp(body, refraction, 1.0 - WaterTransparency.y * (1.0 - floorSeen));
+	// the water's colour: Zero Hour's water texture lit as its water polygons are (a river's
+	// darkened by a quarter, as RiverWater.fx does its vertex colour), under the shroud as the floor is
+	float3 body = GammaToLinear(tex2D(SAMPLER(WaterTexture), In.RippleTexCoords_Body.zw).xyz * In.Color.xyz)
+		* lerp(1.0, 0.75, WaterRiver.x) * shroud;
+
+	float3 underwater;
+	float opacity;
+	if (WaterDepthLut.x > 0)
+	{
+		// RA3 and C&C4: the floor times the depth table, plus the caustics, the surface opaque
+		// (it carries the floor)
+		float lutCoord = (1.0 + floorDepth * WaterDepthLut.w) * WaterDepthLut.y;
+		float4 lut = tex2Dlod(SAMPLER(DepthLutTexture), float4(lutCoord, lutCoord, 0, 0));
+		float3 floorNormal = normalize(cross(ddy(floorPosition), ddx(floorPosition)));
+		float3 caustics = Caustics(floorPosition, floorNormal, lut.w) * WaterDepthLut.z * shroud;
+		underwater = refraction * GammaToLinear(lut.xyz) + caustics;
+		opacity = 1.0;
+	}
+	else
+	{
+		// the floor fades into the water's colour with depth, red first
+		float3 floorSeen = exp(-depth * WaterAbsorption.xyz / max(WaterTransparency.x, 0.5));
+		underwater = lerp(body, refraction, 1.0 - WaterTransparency.y * (1.0 - floorSeen));
+		opacity = In.Color.w;
+	}
 
 	// C&C4: tinted by the water colour (its PuddleColor)
 	float3 waterColor = lerp(underwater, body, WaterLook.x);
@@ -265,12 +405,25 @@ float4 PS_Water(VSOutput In, uniform bool hasShadow, float2 vPos : PIXELLOC) : C
 	float foamFactor = 1.0 - saturate(depth / WaterParams.w);
 	foamSamp = pow(foamSamp, 2) * foamFactor * WaterLook.z * DirectionalLight_0_Color.xyz;
 
-	float shroud = GammaToLinear(tex2D(SAMPLER(ShroudTexture), In.ShroudTexCoord_Fog.xy).xyz).x;
-	float3 color = waterColor + shroud * (foamSamp + envcolor);
+	// the sky, reflected: the reflected ray up to Zero Hour's sky plane, by the Fresnel term (RA3
+	// adds half its reflection texture flat; over Zero Hour's pale desert skies that read as ice)
+	float3 skyColor = 0;
+	if (WaterSky.x > 0)
+	{
+		float3 up = reflVect;
+		up.z = max(up.z, 0.05);
+		float2 skyPoint = worldPosition.xy + up.xy * (WaterSkyColor.w / up.z);
+		float2 skyTexCoord = skyPoint * WaterSky.y + Time * WaterSky.zw;
+		skyColor = GammaToLinear(tex2D(SAMPLER(SkyTexture), skyTexCoord).xyz * WaterSkyColor.xyz) * WaterSky.x * fresnel;
+	}
+
+	float3 color = waterColor + shroud * (foamSamp + envcolor + skyColor);
 	color = lerp(Fog.Color.xyz, color, In.ShroudTexCoord_Fog.z);
 
-	// the edge fades in over the first units of depth, the water's own opacity over it
-	float opacity = In.Color.w * saturate(depth / WaterParams.z);
+	// the edge fades in over the first units of depth, a river's banks by its edge texture
+	opacity *= saturate(depth / WaterParams.z);
+	if (WaterRiver.w > 0)
+		opacity *= tex2D(SAMPLER(EdgeTexture), In.RippleTexCoords_Body.xy).w;
 	return float4(color, opacity);
 }
 

@@ -73,6 +73,7 @@ extern void DoTrees(RenderInfoClass & rinfo);
 extern void DoShadows(RenderInfoClass & rinfo, Bool stencilPass);
 #ifdef RTS_RENDERER_D3D9
 #include "WW3D2/sage2/sage2shadow.h"	// Tiberium Project @feature C&C4's shadow map
+#include "WW3D2/sage2/sage2scene.h"	// Tiberium Project @feature point lights in the deferred pass
 #endif
 
 extern void DoParticles(RenderInfoClass & rinfo);
@@ -1116,6 +1117,13 @@ void RTS3DScene::Customized_Render( RenderInfoClass &rinfo )
 		}
 	}
 
+#ifdef RTS_RENDERER_D3D9
+	// Tiberium Project @feature this frame's light pulses (explosions, muzzle flashes, ...) for the
+	// SAGE 2 deferred light pass, which lights the ground and deferred meshes with them
+	if (!ShaderClass::Is_Backface_Culling_Inverted() && !Sage2ShadowClass::Is_Rendering())
+		gatherSage2PointLights();
+#endif
+
 	//terrain needs to be rendered first
 	if (terrainObject)	// Don't check visibility - terrain is always visible. jba.
 	{
@@ -1661,6 +1669,132 @@ void RTS3DScene::addDynamicLight(W3DDynamicLight * obj)
 //=============================================================================
 /** Adds a dynamic light. */
 //=============================================================================
+
+#ifdef RTS_RENDERER_D3D9
+//=============================================================================
+// RTS3DScene::gatherSage2PointLights
+//=============================================================================
+/** Tiberium Project @feature The enabled light pulses, as plain point lights for the SAGE 2 deferred
+	light pass: position, diffuse colour by intensity, and the far attenuation range Zero Hour lights
+	the ground over (full strength to its start, nothing past its end). Visual only. */
+//=============================================================================
+void RTS3DScene::gatherSage2PointLights()
+{
+	Sage2SceneClass::Clear_Point_Lights();
+	if (Sage2SceneClass::Get_Point_Light_Strength() <= 0.0f)
+		return;
+	RefRenderObjListIterator lightIt(&m_dynamicLightList);
+	for (lightIt.First(); !lightIt.Is_Done(); lightIt.Next())
+	{
+		W3DDynamicLight *light = (W3DDynamicLight *)lightIt.Peek_Obj();
+		if (!light->isEnabled())
+			continue;
+		Vector3 diffuse;
+		light->Get_Diffuse(&diffuse);
+		const Real intensity = light->Get_Intensity();
+		double attenStart = 0.0, attenEnd = 0.0;
+		light->Get_Far_Attenuation_Range(attenStart, attenEnd);
+		if (attenEnd <= 0.0 || (diffuse.X <= 0.0f && diffuse.Y <= 0.0f && diffuse.Z <= 0.0f))
+			continue;
+		const Vector3 position = light->Get_Position();
+		Sage2SceneClass::PointLight point;
+		point.position[0] = position.X;
+		point.position[1] = position.Y;
+		point.position[2] = position.Z;
+		point.color[0] = diffuse.X * intensity;
+		point.color[1] = diffuse.Y * intensity;
+		point.color[2] = diffuse.Z * intensity;
+		point.innerRadius = (float)attenStart;
+		point.outerRadius = (float)attenEnd;
+		Sage2SceneClass::Add_Point_Light(point);
+	}
+	gatherSage2FireLights();
+}
+
+//=============================================================================
+// RTS3DScene::gatherSage2FireLights
+//=============================================================================
+/** Tiberium Project @feature Fires light their surroundings: every additive particle system drawn
+	with one of Zero Hour's fire textures (burning buildings, trees and wrecks, flamethrowers, napalm,
+	the toxin fires) becomes a point light at the middle of its visible particles, its colour their
+	average colour warmed as the fire textures are, its strength and reach from how much fire there
+	is (the particles' alpha times size), flickering. Particle systems are client side; visual only. */
+//=============================================================================
+void RTS3DScene::gatherSage2FireLights()
+{
+	if (TheParticleSystemManager == nullptr)
+		return;
+	static const char *const FIRE_TEXTURES[] = { "exfire", "exexplo", "exfthrower", "exfireball", "exsmolderingfire" };
+	const Real time = (Real)(WW3D::Get_Sync_Time() % 1000000) * 0.001f;
+	ParticleSystemManager::ParticleSystemList &systems = TheParticleSystemManager->getAllParticleSystems();
+	for (ParticleSystemManager::ParticleSystemListIt it = systems.begin(); it != systems.end(); ++it)
+	{
+		ParticleSystem *sys = *it;
+		if (sys == nullptr || sys->getShaderType() != ParticleSystemInfo::ADDITIVE || sys->getParticleCount() == 0)
+			continue;
+		const AsciiString &texture = sys->getParticleTypeName();
+		Bool fire = FALSE;
+		for (Int t = 0; t < (Int)(sizeof(FIRE_TEXTURES) / sizeof(FIRE_TEXTURES[0])) && !fire; ++t)
+			fire = texture.startsWithNoCase(FIRE_TEXTURES[t]);
+		if (!fire)
+			continue;
+		// the fire's weight, middle and colour from its visible particles
+		Real weight = 0.0f;
+		Coord3D middle = { 0.0f, 0.0f, 0.0f };
+		Real red = 0.0f, green = 0.0f, blue = 0.0f;
+		Real spread = 0.0f;
+		for (Particle *particle = sys->getFirstParticle(); particle != nullptr; particle = particle->m_systemNext)
+		{
+			const Real w = particle->getAlpha() * particle->getSize();
+			if (w <= 0.0f)
+				continue;
+			const Coord3D *pos = particle->getPosition();
+			const RGBColor *color = particle->getColor();
+			weight += w;
+			middle.x += pos->x * w;
+			middle.y += pos->y * w;
+			middle.z += pos->z * w;
+			red += color->red * w;
+			green += color->green * w;
+			blue += color->blue * w;
+		}
+		if (weight < 0.5f)
+			continue;
+		middle.x /= weight;
+		middle.y /= weight;
+		middle.z /= weight;
+		for (Particle *particle = sys->getFirstParticle(); particle != nullptr; particle = particle->m_systemNext)
+		{
+			const Real w = particle->getAlpha() * particle->getSize();
+			if (w <= 0.0f)
+				continue;
+			const Coord3D *pos = particle->getPosition();
+			const Real dx = pos->x - middle.x, dy = pos->y - middle.y;
+			spread += (dx * dx + dy * dy) * w;
+		}
+		spread = WWMath::Sqrt(spread / weight);
+		// a fire's average particle colour is mostly white (the textures carry the colour): warm it
+		// as the fire textures are, keeping a coloured fire's own hue (the green toxin fires)
+		Real colorScale = 1.0f / weight;
+		red *= colorScale; green *= colorScale; blue *= colorScale;
+		const Real strength = min(1.5f, max(0.2f, weight / 300.0f));
+		const UnsignedInt id = (UnsignedInt)sys->getSystemID();
+		const Real phase = (Real)(id % 97) * 0.37f;
+		const Real flicker = 0.85f + 0.15f * WWMath::Sin(time * 13.0f + phase) * WWMath::Sin(time * 7.3f + phase * 1.7f);
+		Sage2SceneClass::PointLight point;
+		point.position[0] = middle.x;
+		point.position[1] = middle.y;
+		point.position[2] = middle.z + 10.0f;
+		point.color[0] = red * 1.0f * strength * flicker;
+		point.color[1] = green * 0.62f * strength * flicker;
+		point.color[2] = blue * 0.30f * strength * flicker;
+		point.innerRadius = 10.0f + spread;
+		point.outerRadius = min(240.0f, max(60.0f, 40.0f + spread * 2.0f + WWMath::Sqrt(weight) * 4.0f));
+		Sage2SceneClass::Add_Point_Light(point);
+	}
+}
+#endif
+
 W3DDynamicLight * RTS3DScene::getADynamicLight()
 {
 	RefRenderObjListIterator dynaLightIt(&m_dynamicLightList);

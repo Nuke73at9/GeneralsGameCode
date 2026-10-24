@@ -88,6 +88,10 @@ public:
 	RefRenderObjListIterator *createLightsIterator();
 	void destroyLightsIterator(RefRenderObjListIterator * it);
 	RefRenderObjListClass *getDynamicLights() {return &m_dynamicLightList;};
+#ifdef RTS_RENDERER_D3D9
+	void gatherSage2PointLights();	///< Tiberium Project: the light pulses for the SAGE 2 deferred light pass
+	void gatherSage2FireLights();	///< Tiberium Project: fires (their particle systems) as point lights
+#endif
 	W3DDynamicLight *getADynamicLight();
 	void setGlobalLight(LightClass *pLight,Int lightIndex=0);
 	LightEnvironmentClass &getDefaultLightEnv() {return m_defaultLightEnv;}
