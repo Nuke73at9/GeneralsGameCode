@@ -971,7 +971,10 @@ void W3DDisplay::init()
 			Sage2LightingClass::Select(cnc4Style ? prefs.getAsciiString("Sage2Lighting", "auto").str() : "map");
 			Sage2PostClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Post", TRUE));
 			Sage2TerrainClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Terrain", TRUE));	// the terrain through the C&C4-style effect
-			Sage2TerrainClass::Set_Albedo_Scale(prefs.getReal("Sage2TerrainAlbedo", 1.6f));		// ZH's tiles lifted for linear light
+			// Zero Hour's tiles, roads and tracks in linear light: lifted 1.6 under the maps' own lights;
+			// under a C&C4 preset (a brighter sun and sky, then the grading table) 0.6 keeps a road as
+			// much lighter than the grass as Zero Hour draws it
+			Sage2TerrainClass::Set_Albedo_Scale(prefs.getReal("Sage2TerrainAlbedo", Sage2LightingClass::Uses_Presets() ? 0.6f : 1.6f));
 			Sage2TerrainClass::Set_Tile_World_Size(prefs.getReal("Sage2TerrainTileSize", 80.0f));	// world units per C&C4 terrain texture
 			Sage2TerrainClass::Set_Bump(prefs.getBool("Sage2TerrainBumpFlip", FALSE), prefs.getReal("Sage2TerrainBumpScale", 0.75f));	// normal map green flipped; bump strength
 			Sage2PostClass::Set_Exposure(prefs.getReal("Sage2Exposure", 1.0f));

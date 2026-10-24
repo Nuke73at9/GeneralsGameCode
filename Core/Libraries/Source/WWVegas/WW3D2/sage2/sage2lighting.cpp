@@ -112,6 +112,9 @@ void Sage2LightingClass::Select(const char* mode)
 }
 
 //-------------------------------------------------------------------------------------------------
+bool Sage2LightingClass::Uses_Presets() { return s_mode != MODE_MAP; }
+
+//-------------------------------------------------------------------------------------------------
 const Sage2LightingPreset* Sage2LightingClass::Choose(int timeOfDay, bool snowy)
 {
 	const Sage2LightingPreset* preset = nullptr;

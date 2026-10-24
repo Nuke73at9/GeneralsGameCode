@@ -274,6 +274,41 @@ namespace
 		effect.Set_Matrix(effect.Get_Param(param).name.c_str(), &m[0][0]);
 	}
 
+	// Tiberium Project @bugfix The effects that undo the projection (the linear depth, the
+	// deferred lights) build their clip position from a frame position (the pixel over the frame
+	// size), as C&C4 draws the world over the whole frame. Zero Hour draws it in a viewport that
+	// stops at the control bar, so the projection's clip space is the viewport's: this maps the
+	// viewport's clip space into the frame's, to go in front of the projection before inverting.
+	// False (and nothing to do) when the viewport is the whole target.
+	bool Viewport_To_Frame(Matrix4x4& f)
+	{
+		IDirect3DDevice8* device8 = DX8Wrapper::_Get_D3D_Device8();
+		if (device8 == nullptr)
+			return false;
+		IDirect3DDevice9* device = device8->Get_D3D9();
+		D3DVIEWPORT9 vp;
+		if (FAILED(device->GetViewport(&vp)) || vp.Width == 0 || vp.Height == 0)
+			return false;
+		IDirect3DSurface9* target = nullptr;
+		if (FAILED(device->GetRenderTarget(0, &target)) || target == nullptr)
+			return false;
+		D3DSURFACE_DESC desc;
+		HRESULT hr = target->GetDesc(&desc);
+		target->Release();
+		if (FAILED(hr) || desc.Width == 0 || desc.Height == 0)
+			return false;
+		if (vp.X == 0 && vp.Y == 0 && vp.Width == desc.Width && vp.Height == desc.Height)
+			return false;
+		const float fw = (float)desc.Width, fh = (float)desc.Height;
+		const float ax = (float)vp.Width / fw, bx = (2.0f * (float)vp.X + (float)vp.Width) / fw - 1.0f;
+		const float ay = (float)vp.Height / fh, by = 1.0f - (2.0f * (float)vp.Y + (float)vp.Height) / fh;
+		f = Matrix4x4(Vector4(ax, 0.0f, 0.0f, bx),
+			Vector4(0.0f, ay, 0.0f, by),
+			Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+			Vector4(0.0f, 0.0f, 0.0f, 1.0f));
+		return true;
+	}
+
 	// the map's lights (Set_Scene_Lights) and whether the draws now take them
 	bool s_sceneLightsValid = false;
 	bool s_useSceneLights = false;
@@ -502,8 +537,14 @@ void Sage2GlobalsClass::Apply(Sage2EffectClass& effect, const Sage2DrawState& dr
 				Set_Matrix4_Rows(effect, i, viewInverse);
 				break;
 			case SAGE2_BIND_PROJECTION_INVERSE:
-				Set_Matrix4_Rows(effect, i, projection.Inverse());
+			{
+				Matrix4x4 toFrame;
+				if (Viewport_To_Frame(toFrame))
+					Set_Matrix4_Rows(effect, i, (toFrame * projection).Inverse());
+				else
+					Set_Matrix4_Rows(effect, i, projection.Inverse());
 				break;
+			}
 			case SAGE2_BIND_EYE_POSITION:
 				v[0] = eye.X; v[1] = eye.Y; v[2] = eye.Z;
 				effect.Set_Float(i, v, 3);

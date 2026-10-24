@@ -160,13 +160,31 @@ namespace
 	// position from the pixel; the texcoord-based one gets matching coordinates)
 	void Draw_Rect(IDirect3DDevice9* device, Sage2EffectClass& effect, int technique, float x0, float y0, float x1, float y1)
 	{
-		float hx = 1.0f / (float)s_width, hy = 1.0f / (float)s_height;	// half-pixel: texel centres on pixel centres
+		// Tiberium Project @bugfix The rectangle is in the scene viewport's coordinates, which is
+		// smaller than the frame while the control bar is up (Zero Hour draws the world in the top
+		// 80%). The buffers are frame-sized and the effects address them by frame position, so the
+		// texture coordinates are the frame's: with the viewport's own 0..1 the linear depth read
+		// the pre-pass 1.25x too low down, and below 64% of the screen read rows the pre-pass never
+		// drew - the dark band over the bottom of the view, and shadows sliding with the camera.
+		D3DVIEWPORT9 vp;
+		if (FAILED(device->GetViewport(&vp)) || vp.Width == 0 || vp.Height == 0)
+		{
+			vp.X = vp.Y = 0;
+			vp.Width = s_width;
+			vp.Height = s_height;
+		}
+		const float fw = (float)s_width, fh = (float)s_height;
+		const float hx = 1.0f / (float)vp.Width, hy = 1.0f / (float)vp.Height;	// half a pixel: texel centres on pixel centres
+		const float u0 = ((float)vp.X + (x0 * 0.5f + 0.5f) * (float)vp.Width) / fw;
+		const float u1 = ((float)vp.X + (x1 * 0.5f + 0.5f) * (float)vp.Width) / fw;
+		const float v0 = ((float)vp.Y + (0.5f - y0 * 0.5f) * (float)vp.Height) / fh;
+		const float v1 = ((float)vp.Y + (0.5f - y1 * 0.5f) * (float)vp.Height) / fh;
 		float v[4][5] =
 		{
-			{ x0 - hx, y0 + hy, 0.0f, x0 * 0.5f + 0.5f, 0.5f - y0 * 0.5f },
-			{ x1 - hx, y0 + hy, 0.0f, x1 * 0.5f + 0.5f, 0.5f - y0 * 0.5f },
-			{ x0 - hx, y1 + hy, 0.0f, x0 * 0.5f + 0.5f, 0.5f - y1 * 0.5f },
-			{ x1 - hx, y1 + hy, 0.0f, x1 * 0.5f + 0.5f, 0.5f - y1 * 0.5f },
+			{ x0 - hx, y0 + hy, 0.0f, u0, v0 },
+			{ x1 - hx, y0 + hy, 0.0f, u1, v0 },
+			{ x0 - hx, y1 + hy, 0.0f, u0, v1 },
+			{ x1 - hx, y1 + hy, 0.0f, u1, v1 },
 		};
 		void* p = nullptr;
 		if (FAILED(s_quad->Lock(0, 0, &p, D3DLOCK_DISCARD)))
@@ -314,6 +332,17 @@ bool Sage2SceneClass::Light_Batch(Sage2EffectClass& effect, int prepassTechnique
 	// everything drawn after this mesh would land stretched and shifted
 	D3DVIEWPORT9 viewport;
 	device->GetViewport(&viewport);
+	{
+		static D3DVIEWPORT9 logged = { 0, 0, 0, 0, 0.0f, 0.0f };
+		static unsigned loggedCount = 0;
+		if (loggedCount < 8 && (logged.X != viewport.X || logged.Y != viewport.Y || logged.Width != viewport.Width || logged.Height != viewport.Height))
+		{
+			++loggedCount;
+			logged = viewport;
+			Sage2_Log("deferred lighting: scene viewport %u,%u %ux%u in a %ux%u frame",
+				(unsigned)viewport.X, (unsigned)viewport.Y, (unsigned)viewport.Width, (unsigned)viewport.Height, (unsigned)desc.Width, (unsigned)desc.Height);
+		}
+	}
 	RECT scissor = { 0, 0, 0, 0 };
 	DWORD scissorEnabled = FALSE;
 	device->GetRenderState(D3DRS_SCISSORTESTENABLE, &scissorEnabled);

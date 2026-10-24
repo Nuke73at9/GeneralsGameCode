@@ -183,6 +183,7 @@ namespace
 void Sage2TerrainClass::Set_Enabled(bool enabled) { s_enabled = enabled; }
 bool Sage2TerrainClass::Is_Enabled() { return s_enabled; }
 void Sage2TerrainClass::Set_Albedo_Scale(float scale) { s_albedoScale = scale > 0.0f ? scale : 1.0f; }
+float Sage2TerrainClass::Get_Albedo_Scale() { return s_albedoScale; }
 void Sage2TerrainClass::Set_Tile_World_Size(float size) { s_tileWorldSize = size > 1.0f ? size : 80.0f; }
 void Sage2TerrainClass::Set_Bump(bool flipY, float scale) { s_bumpSign = flipY ? -1.0f : 1.0f; s_bumpScale = scale >= 0.0f ? scale : 0.75f; }
 

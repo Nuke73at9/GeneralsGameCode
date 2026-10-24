@@ -108,6 +108,10 @@ bool Sage2RoadClass::Draw(Kind kind, IDirect3DVertexBuffer9* vertices, IDirect3D
 	Sage2DrawState drawState;
 	Sage2GlobalsClass::Apply(*s_effect, drawState);
 	s_effect->Set_Texture("BaseSampler", D3D_Texture(texture));
+	// Tiberium Project @bugfix Zero Hour's road and track textures take the same lift as its tiles
+	// (Sage2TerrainAlbedo), not the effect's own fixed 1.6: under a C&C4 preset's brighter sun that
+	// burnt the concrete roads to white
+	s_effect->Set_Float1("AlbedoScale", Sage2TerrainClass::Get_Albedo_Scale());
 	const Sage2TerrainClass::Shroud& shroud = Sage2TerrainClass::Get_Shroud();
 	IDirect3DBaseTexture9* shroudTexture = D3D_Texture(shroud.texture);
 	if (shroudTexture != nullptr)

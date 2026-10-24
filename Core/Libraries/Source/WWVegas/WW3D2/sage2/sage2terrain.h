@@ -55,6 +55,7 @@ public:
 	static bool Is_Enabled();
 	/// How much Zero Hour's tile colours are lifted for linear-light rendering (1 = as painted)
 	static void Set_Albedo_Scale(float scale);
+	static float Get_Albedo_Scale();
 	/// World units one C&C4 terrain texture spans (80: eight cells, as in C&C4)
 	static void Set_Tile_World_Size(float size);
 	/// The bumps: 'flipY' reads the normal maps' green channel the other way round (if the ridges

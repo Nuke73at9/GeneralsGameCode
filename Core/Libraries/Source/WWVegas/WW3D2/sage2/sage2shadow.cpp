@@ -232,14 +232,18 @@ void Sage2ShadowClass::End()
 	DX8Wrapper::Set_Render_Target((IDirect3DSurface8*)nullptr);
 	s_rendering = false;
 	s_mapReady = true;
-	if (s_passesLogged < 3)
+	// the first three passes, and one well into the game (the first ones can come before the map's
+	// objects are drawn)
+	static unsigned passes = 0;
+	++passes;
+	if (s_passesLogged < 3 || passes == 150)
 	{
 		++s_passesLogged;
 		DWORD scissor = 0, zenable = 0;
 		device->GetRenderState(D3DRS_SCISSORTESTENABLE, &scissor);
 		device->GetRenderState(D3DRS_ZENABLE, &zenable);
-		Sage2_Log("shadow pass %d: %u fixed-function draws (%u polygons), %d drawn with their own effect, terrain %s (scissor %u, z %u)",
-			s_passesLogged, s_fixedFunctionDraws, s_fixedFunctionPolygons, s_effectDraws, s_terrainDrawn ? "drawn" : "not drawn",
+		Sage2_Log("shadow pass %u: %u fixed-function draws (%u polygons), %d drawn with their own effect, terrain %s (scissor %u, z %u)",
+			passes, s_fixedFunctionDraws, s_fixedFunctionPolygons, s_effectDraws, s_terrainDrawn ? "drawn" : "not drawn",
 			(unsigned)scissor, (unsigned)zenable);
 	}
 }

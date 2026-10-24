@@ -51,6 +51,8 @@ public:
 	/// How maps are lit from now on: "auto" picks the C&C4 preset matching each map's own time of
 	/// day and weather (the C&C4 style), a preset name forces that one, "map" keeps the maps' lights.
 	static void Select(const char* mode);
+	/// Whether maps get C&C4 presets (auto or a fixed preset) rather than their own lights
+	static bool Uses_Presets();
 	/// The preset for a map being loaded (its Zero Hour time of day, 1 = morning .. 4 = night, and
 	/// whether it is a snow map), under the selected mode; null to keep the map's lights. Also sets
 	/// the post-processing look that goes with it.
