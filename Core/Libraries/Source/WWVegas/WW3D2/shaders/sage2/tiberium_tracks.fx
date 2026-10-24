@@ -56,6 +56,26 @@ float AlbedoScale
 	string SasBindAddress = "Terrain.AlbedoScale";
 > = 1.6;
 
+// Tiberium Project @feature the terrain's macro texture (large-scale noise), multiplied over the
+// ground the way C&C4's terrain family does it, roads and tracks included, so they darken with it
+SAMPLER_2D_BEGIN( MacroSampler,
+	string UIWidget = "None";
+	string SasBindAddress = "Terrain.MacroTexture";
+	)
+	MinFilter = Linear;
+	MagFilter = Linear;
+	MipFilter = Linear;
+	AddressU = Wrap;
+	AddressV = Wrap;
+SAMPLER_2D_END
+
+// world units per macro texture repeat (as the terrain's)
+float MacroScale
+<
+	string UIWidget = "None";
+	string SasBindAddress = "Terrain.MacroScale";
+> = 1.0 / 660.0;
+
 struct VSInput
 {
 	float3 Position : POSITION;
@@ -91,6 +111,7 @@ void RoadSurface(VSOutput In, out float3 color, out float opacity)
 
 float4 Finish(VSOutput In, float3 color, float opacity)
 {
+	color *= GammaToLinear(tex2D(SAMPLER(MacroSampler), In.TexCoord_WorldXY.zw * MacroScale).xyz);
 	color = lerp(Fog.Color.xyz, color, In.ShroudTexCoord_Fog_Fade.z);
 	color *= GammaToLinear(tex2D(SAMPLER(ShroudTexture), In.ShroudTexCoord_Fog_Fade.xy).xyz);
 	return float4(color, opacity);

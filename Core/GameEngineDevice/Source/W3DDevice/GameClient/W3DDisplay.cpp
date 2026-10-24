@@ -973,6 +973,7 @@ void W3DDisplay::init()
 			Bool cnc4Style = prefs.getBool("CNC4Style", TRUE);
 			Sage2LightingClass::Set_Look(prefs.getAsciiString("Sage2Look", "ra3").str());
 			Sage2GlobalsClass::Set_Linear_Lights(prefs.getBool("Sage2LinearLights", FALSE));	// light colours to the effects in linear light
+			Sage2GlobalsClass::Set_Macro_Texture(prefs.getAsciiString("Sage2TerrainMacro", "tsnoiseurb").str());	// the ground's large-scale noise, as RA3 and C&C4
 			Sage2LightingClass::Select(cnc4Style ? prefs.getAsciiString("Sage2Lighting", "auto").str() : "map");
 			// how much of each map's own mood (how dim and what colour its light is) the C&C4 light keeps: 0..1
 			Sage2LightingClass::Set_Mood(prefs.getReal("Sage2MapMood", 0.0f));

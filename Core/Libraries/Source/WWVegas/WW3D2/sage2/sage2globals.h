@@ -94,6 +94,7 @@ enum Sage2Binding
 	SAGE2_BIND_TEXTURE_ENV_GDI,			// GDI faction reflection cube
 	SAGE2_BIND_TEXTURE_ENV_NOD,			// Nod faction reflection cube
 	SAGE2_BIND_TEXTURE_CLOUD,			// cloud shadow layer
+	SAGE2_BIND_TEXTURE_MACRO,			// the terrain's macro texture (large-scale variation; white for none)
 	SAGE2_BIND_TEXTURE_SHADOW_MAP,		// the sun's shadow map (white while there is none)
 	SAGE2_BIND_TEXTURE_TOP_VIEW,		// the terrain top view: scorch marks (transparent while there is none)
 	SAGE2_BIND_TEXTURE_DEFERRED_DIFFUSE,
@@ -169,6 +170,11 @@ public:
 	/// two or three times as strongly next to its sun as those games light it, and the ground came
 	/// out flat and pale.
 	static void Set_Linear_Lights(bool linear);
+	/// Tiberium Project @feature The ground's macro texture (Options.ini Sage2TerrainMacro): a
+	/// map-wide noise multiplied over the terrain, one repeat every 66 cells, that breaks up the
+	/// repetition of its textures across wide fields. Every RA3 and C&C4 skirmish map names
+	/// TSNoiseUrb (EnvironmentData); "none" leaves the ground as it is.
+	static void Set_Macro_Texture(const char* name);
 	static bool Get_Linear_Lights();
 
 	/// Releases the stand-in textures (before the device goes away).

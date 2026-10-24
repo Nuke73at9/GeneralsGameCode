@@ -27,6 +27,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <string>
 
 #include "dx8wrapper.h"
 #include "WWMath/quat.h"
@@ -106,7 +107,7 @@ namespace
 		{ "CloudSampler", SAGE2_BIND_TEXTURE_CLOUD },
 		{ "Cloud_WorldPositionMultiplier_XYZZ", SAGE2_BIND_CLOUD_MULTIPLIER },
 		{ "Cloud_CurrentOffsetUV", SAGE2_BIND_CLOUD_OFFSET },
-		{ "MacroSampler", SAGE2_BIND_TEXTURE_WHITE },
+		{ "MacroSampler", SAGE2_BIND_TEXTURE_MACRO },
 		{ "ShroudTexture", SAGE2_BIND_TEXTURE_WHITE },
 		{ "Noise", SAGE2_BIND_TEXTURE_GREY },
 		{ "FilteredNoise", SAGE2_BIND_TEXTURE_GREY },
@@ -154,8 +155,8 @@ namespace
 		{ "WW3D.NOD_Env_cube", SAGE2_BIND_TEXTURE_ENV_NOD },
 		{ "Objects.LightSpaceEnvironmentMap", SAGE2_BIND_TEXTURE_ENVIRONMENT },
 		{ "Water.LightSpaceEnvironmentMap", SAGE2_BIND_TEXTURE_ENVIRONMENT },
-		{ "Terrain.Macro.Texture", SAGE2_BIND_TEXTURE_WHITE },
-		{ "Terrain.MacroTexture", SAGE2_BIND_TEXTURE_WHITE },
+		{ "Terrain.Macro.Texture", SAGE2_BIND_TEXTURE_MACRO },
+		{ "Terrain.MacroTexture", SAGE2_BIND_TEXTURE_MACRO },
 		{ "WW3D.Shroud", SAGE2_BIND_TEXTURE_WHITE },
 		{ "Terrain.Shroud.Texture", SAGE2_BIND_TEXTURE_WHITE },	// the terrain effect sets the map's shroud over it
 		{ "WW3D.EnvironmentTexture", SAGE2_BIND_TEXTURE_ENVIRONMENT },
@@ -163,6 +164,7 @@ namespace
 	};
 
 	bool s_linearLights = false;		// Sage2LinearLights
+	std::string s_macroName = "tsnoiseurb";	// Sage2TerrainMacro, empty for none
 
 	// a light colour (display values, as the map stores it) as the effects take it
 	void Light_Color(float v[3])
@@ -204,6 +206,7 @@ namespace
 			case SAGE2_BIND_TEXTURE_ENV_GDI: effect.Set_Texture(i, Texture_Or("gdi_env_cube", s_environment)); return true;
 			case SAGE2_BIND_TEXTURE_ENV_NOD: effect.Set_Texture(i, Texture_Or("nod_env_cube", s_environment)); return true;
 			case SAGE2_BIND_TEXTURE_CLOUD: effect.Set_Texture(i, Texture_Or("tscloudmed", s_white)); return true;
+			case SAGE2_BIND_TEXTURE_MACRO: effect.Set_Texture(i, s_macroName.empty() ? s_white : Texture_Or(s_macroName.c_str(), s_white)); return true;
 			case SAGE2_BIND_TEXTURE_SHADOW_MAP: effect.Set_Texture(i, Sage2ShadowClass::Is_Available() ? Sage2ShadowClass::Get_Texture() : s_white); return true;
 			case SAGE2_BIND_TEXTURE_TOP_VIEW: effect.Set_Texture(i, Sage2TopViewClass::Is_Available() ? Sage2TopViewClass::Get_Texture() : s_clear); return true;
 			case SAGE2_BIND_TEXTURE_DEFERRED_DIFFUSE: effect.Set_Texture(i, s_deferredDiffuse ? s_deferredDiffuse : s_grey); return true;
@@ -738,3 +741,13 @@ void Sage2GlobalsClass::Set_Linear_Lights(bool linear)
 }
 
 bool Sage2GlobalsClass::Get_Linear_Lights() { return s_linearLights; }
+
+//-------------------------------------------------------------------------------------------------
+void Sage2GlobalsClass::Set_Macro_Texture(const char* name)
+{
+	s_macroName.clear();
+	if (name != nullptr && *name != '\0' && strcmp(name, "none") != 0 && strcmp(name, "None") != 0)
+		for (const char* c = name; *c; ++c)
+			s_macroName += (char)((*c >= 'A' && *c <= 'Z') ? *c + ('a' - 'A') : *c);
+	Sage2_Log("globals: terrain macro texture %s", s_macroName.empty() ? "none" : s_macroName.c_str());
+}
