@@ -30,6 +30,7 @@
 #include "sage2globals.h"
 #include "sage2material.h"
 #include "sage2scene.h"
+#include "sage2shadow.h"
 #include "sage2terrainatlas.h"
 #include "shader.h"
 #include "texture.h"
@@ -276,6 +277,7 @@ bool Sage2TerrainClass::Draw_Shadow(DX8IndexBufferClass* indexBuffer, const Tile
 	Sage2GlobalsClass::Apply(*s_effect, drawState);
 	device8->Set_Vertex_Declaration_Override(s_declaration);
 	device->SetVertexDeclaration(s_declaration);
+	Sage2ShadowClass::Count_Draw(true);
 	for (int pass = 0; pass < s_effect->Get_Pass_Count(s_techShadow); ++pass)
 	{
 		if (!s_effect->Begin(device, s_techShadow, pass))

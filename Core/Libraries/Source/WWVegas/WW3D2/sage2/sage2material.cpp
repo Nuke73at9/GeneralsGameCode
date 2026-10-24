@@ -595,6 +595,7 @@ bool Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const
 			return false;
 		}
 		technique = mat.shadowTechnique;
+		Sage2ShadowClass::Count_Draw(false);
 	}
 	else if (mat.prepassTechnique >= 0 && Sage2SceneClass::Is_Enabled() && Sage2SceneClass::Supports_SRGB_Write())
 	{

@@ -25,6 +25,7 @@
 #include "camera.h"
 #include "dx8wrapper.h"
 #include "sage2globals.h"
+#include "statistics.h"
 #include "WWMath/matrix3d.h"
 #include "WWMath/matrix4.h"
 #include "WWMath/vector3.h"
@@ -49,6 +50,10 @@ namespace
 	bool s_rendering = false;
 	bool s_mapReady = false;
 	float s_worldToShadow[16];
+	bool s_debug = false;
+	int s_passesLogged = 0;
+	int s_effectDraws = 0;
+	bool s_terrainDrawn = false;
 	DWORD s_savedColorWrite = 0xF;
 
 	template <class T> void Release(T*& p) { if (p) p->Release(); p = nullptr; }
@@ -202,6 +207,8 @@ bool Sage2ShadowClass::Begin(const Vector3& sunTravel, const Vector3& boxMin, co
 		for (int c = 0; c < 4; ++c)
 			s_worldToShadow[r * 4 + c] = worldToShadow[r][c];
 	s_rendering = true;
+	s_effectDraws = 0;
+	s_terrainDrawn = false;
 
 	static bool logged = false;
 	if (!logged)
@@ -223,6 +230,76 @@ void Sage2ShadowClass::End()
 	DX8Wrapper::Set_Render_Target((IDirect3DSurface8*)nullptr);
 	s_rendering = false;
 	s_mapReady = true;
+	if (s_passesLogged < 3)
+	{
+		++s_passesLogged;
+		// the polygon count covers the fixed-function draws since this pass's Begin_Render
+		DWORD scissor = 0, zenable = 0;
+		device->GetRenderState(D3DRS_SCISSORTESTENABLE, &scissor);
+		device->GetRenderState(D3DRS_ZENABLE, &zenable);
+		Sage2_Log("shadow pass %d: %d fixed-function polygons, %d drawn with their own effect, terrain %s (scissor %u, z %u)",
+			s_passesLogged, Debug_Statistics::Get_DX8_Polygons(), s_effectDraws, s_terrainDrawn ? "drawn" : "not drawn",
+			(unsigned)scissor, (unsigned)zenable);
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void Sage2ShadowClass::Count_Draw(bool terrain)
+{
+	if (!s_rendering)
+		return;
+	++s_effectDraws;
+	if (terrain)
+		s_terrainDrawn = true;
+}
+
+void Sage2ShadowClass::Set_Debug(bool enabled) { s_debug = enabled; }
+bool Sage2ShadowClass::Is_Debug() { return s_debug; }
+
+//-------------------------------------------------------------------------------------------------
+void Sage2ShadowClass::Draw_Debug()
+{
+	if (!s_debug || !Is_Available())
+		return;
+	IDirect3DDevice8* device8 = DX8Wrapper::_Get_D3D_Device8();
+	if (device8 == nullptr)
+		return;
+	IDirect3DDevice9* device = device8->Get_D3D9();
+	DX8Wrapper::Apply_Render_State_Changes();
+	IDirect3DStateBlock9* saved = nullptr;
+	if (FAILED(device->CreateStateBlock(D3DSBT_ALL, &saved)))
+		return;
+	// the map, fixed-function: a depth texture read this way returns its depth in every channel
+	const float size = 480.0f, x0 = 8.0f - 0.5f, y0 = 8.0f - 0.5f;
+	struct V { float x, y, z, rhw, u, v; };
+	V quad[4] = { { x0, y0, 0, 1, 0, 0 }, { x0 + size, y0, 0, 1, 1, 0 }, { x0, y0 + size, 0, 1, 0, 1 }, { x0 + size, y0 + size, 0, 1, 1, 1 } };
+	device->SetVertexShader(nullptr);
+	device->SetPixelShader(nullptr);
+	device->SetFVF(D3DFVF_XYZRHW | D3DFVF_TEX1);
+	device->SetTexture(0, s_depthTexture);
+	device->SetTexture(1, nullptr);
+	device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+	device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+	device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
+	device->SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
+	device->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+	device->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+	device->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+	device->SetRenderState(D3DRS_ZENABLE, FALSE);
+	device->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+	device->SetRenderState(D3DRS_ALPHATESTENABLE, FALSE);
+	device->SetRenderState(D3DRS_LIGHTING, FALSE);
+	device->SetRenderState(D3DRS_FOGENABLE, FALSE);
+	device->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
+	device->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+	device->SetRenderState(D3DRS_SRGBWRITEENABLE, FALSE);
+	device->SetRenderState(D3DRS_COLORWRITEENABLE, 0xF);
+	device->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, quad, sizeof(V));
+	saved->Apply();
+	saved->Release();
+	device8->Invalidate_State();
+	DX8Wrapper::Invalidate_Shader_Constants();
+	ShaderClass::Invalidate();
 }
 
 //-------------------------------------------------------------------------------------------------

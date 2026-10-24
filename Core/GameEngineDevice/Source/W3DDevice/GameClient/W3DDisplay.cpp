@@ -976,6 +976,7 @@ void W3DDisplay::init()
 			Sage2ShadowClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Shadows", TRUE));	// C&C4's shadow map in place of ZH's shadows
 			Sage2ShadowClass::Set_Map_Size((unsigned)prefs.getInt("Sage2ShadowMapSize", 2048));
 			Sage2ShadowClass::Set_Soft(prefs.getReal("Sage2ShadowSoft", 1.0f), prefs.getReal("Sage2ShadowJitter", 0.5f));	// C&C4's soft kernel step and jitter, in texels
+			Sage2ShadowClass::Set_Debug(prefs.getBool("Sage2ShadowDebug", FALSE));	// the shadow map shown in the top-left corner
 			Sage2TopViewClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2TopView", TRUE));	// scorch marks baked into the ground, C&C4's way
 			Sage2TopViewClass::Set_Size((unsigned)prefs.getInt("Sage2TopViewSize", 2048));
 			Sage2RoadClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Roads", TRUE));	// roads lit as the terrain, C&C4's way
@@ -2298,6 +2299,7 @@ AGAIN:
 						s_postProcessChecked = TRUE;
 					}
 					PostProcessClass::Apply();
+					Sage2ShadowClass::Draw_Debug();	// Sage2ShadowDebug = yes: the shadow map over the world, under the interface
 				}
 #endif
 

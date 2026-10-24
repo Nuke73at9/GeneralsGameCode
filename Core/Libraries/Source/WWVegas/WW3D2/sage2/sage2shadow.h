@@ -69,6 +69,14 @@ public:
 	static unsigned Get_Map_Size();
 	static void Get_Soft(float& kernel, float& jitter);
 
+	/// Diagnostics: a caster drawn with its own effect (the terrain, a C&C4 mesh) counts itself;
+	/// End() logs the first passes' counts. Draw_Debug() shows the map in the top-left corner of
+	/// the frame (depth as grey: near the sun dark, far light) - Options.ini Sage2ShadowDebug = yes.
+	static void Count_Draw(bool terrain);
+	static void Set_Debug(bool enabled);
+	static bool Is_Debug();
+	static void Draw_Debug();
+
 	/// Frees the map (before a device reset); made again on the next Begin()
 	static void Release_Resources();
 	static void Shutdown();
