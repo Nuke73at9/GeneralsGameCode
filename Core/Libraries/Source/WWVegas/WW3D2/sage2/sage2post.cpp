@@ -45,6 +45,10 @@ namespace
 
 	Sage2EffectClass* s_bloom = nullptr;
 	Sage2EffectClass* s_lookup = nullptr;
+	Sage2EffectClass* s_keepBlack = nullptr;	// tiberium_keepblack: optional, from the mod
+	int s_techKeepBlack = -1;
+	bool s_keepBlackTried = false;
+	bool s_keepBlackEnabled = true;
 	int s_techDownsampleInitial = -1, s_techDownsample4x4 = -1, s_techBlurU = -1, s_techBlurV = -1;
 	int s_techAccumulate = -1, s_techAccumulateFinal = -1, s_techLookup = -1;
 
@@ -81,6 +85,12 @@ namespace
 		s_techAccumulate = s_bloom->Find_Technique("Accumulate");
 		s_techAccumulateFinal = s_bloom->Find_Technique("AccumulateFinal");
 		s_techLookup = s_lookup->Find_Technique("Default");
+		if (!s_keepBlackTried)
+		{
+			s_keepBlackTried = true;
+			s_keepBlack = Sage2MaterialClass::Get_Effect("tiberium_keepblack");
+			s_techKeepBlack = s_keepBlack ? s_keepBlack->Find_Technique("Default") : -1;
+		}
 		return s_techDownsampleInitial >= 0 && s_techDownsample4x4 >= 0 && s_techBlurU >= 0 && s_techBlurV >= 0
 			&& s_techAccumulate >= 0 && s_techAccumulateFinal >= 0 && s_techLookup >= 0;
 	}
@@ -236,6 +246,12 @@ void Sage2PostClass::Set_Look(const char* lookupTexture, float lookupBlend, floa
 }
 
 //-------------------------------------------------------------------------------------------------
+void Sage2PostClass::Set_Keep_Black(bool enabled)
+{
+	s_keepBlackEnabled = enabled;
+}
+
+//-------------------------------------------------------------------------------------------------
 void Sage2PostClass::Set_Exposure(float exposure)
 {
 	s_exposure = exposure > 0.0f ? exposure : 1.0f;
@@ -337,6 +353,14 @@ bool Sage2PostClass::Apply()
 	grade.Set_Bool("ApplyFalloffAndGrain", false);
 	grade.Set_Bool("ApplyColorMask", false);
 	Draw(device, grade, s_techLookup, frame, desc.Width, desc.Height, nullptr);
+	// Tiberium Project @bugfix Zero Hour's black kept black: C&C4's tables lift black (the
+	// Pan-American one to a dark purple), and Zero Hour leaves the world black past the map's
+	// edge and under the shroud, which came out as a purple sky at a far or low camera
+	if (s_keepBlackEnabled && s_keepBlack != nullptr && s_techKeepBlack >= 0)
+	{
+		s_keepBlack->Set_Texture("SourceTexture", s_linear);
+		Draw(device, *s_keepBlack, s_techKeepBlack, frame, desc.Width, desc.Height, nullptr);
+	}
 
 	device->SetRenderTarget(0, frame);
 	device->SetDepthStencilSurface(depth);
@@ -374,6 +398,8 @@ void Sage2PostClass::Shutdown()
 {
 	Release_Resources();
 	Release(s_quadDeclaration);
-	s_bloom = s_lookup = nullptr;	// owned by the effect cache
+	s_bloom = s_lookup = s_keepBlack = nullptr;	// owned by the effect cache
+	s_keepBlackTried = false;
+	s_techKeepBlack = -1;
 	s_state = NOT_TRIED;
 }

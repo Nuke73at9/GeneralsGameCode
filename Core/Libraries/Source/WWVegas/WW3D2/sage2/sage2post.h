@@ -39,6 +39,9 @@ public:
 	static void Set_Look(const char* lookupTexture, float lookupBlend, float bloomIntensity);
 	/// Exposure applied before the tone curve (1 = as C&C4)
 	static void Set_Exposure(float exposure);
+	/// Sage2KeepBlack (default on): black before the grade stays black after it (the mod's
+	/// tiberium_keepblack.fxo), so the world past the map's edge and under the shroud is not lifted
+	static void Set_Keep_Black(bool enabled);
 
 	/// Runs the chain on the current render target (between the 3D scene and the interface).
 	/// Returns false when the effects or textures are not available, so a fallback can run.

@@ -316,7 +316,7 @@ void TiberiumTest::update()
 		s_spanStart = now;
 	}
 	// (none from the quit frame on: on a fast machine more would keep the quit waiting forever)
-	const Bool quitReached = s_quitFrame > 0 && s_frame >= s_quitFrame;
+	const Bool quitReached = s_quitFrame > 0 && s_frame > s_quitFrame;
 	if ( s_shotInterval > 0 && TheDisplay != nullptr && s_frame % s_shotInterval == 0 && s_frame >= s_shotStart && !quitReached )
 	{
 		double msPerFrame = 0.0;

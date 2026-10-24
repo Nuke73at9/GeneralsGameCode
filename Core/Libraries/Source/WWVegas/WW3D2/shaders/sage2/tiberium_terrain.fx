@@ -180,10 +180,10 @@ struct VSInput
 	float2 Slots : TEXCOORD2;		// C&C4 atlas slots of the base and blend terrains, -1 for none
 };
 
-// one world-aligned C&C4 texture: colour (linear), specular mask and tangent-space normal
-void SampleC4(float slot, float2 worldXY, out float3 color, out float spec, out float3 normalTS)
+// one projection of a world-aligned C&C4 texture: the slot's tile at plane coordinates p
+void SampleC4Plane(float slot, float2 p, out float4 c, out float4 n)
 {
-	float2 w = worldXY / AtlasParams.w;
+	float2 w = p / AtlasParams.w;
 	float2 f = frac(w);
 	f.y = 1.0 - f.y;		// the texture's top row lies at the larger world y, as C&C4 maps it
 	float pitch = AtlasParams.y + 2.0 * AtlasParams.z;
@@ -193,8 +193,26 @@ void SampleC4(float slot, float2 worldXY, out float3 color, out float spec, out 
 	// gradients from the unwrapped coordinate, so the mip level does not jump at the wrap
 	float2 dx = ddx(w) * AtlasParams.y;
 	float2 dy = ddy(w) * AtlasParams.y;
-	float4 c = tex2Dgrad(SAMPLER(AtlasColor), uv, dx, dy);
-	float4 n = tex2Dgrad(SAMPLER(AtlasNormal), uv, dx, dy);
+	c = tex2Dgrad(SAMPLER(AtlasColor), uv, dx, dy);
+	n = tex2Dgrad(SAMPLER(AtlasNormal), uv, dx, dy);
+}
+
+// Tiberium Project @feature one world-aligned C&C4 texture: colour (linear), specular mask and
+// tangent-space normal. Projected from above, and on steep ground from the two sides as well,
+// weighted by the slope (triplanar): seen only from above, a cliff face stretches the texture into
+// long streaks.
+void SampleC4(float slot, float3 worldPos, float3 worldNormal, out float3 color, out float spec, out float3 normalTS)
+{
+	float4 c, n, cx, nx, cy, ny;
+	SampleC4Plane(slot, worldPos.xy, c, n);
+	SampleC4Plane(slot, worldPos.yz, cx, nx);	// seen along x
+	SampleC4Plane(slot, worldPos.xz, cy, ny);	// seen along y
+	// weights from the slope; a vertex without a normal (some of Zero Hour's blend quads) takes
+	// the view from above alone rather than dividing by zero
+	float3 b = pow(abs(worldNormal), 4.0) + float3(0.0, 0.0, 1e-6);
+	b /= (b.x + b.y + b.z);
+	c = c * b.z + cx * b.x + cy * b.y;
+	n = n * b.z + nx * b.x + ny * b.y;
 	color = GammaToLinear(c.xyz);
 	spec = c.w;
 	normalTS = n.xyz * 2.0 - 1.0;
@@ -205,15 +223,15 @@ void SampleC4(float slot, float2 worldXY, out float3 color, out float spec, out 
 // C&C4 texture where the map's terrain has one, blended by the tile's alpha edge times the vertex
 // alpha (how Zero Hour's second fixed-function pass blends). Colour in linear light, with the
 // specular mask and the tangent-space normal (flat where a Zero Hour tile stays).
-void SampleGround(float2 baseTexCoord, float2 blendTexCoord, float vertexAlpha, float2 slots, float2 worldXY,
+void SampleGround(float2 baseTexCoord, float2 blendTexCoord, float vertexAlpha, float2 slots, float3 worldPos, float3 worldNormal,
 	out float3 color, out float spec, out float3 normalTS)
 {
 	float4 zhBase = tex2D(SAMPLER(BaseSampler), baseTexCoord);
 	float4 zhBlend = tex2D(SAMPLER(BaseSampler), blendTexCoord);
 	float3 cBase, cBlend, nBase, nBlend;
 	float sBase, sBlend;
-	SampleC4(max(slots.x, 0.0), worldXY, cBase, sBase, nBase);
-	SampleC4(max(slots.y, 0.0), worldXY, cBlend, sBlend, nBlend);
+	SampleC4(max(slots.x, 0.0), worldPos, worldNormal, cBase, sBase, nBase);
+	SampleC4(max(slots.y, 0.0), worldPos, worldNormal, cBlend, sBlend, nBlend);
 	float hasBase = slots.x >= 0.0 ? 1.0 : 0.0;
 	float hasBlend = slots.y >= 0.0 ? 1.0 : 0.0;
 	float3 flat = float3(0, 0, 1);
@@ -250,6 +268,7 @@ struct VSOutput_CreateDepthNormalMap
 	float4 BaseTexCoord_BlendTexCoord : TEXCOORD2;
 	float4 WorldXY_Slots : TEXCOORD3;
 	float BlendAlpha : TEXCOORD4;
+	float WorldZ : TEXCOORD5;
 };
 
 struct PSOutput_CreateDepthNormalMap
@@ -267,6 +286,7 @@ VSOutput_CreateDepthNormalMap VS_CreateDepthNormalMap(VSInput In)
 	Out.BaseTexCoord_BlendTexCoord = float4(In.BaseTexCoord, In.BlendTexCoord);
 	Out.WorldXY_Slots = float4(In.Position.xy, In.Slots);
 	Out.BlendAlpha = In.Color.w;
+	Out.WorldZ = In.Position.z;
 	return Out;
 }
 
@@ -275,8 +295,8 @@ PSOutput_CreateDepthNormalMap PS_CreateDepthNormalMap(VSOutput_CreateDepthNormal
 	PSOutput_CreateDepthNormalMap Out;
 	float3 color, normalTS;
 	float spec;
-	SampleGround(In.BaseTexCoord_BlendTexCoord.xy, In.BaseTexCoord_BlendTexCoord.zw, In.BlendAlpha, In.WorldXY_Slots.zw, In.WorldXY_Slots.xy,
-		color, spec, normalTS);
+	SampleGround(In.BaseTexCoord_BlendTexCoord.xy, In.BaseTexCoord_BlendTexCoord.zw, In.BlendAlpha, In.WorldXY_Slots.zw,
+		float3(In.WorldXY_Slots.xy, In.WorldZ), In.Normal, color, spec, normalTS);
 	float3 normal = BumpedNormal(normalTS, In.Normal);
 	Out.NormalSpec = float4((normal + 1.0f) * 0.5f, saturate(SpecularExponent / 255.0f));
 	Out.Depth = In.Depth;
@@ -336,6 +356,7 @@ struct VSOutputDefault
 	float4 MacroTexCoord_Fog_BlendAlpha : TEXCOORD1;
 	float4 WorldXY_Slots : TEXCOORD2;
 	float2 ShroudTexCoord : TEXCOORD3;
+	float4 Normal_WorldZ : TEXCOORD4;
 };
 
 VSOutputDefault VS_Default(VSInput In)
@@ -348,6 +369,7 @@ VSOutputDefault VS_Default(VSInput In)
 	Out.MacroTexCoord_Fog_BlendAlpha.w = In.Color.w;
 	Out.WorldXY_Slots = float4(In.Position.xy, In.Slots);
 	Out.ShroudTexCoord = ShroudUV(In.Position.xy);
+	Out.Normal_WorldZ = float4(In.Normal, In.Position.z);
 	return Out;
 }
 
@@ -356,7 +378,7 @@ float4 PS_Default(VSOutputDefault In, float2 vPos : PIXELLOC) : COLOR
 	float3 baseColor, normalTS;
 	float spec;
 	SampleGround(In.BaseTexCoord_BlendTexCoord.xy, In.BaseTexCoord_BlendTexCoord.zw, In.MacroTexCoord_Fog_BlendAlpha.w,
-		In.WorldXY_Slots.zw, In.WorldXY_Slots.xy, baseColor, spec, normalTS);
+		In.WorldXY_Slots.zw, float3(In.WorldXY_Slots.xy, In.Normal_WorldZ.w), In.Normal_WorldZ.xyz, baseColor, spec, normalTS);
 	ApplyTopView(In.WorldXY_Slots.xy, baseColor, spec);
 	float2 screenTexCoord = GetScreenTexcoordCoord(vPos);
 	float3 color = (SampleDiffuseLight(screenTexCoord) + AmbientLightColor) * baseColor
@@ -406,6 +428,7 @@ struct VSOutput_ExtraBlend
 	float4 TexCoord_WorldXY : TEXCOORD0;
 	float4 MacroTexCoord_Fog_Alpha : TEXCOORD1;
 	float4 ShroudTexCoord_Slot : TEXCOORD2;
+	float4 Normal_WorldZ : TEXCOORD3;
 };
 
 VSOutput_ExtraBlend VS_ExtraBlend(VSInput_ExtraBlend In)
@@ -417,6 +440,7 @@ VSOutput_ExtraBlend VS_ExtraBlend(VSInput_ExtraBlend In)
 	Out.MacroTexCoord_Fog_Alpha.z = CalculateFog(Fog, In.Position, EyePosition);
 	Out.MacroTexCoord_Fog_Alpha.w = In.Color.w;
 	Out.ShroudTexCoord_Slot = float4(ShroudUV(In.Position.xy), In.Slot.x, 0);
+	Out.Normal_WorldZ = float4(In.Normal, In.Position.z);
 	return Out;
 }
 
@@ -426,7 +450,7 @@ float4 PS_ExtraBlend(VSOutput_ExtraBlend In, float2 vPos : PIXELLOC) : COLOR
 	float slot = In.ShroudTexCoord_Slot.z;
 	float3 c4, normalTS;
 	float spec;
-	SampleC4(max(slot, 0.0), In.TexCoord_WorldXY.zw, c4, spec, normalTS);
+	SampleC4(max(slot, 0.0), float3(In.TexCoord_WorldXY.zw, In.Normal_WorldZ.w), In.Normal_WorldZ.xyz, c4, spec, normalTS);
 	float hasC4 = slot >= 0.0 ? 1.0 : 0.0;
 	float3 baseColor = lerp(GammaToLinear(zh.xyz) * AlbedoScale, c4, hasC4);
 	spec = lerp(0.0, spec, hasC4);
@@ -492,7 +516,7 @@ float4 PS_Default_M(VSOutput_M In) : COLOR
 	float3 baseColor, normalTS;
 	float spec;
 	SampleGround(In.BaseTexCoord_BlendTexCoord.xy, In.BaseTexCoord_BlendTexCoord.zw, In.WorldPosition_BlendAlpha.w,
-		In.Slots, In.WorldPosition_BlendAlpha.xy, baseColor, spec, normalTS);
+		In.Slots, In.WorldPosition_BlendAlpha.xyz, In.Normal_Fog.xyz, baseColor, spec, normalTS);
 	ApplyTopView(In.WorldPosition_BlendAlpha.xy, baseColor, spec);
 	float3 normal = BumpedNormal(normalTS, In.Normal_Fog.xyz);
 	float3 cloud = GammaToLinear(tex2D(SAMPLER(CloudTexture), In.CloudTexCoord_MacroTexCoord.xy).xyz);
