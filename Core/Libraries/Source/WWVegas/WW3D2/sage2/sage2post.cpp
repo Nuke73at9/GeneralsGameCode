@@ -358,7 +358,9 @@ bool Sage2PostClass::Apply()
 	// edge and under the shroud, which came out as a purple sky at a far or low camera
 	if (s_keepBlackEnabled && s_keepBlack != nullptr && s_techKeepBlack >= 0)
 	{
-		s_keepBlack->Set_Texture("SourceTexture", s_linear);
+		// the frame as the scene left it, before the bloom: the bloom's glow spreads over the
+		// black and would otherwise count as picture there
+		s_keepBlack->Set_Texture("SourceTexture", s_frame);
 		Draw(device, *s_keepBlack, s_techKeepBlack, frame, desc.Width, desc.Height, nullptr);
 	}
 

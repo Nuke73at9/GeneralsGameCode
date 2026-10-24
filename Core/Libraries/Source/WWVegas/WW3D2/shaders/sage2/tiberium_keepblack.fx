@@ -4,8 +4,9 @@
 // C&C4's colour tables lift black (the Pan-American one to a dark purple, 32/7/32 of 255): its own
 // maps never show pure black, but Zero Hour leaves the world black past the map's edge and under
 // the shroud, and a far or low camera showed a purple sky there. This pass runs after the grade:
-// where the scene before grading (the post chain's linear frame) was black, it blends the graded
-// pixel back to black, fading out over the darkest few levels so nothing else changes.
+// where the scene before the bloom and the grade (the post chain's copy of the frame) was black,
+// it blends the graded pixel back to black, fading out over the darkest couple of levels so
+// nothing else changes.
 //
 // Compiled with shaders/sage2/build_effects.py to tiberium_keepblack.fxo, packed into the mod as
 // Art\Shaders\tiberium_keepblack.fxo; Sage2PostClass draws it when it is there.
@@ -23,7 +24,7 @@ SAMPLER_2D_BEGIN( SourceTexture,
 	AddressV = Clamp;
 SAMPLER_2D_END
 
-// linear light below which a pixel counts as black, and the level where the grade is fully back
+// the frame's value below which a pixel counts as black, and where the grade is fully back
 float2 BlackRange
 <
 	string UIWidget = "None";
