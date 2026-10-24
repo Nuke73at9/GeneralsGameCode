@@ -224,7 +224,9 @@ bool Sage2TerrainClass::Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuff
 	{
 		if (!s_effect->Begin(device, technique, pass))
 			continue;
-		if (deferred)
+		// both techniques compute in linear light (the forward one too): written sRGB when the
+		// frame buffer can take it
+		if (Sage2SceneClass::Supports_SRGB_Write())
 			device->SetRenderState(D3DRS_SRGBWRITEENABLE, TRUE);
 		device->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);	// the tiles' winding is the renderer's business
 		Draw_Tiles(device, indices, tiles, tileCount, vertexCount, polygonCount);

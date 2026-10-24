@@ -220,9 +220,12 @@ bool Sage2SceneClass::Supports_SRGB_Write()
 		IDirect3DDevice8* device8 = DX8Wrapper::_Get_D3D_Device8();
 		if (d3d && device8)
 		{
+			// the swap chain's back buffer, not whatever target is current: the first query can come
+			// from a pass that draws into its own target (the shadow map's R32F one, say), and the
+			// answer is kept for the session. The frame's offscreen target is A8R8G8B8, as checked below.
 			IDirect3DSurface9* back = nullptr;
 			D3DSURFACE_DESC desc;
-			if (SUCCEEDED(device8->Get_D3D9()->GetRenderTarget(0, &back)) && back)
+			if (SUCCEEDED(device8->Get_D3D9()->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &back)) && back)
 			{
 				if (SUCCEEDED(back->GetDesc(&desc)))
 				{
@@ -230,7 +233,9 @@ bool Sage2SceneClass::Supports_SRGB_Write()
 					if (FAILED(d3d->GetAdapterDisplayMode(D3DADAPTER_DEFAULT, &mode)))
 						mode.Format = D3DFMT_X8R8G8B8;
 					if (SUCCEEDED(d3d->CheckDeviceFormat(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, mode.Format,
-						D3DUSAGE_RENDERTARGET | D3DUSAGE_QUERY_SRGBWRITE, D3DRTYPE_SURFACE, desc.Format)))
+						D3DUSAGE_RENDERTARGET | D3DUSAGE_QUERY_SRGBWRITE, D3DRTYPE_SURFACE, desc.Format))
+						&& SUCCEEDED(d3d->CheckDeviceFormat(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, mode.Format,
+						D3DUSAGE_RENDERTARGET | D3DUSAGE_QUERY_SRGBWRITE, D3DRTYPE_TEXTURE, D3DFMT_A8R8G8B8)))
 						s_srgbWrite = 1;
 				}
 				back->Release();

@@ -126,7 +126,9 @@ bool Sage2RoadClass::Draw(Kind kind, IDirect3DVertexBuffer9* vertices, IDirect3D
 	{
 		if (!s_effect->Begin(device, technique, pass))
 			continue;
-		if (deferred)
+		// both techniques compute in linear light (the forward one too): written sRGB when the
+		// frame buffer can take it
+		if (Sage2SceneClass::Supports_SRGB_Write())
 			device->SetRenderState(D3DRS_SRGBWRITEENABLE, TRUE);
 		device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, (INT)baseVertex, 0, vertexCount, 0, triangleCount);
 		s_effect->End(device);

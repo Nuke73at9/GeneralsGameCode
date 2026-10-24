@@ -60,7 +60,8 @@ namespace
 			{ { 0.75f, 0.75f, 0.75f }, { -0.629f,  0.349f, -0.695f } },
 			{ { 0.50f, 0.50f, 0.50f }, {  0.775f,  0.542f, -0.326f } },
 			{ { 0.50f, 0.50f, 0.50f }, {  0.330f, -0.908f, -0.259f } } }, "pan_am_lut_vol", 0.5f, 0.18f },
-		// the night set C&C4's temperate maps share
+		// the night set stored in C&C4's temperate maps; none of them plays at night and its ambient
+		// is zero, so the automatic choice takes Junktown's night (a map C&C4 does play at night)
 		{ "night", { 0.00f, 0.00f, 0.00f }, {
 			{ { 0.94f, 0.94f, 1.25f }, { -0.321f,  0.321f, -0.891f } },
 			{ { 0.25f, 0.25f, 0.38f }, {  0.978f,  0.208f,  0.000f } },
@@ -126,7 +127,7 @@ const Sage2LightingPreset* Sage2LightingClass::Choose(int timeOfDay, bool snowy)
 		else if (timeOfDay == 3)
 			name = "evening";
 		else if (timeOfDay == 4)
-			name = "night";
+			name = "junktown";	// C&C4's own night: moonlight from above, a green-grey ambient
 		else
 			name = "temperate";
 		preset = Find(name);
