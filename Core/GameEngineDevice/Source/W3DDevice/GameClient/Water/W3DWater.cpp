@@ -172,6 +172,18 @@ static ShaderClass blendStagesShader(SC_DETAIL_BLEND);
 
 WaterRenderObjClass *TheWaterRenderObj=nullptr; ///<global water rendering object
 
+// Tiberium Project @bugfix The water's shade (the terrain's ambient plus each light's diffuse, times
+// the water's colour, 0..255 a channel) packed into a vertex colour, each channel held to 0..255.
+// Zero Hour's lights never added up past 1; brighter ones (the C&C4 and RA3 sets: a sun of 1.3-1.6)
+// carried a channel over into the next and the water came out pure green or blue.
+static Int packWaterShade(Real shadeR, Real shadeG, Real shadeB)
+{
+	const Int r = REAL_TO_INT(shadeR < 0.0f ? 0.0f : (shadeR > 255.0f ? 255.0f : shadeR));
+	const Int g = REAL_TO_INT(shadeG < 0.0f ? 0.0f : (shadeG > 255.0f ? 255.0f : shadeG));
+	const Int b = REAL_TO_INT(shadeB < 0.0f ? 0.0f : (shadeB > 255.0f ? 255.0f : shadeB));
+	return b | (g << 8) | (r << 16);
+}
+
 static Int getRiverVertexDiffuse(W3DShroud *shroud, Real x, Real y, Real shadeR, Real shadeG, Real shadeB, Int diffuse)
 {
 	if (!shroud)
@@ -181,10 +193,11 @@ static Int getRiverVertexDiffuse(W3DShroud *shroud, Real x, Real y, Real shadeR,
 	Int cellY = (Int)(y / shroud->getCellHeight());
 	W3DShroudLevel level = shroud->getShroudLevel(cellX, cellY);
 	Real shroudScale = (Real)level / 255.0f;
+	// Tiberium Project @bugfix held to 0..255 a channel, as packWaterShade does
 	return GameMakeColor(
-		(Int)(shadeR * shroudScale),
-		(Int)(shadeG * shroudScale),
-		(Int)(shadeB * shroudScale),
+		(Int)(min(max(shadeR, 0.0f), 255.0f) * shroudScale),
+		(Int)(min(max(shadeG, 0.0f), 255.0f) * shroudScale),
+		(Int)(min(max(shadeB, 0.0f), 255.0f) * shroudScale),
 		(diffuse >> 24) & 0xff);
 }
 
@@ -2847,7 +2860,7 @@ void WaterRenderObjClass::drawRiverWater(PolygonTrigger *pTrig)
 		}
 	}
 
-	Int diffuse=REAL_TO_INT(shadeB) | (REAL_TO_INT(shadeG) << 8) | (REAL_TO_INT(shadeR) << 16);
+	Int diffuse=packWaterShade(shadeR, shadeG, shadeB);
 
 	//Keep diffuse from lighting calculations but substitute custom alpha
 	diffuse |= m_settings[m_tod].waterDiffuse & 0xff000000;	//copy alpha/opacity from ini setting
@@ -3191,7 +3204,7 @@ void WaterRenderObjClass::drawTrapezoidWater(Vector3 points[4])
 		}
 	}
 
-	Int diffuse=REAL_TO_INT(shadeB) | (REAL_TO_INT(shadeG) << 8) | (REAL_TO_INT(shadeR) << 16);
+	Int diffuse=packWaterShade(shadeR, shadeG, shadeB);
 
 	//Keep diffuse from lighting calculations but substitute custom alpha
 	diffuse |= m_settings[m_tod].waterDiffuse & 0xff000000;	//copy alpha/opacity from ini setting
