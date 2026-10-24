@@ -31,6 +31,7 @@
 #include "Common/FramePacer.h"
 #include "Common/GameEngine.h"
 #include "Common/ReplaySimulation.h"
+#include "Common/TiberiumTest.h"
 
 
 /**
@@ -56,10 +57,12 @@ Int GameMain()
 	}
 
 	// since execute() returned, we are exiting the game
+	TiberiumTest::exitStage( "the game loop has ended" );	// Tiberium Project @feature crash watch
 	delete TheFramePacer;
 	TheFramePacer = nullptr;
 	delete TheGameEngine;
 	TheGameEngine = nullptr;
+	TiberiumTest::exitStage( "the game engine is shut down" );
 
 	return exitcode;
 }

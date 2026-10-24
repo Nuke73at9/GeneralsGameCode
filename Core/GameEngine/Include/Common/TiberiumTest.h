@@ -67,4 +67,15 @@ public:
 
 	/// A line in TiberiumTest.log (and on stderr)
 	static void log( const char *format, ... );
+
+	/// A step of the game's shutdown, in TiberiumCrash.log (test runs only). Written straight to the
+	/// file, so it still works after the C runtime has started closing down.
+	static void exitStage( const char *stage );
 };
+
+// Tiberium Project @feature Crash watch for test runs (Windows): from the first test frame on, any
+// error exception (an access violation and the like, not C++ exceptions) is written to
+// TiberiumCrash.log in the user data folder, with the module and offset it happened at and, on
+// x64, the call stack as module+offset pairs (GeneralsXZH.pdb turns them into functions). With
+// exitStage() marking the shutdown steps, a crash after the game's own crash handler is gone (it
+// stops at the end of WinMain) still shows where it was.

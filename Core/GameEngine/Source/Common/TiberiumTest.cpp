@@ -110,6 +110,123 @@ namespace
 		path += "TiberiumTest.log";
 		s_log = fopen( path.c_str(), "w" );
 	}
+
+	// Tiberium Project @feature Crash watch (see TiberiumTest.h). Plain Win32 calls only: it must
+	// work while the process is exiting, after the C runtime has begun shutting down.
+#ifdef _WIN32
+	HANDLE s_crashFile = INVALID_HANDLE_VALUE;
+	volatile LONG s_crashCount = 0;
+	const LONG MAX_CRASH_REPORTS = 4;
+
+	void rawWrite( const char *text )
+	{
+		if ( s_crashFile == INVALID_HANDLE_VALUE )
+			return;
+		DWORD written = 0;
+		WriteFile( s_crashFile, text, (DWORD)strlen( text ), &written, nullptr );
+	}
+
+	// "module.dll+0x1234" for a code address
+	void describeAddress( const void *address, char *out, size_t size )
+	{
+		HMODULE module = nullptr;
+		char path[MAX_PATH] = "";
+		if ( GetModuleHandleExA( GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+				(LPCSTR)address, &module ) && module != nullptr
+			&& GetModuleFileNameA( module, path, MAX_PATH ) > 0 )
+		{
+			const char *name = strrchr( path, '\\' );
+			snprintf( out, size, "%s+0x%llx", name != nullptr ? name + 1 : path,
+				(unsigned long long)( (const char *)address - (const char *)module ) );
+		}
+		else
+		{
+			snprintf( out, size, "0x%llx (no module)", (unsigned long long)(uintptr_t)address );
+		}
+	}
+
+#if defined(_M_X64) || defined(__x86_64__)
+	// The call stack from the faulting instruction, unwound with the modules' own unwind tables
+	void writeStack( const CONTEXT &faulting )
+	{
+		CONTEXT context = faulting;
+		char line[400], where[MAX_PATH + 40];
+		for ( int depth = 0; depth < 24 && context.Rip != 0; ++depth )
+		{
+			describeAddress( (const void *)context.Rip, where, sizeof(where) );
+			snprintf( line, sizeof(line), "  %2d %s\r\n", depth, where );
+			rawWrite( line );
+			DWORD64 imageBase = 0;
+			PRUNTIME_FUNCTION function = RtlLookupFunctionEntry( context.Rip, &imageBase, nullptr );
+			if ( function == nullptr )
+			{
+				// a leaf function: the return address is on top of the stack
+				MEMORY_BASIC_INFORMATION memory;
+				if ( VirtualQuery( (LPCVOID)context.Rsp, &memory, sizeof(memory) ) == 0 || memory.State != MEM_COMMIT )
+					break;
+				context.Rip = *(const DWORD64 *)context.Rsp;
+				context.Rsp += 8;
+			}
+			else
+			{
+				PVOID handlerData = nullptr;
+				DWORD64 establisherFrame = 0;
+				RtlVirtualUnwind( UNW_FLAG_NHANDLER, imageBase, context.Rip, function, &context, &handlerData,
+					&establisherFrame, nullptr );
+			}
+		}
+	}
+#endif
+
+	LONG WINAPI crashWatch( EXCEPTION_POINTERS *info )
+	{
+		const DWORD code = info->ExceptionRecord->ExceptionCode;
+		if ( ( code & 0xF0000000u ) != 0xC0000000u )	// errors only: not C++ exceptions, debug output or thread names
+			return EXCEPTION_CONTINUE_SEARCH;
+		if ( InterlockedIncrement( &s_crashCount ) > MAX_CRASH_REPORTS )
+			return EXCEPTION_CONTINUE_SEARCH;
+
+		char line[600], where[MAX_PATH + 40];
+		describeAddress( info->ExceptionRecord->ExceptionAddress, where, sizeof(where) );
+		int length = snprintf( line, sizeof(line), "exception 0x%08lx at %s, thread %lu, frame %d",
+			(unsigned long)code, where, (unsigned long)GetCurrentThreadId(), (int)s_frame );
+		if ( code == EXCEPTION_ACCESS_VIOLATION && info->ExceptionRecord->NumberParameters >= 2 && length > 0 )
+		{
+			const ULONG_PTR kind = info->ExceptionRecord->ExceptionInformation[0];
+			snprintf( line + length, sizeof(line) - length, ", %s 0x%llx",
+				kind == 0 ? "reading" : ( kind == 1 ? "writing" : "executing" ),
+				(unsigned long long)info->ExceptionRecord->ExceptionInformation[1] );
+		}
+		rawWrite( line );
+		rawWrite( "\r\n" );
+#if defined(_M_X64) || defined(__x86_64__)
+		writeStack( *info->ContextRecord );
+#endif
+		return EXCEPTION_CONTINUE_SEARCH;
+	}
+
+	void atExitStage()
+	{
+		TiberiumTest::exitStage( "C runtime exit: static objects are being destroyed" );
+	}
+#endif
+
+	void installCrashWatch()
+	{
+#ifdef _WIN32
+		if ( s_crashFile != INVALID_HANDLE_VALUE || TheGlobalData == nullptr )
+			return;
+		std::string path = TheGlobalData->getPath_UserData().str();
+		path += "TiberiumCrash.log";
+		s_crashFile = CreateFileA( path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS,
+			FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH, nullptr );
+		if ( s_crashFile == INVALID_HANDLE_VALUE )
+			return;
+		rawWrite( "crash watch: on for this test run (error exceptions, with their call stacks, and the shutdown steps)\r\n" );
+		AddVectoredExceptionHandler( 1, crashWatch );
+		atexit( atExitStage );
+#endif
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -192,6 +309,21 @@ void TiberiumTest::setQuitFrame( Int frame ) { if ( frame > 0 ) { s_quitFrame = 
 Bool TiberiumTest::isActive() { return s_active; }
 
 //-------------------------------------------------------------------------------------------------
+void TiberiumTest::exitStage( const char *stage )
+{
+	if ( !s_active || stage == nullptr )
+		return;
+#ifdef _WIN32
+	rawWrite( "exit: " );
+	rawWrite( stage );
+	rawWrite( "\r\n" );
+#else
+	fprintf( stderr, "TIBTEST exit: %s\n", stage );
+	fflush( stderr );
+#endif
+}
+
+//-------------------------------------------------------------------------------------------------
 void TiberiumTest::update()
 {
 	if ( !s_active )
@@ -201,6 +333,7 @@ void TiberiumTest::update()
 	if ( !s_announced )
 	{
 		s_announced = TRUE;
+		installCrashWatch();
 		log( "test run: map '%s', %d camera steps, screenshot every %d frames, scorch at %d, CRC at logic frame %d, quit at %d",
 			s_map.c_str(), (int)s_cameras.size(), (int)s_shotInterval, (int)s_scorchFrame, (int)s_crcFrame, (int)s_quitFrame );
 	}

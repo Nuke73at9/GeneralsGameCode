@@ -68,6 +68,7 @@
 
 #ifdef RTS_ENABLE_CRASHDUMP
 #include "Common/MiniDumper.h"
+#include "Common/TiberiumTest.h"
 #endif
 
 
@@ -927,6 +928,7 @@ Int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
 			GameSwitcher::launchRequested();
 		}
 
+		TiberiumTest::exitStage( "GameMain returned" );	// Tiberium Project @feature crash watch
 		delete TheVersion;
 		TheVersion = nullptr;
 
@@ -938,6 +940,7 @@ Int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	#endif
 
 		shutdownMemoryManager();
+		TiberiumTest::exitStage( "the memory manager is shut down" );
 
 		// BGC - shut down COM
 	//	OleUninitialize();
@@ -954,6 +957,7 @@ Int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	TheDmaCriticalSection = nullptr;
 	TheMemoryPoolCriticalSection = nullptr;
 
+	TiberiumTest::exitStage( "leaving WinMain (the game's crash handler is gone)" );
 	return exitcode;
 
 }
