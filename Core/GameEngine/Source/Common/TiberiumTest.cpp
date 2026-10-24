@@ -32,6 +32,7 @@
 
 #include "Common/GameEngine.h"
 #include "Common/GlobalData.h"
+#include "GameClient/ControlBar.h"
 #include "GameClient/Display.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/View.h"
@@ -42,8 +43,8 @@ namespace
 	struct CameraStep
 	{
 		Int frame;
-		Bool hasZoom, hasPitch, hasPosition;
-		Real zoom, pitchDegrees, x, y;
+		Bool hasZoom, hasPitch, hasPosition, hasAngle;
+		Real zoom, pitchDegrees, x, y, angleDegrees;
 	};
 
 	Bool s_active = FALSE;
@@ -52,9 +53,12 @@ namespace
 	std::vector<CameraStep> s_cameras;
 	Int s_shotInterval = 0;
 	Int s_scorchFrame = -1;
+	Int s_controlBarStage = -1;	// ControlBarStages, or -1: as it is
+	Bool s_controlBarSet = FALSE;
 	Int s_crcFrame = -1;
 	Bool s_crcLogged = FALSE;
 	Int s_quitFrame = -1;
+	Bool s_quitIssued = FALSE;
 	Int s_frame = 0;
 	Int s_lastShotFrame = -1000;
 	std::chrono::steady_clock::time_point s_lastShotTime;
@@ -144,13 +148,26 @@ void TiberiumTest::setCameras( const char *spec )
 			continue;
 		CameraStep step;
 		step.frame = (Int)frame;
-		step.zoom = step.pitchDegrees = step.x = step.y = 0.0f;
+		step.zoom = step.pitchDegrees = step.x = step.y = step.angleDegrees = 0.0f;
 		step.hasZoom = f.size() > 1 && parseField( f[1], step.zoom );
 		step.hasPitch = f.size() > 2 && parseField( f[2], step.pitchDegrees );
 		step.hasPosition = f.size() > 4 && parseField( f[3], step.x ) && parseField( f[4], step.y );
+		step.hasAngle = f.size() > 5 && parseField( f[5], step.angleDegrees );
 		s_cameras.push_back( step );
 		s_active = TRUE;
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void TiberiumTest::setControlBar( const char *stage )
+{
+	if ( stage == nullptr )
+		return;
+	if ( strcmp( stage, "default" ) == 0 ) s_controlBarStage = CONTROL_BAR_STAGE_DEFAULT;
+	else if ( strcmp( stage, "low" ) == 0 ) s_controlBarStage = CONTROL_BAR_STAGE_LOW;
+	else if ( strcmp( stage, "hidden" ) == 0 ) s_controlBarStage = CONTROL_BAR_STAGE_HIDDEN;
+	else return;
+	s_active = TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -176,6 +193,15 @@ void TiberiumTest::update()
 
 	const Bool inGame = TheGameLogic != nullptr && TheGameLogic->isInGame();
 
+	// the control bar lowered or hidden, for a full view of the world (the interface only); a
+	// moment into the game, as the game's start sets up its own bar
+	if ( s_controlBarStage >= 0 && !s_controlBarSet && inGame && s_frame >= 5 && TheControlBar != nullptr )
+	{
+		s_controlBarSet = TRUE;
+		TheControlBar->switchControlBarStage( (ControlBarStages)s_controlBarStage );
+		log( "frame %d: control bar stage %d", (int)s_frame, (int)s_controlBarStage );
+	}
+
 	// the camera, client-side only
 	if ( TheTacticalView != nullptr )
 	{
@@ -196,9 +222,11 @@ void TiberiumTest::update()
 				TheTacticalView->setZoom( step.zoom );
 			if ( step.hasPitch )
 				TheTacticalView->setPitch( step.pitchDegrees * PI / 180.0f );
+			if ( step.hasAngle )
+				TheTacticalView->setAngle( step.angleDegrees * PI / 180.0f );
 			const Coord3D pos = TheTacticalView->getPosition();
-			log( "frame %d: camera zoom %.2f pitch %.1f at %.0f %.0f", (int)s_frame, TheTacticalView->getZoom(),
-				TheTacticalView->getPitch() * 180.0f / PI, pos.x, pos.y );
+			log( "frame %d: camera zoom %.2f pitch %.1f angle %.0f at %.0f %.0f", (int)s_frame, TheTacticalView->getZoom(),
+				TheTacticalView->getPitch() * 180.0f / PI, TheTacticalView->getAngle() * 180.0f / PI, pos.x, pos.y );
 		}
 	}
 
@@ -232,7 +260,9 @@ void TiberiumTest::update()
 		s_spanStartFrame = s_frame;
 		s_spanStart = now;
 	}
-	if ( s_shotInterval > 0 && TheDisplay != nullptr && s_frame % s_shotInterval == 0 )
+	// (none from the quit frame on: on a fast machine more would keep the quit waiting forever)
+	const Bool quitReached = s_quitFrame > 0 && s_frame >= s_quitFrame;
+	if ( s_shotInterval > 0 && TheDisplay != nullptr && s_frame % s_shotInterval == 0 && !quitReached )
 	{
 		double msPerFrame = 0.0;
 		if ( s_spanStartFrame > 0 && s_frame > s_spanStartFrame )
@@ -251,10 +281,10 @@ void TiberiumTest::update()
 	// it, which takes a second or two at high resolutions, many frames on a fast machine
 	const Bool shotPending = s_shotCount > 0 && ( s_frame < s_lastShotFrame + 15
 		|| std::chrono::steady_clock::now() - s_lastShotTime < std::chrono::seconds( 5 ) );
-	if ( s_quitFrame > 0 && s_frame >= s_quitFrame && !shotPending && TheGameEngine != nullptr )
+	if ( s_quitFrame > 0 && !s_quitIssued && s_frame >= s_quitFrame && !shotPending && TheGameEngine != nullptr )
 	{
 		log( "frame %d: quitting", (int)s_frame );
 		TheGameEngine->setQuitting( TRUE );
-		s_quitFrame = -1;
+		s_quitIssued = TRUE;
 	}
 }

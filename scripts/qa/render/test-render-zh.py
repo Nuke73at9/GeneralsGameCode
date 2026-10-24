@@ -42,8 +42,11 @@ SCENES = {
     "alpine_mountain": (r"Maps\Alpine Assault\Alpine Assault.map", "10,0.3,-,239,217", 100, 200, []),
     "alpine_start": (r"Maps\Alpine Assault\Alpine Assault.map", "", 100, 200, []),
     "beach_scorch": (r"Maps\Bombardment Beach\Bombardment Beach.map", "10,0.6", 100, 200, []),
+    # the town turned through four angles at two zooms, the control bar lowered (the world full height)
+    "alpine_turn": (r"Maps\Alpine Assault\Alpine Assault.map",
+                    "10,0.5,-,1500,950,0;110,-,-,-,-,90;210,-,-,-,-,180;310,-,-,-,-,270;410,1.2,-,-,-,45", 100, 500, []),
 }
-SCENE_EXTRA_ARGS = {"beach_scorch": ["-testScorch", "40"]}
+SCENE_EXTRA_ARGS = {"beach_scorch": ["-testScorch", "40"], "alpine_turn": ["-testControlBar", "low"]}
 LOGIC_MAP = r"Maps\MD_GLA01\MD_GLA01.map"
 LOGIC_FRAME = 300
 

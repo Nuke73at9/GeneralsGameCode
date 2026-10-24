@@ -850,6 +850,13 @@ Int parseTestCamera(char *args[], int num)
 	return 2;
 }
 
+Int parseTestControlBar(char *args[], int num)
+{
+	if (num > 1)
+		TiberiumTest::setControlBar(args[1]);
+	return 2;
+}
+
 Int parseTestShots(char *args[], int num)
 {
 	if (num > 1)
@@ -1270,6 +1277,7 @@ static CommandLineParam paramsForEngineInit[] =
 	// add scorch marks, log the logic CRC and quit, unattended (see Common/TiberiumTest.h)
 	{ "-testMap", parseTestMap },
 	{ "-testCamera", parseTestCamera },
+	{ "-testControlBar", parseTestControlBar },
 	{ "-testShots", parseTestShots },
 	{ "-testScorch", parseTestScorch },
 	{ "-testCRC", parseTestCRC },

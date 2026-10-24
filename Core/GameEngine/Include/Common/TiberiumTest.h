@@ -24,8 +24,12 @@
 // screenshots, add scorch marks, log the game logic's CRC and quit, with nobody at the keyboard:
 //
 //   -testMap "Maps\Alpine Assault\Alpine Assault.map"   start that map as a single-player game
-//   -testCamera "60,0.45,-,1500,950;200,0.3,40"         at frame 60: zoom 0.45, default pitch, look at
-//                                                        (1500, 950); at frame 200: zoom 0.3, pitch 40
+//   -testCamera "60,0.45,-,1500,950;200,0.3,40,-,-,90"  at frame 60: zoom 0.45, default pitch, look at
+//                                                        (1500, 950); at frame 200: zoom 0.3, pitch 40,
+//                                                        turned to 90 degrees (fields: frame, zoom, pitch,
+//                                                        x, y, angle; "-" keeps a value)
+//   -testControlBar low                                  the control bar lowered, as its green arrow does:
+//                                                        the world drawn full height (hidden only hides it)
 //   -testShots 100                                       a PNG screenshot every 100 frames
 //   -testScorch 50                                       a field of scorch marks around the view at frame 50
 //   -testCRC 300                                         log the logic CRC at logic frame 300
@@ -44,6 +48,7 @@ class TiberiumTest
 public:
 	static void setMap( const char *path );
 	static void setCameras( const char *spec );
+	static void setControlBar( const char *stage );
 	static void setShotInterval( Int frames );
 	static void setScorchFrame( Int frame );
 	static void setCRCFrame( Int frame );
