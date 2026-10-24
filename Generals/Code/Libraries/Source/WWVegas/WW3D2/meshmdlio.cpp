@@ -1679,37 +1679,100 @@ void MeshModelClass::post_process()
 }
 
 /***********************************************************************************************
- * MeshModelClass::modify_for_night_lights -- the lit windows of a night model, self-lit         *
+ * MeshModelClass::Is_Night_Model_Name -- a night model's mesh, by its name                      *
  *                                                                                             *
- * Tiberium Project @feature Zero Hour's buildings at night are two-pass models: their texture,   *
- * then an additive pass (source one, destination one) of a night texture that is black but     *
- * for the lit windows and lamps, with a vertex material named "W3D Night". That pass is lit by   *
- * the scene's lights like the rest (no emissive), so under a dark night the "lit" windows were  *
- * as dark as the walls. Here such a pass's materials get an emissive colour equal to their     *
- * diffuse: the windows show at their texture's brightness whatever the light, and the bloom    *
+ * Tiberium Project: Zero Hour names its buildings' night models with an N in the suffix after  *
+ * the last underscore of the model (CBTownHs01_N, _DN, _EN, _SN, _DSNG ...); a mesh's name is   *
+ * "MODEL.MESH".                                                                                *
+ *=============================================================================================*/
+bool MeshModelClass::Is_Night_Model_Name(const char *name)
+{
+	if (name == nullptr) {
+		return false;
+	}
+	const char *dot = strchr(name, '.');
+	const char *end = dot != nullptr ? dot : name + strlen(name);
+	const char *underscore = nullptr;
+	for (const char *c = name; c < end; ++c) {
+		if (*c == '_') {
+			underscore = c;
+		}
+	}
+	if (underscore == nullptr || end - underscore - 1 < 1 || end - underscore - 1 > 5) {
+		return false;
+	}
+	bool night = false;
+	for (const char *c = underscore + 1; c < end; ++c) {
+		if (!isalpha((unsigned char)*c)) {
+			return false;
+		}
+		if (*c == 'N' || *c == 'n') {
+			night = true;
+		}
+	}
+	return night;
+}
+
+/***********************************************************************************************
+ * MeshModelClass::Is_Night_Light_Pass -- an additive textured pass (a lit-window layer, a lamp) *
+ *=============================================================================================*/
+bool MeshModelClass::Is_Night_Light_Pass(int pass) const
+{
+	if (pass < 0 || pass >= DefMatDesc->PassCount || DefMatDesc->ShaderArray[pass]) {
+		return false;
+	}
+	const ShaderClass &shader = DefMatDesc->Shader[pass];
+	return shader.Get_Src_Blend_Func() == ShaderClass::SRCBLEND_ONE && shader.Get_Dst_Blend_Func() == ShaderClass::DSTBLEND_ONE
+		&& shader.Get_Texturing() == ShaderClass::TEXTURING_ENABLE;
+}
+
+/***********************************************************************************************
+ * MeshModelClass::Has_Night_Window_Pass -- a night model's mesh with a lit-window layer         *
+ *=============================================================================================*/
+bool MeshModelClass::Has_Night_Window_Pass() const
+{
+	if (!Is_Night_Model_Name(Get_Name())) {
+		return false;
+	}
+	for (int pass = 1; pass < DefMatDesc->PassCount; pass++) {
+		if (Is_Night_Light_Pass(pass)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/***********************************************************************************************
+ * MeshModelClass::modify_for_night_lights -- the lit windows and lamps of a night model, self-lit*
+ *                                                                                             *
+ * Tiberium Project @feature Zero Hour's buildings at night are night models (see               *
+ * Is_Night_Model_Name) whose lit windows are an additive pass (source one, destination one) of *
+ * a night texture that is black but for the windows, over the building's own texture; their   *
+ * lamps and beacons are additive meshes of their own. Those passes are lit by the scene's      *
+ * lights like the rest (no emissive), so under a dark night the "lit" windows were as dark as   *
+ * the walls. Here such a pass's materials get an emissive colour of 0.85 of their diffuse:    *
+ * the windows and lamps show near their texture's brightness whatever the light, and the bloom *
  * picks them up. Visual only.                                                                  *
  *=============================================================================================*/
 void MeshModelClass::modify_for_night_lights()
 {
-	for (int pass = 1; pass < DefMatDesc->PassCount; pass++) {
-		if (DefMatDesc->ShaderArray[pass]) {
-			continue;
-		}
-		const ShaderClass &shader = DefMatDesc->Shader[pass];
-		if (shader.Get_Src_Blend_Func() != ShaderClass::SRCBLEND_ONE || shader.Get_Dst_Blend_Func() != ShaderClass::DSTBLEND_ONE
-			|| shader.Get_Texturing() != ShaderClass::TEXTURING_ENABLE) {
+	if (!Is_Night_Model_Name(Get_Name())) {
+		return;
+	}
+	for (int pass = 0; pass < DefMatDesc->PassCount; pass++) {
+		if (!Is_Night_Light_Pass(pass)) {
 			continue;
 		}
 		const int count = DefMatDesc->MaterialArray[pass] ? VertexCount : 1;
 		for (int i = 0; i < count; i++) {
 			VertexMaterialClass *material = DefMatDesc->MaterialArray[pass] ? DefMatDesc->MaterialArray[pass]->Peek_Element(i)
 				: DefMatDesc->Material[pass];
-			if (material == nullptr || material->Get_Name() == nullptr || stricmp(material->Get_Name(), "W3D Night") != 0) {
+			if (material == nullptr) {
 				continue;
 			}
 			Vector3 diffuse;
 			material->Get_Diffuse(&diffuse);
-			material->Set_Emissive(diffuse);
+			material->Set_Emissive(diffuse * 0.85f);	// a little under full, so lit walls of windows do not flatten to white
 		}
 	}
 }

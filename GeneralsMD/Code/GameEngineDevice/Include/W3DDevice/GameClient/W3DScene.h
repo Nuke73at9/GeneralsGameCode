@@ -91,6 +91,7 @@ public:
 #ifdef RTS_RENDERER_D3D9
 	void gatherSage2PointLights();	///< Tiberium Project: the light pulses for the SAGE 2 deferred light pass
 	void gatherSage2FireLights();	///< Tiberium Project: fires (their particle systems) as point lights
+	void gatherSage2NightLights();	///< Tiberium Project: lit buildings and street lamps at night as point lights
 #endif
 	W3DDynamicLight *getADynamicLight();
 	void setGlobalLight(LightClass *pLight,Int lightIndex=0);

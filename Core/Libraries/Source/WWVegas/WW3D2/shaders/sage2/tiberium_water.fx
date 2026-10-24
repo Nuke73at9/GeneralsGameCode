@@ -405,8 +405,9 @@ float4 PS_Water(VSOutput In, uniform bool hasShadow, float2 vPos : PIXELLOC) : C
 	float foamFactor = 1.0 - saturate(depth / WaterParams.w);
 	foamSamp = pow(foamSamp, 2) * foamFactor * WaterLook.z * DirectionalLight_0_Color.xyz;
 
-	// the sky, reflected: the reflected ray up to Zero Hour's sky plane, by the Fresnel term (RA3
-	// adds half its reflection texture flat; over Zero Hour's pale desert skies that read as ice)
+	// the sky, reflected: the reflected ray up to Zero Hour's sky plane, by the square of the
+	// Fresnel term above (RA3 adds half its reflection texture flat; over Zero Hour's pale desert
+	// skies that, and the plain term too on the user's PC, turned Golden Oasis's lake to ice)
 	float3 skyColor = 0;
 	if (WaterSky.x > 0)
 	{
@@ -414,7 +415,7 @@ float4 PS_Water(VSOutput In, uniform bool hasShadow, float2 vPos : PIXELLOC) : C
 		up.z = max(up.z, 0.05);
 		float2 skyPoint = worldPosition.xy + up.xy * (WaterSkyColor.w / up.z);
 		float2 skyTexCoord = skyPoint * WaterSky.y + Time * WaterSky.zw;
-		skyColor = GammaToLinear(tex2D(SAMPLER(SkyTexture), skyTexCoord).xyz * WaterSkyColor.xyz) * WaterSky.x * fresnel;
+		skyColor = GammaToLinear(tex2D(SAMPLER(SkyTexture), skyTexCoord).xyz * WaterSkyColor.xyz) * WaterSky.x * fresnel * fresnel;
 	}
 
 	float3 color = waterColor + shroud * (foamSamp + envcolor + skyColor);

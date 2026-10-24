@@ -74,6 +74,11 @@ extern void DoShadows(RenderInfoClass & rinfo, Bool stencilPass);
 #ifdef RTS_RENDERER_D3D9
 #include "WW3D2/sage2/sage2shadow.h"	// Tiberium Project @feature C&C4's shadow map
 #include "WW3D2/sage2/sage2scene.h"	// Tiberium Project @feature point lights in the deferred pass
+#include "Common/ThingTemplate.h"	// Tiberium Project: night lights
+#include "GameClient/GameClient.h"
+#include "W3DDevice/GameClient/Module/W3DModelDraw.h"
+#include "WW3D2/mesh.h"
+#include "WW3D2/meshmdl.h"
 #endif
 
 extern void DoParticles(RenderInfoClass & rinfo);
@@ -1709,6 +1714,102 @@ void RTS3DScene::gatherSage2PointLights()
 		Sage2SceneClass::Add_Point_Light(point);
 	}
 	gatherSage2FireLights();
+	gatherSage2NightLights();
+}
+
+//=============================================================================
+// hasNightLights
+//=============================================================================
+/** Tiberium Project: whether a render object (a model, its sub-objects) is a night model with lit
+	windows (see MeshModelClass::Has_Night_Window_Pass). */
+//=============================================================================
+static Bool hasNightLights(RenderObjClass *robj, Int depth)
+{
+	if (robj == nullptr || depth > 3)
+		return FALSE;
+	if (robj->Class_ID() == RenderObjClass::CLASSID_MESH)
+	{
+		MeshModelClass *model = ((MeshClass *)robj)->Peek_Model();
+		return model != nullptr && model->Has_Night_Window_Pass();
+	}
+	for (Int i = 0; i < robj->Get_Num_Sub_Objects(); ++i)
+	{
+		RenderObjClass *sub = robj->Get_Sub_Object(i);
+		const Bool lit = hasNightLights(sub, depth + 1);
+		REF_PTR_RELEASE(sub);
+		if (lit)
+			return TRUE;
+	}
+	return FALSE;
+}
+
+//=============================================================================
+// RTS3DScene::gatherSage2NightLights
+//=============================================================================
+/** Tiberium Project @feature Lights on at night: in the evening and at night, each visible building
+	whose model has a lit-window pass (Zero Hour's night models) spills a soft warm light onto the
+	ground around it, and each street lamp lights the ground under it. Zero Hour drew the windows and
+	lamps but they lit nothing. Visual only. */
+//=============================================================================
+void RTS3DScene::gatherSage2NightLights()
+{
+	if (TheGameClient == nullptr || TheGlobalData == nullptr)
+		return;
+	const TimeOfDay timeOfDay = TheGlobalData->m_timeOfDay;
+	if (timeOfDay != TIME_OF_DAY_NIGHT && timeOfDay != TIME_OF_DAY_EVENING)
+		return;
+	const Real dusk = timeOfDay == TIME_OF_DAY_NIGHT ? 1.0f : 0.6f;
+	for (Drawable *draw = TheGameClient->firstDrawable(); draw != nullptr; draw = draw->getNextDrawable())
+	{
+		if (draw->isDrawableEffectivelyHidden() || draw->getFullyObscuredByShroud() || !draw->isVisible())
+			continue;
+		const ThingTemplate *tmpl = draw->getTemplate();
+		if (tmpl == nullptr)
+			continue;
+		const GeometryInfo &geometry = tmpl->getTemplateGeometryInfo();
+		const Coord3D *pos = draw->getPosition();
+		const AsciiString &name = tmpl->getName();
+		Sage2SceneClass::PointLight point;
+		AsciiString lowerName = name;
+		lowerName.toLower();
+		if (strstr(lowerName.str(), "streetlight") != nullptr || strstr(lowerName.str(), "lightpost") != nullptr
+			|| strstr(lowerName.str(), "lamppost") != nullptr)
+		{
+			// a street lamp: sodium light from its head down onto the street
+			point.position[0] = pos->x;
+			point.position[1] = pos->y;
+			point.position[2] = pos->z + max(10.0f, geometry.getMaxHeightAbovePosition() * 0.9f);
+			point.color[0] = 1.0f * 0.6f * dusk;
+			point.color[1] = 0.75f * 0.6f * dusk;
+			point.color[2] = 0.45f * 0.6f * dusk;
+			point.innerRadius = 15.0f;
+			point.outerRadius = 100.0f;
+			Sage2SceneClass::Add_Point_Light(point);
+			continue;
+		}
+		if (!draw->isKindOf(KINDOF_STRUCTURE))
+			continue;
+		// a building with its lights on: the model drawn now has a lit-window pass
+		Bool lit = FALSE;
+		for (DrawModule **dm = draw->getDrawModules(); *dm != nullptr && !lit; ++dm)
+		{
+			ObjectDrawInterface *odi = (*dm)->getObjectDrawInterface();
+			if (odi != nullptr)	// only W3DModelDraw (and its subclasses) draw objects
+				lit = hasNightLights(static_cast<W3DModelDraw *>(odi)->getRenderObject(), 0);
+		}
+		if (!lit)
+			continue;
+		const Real radius = max(geometry.getMajorRadius(), geometry.getMinorRadius());
+		point.position[0] = pos->x;
+		point.position[1] = pos->y;
+		point.position[2] = pos->z + max(8.0f, geometry.getMaxHeightAbovePosition() * 0.3f);
+		point.color[0] = 1.0f * 0.35f * dusk;
+		point.color[1] = 0.78f * 0.35f * dusk;
+		point.color[2] = 0.5f * 0.35f * dusk;
+		point.innerRadius = radius * 0.8f;
+		point.outerRadius = min(260.0f, radius + 60.0f);
+		Sage2SceneClass::Add_Point_Light(point);
+	}
 }
 
 //=============================================================================
