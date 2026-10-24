@@ -85,11 +85,13 @@ namespace
 			{ { 1.25f, 1.21f, 1.04f }, { -0.629f,  0.349f, -0.695f } },
 			{ { 0.69f, 0.67f, 0.69f }, {  0.807f,  0.586f, -0.070f } },
 			{ { 0.75f, 0.83f, 0.89f }, {  0.329f, -0.903f, -0.276f } } }, "lusaturatecolors_vol", 0.29f, 0.22f },
-		// RA3's evening (map_mp_2_black1b): the sun low in the west, a grey sky light; its table (0.51) at a third too
-		{ "ra3_evening", { 0.31f, 0.31f, 0.31f }, {
-			{ { 1.60f, 1.40f, 1.40f }, {  0.906f,  0.000f, -0.423f } },
-			{ { 0.45f, 0.45f, 0.65f }, { -0.842f,  0.429f, -0.326f } },
-			{ { 0.55f, 0.55f, 0.55f }, { -0.858f,  0.121f, -0.500f } } }, "lusaturatecolors_vol", 0.35f, 0.00f },
+		// RA3's evening (map_mp_2_feasel2_edit, the set C&C4's evening took): an orange sun low in
+		// the west-south-west under a cool sky. RA3's other evening set (map_mp_2_black1b, a grey sky
+		// light and a white sun) did not read as evening on Zero Hour's maps (Final Crusade).
+		{ "ra3_evening", { 0.18f, 0.14f, 0.09f }, {
+			{ { 1.67f, 1.11f, 0.75f }, {  0.673f,  0.545f, -0.500f } },
+			{ { 0.32f, 0.50f, 0.78f }, { -0.940f,  0.016f, -0.342f } },
+			{ { 0.49f, 0.50f, 0.67f }, {  0.304f, -0.715f, -0.629f } } }, "lusaturatecolors_vol", 0.33f, 0.22f },
 		// RA3's night (map_mp_2_feasel3): blue moonlight and a table that shifts towards blue
 		{ "ra3_night", { 0.08f, 0.07f, 0.07f }, {
 			{ { 0.80f, 0.80f, 1.00f }, {  0.691f,  0.198f, -0.695f } },
