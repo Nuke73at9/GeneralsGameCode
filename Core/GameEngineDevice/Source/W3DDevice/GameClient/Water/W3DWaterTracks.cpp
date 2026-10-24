@@ -897,9 +897,11 @@ Try improving the fit to vertical surfaces like cliffs.
 	shadeR += TheGlobalData->m_terrainDiffuse[0].red/2;
 	shadeG += TheGlobalData->m_terrainDiffuse[0].green/2;
 	shadeB += TheGlobalData->m_terrainDiffuse[0].blue/2;
-	shadeR*=255.0f;
-	shadeG*=255.0f;
-	shadeB*=255.0f;
+	// Tiberium Project @bugfix held to 0..255 a channel: a brighter light set (C&C4's, RA3's) than
+	// Zero Hour's carried one channel over into the next when packed
+	shadeR = min(max(shadeR, 0.0f), 1.0f) * 255.0f;
+	shadeG = min(max(shadeG, 0.0f), 1.0f) * 255.0f;
+	shadeB = min(max(shadeB, 0.0f), 1.0f) * 255.0f;
 
 	diffuseLight=REAL_TO_INT(shadeB) | (REAL_TO_INT(shadeG) << 8) | (REAL_TO_INT(shadeR) << 16);
 
