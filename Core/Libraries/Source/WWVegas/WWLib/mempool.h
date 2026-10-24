@@ -287,7 +287,11 @@ T * ObjectPoolClass<T,BLOCK_SIZE>::Allocate_Object_Memory()
 		*(void **)BlockListHead = tmp_block_head;
 
 		// Link the objects in the block into the free object list
-		FreeListHead = (T*)(BlockListHead + 1);
+		// Tiberium Project @bugfix The objects start after the block link, which is a pointer: on x64
+		// "BlockListHead + 1" (a uint32 *) put them 4 bytes in, so the first object overwrote the upper
+		// half of the link, and destroying a pool that had grown past one block (the static pools, at
+		// exit) followed a broken link: an access violation every time the game quit.
+		FreeListHead = (T*)((char *)BlockListHead + sizeof(uint32 *));
 		for ( int i = 0; i < BLOCK_SIZE; i++ ) {
 			*(T**)(&(FreeListHead[i])) = &(FreeListHead[i+1]);	// link up the elements
 		}
