@@ -22,6 +22,7 @@
 
 #include "Common/TiberiumTest.h"
 
+#include <chrono>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -56,6 +57,9 @@ namespace
 	Int s_quitFrame = -1;
 	Int s_frame = 0;
 	Int s_lastShotFrame = -1000;
+	std::chrono::steady_clock::time_point s_lastShotTime;
+	std::chrono::steady_clock::time_point s_spanStart;	// frame timing: since the last screenshot (or the first frame)
+	Int s_spanStartFrame = 0;
 	Int s_shotCount = 0;
 	FILE *s_log = nullptr;
 	Bool s_logTried = FALSE;
@@ -220,18 +224,34 @@ void TiberiumTest::update()
 		log( "logic frame %u: CRC %08X", (unsigned)TheGameLogic->getFrame(), (unsigned)crc );
 	}
 
-	// screenshots
+	// screenshots, each with the average frame time since the one before (the first span starts
+	// in game, past the map load); the screenshot's own cost falls in the next span's first frame
+	const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+	if ( s_spanStartFrame == 0 && inGame )
+	{
+		s_spanStartFrame = s_frame;
+		s_spanStart = now;
+	}
 	if ( s_shotInterval > 0 && TheDisplay != nullptr && s_frame % s_shotInterval == 0 )
 	{
+		double msPerFrame = 0.0;
+		if ( s_spanStartFrame > 0 && s_frame > s_spanStartFrame )
+			msPerFrame = std::chrono::duration<double, std::milli>( now - s_spanStart ).count() / ( s_frame - s_spanStartFrame );
 		TheDisplay->takeScreenShot( SCREENSHOT_PNG );
 		s_lastShotFrame = s_frame;
+		s_lastShotTime = now;
 		++s_shotCount;
-		log( "frame %d: screenshot %d (logic frame %u, in game %d)", (int)s_frame, (int)s_shotCount,
-			TheGameLogic != nullptr ? (unsigned)TheGameLogic->getFrame() : 0u, inGame ? 1 : 0 );
+		log( "frame %d: screenshot %d (logic frame %u, in game %d), %.2f ms per frame since frame %d", (int)s_frame, (int)s_shotCount,
+			TheGameLogic != nullptr ? (unsigned)TheGameLogic->getFrame() : 0u, inGame ? 1 : 0, msPerFrame, (int)s_spanStartFrame );
+		s_spanStartFrame = s_frame + 1;
+		s_spanStart = std::chrono::steady_clock::now();
 	}
 
-	// quit, once the last screenshot has had time to be written
-	if ( s_quitFrame > 0 && s_frame >= s_quitFrame && s_frame >= s_lastShotFrame + 15 && TheGameEngine != nullptr )
+	// quit, once the last screenshot has had time to be written: its own thread encodes and writes
+	// it, which takes a second or two at high resolutions, many frames on a fast machine
+	const Bool shotPending = s_shotCount > 0 && ( s_frame < s_lastShotFrame + 15
+		|| std::chrono::steady_clock::now() - s_lastShotTime < std::chrono::seconds( 5 ) );
+	if ( s_quitFrame > 0 && s_frame >= s_quitFrame && !shotPending && TheGameEngine != nullptr )
 	{
 		log( "frame %d: quitting", (int)s_frame );
 		TheGameEngine->setQuitting( TRUE );

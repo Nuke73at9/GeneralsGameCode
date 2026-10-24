@@ -242,6 +242,108 @@ namespace
 		return mat;
 	}
 
+	//-------------------------------------------------------------------- Zero Hour's own meshes
+	// Tiberium Project @feature A plain W3D mesh (one texture, lit by the material's colours, opaque
+	// or alpha-tested) can be drawn by the effect C&C4 itself drew such meshes with, BasicW3D: lit by
+	// the same lights as the C&C4-style terrain, under its shadow map and clouds, and deferred-lit
+	// with it when Sage2ObjectShaders = deferred.
+	int s_legacyMode = Sage2MaterialClass::LEGACY_OFF;
+	bool s_legacyTried = false;
+	MeshMaterial s_legacy;		// effect nullptr: BasicW3D is missing
+	struct LegacyParams
+	{
+		int texture, ambient, diffuse, specular, emissive, shininess, alphaTest, culling, depthWrite, blendMode;
+	} s_legacyParams;
+
+	const MeshMaterial* Legacy_Material()
+	{
+		if (!s_legacyTried)
+		{
+			s_legacyTried = true;
+			Sage2EffectClass* effect = Load_Effect("basicw3d");
+			if (effect != nullptr)
+			{
+				s_legacyParams.texture = effect->Find_Param("Texture_0");
+				s_legacyParams.ambient = effect->Find_Param("ColorAmbient");
+				s_legacyParams.diffuse = effect->Find_Param("ColorDiffuse");
+				s_legacyParams.specular = effect->Find_Param("ColorSpecular");
+				s_legacyParams.emissive = effect->Find_Param("ColorEmissive");
+				s_legacyParams.shininess = effect->Find_Param("Shininess");
+				s_legacyParams.alphaTest = effect->Find_Param("AlphaTestEnable");
+				s_legacyParams.culling = effect->Find_Param("CullingEnable");
+				s_legacyParams.depthWrite = effect->Find_Param("DepthWriteEnable");
+				s_legacyParams.blendMode = effect->Find_Param("BlendMode");
+				s_legacy.technique = effect->Find_Technique("Default");
+				s_legacy.forwardTechnique = effect->Find_Technique("Default_M");
+				s_legacy.prepassTechnique = effect->Find_Technique("_CreateDepthNormalMap");
+				s_legacy.shadowTechnique = -1;	// casters keep W3D's fixed-function draw
+				if (s_legacy.technique >= 0 && s_legacy.forwardTechnique >= 0 && s_legacyParams.texture >= 0)
+					s_legacy.effect = effect;
+				Sage2_Log("Zero Hour meshes: %s", s_legacy.effect != nullptr ? "drawn with basicw3d where they qualify" : "basicw3d lacks its techniques, fixed-function draw kept");
+			}
+		}
+		return s_legacy.effect != nullptr ? &s_legacy : nullptr;
+	}
+
+	// why a Zero Hour mesh keeps W3D's draw (counted for Sage2.log)
+	enum LegacyRejection
+	{
+		REJECT_TEXTURE, REJECT_STAGE_1, REJECT_UNLIT, REJECT_TRANSLUCENT, REJECT_MAPPER, REJECT_COLOR_SOURCE,
+		REJECT_GEOMETRY, REJECT_BLEND, REJECT_SHADER, ACCEPTED, LEGACY_OUTCOMES
+	};
+	unsigned s_legacyOutcomes[LEGACY_OUTCOMES];
+	unsigned s_legacyCalls = 0;
+
+	LegacyRejection Legacy_Check(MeshModelClass* model, TextureClass* base, TextureClass* stage1, const VertexMaterialClass* material)
+	{
+		if (base == nullptr || material == nullptr)
+			return REJECT_TEXTURE;
+		if (stage1 != nullptr)
+			return REJECT_STAGE_1;
+		VertexMaterialClass* vm = const_cast<VertexMaterialClass*>(material);	// the getters below aren't const
+		if (!vm->Get_Lighting())
+			return REJECT_UNLIT;
+		if (vm->Get_Opacity() < 0.99f)
+			return REJECT_TRANSLUCENT;
+		if (vm->Peek_Mapper(0) != nullptr)
+			return REJECT_MAPPER;
+		if (vm->Get_Diffuse_Color_Source() != VertexMaterialClass::MATERIAL
+			|| vm->Get_Ambient_Color_Source() != VertexMaterialClass::MATERIAL
+			|| vm->Get_Emissive_Color_Source() != VertexMaterialClass::MATERIAL)
+			return REJECT_COLOR_SOURCE;
+		if (!model->Needs_Vertex_Normals() || model->Get_UV_Array_Count() < 1)
+			return REJECT_GEOMETRY;
+		ShaderClass shader;
+		DX8Wrapper::Get_Shader(shader);
+		if (shader.Get_Src_Blend_Func() != ShaderClass::SRCBLEND_ONE || shader.Get_Dst_Blend_Func() != ShaderClass::DSTBLEND_ZERO)
+			return REJECT_BLEND;
+		if (shader.Get_Texturing() != ShaderClass::TEXTURING_ENABLE || shader.Get_Primary_Gradient() != ShaderClass::GRADIENT_MODULATE
+			|| shader.Get_Post_Detail_Color_Func() != ShaderClass::DETAILCOLOR_DISABLE)
+			return REJECT_SHADER;
+		return ACCEPTED;
+	}
+
+	/// A mesh BasicW3D draws as W3D would: one texture without a mapper, lit, colours from the
+	/// material, and W3D's shader writing it opaque or alpha-tested. Everything else (glows, scrolling
+	/// treads, vertex-coloured or detail-textured meshes, translucent ones) keeps W3D's own draw.
+	bool Legacy_Eligible(MeshModelClass* model, TextureClass* base, TextureClass* stage1, const VertexMaterialClass* material)
+	{
+		if (s_legacyMode == Sage2MaterialClass::LEGACY_OFF)
+			return false;
+		LegacyRejection outcome = Legacy_Check(model, base, stage1, material);
+		++s_legacyOutcomes[outcome];
+		// what Zero Hour's meshes turned out to be, once, for Sage2.log
+		if (++s_legacyCalls == 20000)
+		{
+			const unsigned* n = s_legacyOutcomes;
+			Sage2_Log("Zero Hour meshes, first 20000 draws: %u through basicw3d; kept on W3D's draw: %u without a texture, %u with a second"
+				" texture, %u unlit, %u translucent, %u with a texture mapper, %u vertex-coloured, %u without normals or UVs,"
+				" %u blended, %u with another shader", n[ACCEPTED], n[REJECT_TEXTURE], n[REJECT_STAGE_1], n[REJECT_UNLIT],
+				n[REJECT_TRANSLUCENT], n[REJECT_MAPPER], n[REJECT_COLOR_SOURCE], n[REJECT_GEOMETRY], n[REJECT_BLEND], n[REJECT_SHADER]);
+		}
+		return outcome == ACCEPTED;
+	}
+
 	//------------------------------------------------------------------------------ side streams
 	// W3D's vertex buffers hold position, normal, colour and texture coordinates. The second
 	// stream adds, per vertex of the same shared buffer, the tangent frame and the blend index.
@@ -476,6 +578,39 @@ namespace
 			TextureLoader::Request_Foreground_Loading(texture);
 		return texture->Peek_D3D_Base_Texture();
 	}
+
+	/// BasicW3D's material values from W3D's: the texture, the material's colours and W3D's states
+	void Apply_Legacy_Values(Sage2EffectClass& effect, TextureClass* base, const VertexMaterialClass* material)
+	{
+		const LegacyParams& p = s_legacyParams;
+		effect.Set_Texture(p.texture, D3D_Texture(base));
+		Vector3 c;
+		material->Get_Ambient(&c);
+		effect.Set_Float(p.ambient, &c.X, 3);
+		material->Get_Diffuse(&c);
+		effect.Set_Float(p.diffuse, &c.X, 3);
+		material->Get_Specular(&c);
+		effect.Set_Float(p.specular, &c.X, 3);
+		material->Get_Emissive(&c);
+		effect.Set_Float(p.emissive, &c.X, 3);
+		// W3D's specular power; C&C4 leaves BasicW3D's at 1 when an artist didn't set it
+		float shininess = material->Get_Shininess();
+		if (shininess < 1.0f)
+			shininess = 1.0f;
+		effect.Set_Float(p.shininess, &shininess, 1);
+		// the effect's passes leave these states to the engine: W3D's shader has set them already,
+		// and the values tell the shaders the same
+		ShaderClass shader;
+		DX8Wrapper::Get_Shader(shader);
+		float v = shader.Get_Alpha_Test() == ShaderClass::ALPHATEST_ENABLE ? 1.0f : 0.0f;
+		effect.Set_Float(p.alphaTest, &v, 1);
+		v = shader.Get_Cull_Mode() == ShaderClass::CULL_MODE_ENABLE ? 1.0f : 0.0f;
+		effect.Set_Float(p.culling, &v, 1);
+		v = shader.Get_Depth_Mask() == ShaderClass::DEPTH_WRITE_ENABLE ? 1.0f : 0.0f;
+		effect.Set_Float(p.depthWrite, &v, 1);
+		v = 0.0f;	// opaque
+		effect.Set_Float(p.blendMode, &v, 1);
+	}
 }
 
 namespace
@@ -517,16 +652,24 @@ bool Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const
 	if (s_state != READY)
 		return false;
 
-	const MeshMaterial& mat = Find_Material(model);
+	const MeshMaterial* found = &Find_Material(model);
 	bool skin = model->Get_Flag(MeshGeometryClass::SKIN) != 0;
 	const HTreeClass* skinTree = (skin && mesh->Get_Container()) ? mesh->Get_Container()->Get_HTree() : nullptr;
-	if (mat.effect == nullptr || (skin && (skinTree == nullptr || (unsigned)mesh->Get_Base_Vertex_Offset() == VERTEX_BUFFER_OVERFLOW_OFFSET)))
+	if (found->effect == nullptr || (skin && (skinTree == nullptr || (unsigned)mesh->Get_Base_Vertex_Offset() == VERTEX_BUFFER_OVERFLOW_OFFSET)))
 	{
 		if (Sage2ShadowClass::Is_Rendering())
 			return false;	// a caster through W3D's fixed-function draw
 		s_builtin = Sage2BuiltinMaterialClass::Begin(mesh, base, damageSheet, material);
-		return s_builtin;
+		if (s_builtin || found->effect != nullptr)
+			return s_builtin;
+		// Tiberium Project @feature a plain Zero Hour mesh: BasicW3D, C&C4's effect for such meshes
+		const MeshMaterial* plain = Legacy_Eligible(model, base, damageSheet, material) ? Legacy_Material() : nullptr;
+		if (plain == nullptr || (skin && (skinTree == nullptr || (unsigned)mesh->Get_Base_Vertex_Offset() == VERTEX_BUFFER_OVERFLOW_OFFSET)))
+			return false;
+		found = plain;
 	}
+	const MeshMaterial& mat = *found;
+	const bool legacy = found == &s_legacy;
 	s_builtin = false;
 
 	// W3D's own state first (textures, shader states, vertex and index buffers), so what the effect
@@ -550,12 +693,19 @@ bool Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const
 	bool direct = dynamic || state.vertex_buffer_types[0] == BUFFER_TYPE_DX8;
 	if (dynamic)
 		baseVertex += (unsigned)state.vba_offset;
+	// Tiberium Project @bugfix a rigid mesh shares its buffer with other models: its indices already
+	// count from the buffer's start, and its vertices sit at its renderer's offset (its base offset
+	// is 0). The side stream was written at 0 for every such model, so all but the first read
+	// another model's tangents, or zeros: a vertex colour of 0, drawn black.
+	else
+		baseVertex += renderer->Get_Vertex_Offset();
 	IDirect3DVertexBuffer9* side = direct ? Side_Stream_For(state.vertex_buffers[0], model, baseVertex, skin ? skinTree : nullptr, dynamic) : nullptr;
 	DWORD fvf = device8->Get_Current_FVF();
 	IDirect3DVertexDeclaration9* decl = fvf ? Declaration_For(fvf) : nullptr;
 	if (side == nullptr || decl == nullptr)
 	{
-		Sage2_Log("mesh %s: no side stream (%p) or declaration (%p, fvf %x, buffer type %d)", model->Get_Name(), (void*)side, (void*)decl, (unsigned)fvf, state.vertex_buffer_types[0]);
+		if (!legacy)
+			Sage2_Log("mesh %s: no side stream (%p) or declaration (%p, fvf %x, buffer type %d)", model->Get_Name(), (void*)side, (void*)decl, (unsigned)fvf, state.vertex_buffer_types[0]);
 		s_builtin = Sage2BuiltinMaterialClass::Begin(mesh, base, damageSheet, material);
 		return s_builtin;
 	}
@@ -575,6 +725,8 @@ bool Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const
 		mat.effect->Set_Texture(mat.textures[i].param, D3D_Texture(mat.textures[i].texture));
 	for (size_t i = 0; i < mat.values.size(); ++i)
 		mat.effect->Set_Float(mat.values[i].param, &mat.values[i].values[0], (unsigned)mat.values[i].values.size());
+	if (legacy)
+		Apply_Legacy_Values(*mat.effect, base, material);
 
 	device8->Set_Vertex_Declaration_Override(decl);
 	device->SetStreamSource(SIDE_STREAM, side, 0, SIDE_STRIDE);
@@ -597,7 +749,8 @@ bool Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const
 		technique = mat.shadowTechnique;
 		Sage2ShadowClass::Count_Draw(false);
 	}
-	else if (mat.prepassTechnique >= 0 && Sage2SceneClass::Is_Enabled() && Sage2SceneClass::Supports_SRGB_Write())
+	else if (mat.prepassTechnique >= 0 && (!legacy || s_legacyMode == Sage2MaterialClass::LEGACY_DEFERRED)
+		&& Sage2SceneClass::Is_Enabled() && Sage2SceneClass::Supports_SRGB_Write())
 	{
 		IDirect3DVertexBuffer9* meshBuffer = static_cast<DX8VertexBufferClass*>(state.vertex_buffers[0])->Get_DX8_Vertex_Buffer();
 		unsigned meshStride = state.vertex_buffers[0]->FVF_Info().Get_FVF_Size();
@@ -609,7 +762,8 @@ bool Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const
 		}
 	}
 	static std::map<MeshModelClass*, int> s_loggedPath;
-	if (!Sage2ShadowClass::Is_Rendering() && s_loggedPath[model] != (s_srgb ? 2 : 1))
+	static unsigned s_loggedLegacy = 0;	// Zero Hour's meshes are many: the first few only
+	if (!Sage2ShadowClass::Is_Rendering() && s_loggedPath[model] != (s_srgb ? 2 : 1) && (!legacy || s_loggedLegacy++ < 12))
 	{
 		s_loggedPath[model] = s_srgb ? 2 : 1;
 		Sage2_Log("mesh %s: drawn %s with technique %s", model->Get_Name(), s_srgb ? "deferred-lit" : "forward-lit", mat.effect->Get_Technique_Name(technique));
@@ -653,6 +807,19 @@ void End()
 }	// namespace
 
 //-------------------------------------------------------------------------------------------------
+void Sage2MaterialClass::Set_Legacy_Mode(LegacyMode mode)
+{
+	if (s_legacyMode != mode)
+		Sage2_Log("Zero Hour meshes: %s", mode == LEGACY_DEFERRED ? "basicw3d, deferred-lit" : mode == LEGACY_FORWARD ? "basicw3d, forward-lit" : "W3D's own draw");
+	s_legacyMode = mode;
+}
+
+Sage2MaterialClass::LegacyMode Sage2MaterialClass::Get_Legacy_Mode()
+{
+	return (LegacyMode)s_legacyMode;
+}
+
+//-------------------------------------------------------------------------------------------------
 void Sage2MaterialClass::Shutdown()
 {
 	Sage2BuiltinMaterialClass::Shutdown();
@@ -679,6 +846,8 @@ void Sage2MaterialClass::Shutdown()
 	for (std::map<std::string, EffectEntry>::iterator it = s_effects.begin(); it != s_effects.end(); ++it)
 		delete it->second.effect;
 	s_effects.clear();
+	s_legacy = MeshMaterial();
+	s_legacyTried = false;
 	s_current = nullptr;
 	s_builtin = false;
 	s_state = NOT_TRIED;

@@ -12,13 +12,16 @@ points to a folder on your machine. The first run with --update stores them.
 
   python test-render-zh.py --game <exe> --userdata <folder> --refs <folder> [--out <folder>]
                            [--prefix "<launcher words>"] [--args "<extra game arguments>"]
-                           [--scenes alpine_town,alpine_mountain] [--update] [--no-logic]
+                           [--scenes alpine_town,alpine_mountain] [--options "Key = value; ..."]
+                           [--update] [--no-logic]
 
   --game      the game executable (GeneralsXZH.exe), or a launcher script when --prefix is used
   --userdata  the game's user data folder (Documents\\Command and Conquer Generals Zero Hour Data
               on Windows): where Options.ini, Screenshots and TiberiumTest.log live
   --prefix    words put before the game, e.g. a wrapper that sets up a virtual display
   --args      extra game arguments for every run, e.g. "-win -mod <mod folder>"
+  --options   Options.ini lines for the scene runs, separated by ";", e.g. "Sage2ObjectShaders = forward"
+              (Options.ini is put back afterwards)
   --threshold mean colour difference (0-255) above which a screenshot counts as changed (2.0)
 
 Exit status: 0 when every compared screenshot is within the threshold and the logic CRCs match.
@@ -105,6 +108,7 @@ def main():
     p.add_argument("--prefix", default="")
     p.add_argument("--args", default="")
     p.add_argument("--scenes", default=",".join(SCENES))
+    p.add_argument("--options", default="")
     p.add_argument("--threshold", type=float, default=2.0)
     p.add_argument("--timeout", type=int, default=900)
     p.add_argument("--update", action="store_true", help="store this run's screenshots as the references")
@@ -130,6 +134,7 @@ def main():
             extra += ["-testCamera", camera]
         extra += SCENE_EXTRA_ARGS.get(name, [])
         print("scene %s" % name)
+        options_lines = options_lines + [line.strip() for line in opts.options.split(";") if line.strip()]
         shots, _ = run_game(opts, extra, options_lines, opts.timeout)
         out_dir = os.path.join(opts.out, name)
         os.makedirs(out_dir, exist_ok=True)

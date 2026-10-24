@@ -29,7 +29,8 @@
 //   -testShots 100                                       a PNG screenshot every 100 frames
 //   -testScorch 50                                       a field of scorch marks around the view at frame 50
 //   -testCRC 300                                         log the logic CRC at logic frame 300
-//   -testQuit 400                                        quit at frame 400 (later if a screenshot is pending)
+//   -testQuit 400                                        quit at frame 400 (no sooner than 5 seconds after
+//                                                        the last screenshot, which is still being written)
 //
 // Frames are the engine's update frames (one per drawn frame). Everything is written to
 // TiberiumTest.log in the user data folder. Nothing here runs unless an option is given, and none

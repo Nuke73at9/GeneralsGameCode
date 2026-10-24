@@ -113,6 +113,7 @@ static void drawFramerateBar();
 #include "WW3D2/sage2/sage2road.h"
 #include "WW3D2/sage2/sage2water.h"
 #include "WW3D2/sage2/sage2globals.h"
+#include "WW3D2/sage2/sage2material.h"
 static void feedSceneLights();
 #endif
 #include "Common/OptionPreferences.h"
@@ -986,6 +987,10 @@ void W3DDisplay::init()
 			Sage2TopViewClass::Set_Size((unsigned)prefs.getInt("Sage2TopViewSize", 2048));
 			Sage2RoadClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Roads", TRUE));	// roads lit as the terrain, C&C4's way
 			Sage2WaterClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Water", TRUE));	// C&C4-style water
+			// Zero Hour's plain meshes through C&C4's own effect for them: off | forward | deferred
+			AsciiString objectShaders = cnc4Style ? prefs.getAsciiString("Sage2ObjectShaders", "off") : AsciiString("off");
+			Sage2MaterialClass::Set_Legacy_Mode(objectShaders.compareNoCase("deferred") == 0 ? Sage2MaterialClass::LEGACY_DEFERRED
+				: objectShaders.compareNoCase("forward") == 0 ? Sage2MaterialClass::LEGACY_FORWARD : Sage2MaterialClass::LEGACY_OFF);
 		}
 #endif
 		setTimeOfDay( TheGlobalData->m_timeOfDay );	//set each light to correct values for given time

@@ -35,6 +35,11 @@
 // a second vertex stream carries what W3D's vertex format lacks (tangent frame, blend index).
 // Meshes without a SAGE 2 material, or whose effect file is missing, fall back to the built-in
 // approximation (Sage2BuiltinMaterialClass). Visual only.
+//
+// Zero Hour's own meshes have no SAGE 2 material. With the legacy mode on, the plain ones (one
+// texture, lit, opaque or alpha-tested) are drawn by BasicW3D, the effect C&C4 drew its own plain
+// W3D meshes with (Art\Shaders\basicw3d.fxo): lit by the C&C4 lights, under the shadow map and the
+// clouds, forward-lit (its "_M" technique) or deferred-lit with the terrain.
 
 #pragma once
 
@@ -47,6 +52,16 @@ class VertexMaterialClass;
 class Sage2MaterialClass
 {
 public:
+	/// What draws Zero Hour's plain meshes (Options.ini Sage2ObjectShaders)
+	enum LegacyMode
+	{
+		LEGACY_OFF,			///< W3D's fixed-function draw
+		LEGACY_FORWARD,		///< BasicW3D, forward-lit
+		LEGACY_DEFERRED,	///< BasicW3D, deferred-lit when the scene's deferred lighting is on
+	};
+	static void Set_Legacy_Mode(LegacyMode mode);
+	static LegacyMode Get_Legacy_Mode();
+
 	/// Draws the mesh with its SAGE 2 effect (deferred-lit when the scene allows it, else with the
 	/// forward-lit technique), or with the built-in approximation when it has no effect but a normal
 	/// map. Returns false (and draws nothing) when the mesh is an ordinary W3D one.
