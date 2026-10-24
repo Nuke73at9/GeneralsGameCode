@@ -583,13 +583,20 @@ namespace
 	void Apply_Legacy_Values(Sage2EffectClass& effect, TextureClass* base, const VertexMaterialClass* material)
 	{
 		const LegacyParams& p = s_legacyParams;
+		ShaderClass shader;
+		DX8Wrapper::Get_Shader(shader);
 		effect.Set_Texture(p.texture, D3D_Texture(base));
 		Vector3 c;
 		material->Get_Ambient(&c);
 		effect.Set_Float(p.ambient, &c.X, 3);
 		material->Get_Diffuse(&c);
 		effect.Set_Float(p.diffuse, &c.X, 3);
+		// Tiberium Project @bugfix W3D adds the material's specular only where the shader turns the
+		// secondary gradient on (D3DRS_SPECULARENABLE); most of Zero Hour's meshes leave it off and
+		// were never glossy. Passed as it was, it lit their flat parts white under a low sun.
 		material->Get_Specular(&c);
+		if (shader.Get_Secondary_Gradient() != ShaderClass::SECONDARY_GRADIENT_ENABLE)
+			c.Set(0.0f, 0.0f, 0.0f);
 		effect.Set_Float(p.specular, &c.X, 3);
 		material->Get_Emissive(&c);
 		effect.Set_Float(p.emissive, &c.X, 3);
@@ -600,8 +607,6 @@ namespace
 		effect.Set_Float(p.shininess, &shininess, 1);
 		// the effect's passes leave these states to the engine: W3D's shader has set them already,
 		// and the values tell the shaders the same
-		ShaderClass shader;
-		DX8Wrapper::Get_Shader(shader);
 		float v = shader.Get_Alpha_Test() == ShaderClass::ALPHATEST_ENABLE ? 1.0f : 0.0f;
 		effect.Set_Float(p.alphaTest, &v, 1);
 		v = shader.Get_Cull_Mode() == ShaderClass::CULL_MODE_ENABLE ? 1.0f : 0.0f;
