@@ -997,8 +997,10 @@ void W3DDisplay::init()
 			Sage2TopViewClass::Set_Size((unsigned)prefs.getInt("Sage2TopViewSize", 2048));
 			Sage2RoadClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Roads", TRUE));	// roads lit as the terrain, C&C4's way
 			Sage2WaterClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Water", TRUE));	// C&C4-style water
-			// Zero Hour's plain meshes through C&C4's own effect for them: off | forward | deferred
-			AsciiString objectShaders = cnc4Style ? prefs.getAsciiString("Sage2ObjectShaders", "off") : AsciiString("off");
+			// Zero Hour's plain meshes through C&C4's own effect for them: off | forward | deferred.
+			// Forward by default: lit by the same light as the ground, under its shadow map, at the
+			// same cost as W3D's fixed-function draw
+			AsciiString objectShaders = cnc4Style ? prefs.getAsciiString("Sage2ObjectShaders", "forward") : AsciiString("off");
 			Sage2MaterialClass::Set_Legacy_Mode(objectShaders.compareNoCase("deferred") == 0 ? Sage2MaterialClass::LEGACY_DEFERRED
 				: objectShaders.compareNoCase("forward") == 0 ? Sage2MaterialClass::LEGACY_FORWARD : Sage2MaterialClass::LEGACY_OFF);
 		}
