@@ -46,6 +46,9 @@ public:
 	static float Get_Slot_Size();
 	static float Get_Slot_Border();
 
+	/// A slot's average albedo (luminance in linear light, 0..1), -1 when unknown
+	static float Get_Slot_Albedo(int slot);
+
 	/// Frees the atlases (a new map, or the device going away)
 	static void Release();
 };

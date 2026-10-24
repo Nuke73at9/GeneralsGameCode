@@ -970,6 +970,8 @@ void W3DDisplay::init()
 			OptionPreferences prefs;
 			Bool cnc4Style = prefs.getBool("CNC4Style", TRUE);
 			Sage2LightingClass::Select(cnc4Style ? prefs.getAsciiString("Sage2Lighting", "auto").str() : "map");
+			// how much of each map's own mood (how dim and what colour its light is) the C&C4 light keeps: 0..1
+			Sage2LightingClass::Set_Mood(prefs.getReal("Sage2MapMood", 0.0f));
 			Sage2PostClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Post", TRUE));
 			Sage2TerrainClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Terrain", TRUE));	// the terrain through the C&C4-style effect
 			// Zero Hour's tiles, roads and tracks in linear light: lifted 1.6 under the maps' own lights;
@@ -979,6 +981,7 @@ void W3DDisplay::init()
 			Sage2TerrainClass::Set_Tile_World_Size(prefs.getReal("Sage2TerrainTileSize", 80.0f));	// world units per C&C4 terrain texture
 			Sage2TerrainClass::Set_Bump(prefs.getBool("Sage2TerrainBumpFlip", FALSE), prefs.getReal("Sage2TerrainBumpScale", 0.75f));	// normal map green flipped; bump strength
 			Sage2PostClass::Set_Exposure(prefs.getReal("Sage2Exposure", 1.0f));
+			Sage2PostClass::Set_Auto_Exposure(prefs.getReal("Sage2AutoExposure", 0.5f));	// exposure for each map's ground: 0..1
 			Sage2PostClass::Set_Keep_Black(prefs.getBool("Sage2KeepBlack", TRUE));	// black past the map's edge stays black under the grade
 			Sage2ShadowClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2Shadows", TRUE));	// C&C4's shadow map in place of ZH's shadows
 			Sage2ShadowClass::Set_Map_Size((unsigned)prefs.getInt("Sage2ShadowMapSize", 2048));

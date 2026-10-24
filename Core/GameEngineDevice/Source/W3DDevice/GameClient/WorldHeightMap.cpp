@@ -53,6 +53,7 @@
 #ifdef RTS_RENDERER_D3D9
 #include "WW3D2/sage2/sage2lighting.h"	// Tiberium Project @feature C&C4 map lighting presets
 #include "WW3D2/sage2/sage2terrainatlas.h"	// Tiberium Project @feature C&C4 terrain textures
+#include "WW3D2/sage2/sage2post.h"	// Tiberium Project @feature exposure for the map's ground
 #endif
 
 #include "Common/file.h"
@@ -825,7 +826,19 @@ Bool WorldHeightMap::ParseLightingDataChunk(DataChunkInput &file, DataChunkInfo 
 #ifdef RTS_RENDERER_D3D9
 		// Tiberium Project @feature Light the map the way C&C4 lights its maps: the C&C4 lighting
 		// preset matching the map's theme replaces its lights (terrain and objects, every time of day).
-		if (const Sage2LightingPreset* preset = Sage2LightingClass::Choose((Int)TheGlobalData->m_timeOfDay, TheGlobalData->m_weather == WEATHER_SNOWY)) {
+		if (const Sage2LightingPreset* chosen = Sage2LightingClass::Choose((Int)TheGlobalData->m_timeOfDay, TheGlobalData->m_weather == WEATHER_SNOWY)) {
+			// the map's own lights for the time of day it plays at, for its mood (Sage2MapMood)
+			const Int tod = (Int)TheGlobalData->m_timeOfDay;
+			float mapAmbient[3] = { 0.0f, 0.0f, 0.0f }, mapDiffuse[3][3] = { { 0.0f } };
+			if (tod >= TIME_OF_DAY_FIRST && tod < TIME_OF_DAY_COUNT) {
+				const GlobalData::TerrainLighting *own = TheGlobalData->m_terrainLighting[tod];
+				mapAmbient[0] = own[0].ambient.red; mapAmbient[1] = own[0].ambient.green; mapAmbient[2] = own[0].ambient.blue;
+				for (Int j=0; j<3 && j<MAX_GLOBAL_LIGHTS; j++) {
+					mapDiffuse[j][0] = own[j].diffuse.red; mapDiffuse[j][1] = own[j].diffuse.green; mapDiffuse[j][2] = own[j].diffuse.blue;
+				}
+			}
+			const Sage2LightingPreset adapted = Sage2LightingClass::Adapt(*chosen, tod, mapAmbient, mapDiffuse);
+			const Sage2LightingPreset* preset = &adapted;
 			for (i=0; i<4; i++) {
 				for (Int j=0; j<MAX_GLOBAL_LIGHTS && j<3; j++) {
 					GlobalData::TerrainLighting light;
@@ -2301,6 +2314,27 @@ TextureClass *WorldHeightMap::getTerrainTexture()
 			for (Int i=0; i<NUM_TEXTURE_CLASSES; i++)
 				names[i] = i < m_numTextureClasses ? m_textureClasses[i].name.str() : "";
 			m_cnc4Atlas = Sage2TerrainAtlasClass::Build(names, m_numTextureClasses, m_cnc4Slots);
+			// the ground's average albedo, by how many cells each C&C4 texture covers, for the exposure
+			if (m_cnc4Atlas && m_tileNdxes != nullptr) {
+				Int classOfTile[NUM_SOURCE_TILES];
+				for (Int t=0; t<NUM_SOURCE_TILES; t++)
+					classOfTile[t] = -1;
+				for (Int c=0; c<m_numTextureClasses; c++)
+					for (Int t=m_textureClasses[c].firstTile; t>=0 && t<m_textureClasses[c].firstTile+m_textureClasses[c].numTiles && t<NUM_SOURCE_TILES; t++)
+						classOfTile[t] = c;
+				double sum = 0.0;
+				Int cells = 0;
+				for (Int i=0; i<m_dataSize; i++) {
+					const Int tile = m_tileNdxes[i] >> 2;
+					const Int c = tile >= 0 && tile < NUM_SOURCE_TILES ? classOfTile[tile] : -1;
+					const float albedo = c >= 0 ? Sage2TerrainAtlasClass::Get_Slot_Albedo(m_cnc4Slots[c]) : -1.0f;
+					if (albedo >= 0.0f) {
+						sum += albedo;
+						cells++;
+					}
+				}
+				Sage2PostClass::Set_Scene_Albedo(cells > 0 ? (float)(sum / cells) : -1.0f);
+			}
 		}
 #endif
 

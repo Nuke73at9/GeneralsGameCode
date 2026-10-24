@@ -39,6 +39,13 @@ public:
 	static void Set_Look(const char* lookupTexture, float lookupBlend, float bloomIntensity);
 	/// Exposure applied before the tone curve (1 = as C&C4)
 	static void Set_Exposure(float exposure);
+	/// Tiberium Project @feature exposure for the map's ground, the way a photographer exposes for
+	/// snow: the map's average albedo (linear luminance, weighted by how much of the map each
+	/// texture covers, -1 unknown). A map brighter than a mid-grey key is exposed down by
+	/// (key / albedo) to the power of the strength (Sage2AutoExposure, 0 = C&C4's exposure as it is,
+	/// 1 = exposed fully for the ground), never brighter than C&C4's, and never below half.
+	static void Set_Scene_Albedo(float albedo);
+	static void Set_Auto_Exposure(float strength);
 	/// Sage2KeepBlack (default on): black before the grade stays black after it (the mod's
 	/// tiberium_keepblack.fxo), so the world past the map's edge and under the shroud is not lifted
 	static void Set_Keep_Black(bool enabled);

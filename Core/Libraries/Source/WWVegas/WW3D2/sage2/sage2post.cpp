@@ -20,6 +20,8 @@
 
 #include "sage2post.h"
 
+#include <math.h>
+
 #include <string>
 #include <string.h>
 #include <vector>
@@ -42,6 +44,19 @@ namespace
 	float s_lookupBlend = 0.745f;
 	float s_bloomIntensity = 0.09f;
 	float s_exposure = 1.0f;
+	float s_autoStrength = 0.5f;		// Sage2AutoExposure
+	float s_sceneAlbedo = -1.0f;		// the map's ground, linear (-1 unknown)
+	float s_autoFactor = 1.0f;			// what the map's ground asks of the exposure
+	const float SCENE_KEY = 0.30f;		// the ground albedo exposed as C&C4 exposes (linear; about 0.58 displayed)
+
+	void Update_Auto_Exposure()
+	{
+		s_autoFactor = 1.0f;
+		if (s_sceneAlbedo > SCENE_KEY && s_autoStrength > 0.0f)
+			s_autoFactor = powf(SCENE_KEY / s_sceneAlbedo, s_autoStrength);
+		if (s_autoFactor < 0.5f)
+			s_autoFactor = 0.5f;
+	}
 
 	Sage2EffectClass* s_bloom = nullptr;
 	Sage2EffectClass* s_lookup = nullptr;
@@ -258,6 +273,22 @@ void Sage2PostClass::Set_Exposure(float exposure)
 }
 
 //-------------------------------------------------------------------------------------------------
+void Sage2PostClass::Set_Auto_Exposure(float strength)
+{
+	s_autoStrength = strength < 0.0f ? 0.0f : (strength > 1.0f ? 1.0f : strength);
+	Update_Auto_Exposure();
+}
+
+//-------------------------------------------------------------------------------------------------
+void Sage2PostClass::Set_Scene_Albedo(float albedo)
+{
+	s_sceneAlbedo = albedo;
+	Update_Auto_Exposure();
+	Sage2_Log("post: the map's ground averages albedo %.2f (linear); exposure x%.2f for it (Sage2AutoExposure %.2f), %.2f in all",
+		albedo, s_autoFactor, s_autoStrength, s_exposure * s_autoFactor);
+}
+
+//-------------------------------------------------------------------------------------------------
 bool Sage2PostClass::Apply()
 {
 	if (!s_enabled)
@@ -311,7 +342,8 @@ bool Sage2PostClass::Apply()
 
 	// the bloom, as C&C4's PostFX_Bloom script orders it
 	Sage2EffectClass& bloom = *s_bloom;
-	float one[3] = { s_exposure, s_exposure, s_exposure };
+	const float exposure = s_exposure * s_autoFactor;
+	float one[3] = { exposure, exposure, exposure };
 	bloom.Set_Float("ExposureLevel", one, 3);
 	bloom.Set_Float1("BloomIntensity", s_bloomIntensity);
 	bloom.Set_Texture("SourceTexture", s_frame);
@@ -375,7 +407,7 @@ bool Sage2PostClass::Apply()
 	if (!logged)
 	{
 		logged = true;
-		Sage2_Log("post: C&C4 chain applied: bloom %.2f, table %s blend %.2f, exposure %.2f", s_bloomIntensity, s_lookupName.c_str(), blend[0], s_exposure);
+		Sage2_Log("post: C&C4 chain applied: bloom %.2f, table %s blend %.2f, exposure %.2f", s_bloomIntensity, s_lookupName.c_str(), blend[0], exposure);
 	}
 	return true;
 }

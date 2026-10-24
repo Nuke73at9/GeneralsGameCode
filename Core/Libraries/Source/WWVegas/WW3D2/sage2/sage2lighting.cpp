@@ -19,6 +19,8 @@
 // Tiberium Project @feature C&C4's global lighting presets (see sage2lighting.h).
 
 #include "sage2lighting.h"
+
+#include <math.h>
 #include "sage2globals.h"
 #include "sage2post.h"
 #include <string.h>
@@ -68,6 +70,31 @@ namespace
 			{ { 0.25f, 0.25f, 0.38f }, { -0.052f, -0.999f,  0.000f } } }, "pan_am_lut_vol", 0.745f, 0.09f },
 	};
 	const int PRESET_COUNT = sizeof(PRESETS) / sizeof(PRESETS[0]);
+
+	// Tiberium Project @feature the map's mood: Zero Hour's default terrain light for each time of
+	// day (GameData.ini, morning to night), as brightness (luminance, 0..1) of the ambient and of
+	// the sun; a map's own lights are measured against these
+	const float ZH_DEFAULT_AMBIENT[4] = { 0.409f, 0.205f, 0.233f, 0.106f };
+	const float ZH_DEFAULT_SUN[4] = { 0.740f, 1.000f, 0.515f, 0.207f };
+	float s_mood = 0.0f;
+
+	float Luminance(const float c[3])
+	{
+		return 0.2126f * c[0] + 0.7152f * c[1] + 0.0722f * c[2];
+	}
+
+	float Clamp(float v, float lo, float hi)
+	{
+		return v < lo ? lo : (v > hi ? hi : v);
+	}
+
+	// a light's colour with its brightness taken out (luminance 1), held near white
+	void Hue(const float c[3], float out[3])
+	{
+		const float l = Luminance(c);
+		for (int i = 0; i < 3; ++i)
+			out[i] = l > 0.001f ? Clamp(c[i] / l, 0.6f, 1.5f) : 1.0f;
+	}
 
 	enum Mode { MODE_MAP, MODE_AUTO, MODE_FIXED };
 	Mode s_mode = MODE_AUTO;
@@ -147,6 +174,50 @@ const Sage2LightingPreset* Sage2LightingClass::Choose(int timeOfDay, bool snowy)
 	else
 		Sage2_Log("lighting: map (time of day %d%s) keeps its own lights", timeOfDay, snowy ? ", snow" : "");
 	return preset;
+}
+
+//-------------------------------------------------------------------------------------------------
+void Sage2LightingClass::Set_Mood(float mood)
+{
+	s_mood = Clamp(mood, 0.0f, 1.0f);
+}
+
+float Sage2LightingClass::Get_Mood()
+{
+	return s_mood;
+}
+
+//-------------------------------------------------------------------------------------------------
+Sage2LightingPreset Sage2LightingClass::Adapt(const Sage2LightingPreset& preset, int timeOfDay, const float mapAmbient[3], const float mapDiffuse[3][3])
+{
+	Sage2LightingPreset out = preset;
+	const int t = timeOfDay < 1 ? 0 : (timeOfDay > 4 ? 3 : timeOfDay - 1);
+	const float mapLevel = Luminance(mapAmbient) + Luminance(mapDiffuse[0]);
+	const float defaultLevel = ZH_DEFAULT_AMBIENT[t] + ZH_DEFAULT_SUN[t];
+	const float ratio = Clamp(mapLevel / defaultLevel, 0.25f, 1.0f);
+	Sage2_Log("lighting: the map's own: ambient (%.2f %.2f %.2f), sun (%.2f %.2f %.2f), fills (%.2f %.2f %.2f) (%.2f %.2f %.2f); %.0f%% of Zero Hour's default for its time of day",
+		mapAmbient[0], mapAmbient[1], mapAmbient[2], mapDiffuse[0][0], mapDiffuse[0][1], mapDiffuse[0][2],
+		mapDiffuse[1][0], mapDiffuse[1][1], mapDiffuse[1][2], mapDiffuse[2][0], mapDiffuse[2][1], mapDiffuse[2][2],
+		100.0f * mapLevel / defaultLevel);
+	if (s_mood <= 0.0f)
+		return out;
+
+	// The map's colours lit Zero Hour's gamma-space textures directly; C&C4's light works in linear
+	// light, so a map half as bright as the default is a quarter or so as bright here (power 2.2)
+	const float scale = 1.0f + (powf(ratio, 2.2f) - 1.0f) * s_mood;
+	float sunHue[3], ambientHue[3];
+	Hue(mapDiffuse[0], sunHue);
+	Hue(mapAmbient, ambientHue);
+	for (int i = 0; i < 3; ++i)
+	{
+		out.ambient[i] *= scale * (1.0f + (ambientHue[i] - 1.0f) * s_mood);
+		out.light[0].diffuse[i] *= scale * (1.0f + (sunHue[i] - 1.0f) * s_mood);
+		for (int j = 1; j < 3; ++j)
+			out.light[j].diffuse[i] *= scale * (1.0f + (ambientHue[i] - 1.0f) * s_mood);	// the fills, as the sky
+	}
+	Sage2_Log("lighting: with the map's mood (%.2f): light x%.2f, ambient (%.2f %.2f %.2f), sun (%.2f %.2f %.2f)",
+		s_mood, scale, out.ambient[0], out.ambient[1], out.ambient[2], out.light[0].diffuse[0], out.light[0].diffuse[1], out.light[0].diffuse[2]);
+	return out;
 }
 
 //-------------------------------------------------------------------------------------------------

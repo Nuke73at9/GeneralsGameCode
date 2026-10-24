@@ -20,6 +20,8 @@
 
 #include "sage2terrainatlas.h"
 
+#include <math.h>
+
 #include <ctype.h>
 #include <map>
 #include <string>
@@ -43,6 +45,28 @@ namespace
 	IDirect3DTexture9* s_normal = nullptr;
 	unsigned s_atlasSize = 0;
 	int s_slotsPerRow = 0;
+	std::vector<float> s_slotAlbedo;		// per slot: average albedo, linear luminance (-1 unknown)
+
+	// a BGRA image's average albedo: luminance in linear light (every fourth pixel is plenty)
+	float Average_Albedo(const std::vector<unsigned char>& bgra)
+	{
+		static float toLinear[256];
+		static bool tableMade = false;
+		if (!tableMade)
+		{
+			for (int i = 0; i < 256; ++i)
+				toLinear[i] = powf(i / 255.0f, 2.2f);
+			tableMade = true;
+		}
+		double sum = 0.0;
+		size_t n = 0;
+		for (size_t i = 0; i + 3 < bgra.size(); i += 16)
+		{
+			sum += 0.0722f * toLinear[bgra[i]] + 0.7152f * toLinear[bgra[i + 1]] + 0.2126f * toLinear[bgra[i + 2]];
+			++n;
+		}
+		return n ? (float)(sum / n) : -1.0f;
+	}
 
 	std::string Lower(const std::string& s)
 	{
@@ -223,12 +247,14 @@ bool Sage2TerrainAtlasClass::Build(const char* const* terrainNames, int count, i
 	}
 	int loaded = 0;
 	std::vector<unsigned char> pixels;
+	s_slotAlbedo.assign(textures.size(), -1.0f);
 	for (size_t t = 0; t < textures.size(); ++t)
 	{
 		unsigned w = 0, h = 0;
 		if (Sage2TextureClass::Load_Pixels(textures[t].c_str(), w, h, pixels) && w > 0 && h > 0)
 		{
 			Blit_Slot((unsigned char*)lrColor.pBits, lrColor.Pitch, (int)t, pixels, w, h);
+			s_slotAlbedo[t] = Average_Albedo(pixels);
 			++loaded;
 		}
 		else
@@ -253,6 +279,11 @@ int Sage2TerrainAtlasClass::Get_Slots_Per_Row() { return s_slotsPerRow; }
 float Sage2TerrainAtlasClass::Get_Slot_Size() { return s_atlasSize ? (float)SLOT_PIXELS / (float)s_atlasSize : 0.0f; }
 float Sage2TerrainAtlasClass::Get_Slot_Border() { return s_atlasSize ? (float)BORDER / (float)s_atlasSize : 0.0f; }
 
+float Sage2TerrainAtlasClass::Get_Slot_Albedo(int slot)
+{
+	return slot >= 0 && slot < (int)s_slotAlbedo.size() ? s_slotAlbedo[slot] : -1.0f;
+}
+
 //-------------------------------------------------------------------------------------------------
 void Sage2TerrainAtlasClass::Release()
 {
@@ -261,4 +292,5 @@ void Sage2TerrainAtlasClass::Release()
 	s_color = s_normal = nullptr;
 	s_atlasSize = 0;
 	s_slotsPerRow = 0;
+	s_slotAlbedo.clear();
 }

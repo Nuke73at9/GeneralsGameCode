@@ -57,6 +57,15 @@ public:
 	/// whether it is a snow map), under the selected mode; null to keep the map's lights. Also sets
 	/// the post-processing look that goes with it.
 	static const Sage2LightingPreset* Choose(int timeOfDay, bool snowy);
+	/// How much of each map's own mood the C&C4 preset takes on (Options.ini Sage2MapMood, 0..1):
+	/// 0 is C&C4's light as it is; 1 is as dim as the map's own lights are next to Zero Hour's
+	/// default light for that time of day (never brighter), and tinted with their colours.
+	static void Set_Mood(float mood);
+	static float Get_Mood();
+	/// The preset to light a map with, given the map's own lights for the time of day it plays at
+	/// (ambient, and the diffuse colour of its three lights, as the map stores them): the preset
+	/// itself at mood 0, darkened and tinted towards the map's own light as the mood rises.
+	static Sage2LightingPreset Adapt(const Sage2LightingPreset& preset, int timeOfDay, const float mapAmbient[3], const float mapDiffuse[3][3]);
 	/// The preset names, for diagnostics
 	static int Get_Preset_Count();
 	static const Sage2LightingPreset& Get_Preset(int index);
