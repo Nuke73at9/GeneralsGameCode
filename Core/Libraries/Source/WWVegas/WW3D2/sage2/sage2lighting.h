@@ -57,6 +57,11 @@ public:
 	/// whether it is a snow map), under the selected mode; null to keep the map's lights. Also sets
 	/// the post-processing look that goes with it.
 	static const Sage2LightingPreset* Choose(int timeOfDay, bool snowy);
+	/// Tiberium Project @feature Whose look the automatic choice gives the maps that are not snowy
+	/// (Options.ini Sage2Look): "ra3" (the default) takes Red Alert 3's light and saturating table
+	/// for the map's time of day, "cnc4" C&C4's Pan-America sets. Snow maps take C&C4's Arctic either way.
+	static void Set_Look(const char* look);
+	static bool Is_RA3_Look();
 	/// How much of each map's own mood the C&C4 preset takes on (Options.ini Sage2MapMood, 0..1):
 	/// 0 is C&C4's light as it is; 1 is as dim as the map's own lights are next to Zero Hour's
 	/// default light for that time of day (never brighter), and tinted with their colours.

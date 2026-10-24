@@ -68,8 +68,37 @@ namespace
 			{ { 0.94f, 0.94f, 1.25f }, { -0.321f,  0.321f, -0.891f } },
 			{ { 0.25f, 0.25f, 0.38f }, {  0.978f,  0.208f,  0.000f } },
 			{ { 0.25f, 0.25f, 0.38f }, { -0.052f, -0.999f,  0.000f } } }, "pan_am_lut_vol", 0.745f, 0.09f },
+
+		// Tiberium Project @feature Red Alert 3's look, read out of the GlobalLighting and
+		// PostEffectsChunk of RA3's skirmish maps (C&C4 took several of its own sets from them: its
+		// evening is RA3's, its Arctic morning too). No sky light of its own by day: a warm sun from
+		// lower down, two fills low across the ground, and a table that only saturates (greys stay as
+		// they are), where C&C4's Pan-America table also lifts the middle tones by a fifth.
+		// the afternoon set most of RA3's maps share (eleven of the forty-five); its table at a third
+		// (RA3's maps use 0.2 to 0.7, mostly a half: at a half Zero Hour's pinkish desert tiles went salmon)
+		{ "ra3_day", { 0.00f, 0.00f, 0.00f }, {
+			{ { 1.60f, 1.45f, 1.45f }, {  0.799f, -0.014f, -0.602f } },
+			{ { 0.60f, 0.65f, 0.72f }, {  0.051f,  0.965f, -0.259f } },
+			{ { 1.15f, 1.20f, 1.29f }, { -0.266f, -0.929f, -0.259f } } }, "lusaturatecolors_vol", 0.33f, 0.22f },
+		// RA3's morning (map_mp_2_feasel11_ep1), the light C&C4's Arctic morning took
+		{ "ra3_morning", { 0.14f, 0.13f, 0.13f }, {
+			{ { 1.25f, 1.21f, 1.04f }, { -0.629f,  0.349f, -0.695f } },
+			{ { 0.69f, 0.67f, 0.69f }, {  0.807f,  0.586f, -0.070f } },
+			{ { 0.75f, 0.83f, 0.89f }, {  0.329f, -0.903f, -0.276f } } }, "lusaturatecolors_vol", 0.29f, 0.22f },
+		// RA3's evening (map_mp_2_black1b): the sun low in the west, a grey sky light; its table (0.51) at a third too
+		{ "ra3_evening", { 0.31f, 0.31f, 0.31f }, {
+			{ { 1.60f, 1.40f, 1.40f }, {  0.906f,  0.000f, -0.423f } },
+			{ { 0.45f, 0.45f, 0.65f }, { -0.842f,  0.429f, -0.326f } },
+			{ { 0.55f, 0.55f, 0.55f }, { -0.858f,  0.121f, -0.500f } } }, "lusaturatecolors_vol", 0.35f, 0.00f },
+		// RA3's night (map_mp_2_feasel3): blue moonlight and a table that shifts towards blue
+		{ "ra3_night", { 0.08f, 0.07f, 0.07f }, {
+			{ { 0.80f, 0.80f, 1.00f }, {  0.691f,  0.198f, -0.695f } },
+			{ { 0.69f, 0.67f, 0.69f }, { -0.882f,  0.469f, -0.052f } },
+			{ { 0.75f, 0.83f, 0.89f }, {  0.330f, -0.908f, -0.259f } } }, "lushiftblue_vol", 0.29f, 0.22f },
 	};
 	const int PRESET_COUNT = sizeof(PRESETS) / sizeof(PRESETS[0]);
+
+	bool s_ra3Look = true;		// Sage2Look: RA3's light and table for maps that are not snowy
 
 	// Tiberium Project @feature the map's mood: Zero Hour's default terrain light for each time of
 	// day (GameData.ini, morning to night), as brightness (luminance, 0..1) of the ambient and of
@@ -150,10 +179,14 @@ const Sage2LightingPreset* Sage2LightingClass::Choose(int timeOfDay, bool snowy)
 	else if (s_mode == MODE_AUTO)
 	{
 		// Zero Hour's map themes to C&C4's: snow maps are Arctic, the rest Pan-America; the map's
-		// time of day picks the set, as it does in C&C4 (1 morning, 2 afternoon, 3 evening, 4 night)
+		// time of day picks the set, as it does in C&C4 (1 morning, 2 afternoon, 3 evening, 4 night).
+		// Under RA3's look the maps that are not snowy take RA3's set for their time of day instead
+		// (snow keeps C&C4's Arctic, whose light already is RA3's).
 		const char* name;
 		if (snowy)
 			name = timeOfDay == 4 ? "arctic" : "arctic_day";
+		else if (s_ra3Look)
+			name = timeOfDay == 1 ? "ra3_morning" : timeOfDay == 3 ? "ra3_evening" : timeOfDay == 4 ? "ra3_night" : "ra3_day";
 		else if (timeOfDay == 3)
 			name = "evening";
 		else if (timeOfDay == 4)
@@ -165,7 +198,7 @@ const Sage2LightingPreset* Sage2LightingClass::Choose(int timeOfDay, bool snowy)
 	if (preset != nullptr)
 	{
 		Sage2PostClass::Set_Look(preset->lookupTexture, preset->lookupBlend, preset->bloomIntensity);
-		Sage2_Log("lighting: map (time of day %d%s) gets C&C4 preset '%s': ambient (%.2f %.2f %.2f), sun (%.2f %.2f %.2f) along (%.3f %.3f %.3f), table %s %.2f, bloom %.2f",
+		Sage2_Log("lighting: map (time of day %d%s) gets preset '%s': ambient (%.2f %.2f %.2f), sun (%.2f %.2f %.2f) along (%.3f %.3f %.3f), table %s %.2f, bloom %.2f",
 			timeOfDay, snowy ? ", snow" : "", preset->name, preset->ambient[0], preset->ambient[1], preset->ambient[2],
 			preset->light[0].diffuse[0], preset->light[0].diffuse[1], preset->light[0].diffuse[2],
 			preset->light[0].direction[0], preset->light[0].direction[1], preset->light[0].direction[2],
@@ -175,6 +208,15 @@ const Sage2LightingPreset* Sage2LightingClass::Choose(int timeOfDay, bool snowy)
 		Sage2_Log("lighting: map (time of day %d%s) keeps its own lights", timeOfDay, snowy ? ", snow" : "");
 	return preset;
 }
+
+//-------------------------------------------------------------------------------------------------
+void Sage2LightingClass::Set_Look(const char* look)
+{
+	s_ra3Look = look == nullptr || !Equals_No_Case(look, "cnc4");
+	Sage2_Log("lighting: %s look for the maps that are not snowy", s_ra3Look ? "Red Alert 3's" : "C&C4's");
+}
+
+bool Sage2LightingClass::Is_RA3_Look() { return s_ra3Look; }
 
 //-------------------------------------------------------------------------------------------------
 void Sage2LightingClass::Set_Mood(float mood)

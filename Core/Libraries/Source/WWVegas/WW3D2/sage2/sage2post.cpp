@@ -407,7 +407,8 @@ bool Sage2PostClass::Apply()
 	if (!logged)
 	{
 		logged = true;
-		Sage2_Log("post: C&C4 chain applied: bloom %.2f, table %s blend %.2f, exposure %.2f", s_bloomIntensity, s_lookupName.c_str(), blend[0], exposure);
+		Sage2_Log("post: C&C4 chain applied: bloom %.2f, table %s%s blend %.2f, exposure %.2f", s_bloomIntensity, s_lookupName.c_str(),
+			lookup != nullptr || s_lookupName.empty() ? "" : " (not in the mod: no grading)", blend[0], exposure);
 	}
 	return true;
 }

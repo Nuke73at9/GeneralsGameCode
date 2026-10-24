@@ -61,6 +61,9 @@ public:
 	/// The bumps: 'flipY' reads the normal maps' green channel the other way round (if the ridges
 	/// come out lit from the wrong side), 'scale' their strength (0.75 as C&C4, 0 flat)
 	static void Set_Bump(bool flipY, float scale);
+	/// Tiberium Project @feature How much of the fill lights' highlight the ground keeps (Options.ini
+	/// Sage2TerrainFillSpecular): 1 as C&C4's light pass gives it, 0 as Red Alert 3's terrain (the sun's alone)
+	static void Set_Fill_Specular(float amount);
 
 	/// The map's shroud, multiplied over the terrain at the end of the pass (Zero Hour draws it
 	/// as an extra pass that needs an equal depth, which a different vertex pipeline cannot

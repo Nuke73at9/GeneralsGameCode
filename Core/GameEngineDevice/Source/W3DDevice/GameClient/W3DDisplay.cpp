@@ -966,9 +966,13 @@ void W3DDisplay::init()
 			// Tiberium Project @feature Options.ini: CNC4Style = yes lights every map with the C&C4 lighting
 			// matching its theme (snow maps Arctic, the rest Pan-America, by time of day) and runs C&C4's
 			// post chain; no keeps the maps' own lights and the plain renderer. Sage2Lighting = <preset name>
-			// (temperate | evening | arctic | arctic_day | junktown | junktown_day | night) forces one preset.
+			// (temperate | evening | arctic | arctic_day | junktown | junktown_day | night | ra3_day |
+			// ra3_morning | ra3_evening | ra3_night) forces one preset. Sage2Look = ra3 | cnc4: whose sets the
+			// maps that are not snowy get (Red Alert 3's light and saturating table, or C&C4's Pan-America).
 			OptionPreferences prefs;
 			Bool cnc4Style = prefs.getBool("CNC4Style", TRUE);
+			Sage2LightingClass::Set_Look(prefs.getAsciiString("Sage2Look", "ra3").str());
+			Sage2GlobalsClass::Set_Linear_Lights(prefs.getBool("Sage2LinearLights", FALSE));	// light colours to the effects in linear light
 			Sage2LightingClass::Select(cnc4Style ? prefs.getAsciiString("Sage2Lighting", "auto").str() : "map");
 			// how much of each map's own mood (how dim and what colour its light is) the C&C4 light keeps: 0..1
 			Sage2LightingClass::Set_Mood(prefs.getReal("Sage2MapMood", 0.0f));
@@ -980,6 +984,8 @@ void W3DDisplay::init()
 			Sage2TerrainClass::Set_Albedo_Scale(prefs.getReal("Sage2TerrainAlbedo", Sage2LightingClass::Uses_Presets() ? 0.6f : 1.6f));
 			Sage2TerrainClass::Set_Tile_World_Size(prefs.getReal("Sage2TerrainTileSize", 80.0f));	// world units per C&C4 terrain texture
 			Sage2TerrainClass::Set_Bump(prefs.getBool("Sage2TerrainBumpFlip", FALSE), prefs.getReal("Sage2TerrainBumpScale", 0.75f));	// normal map green flipped; bump strength
+			// the fills' highlight on the ground: RA3's terrain takes the sun's alone, C&C4's light pass all three
+			Sage2TerrainClass::Set_Fill_Specular(prefs.getReal("Sage2TerrainFillSpecular", Sage2LightingClass::Is_RA3_Look() ? 0.0f : 1.0f));
 			Sage2PostClass::Set_Exposure(prefs.getReal("Sage2Exposure", 1.0f));
 			Sage2PostClass::Set_Auto_Exposure(prefs.getReal("Sage2AutoExposure", 0.5f));	// exposure for each map's ground: 0..1
 			Sage2PostClass::Set_Keep_Black(prefs.getBool("Sage2KeepBlack", TRUE));	// black past the map's edge stays black under the grade

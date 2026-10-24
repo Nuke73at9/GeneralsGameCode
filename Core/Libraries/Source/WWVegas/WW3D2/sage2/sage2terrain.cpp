@@ -47,6 +47,7 @@ namespace
 	bool s_drew = false, s_drewDeferred = false;	// the last Draw()
 	Sage2TerrainClass::Shroud s_shroud = { nullptr, 0.0f, 0.0f, 0.0f, 0.0f };
 	float s_bumpScale = 0.75f;			// C&C4's terrain, High
+	float s_fillSpecular = 1.0f;		// the fills' share of the ground's highlight
 	InitState s_state = NOT_TRIED;
 	Sage2EffectClass* s_effect = nullptr;
 	int s_techDefault = -1, s_techForward = -1, s_techPrepass = -1, s_techShadow = -1, s_techExtraBlend = -1;
@@ -185,6 +186,7 @@ bool Sage2TerrainClass::Is_Enabled() { return s_enabled; }
 void Sage2TerrainClass::Set_Albedo_Scale(float scale) { s_albedoScale = scale > 0.0f ? scale : 1.0f; }
 float Sage2TerrainClass::Get_Albedo_Scale() { return s_albedoScale; }
 void Sage2TerrainClass::Set_Tile_World_Size(float size) { s_tileWorldSize = size > 1.0f ? size : 80.0f; }
+void Sage2TerrainClass::Set_Fill_Specular(float amount) { s_fillSpecular = amount < 0.0f ? 0.0f : (amount > 1.0f ? 1.0f : amount); }
 void Sage2TerrainClass::Set_Bump(bool flipY, float scale) { s_bumpSign = flipY ? -1.0f : 1.0f; s_bumpScale = scale >= 0.0f ? scale : 0.75f; }
 
 //-------------------------------------------------------------------------------------------------
@@ -210,6 +212,7 @@ bool Sage2TerrainClass::Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuff
 	Sage2GlobalsClass::Apply(*s_effect, drawState);
 	s_effect->Set_Texture("BaseSampler", atlasTexture);
 	s_effect->Set_Float1("AlbedoScale", s_albedoScale);
+	s_effect->Set_Float1("FillSpecular", s_fillSpecular);
 	// the C&C4 textures of this map, world-aligned by slot; none: every slot is -1 and the tiles show
 	IDirect3DBaseTexture9* c4Color = Sage2TerrainAtlasClass::Get_Color();
 	IDirect3DBaseTexture9* c4Normal = Sage2TerrainAtlasClass::Get_Normal();
@@ -303,6 +306,7 @@ bool Sage2TerrainClass::Draw_Extra_Blend(TextureClass* tiles, unsigned vertexCou
 	Sage2GlobalsClass::Apply(*s_effect, drawState);
 	s_effect->Set_Texture("BaseSampler", tileTexture);
 	s_effect->Set_Float1("AlbedoScale", s_albedoScale);
+	s_effect->Set_Float1("FillSpecular", s_fillSpecular);
 	s_effect->Set_Texture("AtlasColor", Sage2TerrainAtlasClass::Get_Color());
 	s_effect->Set_Texture("AtlasNormal", Sage2TerrainAtlasClass::Get_Normal());
 	float atlasParams[4] = { (float)Sage2TerrainAtlasClass::Get_Slots_Per_Row(), Sage2TerrainAtlasClass::Get_Slot_Size(),

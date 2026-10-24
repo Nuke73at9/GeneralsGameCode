@@ -23,6 +23,7 @@
 #include "sage2texture.h"
 #include "sage2topview.h"
 
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -160,6 +161,17 @@ namespace
 		{ "WW3D.EnvironmentTexture", SAGE2_BIND_TEXTURE_ENVIRONMENT },
 		{ "WW3D.FactionEnvCube", SAGE2_BIND_TEXTURE_ENVIRONMENT },
 	};
+
+	bool s_linearLights = false;		// Sage2LinearLights
+
+	// a light colour (display values, as the map stores it) as the effects take it
+	void Light_Color(float v[3])
+	{
+		if (!s_linearLights)
+			return;
+		for (int k = 0; k < 3; ++k)
+			v[k] = v[k] > 0.0f ? powf(v[k], 2.2f) : 0.0f;
+	}
 
 	unsigned s_frameWidth = 0, s_frameHeight = 0;
 	IDirect3DBaseTexture9* s_deferredDiffuse = nullptr;
@@ -331,6 +343,8 @@ namespace
 			{
 				const float* src = color ? s_sceneDiffuse[light] : s_sceneToLight[light];
 				v[0] = src[0]; v[1] = src[1]; v[2] = src[2]; v[3] = color ? 1.0f : 0.0f;
+				if (color)
+					Light_Color(v);
 			}
 		}
 		else if (DX8Wrapper::Is_Light_Enabled(light))
@@ -339,6 +353,7 @@ namespace
 			if (color)
 			{
 				v[0] = l.Diffuse.r; v[1] = l.Diffuse.g; v[2] = l.Diffuse.b; v[3] = 1.0f;
+				Light_Color(v);
 			}
 			else if (l.Type == D3DLIGHT_DIRECTIONAL)
 			{
@@ -582,6 +597,7 @@ void Sage2GlobalsClass::Apply(Sage2EffectClass& effect, const Sage2DrawState& dr
 					DWORD a = DX8Wrapper::Get_DX8_Render_State(D3DRS_AMBIENT);
 					v[0] = ((a >> 16) & 0xFF) / 255.0f; v[1] = ((a >> 8) & 0xFF) / 255.0f; v[2] = (a & 0xFF) / 255.0f;
 				}
+				Light_Color(v);
 				effect.Set_Float(i, v, 3);
 				break;
 			}
@@ -713,3 +729,12 @@ void Sage2GlobalsClass::Shutdown()
 	s_standInsTried = false;
 	s_deferredDiffuse = s_deferredSpecular = s_depth = s_normalSpec = s_depthBuffer = nullptr;
 }
+
+//-------------------------------------------------------------------------------------------------
+void Sage2GlobalsClass::Set_Linear_Lights(bool linear)
+{
+	s_linearLights = linear;
+	Sage2_Log("globals: light colours to the effects %s", linear ? "in linear light (the maps' colours to the power 2.2, as RA3 and C&C4)" : "as the maps store them");
+}
+
+bool Sage2GlobalsClass::Get_Linear_Lights() { return s_linearLights; }

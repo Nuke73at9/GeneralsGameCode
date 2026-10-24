@@ -160,6 +160,17 @@ float AlbedoScale
 	string SasBindAddress = "Terrain.AlbedoScale";
 > = 1.6;
 
+// Tiberium Project @feature How much of the fill lights' highlight the ground keeps. 1 is C&C4's
+// deferred light pass, where all three directional lights shine in the specular; 0 is Red Alert 3's
+// terrain, where only the sun does and the fills light it diffusely (RA3's fills are strong and low
+// across the ground: under Zero Hour's camera they glared off it). The light buffer holds the sum,
+// so the fills' part is worked out again here, with the light pass's own terms, and taken back out.
+float FillSpecular
+<
+	string UIWidget = "None";
+	string SasBindAddress = "Terrain.FillSpecular";
+> = 1.0;
+
 // world units per macro texture repeat
 float MacroScale
 <
@@ -255,6 +266,26 @@ float3 BumpedNormal(float3 normalTS, float3 worldNormal)
 	float3 binormal = cross(n, float3(0, 1, 0));
 	normalTS.xy *= BumpParams.y;
 	return normalize(mul(normalTS, float3x3(-binormal, -tangent, n)));
+}
+
+// the specular light of the two fills at a point, as the deferred light pass adds it
+float3 FillSpecularLight(float3 normal, float3 worldPos)
+{
+	float3 eye = normalize(EyePosition - worldPos);
+	float4 fill1 = lit(dot(normal, DirectionalLight_1_Direction.xyz),
+		dot(normal, normalize(DirectionalLight_1_Direction.xyz + eye)), SpecularExponent);
+	float4 fill2 = lit(dot(normal, DirectionalLight_2_Direction.xyz),
+		dot(normal, normalize(DirectionalLight_2_Direction.xyz + eye)), SpecularExponent);
+	return DirectionalLight_1_Color.rgb * fill1.z + DirectionalLight_2_Color.rgb * fill2.z;
+}
+
+// the light buffer's specular, less the fills' share FillSpecular takes out
+float3 GroundSpecularLight(float2 screenTexCoord, float3 normalTS, float3 worldNormal, float3 worldPos)
+{
+	float3 specular = SampleSpecularLight(screenTexCoord);
+	if (FillSpecular < 1.0)
+		specular = max(0.0, specular - (1.0 - FillSpecular) * FillSpecularLight(BumpedNormal(normalTS, worldNormal), worldPos));
+	return specular;
 }
 
 // ============================================================================
@@ -382,7 +413,7 @@ float4 PS_Default(VSOutputDefault In, float2 vPos : PIXELLOC) : COLOR
 	ApplyTopView(In.WorldXY_Slots.xy, baseColor, spec);
 	float2 screenTexCoord = GetScreenTexcoordCoord(vPos);
 	float3 color = (SampleDiffuseLight(screenTexCoord) + AmbientLightColor) * baseColor
-		+ SampleSpecularLight(screenTexCoord) * SpecularColor * spec;
+		+ GroundSpecularLight(screenTexCoord, normalTS, In.Normal_WorldZ.xyz, float3(In.WorldXY_Slots.xy, In.Normal_WorldZ.w)) * SpecularColor * spec;
 	float3 macro = GammaToLinear(tex2D(SAMPLER(MacroSampler), In.MacroTexCoord_Fog_BlendAlpha.xy).xyz);
 	color *= macro;
 	color = lerp(Fog.Color.xyz, color, In.MacroTexCoord_Fog_BlendAlpha.z);
@@ -457,7 +488,7 @@ float4 PS_ExtraBlend(VSOutput_ExtraBlend In, float2 vPos : PIXELLOC) : COLOR
 	ApplyTopView(In.TexCoord_WorldXY.zw, baseColor, spec);
 	float2 screenTexCoord = GetScreenTexcoordCoord(vPos);
 	float3 color = (SampleDiffuseLight(screenTexCoord) + AmbientLightColor) * baseColor
-		+ SampleSpecularLight(screenTexCoord) * SpecularColor * spec;
+		+ GroundSpecularLight(screenTexCoord, normalTS, In.Normal_WorldZ.xyz, float3(In.TexCoord_WorldXY.zw, In.Normal_WorldZ.w)) * SpecularColor * spec;
 	color *= GammaToLinear(tex2D(SAMPLER(MacroSampler), In.MacroTexCoord_Fog_Alpha.xy).xyz);
 	color = lerp(Fog.Color.xyz, color, In.MacroTexCoord_Fog_Alpha.z);
 	color *= GammaToLinear(tex2D(SAMPLER(ShroudTexture), In.ShroudTexCoord_Slot.xy).xyz);

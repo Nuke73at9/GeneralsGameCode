@@ -162,6 +162,15 @@ public:
 	static void Set_Scene_Lights(const float ambient[3], const float diffuse[][3], const float toLight[][3], int count);
 	static bool Use_Scene_Lights(bool use);
 
+	/// Tiberium Project @feature Whether the light colours go to the effects in linear light
+	/// (Options.ini Sage2LinearLights). RA3 and C&C4 store a map's light colours as picked, in
+	/// display (gamma) values, and their effects light in linear light: their shaders' own default
+	/// lights are the maps' colours to the power 2.2 (Common.fxh). Without it a map's ambient lit
+	/// two or three times as strongly next to its sun as those games light it, and the ground came
+	/// out flat and pale.
+	static void Set_Linear_Lights(bool linear);
+	static bool Get_Linear_Lights();
+
 	/// Releases the stand-in textures (before the device goes away).
 	static void Shutdown();
 };
