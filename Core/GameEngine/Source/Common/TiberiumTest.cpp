@@ -651,15 +651,15 @@ void TiberiumTest::update()
 		// what stands where it was a moment later (its collapse, debris)
 		if ( s_frame == s_baseFrame + BASE_KILL_FRAMES + 60 )
 		{
-			std::string near;
+			std::string standing;	// (not "near": a macro in the Windows headers)
 			for ( Object *o = TheGameLogic->getFirstObject(); o != nullptr; o = o->getNextObject() )
 			{
 				const Coord3D *q = o->getPosition();
 				const Real dx = q->x - s_baseVictimPos.x, dy = q->y - s_baseVictimPos.y;
-				if ( dx * dx + dy * dy < 80.0f * 80.0f && near.size() < 400 )
-					near += std::string( " " ) + o->getTemplate()->getName().str();
+				if ( dx * dx + dy * dy < 80.0f * 80.0f && standing.size() < 400 )
+					standing += std::string( " " ) + o->getTemplate()->getName().str();
 			}
-			log( "frame %d: where it stood:%s", (int)s_frame, near.c_str() );
+			log( "frame %d: where it stood:%s", (int)s_frame, standing.c_str() );
 		}
 	}
 
