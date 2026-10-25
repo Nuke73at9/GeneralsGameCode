@@ -1312,6 +1312,10 @@ void DX8Wrapper::Enumerate_Devices()
 		D3DADAPTER_IDENTIFIER8 id;
 		::ZeroMemory(&id, sizeof(D3DADAPTER_IDENTIFIER8));
 		HRESULT res = D3DInterface->GetAdapterIdentifier(adapter_index,D3DENUM_NO_WHQL_LEVEL,&id);
+#ifdef RTS_RENDERER_D3D9
+		if (res != D3D_OK)
+			Sage2_Log("renderer: adapter %d of %d: no identifier (0x%08lX)", adapter_index, adapter_count, (unsigned long)res);
+#endif
 
 		if (res == D3D_OK) {
 
@@ -1374,6 +1378,12 @@ void DX8Wrapper::Enumerate_Devices()
 				}
 			}
 
+#ifdef RTS_RENDERER_D3D9
+			// Tiberium Project @feature what each adapter offers, for the renderer comparison (a Direct3D 9
+			// with no usable display mode leaves the game without a device)
+			Sage2_Log("renderer: adapter %d '%s', %d display modes, %d usable", adapter_index, id.Description, mode_count,
+				desc.Enumerate_Resolutions().Count());
+#endif
 			// IML: If the device has one or more valid resolutions add it to the device list.
 			// NOTE: Testing has shown that there are drivers with zero resolutions.
 			if (desc.Enumerate_Resolutions().Count() > 0) {
