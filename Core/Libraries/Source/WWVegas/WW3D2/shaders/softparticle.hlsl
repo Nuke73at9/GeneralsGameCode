@@ -61,7 +61,11 @@ VSOutput VS_Soft(VSInput In)
 float4 PS_Soft(PSInput In, float2 Pixel : VPOS) : COLOR
 {
 	float4 color = tex2D(ParticleSampler, In.TexCoord) * In.Color;
-	color.rgb *= FrameParams.z;
+	// brightened (W3D's modulate 2x): past white the colour keeps its hue and runs towards white, as
+	// C&C4's HDR fireballs do, where clamping each channel would turn orange to lime yellow
+	float3 bright = color.rgb * FrameParams.z;
+	float peak = max(max(bright.r, bright.g), max(bright.b, 1.0));
+	color.rgb = lerp(bright / peak, float3(1.0, 1.0, 1.0), saturate((peak - 1.0) * 0.35));
 	float sceneDepth = abs(tex2D(DepthSampler, (Pixel + 0.5) * FrameParams.xy).x);
 	float fade = saturate((sceneDepth - In.ViewDepth) * SoftParams.x);
 	color.rgb = lerp(color.rgb, color.rgb * fade, SoftParams.y);
