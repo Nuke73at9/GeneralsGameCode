@@ -335,8 +335,12 @@ private:
 	/// End_Fixed_Function unbinds after the draw
 	bool Emulate_Fixed_Function();
 	void End_Fixed_Function();
+	void Release_Fixed_Function_Shaders();
 	IDirect3DVertexShader9* m_ffVertexShader;
-	IDirect3DPixelShader9* m_ffPixelShader;
+	IDirect3DPixelShader9* m_ffPixelShader;		///< the general one
+	IDirect3DPixelShader9* m_ffModulateShader;	///< the common set-ups: texture times diffuse,
+	IDirect3DPixelShader9* m_ffDiffuseShader;	///< the diffuse colour,
+	IDirect3DPixelShader9* m_ffTextureShader;	///< the texture
 	bool m_ffTried;
 
 	struct VertexShader { IDirect3DVertexDeclaration9* decl; IDirect3DVertexShader9* shader; };

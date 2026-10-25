@@ -22,6 +22,9 @@
 
 #include "../shaders/fixedfunction_vs.h"	// Tiberium Project @feature from shaders/fixedfunction.hlsl (build_shaders.py)
 #include "../shaders/fixedfunction_ps.h"
+#include "../shaders/fixedfunction_modulate_ps.h"
+#include "../shaders/fixedfunction_diffuse_ps.h"
+#include "../shaders/fixedfunction_texture_ps.h"
 
 #include <cstring>
 #include <cmath>
@@ -208,6 +211,9 @@ D3D8On9Device::D3D8On9Device(IDirect3DDevice9* device, DWORD behaviorFlags) :
 	m_readableDepthSurface(nullptr),
 	m_ffVertexShader(nullptr),
 	m_ffPixelShader(nullptr),
+	m_ffModulateShader(nullptr),
+	m_ffDiffuseShader(nullptr),
+	m_ffTextureShader(nullptr),
 	m_ffTried(false)
 {
 }
@@ -224,8 +230,7 @@ D3D8On9Device::~D3D8On9Device()
 		if (m_pixelShaders[i]) m_pixelShaders[i]->Release();
 	}
 	Release_Readable_Depth();
-	if (m_ffVertexShader) m_ffVertexShader->Release();
-	if (m_ffPixelShader) m_ffPixelShader->Release();
+	Release_Fixed_Function_Shaders();
 	m_device->Release();
 }
 
@@ -478,11 +483,11 @@ bool D3D8On9Device::Emulate_Fixed_Function()
 	{
 		m_ffTried = true;
 		if (FAILED(m_device->CreateVertexShader(FixedFunctionVertexShader, &m_ffVertexShader))
-			|| FAILED(m_device->CreatePixelShader(FixedFunctionPixelShader, &m_ffPixelShader)))
-		{
-			if (m_ffVertexShader) { m_ffVertexShader->Release(); m_ffVertexShader = nullptr; }
-			if (m_ffPixelShader) { m_ffPixelShader->Release(); m_ffPixelShader = nullptr; }
-		}
+			|| FAILED(m_device->CreatePixelShader(FixedFunctionPixelShader, &m_ffPixelShader))
+			|| FAILED(m_device->CreatePixelShader(FixedFunctionModulatePixelShader, &m_ffModulateShader))
+			|| FAILED(m_device->CreatePixelShader(FixedFunctionDiffusePixelShader, &m_ffDiffuseShader))
+			|| FAILED(m_device->CreatePixelShader(FixedFunctionTexturePixelShader, &m_ffTextureShader)))
+			Release_Fixed_Function_Shaders();
 	}
 	if (m_ffVertexShader == nullptr || m_ffPixelShader == nullptr)
 	{
@@ -596,12 +601,63 @@ bool D3D8On9Device::Emulate_Fixed_Function()
 	psc[10][0] = hasTexture[0];
 	psc[10][1] = hasTexture[1];
 
+	// one of the small pixel shaders when the stages are one of the common set-ups (one stage,
+	// colour and alpha alike, plain arguments, no specular, no projection), else the general one
+	IDirect3DPixelShader9* pixelShader = m_ffPixelShader;
+	const float* c = stageConstants[0];
+	const float* cm = stageConstants[1];
+	const float* a = stageConstants[2];
+	const float* am = stageConstants[3];
+	const bool plain = !stage1On && !specularOn && texGen[0][3] == 0.0f
+		&& cm[0] == 0.0f && cm[1] == 0.0f && cm[2] == 0.0f && cm[3] == 0.0f
+		&& am[0] == 0.0f && am[1] == 0.0f && am[2] == 0.0f && am[3] == 0.0f;
+	if (plain)
+	{
+		// what a channel's operation picks: 1 the diffuse colour, 2 the texture, 3 the two multiplied
+		struct Local
+		{
+			static int Pick(const float* op)
+			{
+				const int o = (int)op[0], a1 = (int)op[1], a2 = (int)op[2];
+				const int arg = o == D3DTOP_SELECTARG1 ? a1 : (o == D3DTOP_SELECTARG2 ? a2 : -1);
+				if (arg == 0) return 1;
+				if (arg == 2) return 2;
+				if (o == D3DTOP_MODULATE && ((a1 == 2 && a2 == 0) || (a1 == 0 && a2 == 2))) return 3;
+				return 0;
+			}
+		};
+		const int colorPick = Local::Pick(c), alphaPick = Local::Pick(a);
+		if (colorPick == alphaPick)
+		{
+			if (colorPick == 1)
+				pixelShader = m_ffDiffuseShader;
+			else if (colorPick == 2 && hasTexture[0] > 0.5f)
+				pixelShader = m_ffTextureShader;
+			else if (colorPick == 3 && hasTexture[0] > 0.5f)
+				pixelShader = m_ffModulateShader;
+		}
+	}
+
 	m_device->SetVertexShader(m_ffVertexShader);
-	m_device->SetPixelShader(m_ffPixelShader);
-	m_device->SetVertexShaderConstantF(0, &vsc[0][0], 58);
-	m_device->SetPixelShaderConstantF(0, &psc[0][0], 11);
+	m_device->SetPixelShader(pixelShader);
+	// the constants the draw uses: the lights only when lit
+	m_device->SetVertexShaderConstantF(0, &vsc[0][0], 18);
+	if (lighting && lightCount > 0)
+		m_device->SetVertexShaderConstantF(18, &vsc[18][0], 7 * lightCount);
+	m_device->SetVertexShaderConstantF(46, &vsc[46][0], 12);
+	if (pixelShader == m_ffPixelShader)
+		m_device->SetPixelShaderConstantF(0, &psc[0][0], 11);
 	++s_ffEmulated;
 	return true;
+}
+
+void D3D8On9Device::Release_Fixed_Function_Shaders()
+{
+	if (m_ffVertexShader) { m_ffVertexShader->Release(); m_ffVertexShader = nullptr; }
+	if (m_ffPixelShader) { m_ffPixelShader->Release(); m_ffPixelShader = nullptr; }
+	if (m_ffModulateShader) { m_ffModulateShader->Release(); m_ffModulateShader = nullptr; }
+	if (m_ffDiffuseShader) { m_ffDiffuseShader->Release(); m_ffDiffuseShader = nullptr; }
+	if (m_ffTextureShader) { m_ffTextureShader->Release(); m_ffTextureShader = nullptr; }
 }
 
 void D3D8On9Device::End_Fixed_Function()

@@ -300,3 +300,24 @@ float4 PSMain(PSIn p) : COLOR
 		current.rgb = saturate(current.rgb + specular.rgb);
 	return current;
 }
+
+// ---------------------------------------------------------------------------- the common cases
+// Three set-ups cover nearly every draw W3D leaves to the fixed-function pipeline (counted on a
+// night battle: particles, the interface, untextured meshes, the snowfall): one stage, colour and
+// alpha alike, the texture times the vertex colour, the vertex colour alone, or the texture alone,
+// no specular. Their own small shaders (the general one above branches through every operation
+// for each pixel, which smoke and fire covering the screen pay for).
+float4 PSModulate(PSIn p) : COLOR
+{
+	return saturate(tex2D(Stage0, p.Tex0.xy) * p.Diffuse);
+}
+
+float4 PSDiffuse(PSIn p) : COLOR
+{
+	return saturate(p.Diffuse);
+}
+
+float4 PSTexture(PSIn p) : COLOR
+{
+	return tex2D(Stage0, p.Tex0.xy);
+}
