@@ -333,6 +333,7 @@ void TiberiumTest::setTour( Int size )
 
 //-------------------------------------------------------------------------------------------------
 void TiberiumTest::setShotInterval( Int frames ) { if ( frames > 0 ) { s_shotInterval = frames; s_active = TRUE; } }
+void TiberiumTest::setShotStart( Int frame ) { if ( frame > 0 ) s_shotStart = frame; }
 void TiberiumTest::setScorchFrame( Int frame ) { if ( frame >= 0 ) { s_scorchFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setLightsFrame( Int frame ) { if ( frame >= 0 ) { s_lightsFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setFireFrame( Int frame ) { if ( frame >= 0 ) { s_fireFrame = frame; s_active = TRUE; } }

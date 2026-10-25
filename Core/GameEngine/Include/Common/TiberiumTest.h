@@ -57,6 +57,7 @@ public:
 	static void setControlBar( const char *stage );
 	static void setTour( Int size );
 	static void setShotInterval( Int frames );
+	static void setShotStart( Int frame );	///< no screenshot before that frame
 	static void setScorchFrame( Int frame );
 	static void setLightsFrame( Int frame );	///< nine lasting light pulses around the view at that frame (client side)
 	static void setFireFrame( Int frame );	///< five lasting fires (particle systems) around the view at that frame (client side)

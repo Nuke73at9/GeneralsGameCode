@@ -871,10 +871,16 @@ Int parseTestTour(char *args[], int num)
 	return 2;
 }
 
+// Tiberium Project @feature -testShots <every>[,<from>]: a screenshot every so many frames, none before <from>
 Int parseTestShots(char *args[], int num)
 {
 	if (num > 1)
+	{
 		TiberiumTest::setShotInterval(atoi(args[1]));
+		const char *comma = strchr(args[1], ',');
+		if (comma != nullptr)
+			TiberiumTest::setShotStart(atoi(comma + 1));
+	}
 	return 2;
 }
 
