@@ -80,10 +80,20 @@ public:
 		float outerRadius;	///< nothing beyond this (C&C4: a smooth step between the two)
 		bool lightsObjects;	///< also brightens forward-lit objects nearby (lights Zero Hour's light environment does not carry already)
 		bool lightsParticles;	///< lights the smoke and dust drawn through it (all but a building's window light)
-		PointLight() : innerRadius(0.0f), outerRadius(0.0f), lightsObjects(false), lightsParticles(true)
+		/// Tiberium Project @feature a spot light (C&C4's SpotLight technique): only within a cone
+		/// along 'direction' (unit length, the way the light shines), full inside the inner angle,
+		/// nothing past the outer one (their cosines)
+		bool spot;
+		float direction[3];
+		float cosInner;
+		float cosOuter;
+		PointLight() : innerRadius(0.0f), outerRadius(0.0f), lightsObjects(false), lightsParticles(true), spot(false),
+			cosInner(0.9f), cosOuter(0.7f)
 		{
 			position[0] = position[1] = position[2] = 0.0f;
 			color[0] = color[1] = color[2] = 0.0f;
+			direction[0] = direction[1] = 0.0f;
+			direction[2] = -1.0f;
 		}
 	};
 	static void Clear_Point_Lights();

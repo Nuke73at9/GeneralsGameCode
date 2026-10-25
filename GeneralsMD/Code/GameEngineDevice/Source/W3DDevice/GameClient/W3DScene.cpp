@@ -1884,14 +1884,34 @@ void RTS3DScene::gatherSage2NightLights()
 			}
 			if (cones == 0)
 				continue;
-			point.position[0] = middle.x / cones;
-			point.position[1] = middle.y / cones;
-			point.position[2] = middle.z / cones + 8.0f;
-			point.color[0] = 1.0f * 0.5f * dusk;
-			point.color[1] = 0.92f * 0.5f * dusk;
-			point.color[2] = 0.75f * 0.5f * dusk;
-			point.innerRadius = 10.0f;
-			point.outerRadius = min(120.0f, reach * 1.5f + 25.0f);
+			// Tiberium Project @feature the headlights as a spot light (C&C4's SpotLight technique):
+			// from the vehicle's nose, along its heading and tipped down onto the road, a beam that
+			// reaches past its cones (it was a round pool at the cones' middle)
+			const Matrix3D *transform = draw->getTransformMatrix();
+			Vector3 forward = transform != nullptr ? transform->Get_X_Vector() : Vector3(1.0f, 0.0f, 0.0f);
+			forward.Z = 0.0f;
+			if (forward.Length2() < 0.0001f)
+				forward.Set(1.0f, 0.0f, 0.0f);
+			forward.Normalize();
+			const Real nose = max(4.0f, geometry.getMajorRadius() * 0.8f);
+			point.position[0] = pos->x + forward.X * nose;
+			point.position[1] = pos->y + forward.Y * nose;
+			// from higher than the lamps sit, so the beam meets the road at less of a graze (flat
+			// ground lit almost edge-on hardly shows it)
+			point.position[2] = pos->z + max(12.0f, geometry.getMaxHeightAbovePosition() * 0.8f);
+			Vector3 beam(forward.X, forward.Y, -0.45f);
+			beam.Normalize();
+			point.spot = true;
+			point.direction[0] = beam.X;
+			point.direction[1] = beam.Y;
+			point.direction[2] = beam.Z;
+			point.cosInner = 0.93f;		// full within about 21 degrees of the beam
+			point.cosOuter = 0.80f;		// gone past about 37
+			point.color[0] = 1.0f * 0.9f * dusk;
+			point.color[1] = 0.92f * 0.9f * dusk;
+			point.color[2] = 0.75f * 0.9f * dusk;
+			point.innerRadius = 20.0f;
+			point.outerRadius = min(160.0f, reach * 2.5f + 60.0f);
 			point.lightsObjects = true;
 			Sage2SceneClass::Add_Point_Light(point);
 			continue;

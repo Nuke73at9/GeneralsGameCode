@@ -83,7 +83,8 @@ namespace
 
 	// Tiberium Project @feature edge anti-aliasing after the grade
 	bool s_aaEnabled = true;
-	float s_aaSubpixel = 0.5f;
+	float s_aaSubpixel = 0.25f;
+	float s_aaThreshold = 0.166f;
 	enum AAState { AA_NOT_TRIED, AA_READY, AA_UNAVAILABLE };
 	AAState s_aaState = AA_NOT_TRIED;
 	IDirect3DTexture9* s_graded = nullptr;		// the graded frame, the anti-aliasing's source
@@ -297,8 +298,9 @@ namespace
 		device->SetPixelShader(s_aaPixelShader);
 		const float halfPixel[4] = { -1.0f / (float)w, 1.0f / (float)h, 0.0f, 0.0f };
 		device->SetVertexShaderConstantF(0, halfPixel, 1);
-		// the edge threshold (a step of an eighth of the local brightness), and a floor for the darks
-		const float params[2][4] = { { 1.0f / (float)w, 1.0f / (float)h, s_aaSubpixel, 0.125f }, { 0.0312f, 0.0f, 0.0f, 0.0f } };
+		// the edge threshold (a step of a sixth of the local brightness: Zero Hour's grass and gravel
+		// textures step by an eighth on their own, and smoothed they went soft), half that in the darks
+		const float params[2][4] = { { 1.0f / (float)w, 1.0f / (float)h, s_aaSubpixel, s_aaThreshold }, { s_aaThreshold * 0.5f, 0.0f, 0.0f, 0.0f } };
 		device->SetPixelShaderConstantF(0, &params[0][0], 2);
 		device->SetTexture(0, s_graded);
 		device->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
@@ -338,10 +340,11 @@ void Sage2PostClass::Set_Look(const char* lookupTexture, float lookupBlend, floa
 }
 
 //-------------------------------------------------------------------------------------------------
-void Sage2PostClass::Set_Anti_Aliasing(bool enabled, float subpixel)
+void Sage2PostClass::Set_Anti_Aliasing(bool enabled, float subpixel, float threshold)
 {
 	s_aaEnabled = enabled;
 	s_aaSubpixel = subpixel < 0.0f ? 0.0f : (subpixel > 1.0f ? 1.0f : subpixel);
+	s_aaThreshold = threshold < 0.05f ? 0.05f : (threshold > 0.5f ? 0.5f : threshold);
 }
 
 //-------------------------------------------------------------------------------------------------

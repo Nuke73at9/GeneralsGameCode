@@ -54,6 +54,7 @@ namespace
 	Sage2EffectClass* s_linearDepth = nullptr;
 	int s_lightingTechnique = -1, s_linearDepthTechnique = -1;
 	int s_pointLightTechnique = -1;
+	int s_spotLightTechnique = -1;
 	bool s_clearedThisFrame = false;
 
 	// Tiberium Project @feature this frame's point lights
@@ -62,6 +63,21 @@ namespace
 	float s_pointLightStrength = 2.0f;	// Zero Hour lit the ground with a pulse's ambient and diffuse both
 	bool s_particleLighting = true;
 	bool s_pointLightsLogged = false;
+
+	// Tiberium Project @feature how much of a spot light reaches a point d (from the light) away:
+	// C&C4's smooth step between the cone's outer and inner angles; 1 for a point light
+	float Spot_Factor(const Sage2SceneClass::PointLight& light, float dx, float dy, float dz)
+	{
+		if (!light.spot)
+			return 1.0f;
+		const float length = sqrtf(dx * dx + dy * dy + dz * dz);
+		if (length < 0.001f)
+			return 1.0f;
+		const float c = (dx * light.direction[0] + dy * light.direction[1] + dz * light.direction[2]) / length;
+		float t = light.cosInner > light.cosOuter ? (c - light.cosOuter) / (light.cosInner - light.cosOuter) : (c >= light.cosOuter ? 1.0f : 0.0f);
+		t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+		return t * t * (3.0f - 2.0f * t);
+	}
 
 	IDirect3DSurface9* Surface(IDirect3DTexture9* t)
 	{
@@ -131,6 +147,7 @@ namespace
 		s_lightingTechnique = s_lighting->Find_Technique("Directional");
 		s_linearDepthTechnique = s_linearDepth->Find_Technique("LinearDepth");
 		s_pointLightTechnique = s_lighting->Find_Technique("PointLight");	// optional: no point lights without it
+		s_spotLightTechnique = s_lighting->Find_Technique("SpotLight");	// optional: spot lights as point lights without it
 		return s_lightingTechnique >= 0 && s_linearDepthTechnique >= 0;
 	}
 
@@ -274,6 +291,23 @@ namespace
 			if (ly1 > y1) ly1 = y1;
 			if (lx0 >= lx1 || ly0 >= ly1)
 				continue;
+			if (light.spot && s_spotLightTechnique >= 0)
+			{
+				// Tiberium Project @feature C&C4's SpotLight technique: the same smooth step over the
+				// radii, times one between the cone's outer and inner angles
+				const float position[4] = { light.position[0], light.position[1], light.position[2], 1.0f };
+				const float color[4] = { light.color[0] * s_pointLightStrength, light.color[1] * s_pointLightStrength,
+					light.color[2] * s_pointLightStrength, 1.0f };
+				const float direction[4] = { light.direction[0], light.direction[1], light.direction[2], 0.0f };
+				const float parameters[4] = { light.cosInner, light.cosOuter, light.innerRadius * light.innerRadius, light.outerRadius * light.outerRadius };
+				s_lighting->Set_Float("SpotLightPosition", position, 4);
+				s_lighting->Set_Float("SpotLightColor", color, 4);
+				s_lighting->Set_Float("SpotLightDirection", direction, 4);
+				s_lighting->Set_Float("SpotLightParameters", parameters, 4);
+				Draw_Rect(device, *s_lighting, s_spotLightTechnique, lx0, ly0, lx1, ly1);
+				++drawn;
+				continue;
+			}
 			const float position[4] = { light.position[0], light.position[1], light.position[2], light.innerRadius * light.innerRadius };
 			const float color[4] = { light.color[0] * s_pointLightStrength, light.color[1] * s_pointLightStrength,
 				light.color[2] * s_pointLightStrength, light.outerRadius * light.outerRadius };
@@ -552,7 +586,7 @@ void Sage2SceneClass::Get_Point_Light_Particle(const float position[3], float li
 		// C&C4's smooth step between the radii; a puff of smoke is lit on its near side, half of it
 		float t = outer2 > inner2 ? (outer2 - d2) / (outer2 - inner2) : 1.0f;
 		t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
-		const float k = t * t * (3.0f - 2.0f * t) * 0.5f * s_pointLightStrength;
+		const float k = t * t * (3.0f - 2.0f * t) * 0.5f * s_pointLightStrength * Spot_Factor(point, dx, dy, dz);
 		light[0] += point.color[0] * k;
 		light[1] += point.color[1] * k;
 		light[2] += point.color[2] * k;
@@ -603,7 +637,7 @@ void Sage2SceneClass::Get_Point_Light_Ambient(const float position[3], float rad
 		// C&C4's smooth step between the radii, half as strong as on the ground: it lights every side
 		float t = outer2 > inner2 ? (outer2 - d2) / (outer2 - inner2) : 1.0f;
 		t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
-		const float k = t * t * (3.0f - 2.0f * t) * 0.5f * s_pointLightStrength * share;
+		const float k = t * t * (3.0f - 2.0f * t) * 0.5f * s_pointLightStrength * share * Spot_Factor(light, dx, dy, dz);
 		ambient[0] += light.color[0] * k;
 		ambient[1] += light.color[1] * k;
 		ambient[2] += light.color[2] * k;
