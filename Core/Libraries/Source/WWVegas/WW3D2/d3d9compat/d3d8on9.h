@@ -246,9 +246,10 @@ public:
 		{ return m_device->CreateRenderTarget(w, h, format, ms, 0, lockable, surface, nullptr); }
 	HRESULT CreateDepthStencilSurface(UINT w, UINT h, D3DFORMAT format, D3DMULTISAMPLE_TYPE ms, IDirect3DSurface9** surface)
 		{ return m_device->CreateDepthStencilSurface(w, h, format, ms, 0, FALSE, surface, nullptr); }
-	/// Direct3D 8 image surfaces are lockable system-memory surfaces
-	HRESULT CreateImageSurface(UINT w, UINT h, D3DFORMAT format, IDirect3DSurface9** surface)
-		{ return m_device->CreateOffscreenPlainSurface(w, h, format, D3DPOOL_SYSTEMMEM, surface, nullptr); }
+	/// Direct3D 8 image surfaces are lockable system-memory surfaces; a format the device does not
+	/// offer for them (Direct3D 12 drivers under D3D9On12 need not offer A4R4G4B4, which W3D's text
+	/// uses) is made in the scratch pool, which takes any format
+	HRESULT CreateImageSurface(UINT w, UINT h, D3DFORMAT format, IDirect3DSurface9** surface);
 	HRESULT CopyRects(IDirect3DSurface9* src, const RECT* rects, UINT count, IDirect3DSurface9* dst, const POINT* points);
 	HRESULT UpdateTexture(IDirect3DBaseTexture9* src, IDirect3DBaseTexture9* dst) { return m_device->UpdateTexture(src, dst); }
 	HRESULT GetFrontBuffer(IDirect3DSurface9* dst) { return m_device->GetFrontBufferData(0, dst); }

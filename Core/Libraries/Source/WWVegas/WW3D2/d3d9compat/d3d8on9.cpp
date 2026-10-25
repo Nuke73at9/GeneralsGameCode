@@ -76,6 +76,41 @@ namespace
 		}
 	}
 
+	/// Tiberium Project @bugfix A4R4G4B4 pixels to A8R8G8B8 (X8R8G8B8 alike), for a copy into a
+	/// texture the device made in a 32-bit format because it does not offer the 16-bit one
+	HRESULT lockedCopyA4R4G4B4ToA8R8G8B8(IDirect3DSurface9* src, const RECT& r, IDirect3DSurface9* dst, const POINT& p)
+	{
+		RECT d = { p.x, p.y, p.x + (r.right - r.left), p.y + (r.bottom - r.top) };
+		D3DLOCKED_RECT sl, dl;
+		HRESULT hr = src->LockRect(&sl, &r, D3DLOCK_READONLY);
+		if (FAILED(hr))
+			return hr;
+		hr = dst->LockRect(&dl, &d, 0);
+		if (FAILED(hr))
+		{
+			src->UnlockRect();
+			return hr;
+		}
+		const UINT width = (UINT)(r.right - r.left);
+		const UINT height = (UINT)(r.bottom - r.top);
+		for (UINT y = 0; y < height; ++y)
+		{
+			const WORD* in = (const WORD*)((const BYTE*)sl.pBits + y * sl.Pitch);
+			DWORD* out = (DWORD*)((BYTE*)dl.pBits + y * dl.Pitch);
+			for (UINT x = 0; x < width; ++x)
+			{
+				const DWORD v = in[x];
+				// each 4-bit channel to 8 bits (0xF -> 0xFF)
+				const DWORD a = ((v >> 12) & 0xF) * 0x11, rr = ((v >> 8) & 0xF) * 0x11;
+				const DWORD g = ((v >> 4) & 0xF) * 0x11, b = (v & 0xF) * 0x11;
+				out[x] = (a << 24) | (rr << 16) | (g << 8) | b;
+			}
+		}
+		dst->UnlockRect();
+		src->UnlockRect();
+		return D3D_OK;
+	}
+
 	/// Copy a rectangle between two lockable surfaces of the same format
 	HRESULT lockedCopy(IDirect3DSurface9* src, const RECT& r, IDirect3DSurface9* dst, const POINT& p, D3DFORMAT format)
 	{
@@ -1073,6 +1108,18 @@ HRESULT D3D8On9Device::Reset(D3DPRESENT_PARAMETERS* params)
 	return hr;
 }
 
+//-------------------------------------------------------------------------------------------------
+HRESULT D3D8On9Device::CreateImageSurface(UINT w, UINT h, D3DFORMAT format, IDirect3DSurface9** surface)
+{
+	HRESULT hr = m_device->CreateOffscreenPlainSurface(w, h, format, D3DPOOL_SYSTEMMEM, surface, nullptr);
+	// Tiberium Project @bugfix a format the device does not offer: the scratch pool takes any (the
+	// surface is only locked and copied from, which is all W3D does with an image surface)
+	if (FAILED(hr))
+		hr = m_device->CreateOffscreenPlainSurface(w, h, format, D3DPOOL_SCRATCH, surface, nullptr);
+	return hr;
+}
+
+//-------------------------------------------------------------------------------------------------
 HRESULT D3D8On9Device::CopyRects(IDirect3DSurface9* src, const RECT* rects, UINT count, IDirect3DSurface9* dst, const POINT* points)
 {
 	if (src == nullptr || dst == nullptr || src == dst)
@@ -1126,9 +1173,13 @@ HRESULT D3D8On9Device::CopyRects(IDirect3DSurface9* src, const RECT* rects, UINT
 		}
 		else
 		{
-			if (sd.Format != dd.Format)
+			// Tiberium Project @bugfix a 16-bit image into a texture the device made 32-bit
+			if (sd.Format == D3DFMT_A4R4G4B4 && (dd.Format == D3DFMT_A8R8G8B8 || dd.Format == D3DFMT_X8R8G8B8))
+				hr = lockedCopyA4R4G4B4ToA8R8G8B8(src, r, dst, p);
+			else if (sd.Format != dd.Format)
 				return D3DERR_INVALIDCALL;
-			hr = lockedCopy(src, r, dst, p, sd.Format);
+			else
+				hr = lockedCopy(src, r, dst, p, sd.Format);
 		}
 		if (FAILED(hr))
 			return hr;
