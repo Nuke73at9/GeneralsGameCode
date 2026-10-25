@@ -21,6 +21,7 @@
 #include "d3d8on9.h"
 
 #include "../shaders/fixedfunction_vs.h"	// Tiberium Project @feature from shaders/fixedfunction.hlsl (build_shaders.py)
+#include "../shaders/fixedfunction_screen_vs.h"
 #include "../shaders/fixedfunction_ps.h"
 #include "../shaders/fixedfunction_modulate_ps.h"
 #include "../shaders/fixedfunction_diffuse_ps.h"
@@ -245,6 +246,7 @@ D3D8On9Device::D3D8On9Device(IDirect3DDevice9* device, DWORD behaviorFlags) :
 	m_readableDepth(nullptr),
 	m_readableDepthSurface(nullptr),
 	m_ffVertexShader(nullptr),
+	m_ffScreenShader(nullptr),
 	m_ffPixelShader(nullptr),
 	m_ffModulateShader(nullptr),
 	m_ffDiffuseShader(nullptr),
@@ -449,7 +451,7 @@ void D3D8On9Device::Read_Fixed_Function_State()
 	D3DVIEWPORT9 viewport;
 	memset(&viewport, 0, sizeof(viewport));
 	m_device->GetViewport(&viewport);
-	m_ff.viewportHeight = viewport.Height;
+	m_ff.viewport = viewport;
 }
 
 void D3D8On9Device::Build_Fixed_Function(DWORD fvf)
@@ -459,8 +461,13 @@ void D3D8On9Device::Build_Fixed_Function(DWORD fvf)
 	m_ff.lightRows = 0;
 	const DWORD* rs = m_ff.renderStates;
 	unsigned reason = 0;
-	if ((fvf & D3DFVF_POSITION_MASK) != D3DFVF_XYZ)
-		reason |= FF_POSITION;	// pre-transformed or blended vertices
+	// Tiberium Project @feature pre-transformed vertices through the screen vertex shader; blended
+	// ones stay fixed-function, as do pre-transformed ones while a declaration stands in for FVFs
+	const DWORD position = fvf & D3DFVF_POSITION_MASK;
+	const bool transformed = position == D3DFVF_XYZRHW;
+	m_ff.transformed = transformed;
+	if (position != D3DFVF_XYZ && (!transformed || m_vertexDeclarationOverride != nullptr))
+		reason |= FF_POSITION;
 	if (fvf & D3DFVF_PSIZE)
 		reason |= FF_POINT_SIZE;
 	if (rs[D3DRS_FOGENABLE])
@@ -527,6 +534,11 @@ void D3D8On9Device::Build_Fixed_Function(DWORD fvf)
 			reason |= FF_TEXGEN;
 			break;
 		}
+		if (transformed && (generation != D3DTSS_TCI_PASSTHRU || ttf != D3DTTFF_DISABLE))
+		{
+			reason |= FF_TEXGEN;	// screen vertices: the coordinates as stored only
+			break;
+		}
 		texGen[stage][2] = (float)(ttf & 0xFF);
 		texGen[stage][3] = (ttf & D3DTTFF_PROJECTED) ? 1.0f : 0.0f;
 		hasTexture[stage] = m_ff.textures[stage] ? 1.0f : 0.0f;
@@ -534,8 +546,8 @@ void D3D8On9Device::Build_Fixed_Function(DWORD fvf)
 	if (stage1On && reason == 0 && m_ff.stages[2][D3DTSS_COLOROP] != D3DTOP_DISABLE)
 		reason |= FF_STAGES;
 
-	// the lights
-	const DWORD lighting = rs[D3DRS_LIGHTING];
+	// the lights (Direct3D does not light pre-transformed vertices)
+	const DWORD lighting = transformed ? 0 : rs[D3DRS_LIGHTING];
 	int lightIndex[4];
 	int lightCount = 0;
 	if (lighting && reason == 0)
@@ -622,7 +634,13 @@ void D3D8On9Device::Build_Fixed_Function(DWORD fvf)
 	vsc[57][0] = DWORD_Float(rs[D3DRS_POINTSCALE_A]);
 	vsc[57][1] = DWORD_Float(rs[D3DRS_POINTSCALE_B]);
 	vsc[57][2] = DWORD_Float(rs[D3DRS_POINTSCALE_C]);
-	vsc[57][3] = (float)m_ff.viewportHeight;
+	vsc[57][3] = (float)m_ff.viewport.Height;
+	// the screen vertex shader's viewport: its corner, and 2 over its size
+	const D3DVIEWPORT9& viewport = m_ff.viewport;
+	vsc[58][0] = (float)viewport.X;
+	vsc[58][1] = (float)viewport.Y;
+	vsc[58][2] = viewport.Width > 0 ? 2.0f / (float)viewport.Width : 0.0f;
+	vsc[58][3] = viewport.Height > 0 ? 2.0f / (float)viewport.Height : 0.0f;
 
 	// pixel shader constants
 	float (*psc)[4] = m_ff.ps;
@@ -689,6 +707,14 @@ bool D3D8On9Device::Emulate_Fixed_Function()
 {
 	if (!s_ffShaders)
 		return false;
+	const bool drawn = Emulate_Fixed_Function_Draw();
+	if (m_ff.declarationFvf != 0 && !(drawn && m_ff.transformed))
+		Restore_FVF();	// Tiberium Project @feature the screen declaration only for screen vertices
+	return drawn;
+}
+
+bool D3D8On9Device::Emulate_Fixed_Function_Draw()
+{
 	if (m_vertexShaderOverride != nullptr)
 	{
 		Unbind_Fixed_Function_Shaders();	// the override draws in place of the vertex shader; no pixel shader of ours
@@ -696,7 +722,14 @@ bool D3D8On9Device::Emulate_Fixed_Function()
 	}
 	DWORD fvf = Get_Current_FVF();
 	if (fvf == 0 && m_vertexShader == ~0u)
-		m_device->GetFVF(&fvf);	// forgotten after a SAGE 2 effect (Invalidate_State) while still set on the device
+	{
+		// forgotten after a SAGE 2 effect (Invalidate_State) while still set on the device, or in place
+		// of the screen declaration still there
+		if (m_ff.declarationFvf != 0)
+			fvf = m_ff.declarationFvf;
+		else
+			m_device->GetFVF(&fvf);
+	}
 	if (fvf == 0)
 	{
 		Unbind_Fixed_Function_Shaders();	// a Direct3D 8 vertex shader of the game's own, or a declaration of someone else's
@@ -706,6 +739,7 @@ bool D3D8On9Device::Emulate_Fixed_Function()
 	{
 		m_ffTried = true;
 		if (FAILED(m_device->CreateVertexShader(FixedFunctionVertexShader, &m_ffVertexShader))
+			|| FAILED(m_device->CreateVertexShader(FixedFunctionScreenVertexShader, &m_ffScreenShader))
 			|| FAILED(m_device->CreatePixelShader(FixedFunctionPixelShader, &m_ffPixelShader))
 			|| FAILED(m_device->CreatePixelShader(FixedFunctionModulatePixelShader, &m_ffModulateShader))
 			|| FAILED(m_device->CreatePixelShader(FixedFunctionDiffusePixelShader, &m_ffDiffuseShader))
@@ -724,13 +758,14 @@ bool D3D8On9Device::Emulate_Fixed_Function()
 	m_device->GetVertexShader(&vs);
 	if (vs != nullptr)
 		vs->Release();
-	if (vs != nullptr && vs != m_ffVertexShader)
+	if (vs != nullptr && vs != m_ffVertexShader && vs != m_ffScreenShader)
 	{
 		m_ff.vsBound = false;
 		Unbind_Fixed_Function_Shaders();
 		return false;	// someone else's shaders (the SAGE 2 effects, the tree buffer)
 	}
 	m_ff.vsBound = vs != nullptr;
+	m_ff.vsBoundTransformed = vs != nullptr && vs == m_ffScreenShader;
 	IDirect3DPixelShader9* ps = nullptr;
 	m_device->GetPixelShader(&ps);
 	if (ps != nullptr)
@@ -766,11 +801,27 @@ bool D3D8On9Device::Emulate_Fixed_Function()
 		return false;
 	}
 
-	// the shaders, when not bound already, and the constants that differ from what the device has
-	if (!m_ff.vsBound)
+	// pre-transformed vertices: their FVF as a declaration with a plain position
+	if (m_ff.transformed && m_ff.declarationFvf != fvf)
 	{
-		m_device->SetVertexShader(m_ffVertexShader);
+		IDirect3DVertexDeclaration9* declaration = Screen_Declaration(fvf);
+		if (declaration == nullptr)
+		{
+			++s_ffLeft;
+			s_ffReasons |= FF_POSITION;
+			Unbind_Fixed_Function_Shaders();
+			return false;
+		}
+		m_device->SetVertexDeclaration(declaration);
+		m_ff.declarationFvf = fvf;
+	}
+
+	// the shaders, when not bound already, and the constants that differ from what the device has
+	if (!m_ff.vsBound || m_ff.vsBoundTransformed != m_ff.transformed)
+	{
+		m_device->SetVertexShader(m_ff.transformed ? m_ffScreenShader : m_ffVertexShader);
 		m_ff.vsBound = true;
+		m_ff.vsBoundTransformed = m_ff.transformed;
 	}
 	if (m_ff.psBound != m_ff.pixelShader)
 	{
@@ -797,10 +848,10 @@ bool D3D8On9Device::Emulate_Fixed_Function()
 	}
 	else if (!vsKnown)
 		m_ff.lightRowsUploaded = 0;
-	if (!vsKnown || memcmp(m_ff.vsUploaded[46], m_ff.vs[46], 12 * ROW) != 0)
+	if (!vsKnown || memcmp(m_ff.vsUploaded[46], m_ff.vs[46], 13 * ROW) != 0)
 	{
-		m_device->SetVertexShaderConstantF(46, m_ff.vs[46], 12);
-		memcpy(m_ff.vsUploaded[46], m_ff.vs[46], 12 * ROW);
+		m_device->SetVertexShaderConstantF(46, m_ff.vs[46], 13);
+		memcpy(m_ff.vsUploaded[46], m_ff.vs[46], 13 * ROW);
 	}
 	m_ff.vsConstantsKnown = true;
 	if (m_ff.pixelShader == m_ffPixelShader
@@ -837,9 +888,10 @@ HRESULT D3D8On9Device::SetTransform(D3DTRANSFORMSTATETYPE state, const D3DMATRIX
 
 HRESULT D3D8On9Device::SetViewport(const D3DVIEWPORT9* vp)
 {
-	if (vp != nullptr && vp->Height != m_ff.viewportHeight)
+	if (vp != nullptr && (vp->X != m_ff.viewport.X || vp->Y != m_ff.viewport.Y || vp->Width != m_ff.viewport.Width
+		|| vp->Height != m_ff.viewport.Height))
 	{
-		m_ff.viewportHeight = vp->Height;
+		m_ff.viewport = *vp;
 		m_ff.changed = true;
 	}
 	return m_device->SetViewport(vp);
@@ -885,9 +937,63 @@ HRESULT D3D8On9Device::SetTexture(DWORD stage, IDirect3DBaseTexture9* texture)
 	return m_device->SetTexture(stage, texture);
 }
 
+// Tiberium Project @feature a pre-transformed FVF as a declaration the vertex shader runs for: its
+// position as a plain four-float POSITION (POSITIONT, what SetFVF makes of it, skips the vertex shader)
+IDirect3DVertexDeclaration9* D3D8On9Device::Screen_Declaration(DWORD fvf)
+{
+	for (size_t i = 0; i < m_ffScreenDeclarations.size(); ++i)
+		if (m_ffScreenDeclarations[i].first == fvf)
+			return m_ffScreenDeclarations[i].second;
+	D3DVERTEXELEMENT9 elements[16];
+	int count = 0;
+	WORD offset = 0;
+	struct Local
+	{
+		static void Add(D3DVERTEXELEMENT9* e, int& n, WORD& offset, BYTE type, BYTE usage, BYTE index, WORD size)
+		{
+			D3DVERTEXELEMENT9& element = e[n++];
+			element.Stream = 0;
+			element.Offset = offset;
+			element.Type = type;
+			element.Method = D3DDECLMETHOD_DEFAULT;
+			element.Usage = usage;
+			element.UsageIndex = index;
+			offset = (WORD)(offset + size);
+		}
+	};
+	Local::Add(elements, count, offset, D3DDECLTYPE_FLOAT4, D3DDECLUSAGE_POSITION, 0, 16);
+	if (fvf & D3DFVF_PSIZE)
+		Local::Add(elements, count, offset, D3DDECLTYPE_FLOAT1, D3DDECLUSAGE_PSIZE, 0, 4);
+	if (fvf & D3DFVF_DIFFUSE)
+		Local::Add(elements, count, offset, D3DDECLTYPE_D3DCOLOR, D3DDECLUSAGE_COLOR, 0, 4);
+	if (fvf & D3DFVF_SPECULAR)
+		Local::Add(elements, count, offset, D3DDECLTYPE_D3DCOLOR, D3DDECLUSAGE_COLOR, 1, 4);
+	const DWORD sets = (fvf & D3DFVF_TEXCOUNT_MASK) >> D3DFVF_TEXCOUNT_SHIFT;
+	static const BYTE TYPES[4] = { D3DDECLTYPE_FLOAT2, D3DDECLTYPE_FLOAT3, D3DDECLTYPE_FLOAT4, D3DDECLTYPE_FLOAT1 };
+	static const WORD SIZES[4] = { 8, 12, 16, 4 };
+	for (DWORD set = 0; set < sets && set < 8; ++set)
+	{
+		const DWORD format = (fvf >> (set * 2 + 16)) & 3;	// D3DFVF_TEXCOORDSIZEn
+		Local::Add(elements, count, offset, TYPES[format], D3DDECLUSAGE_TEXCOORD, (BYTE)set, SIZES[format]);
+	}
+	const D3DVERTEXELEMENT9 end = D3DDECL_END();
+	elements[count] = end;
+	IDirect3DVertexDeclaration9* declaration = nullptr;
+	if (FAILED(m_device->CreateVertexDeclaration(elements, &declaration)))
+		declaration = nullptr;
+	m_ffScreenDeclarations.push_back(std::make_pair(fvf, declaration));	// a failure is remembered too
+	return declaration;
+}
+
 void D3D8On9Device::Release_Fixed_Function_Shaders()
 {
 	if (m_ffVertexShader) { m_ffVertexShader->Release(); m_ffVertexShader = nullptr; }
+	if (m_ffScreenShader) { m_ffScreenShader->Release(); m_ffScreenShader = nullptr; }
+	Restore_FVF();
+	for (size_t i = 0; i < m_ffScreenDeclarations.size(); ++i)
+		if (m_ffScreenDeclarations[i].second)
+			m_ffScreenDeclarations[i].second->Release();
+	m_ffScreenDeclarations.clear();
 	if (m_ffPixelShader) { m_ffPixelShader->Release(); m_ffPixelShader = nullptr; }
 	if (m_ffModulateShader) { m_ffModulateShader->Release(); m_ffModulateShader = nullptr; }
 	if (m_ffDiffuseShader) { m_ffDiffuseShader->Release(); m_ffDiffuseShader = nullptr; }
@@ -1065,6 +1171,7 @@ void D3D8On9Device::Set_Vertex_Declaration_Override(IDirect3DVertexDeclaration9*
 	m_vertexDeclarationOverride = declaration;
 	if (m_vertexShader != ~0u && (m_vertexShader & SHADER_HANDLE_BIT) == 0)
 	{
+		m_ff.declarationFvf = 0;	// Tiberium Project @feature in place of the screen declaration too
 		if (declaration != nullptr)
 			m_device->SetVertexDeclaration(declaration);
 		else
@@ -1102,6 +1209,7 @@ HRESULT D3D8On9Device::Reset(D3DPRESENT_PARAMETERS* params)
 	Invalidate_State();
 	// Tiberium Project @performance a reset device has no shaders bound and its state back to the defaults
 	m_ff.vsBound = false;
+	m_ff.declarationFvf = 0;
 	m_ff.psBound = nullptr;
 	m_ff.vsConstantsKnown = false;
 	m_ff.psConstantsKnown = false;
@@ -1347,8 +1455,9 @@ HRESULT D3D8On9Device::CreateVertexShader(const DWORD* declaration, const DWORD*
 HRESULT D3D8On9Device::SetVertexShader(DWORD handle)
 {
 	if (handle == m_vertexShader)
-		return D3D_OK;
+		return D3D_OK;	// Tiberium Project @feature a screen declaration in its place goes at the next draw
 	m_vertexShader = handle;
+	m_ff.declarationFvf = 0;	// Tiberium Project @feature what is set now replaces the screen declaration
 	if ((handle & SHADER_HANDLE_BIT) == 0)
 	{
 		m_device->SetVertexShader(m_vertexShaderOverride);	// usually none: fixed-function

@@ -24,6 +24,7 @@ SHADERS = [
     ("softparticle.hlsl", "PS_Soft", "ps_3_0", "softparticle_ps.h", "SoftParticlePixelShader"),
     ("fxaa.hlsl", "PSFXAA", "ps_3_0", "fxaa_ps.h", "FXAAPixelShader"),
     ("fixedfunction.hlsl", "VSMain", "vs_3_0", "fixedfunction_vs.h", "FixedFunctionVertexShader"),
+    ("fixedfunction.hlsl", "VSScreen", "vs_3_0", "fixedfunction_screen_vs.h", "FixedFunctionScreenVertexShader"),
     ("fixedfunction.hlsl", "PSMain", "ps_3_0", "fixedfunction_ps.h", "FixedFunctionPixelShader"),
     ("fixedfunction.hlsl", "PSModulate", "ps_3_0", "fixedfunction_modulate_ps.h", "FixedFunctionModulatePixelShader"),
     ("fixedfunction.hlsl", "PSDiffuse", "ps_3_0", "fixedfunction_diffuse_ps.h", "FixedFunctionDiffusePixelShader"),

@@ -13,6 +13,8 @@
 //   pixel:  two texture stages with Direct3D's colour and alpha operations and arguments, and
 //           the specular colour added.
 // Fog and vertex blending are not here: draws that use them stay fixed-function.
+// Pre-transformed vertices (already in screen pixels: the screen filters, the shadow darkening, the
+// heat haze) have a vertex shader of their own, VSScreen.
 //
 // Not an effect: plain shaders, compiled by build_shaders.py to fixedfunction_vs.h and
 // fixedfunction_ps.h.
@@ -207,6 +209,47 @@ VSOut VSMain(VSIn v)
 		size *= PointScale.w * rsqrt(max(PointScale.x + PointScale.y * d + PointScale.z * d * d, 1e-6));
 	}
 	o.PointSize = clamp(size, PointParams.z, PointParams.w);
+	return o;
+}
+
+// ---------------------------------------------------------------------------- pre-transformed vertices
+// Tiberium Project @feature Vertices already in screen pixels (D3DFVF_XYZRHW: x and y in pixels, z the
+// depth, w one over w). The adapter declares them with a plain position (a POSITIONT one would skip the
+// vertex shader) and this takes them back to clip space through the viewport, w from one over w so the
+// interpolation stays perspective-correct as Direct3D's. Not lit and the texture coordinates as
+// stored, as Direct3D draws them (the adapter leaves generated or transformed ones fixed-function).
+float4 ScreenViewport : register(c58);	// x, y the viewport's corner in pixels, z 2 / width, w 2 / height
+
+struct VSScreenIn
+{
+	float4 Position : POSITION;
+	float4 Diffuse : COLOR0;
+	float4 Specular : COLOR1;
+	float4 Tex0 : TEXCOORD0;
+	float4 Tex1 : TEXCOORD1;
+	float4 Tex2 : TEXCOORD2;
+	float4 Tex3 : TEXCOORD3;
+};
+
+float4 ScreenCoordinates(VSScreenIn v, float set)
+{
+	float4 t = set < 0.5 ? v.Tex0 : (set < 1.5 ? v.Tex1 : (set < 2.5 ? v.Tex2 : v.Tex3));
+	t.w = 1.0;
+	return t;
+}
+
+VSOut VSScreen(VSScreenIn v)
+{
+	VSOut o;
+	float w = v.Position.w != 0.0 ? 1.0 / v.Position.w : 1.0;
+	float2 ndc = float2((v.Position.x - ScreenViewport.x) * ScreenViewport.z - 1.0,
+		1.0 - (v.Position.y - ScreenViewport.y) * ScreenViewport.w);
+	o.Position = float4(ndc, v.Position.z, 1.0) * w;
+	o.Diffuse = VSFlags.z > 0.5 ? v.Diffuse : float4(1.0, 1.0, 1.0, 1.0);
+	o.Specular = VSFlags.w > 0.5 ? v.Specular : float4(0.0, 0.0, 0.0, 0.0);
+	o.Tex0 = ScreenCoordinates(v, TexGen[0].x);
+	o.Tex1 = ScreenCoordinates(v, TexGen[1].x);
+	o.PointSize = clamp(PointParams.x, PointParams.z, PointParams.w);
 	return o;
 }
 

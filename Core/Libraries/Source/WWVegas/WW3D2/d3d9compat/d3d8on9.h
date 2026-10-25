@@ -39,6 +39,7 @@
 
 #include <d3d9.h>
 
+#include <utility>
 #include <vector>
 
 #ifndef RTS_RENDERER_D3D9
@@ -308,7 +309,7 @@ public:
 		return m_device->DrawIndexedPrimitiveUP(type, minIndex, numVertices, primCount, indices, format, data, stride);
 	}
 	HRESULT ProcessVertices(UINT srcStart, UINT dstIndex, UINT count, IDirect3DVertexBuffer9* dst, DWORD flags)
-		{ Unbind_Fixed_Function_Shaders(); return m_device->ProcessVertices(srcStart, dstIndex, count, dst, nullptr, flags); }
+		{ Unbind_Fixed_Function_Shaders(); Restore_FVF(); return m_device->ProcessVertices(srcStart, dstIndex, count, dst, nullptr, flags); }
 
 	// shaders: Direct3D 8 hands out DWORD handles; an FVF code is a valid vertex shader handle
 	HRESULT CreateVertexShader(const DWORD* declaration, const DWORD* function, DWORD* handle, DWORD usage);
@@ -347,6 +348,7 @@ private:
 	void Leave_Fixed_Function_Shaders()
 	{
 		Unbind_Fixed_Function_Shaders();
+		Restore_FVF();
 		m_ff.stateKnown = false;
 		m_ff.vsConstantsKnown = false;
 		m_ff.psConstantsKnown = false;
@@ -366,24 +368,47 @@ private:
 		D3DLIGHT9 lights[8];
 		BOOL lightOn[8];
 		D3DMATERIAL9 material;
-		DWORD viewportHeight;
+		D3DVIEWPORT9 viewport;
 		// the last build
 		unsigned reason;		///< why it can't draw through the shaders, 0 when it can
 		IDirect3DPixelShader9* pixelShader;
 		int lightRows;			///< vertex shader constants for the lights, from c18
-		float vs[58][4];
+		bool transformed;		///< pre-transformed vertices (D3DFVF_XYZRHW): the screen vertex shader
+		float vs[59][4];
 		float ps[11][4];
 		// what the device has
 		bool vsBound;
+		bool vsBoundTransformed;	///< the one bound is the screen vertex shader
+		DWORD declarationFvf;	///< the FVF a declaration of ours stands in for on the device, 0 none
 		IDirect3DPixelShader9* psBound;
-		bool vsConstantsKnown;	///< vsUploaded holds what c0 to c17, c46 to c57 and the light rows hold
+		bool vsConstantsKnown;	///< vsUploaded holds what c0 to c17, c46 to c58 and the light rows hold
 		bool psConstantsKnown;
 		int lightRowsUploaded;
-		float vsUploaded[58][4];
+		float vsUploaded[59][4];
 		float psUploaded[11][4];
 	};
 	FixedFunctionState m_ff;
 	IDirect3DVertexShader9* m_ffVertexShader;
+	IDirect3DVertexShader9* m_ffScreenShader;	///< for pre-transformed vertices
+	/// Tiberium Project @feature pre-transformed vertices' FVFs as declarations with a plain position (a
+	/// POSITIONT one skips the vertex shader), made as each FVF is first drawn
+	std::vector<std::pair<DWORD, IDirect3DVertexDeclaration9*> > m_ffScreenDeclarations;
+	IDirect3DVertexDeclaration9* Screen_Declaration(DWORD fvf);
+	/// the FVF back on the device in place of the screen declaration (before a draw that is not one,
+	/// or someone taking the device)
+	void Restore_FVF()
+	{
+		if (m_ff.declarationFvf == 0)
+			return;
+		if (m_vertexDeclarationOverride != nullptr)
+			m_device->SetVertexDeclaration(m_vertexDeclarationOverride);
+		else
+			m_device->SetFVF(m_ff.declarationFvf);
+		m_ff.declarationFvf = 0;
+	}
+	/// Emulate_Fixed_Function's work, before the FVF is put back for a draw the screen declaration
+	/// is not for
+	bool Emulate_Fixed_Function_Draw();
 	IDirect3DPixelShader9* m_ffPixelShader;		///< the general one
 	IDirect3DPixelShader9* m_ffModulateShader;	///< the common set-ups: texture times diffuse,
 	IDirect3DPixelShader9* m_ffDiffuseShader;	///< the diffuse colour,
