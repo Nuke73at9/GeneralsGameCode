@@ -1113,6 +1113,11 @@ bool DX8Wrapper::Create_Device()
 	// the graphics driver from potentially loading the old game dbghelp.dll and then crashing the game process.
 	DbgHelpGuard dbgHelpGuard;
 
+#ifdef RTS_RENDERER_D3D9
+	Sage2_Log("renderer: making the device: %ux%u, back buffer format %d, depth format %d, windowed %d, behaviour 0x%lX",
+		(unsigned)_PresentParameters.BackBufferWidth, (unsigned)_PresentParameters.BackBufferHeight, (int)_PresentParameters.BackBufferFormat,
+		(int)_PresentParameters.AutoDepthStencilFormat, (int)_PresentParameters.Windowed, (unsigned long)Vertex_Processing_Behavior);
+#endif
 	HRESULT hr=D3DInterface->CreateDevice
 	(
 		CurRenderDevice,
@@ -1174,11 +1179,17 @@ bool DX8Wrapper::Create_Device()
 	}
 
 	dbgHelpGuard.deactivate();
+#ifdef RTS_RENDERER_D3D9
+	Sage2_Log("renderer: the device is made (readable depth %s)", D3DDevice->Get_Readable_Depth() != nullptr ? "yes" : "no");
+#endif
 
 	/*
 	** Initialize all subsystems
 	*/
 	Do_Onetime_Device_Dependent_Inits();
+#ifdef RTS_RENDERER_D3D9
+	Sage2_Log("renderer: the device is ready");
+#endif
 	return true;
 }
 
