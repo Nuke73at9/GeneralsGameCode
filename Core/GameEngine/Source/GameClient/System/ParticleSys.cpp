@@ -2882,6 +2882,12 @@ void ParticleSystem::loadPostProcess()
 // ------------------------------------------------------------------------------------------------
 /** INI parse data */
 // ------------------------------------------------------------------------------------------------
+// Tiberium Project @feature sprite-sheet particles: TextureFrameMode
+static const char *const TextureFrameModeNames[] =
+{
+	"LOOP", "RANDOM", "ROW", "RANDOM_ROW", nullptr
+};
+
 const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 {
 	{ "Priority",								INI::parseIndexList, ParticlePriorityNames, offsetof( ParticleSystemTemplate, m_priority ) },
@@ -2986,6 +2992,14 @@ const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 	{ "WindPingPongEndAngleMin",				INI::parseReal, nullptr, offsetof( ParticleSystemTemplate, m_windMotionEndAngleMin ) },
 	{ "WindPingPongEndAngleMax",				INI::parseReal, nullptr, offsetof( ParticleSystemTemplate, m_windMotionEndAngleMax ) },
 
+	// Tiberium Project @feature sprite-sheet particles
+	{ "TextureFrames",					INI::parseUnsignedInt,	nullptr,	offsetof( ParticleSystemTemplate, m_textureFrames ) },
+	{ "TextureGrid",						INI::parseUnsignedInt,	nullptr,	offsetof( ParticleSystemTemplate, m_textureGrid ) },
+	{ "TextureFramesPerRow",		INI::parseUnsignedInt,	nullptr,	offsetof( ParticleSystemTemplate, m_textureFramesPerRow ) },
+	{ "TextureFrameMode",				INI::parseIndexList,		TextureFrameModeNames,	offsetof( ParticleSystemTemplate, m_textureFrameMode ) },
+	{ "TextureFrameRow",				INI::parseUnsignedInt,	nullptr,	offsetof( ParticleSystemTemplate, m_textureFrameRow ) },
+	{ "TextureFrameSpeed",			INI::parseReal,					nullptr,	offsetof( ParticleSystemTemplate, m_textureFrameSpeed ) },
+
 
 	{ nullptr,											nullptr,																					nullptr,		0 },
 };
@@ -3077,6 +3091,12 @@ ParticleSystemTemplate::ParticleSystemTemplate( const AsciiString &name ) :
 	m_name(name)
 {
 	m_slaveTemplate = nullptr;
+	m_textureFrames = 0;
+	m_textureGrid = 1;
+	m_textureFramesPerRow = 0;
+	m_textureFrameMode = TEXTURE_FRAMES_LOOP;
+	m_textureFrameRow = 0;
+	m_textureFrameSpeed = 1.0f;
 }
 
 // ------------------------------------------------------------------------------------------------

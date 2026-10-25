@@ -63,8 +63,10 @@ private:
 	ShareBufferClass<Vector4> *m_RGBABuffer;		///< array of particle color and alpha
 	ShareBufferClass<float> *m_sizeBuffer;			///< array of particle sizes
 	ShareBufferClass<uint8> *m_angleBuffer;			///< array of particle orientations
+	ShareBufferClass<uint8> *m_frameBuffer;			///< Tiberium Project @feature array of particle texture frames
 
 	ParticleSystemInfo::ParticleShaderType m_batchShaderType;
 	Bool m_readyToRender;											///< if true, it is OK to render
 	ParticleSystemInfo::ParticleAlignmentType m_batchParticleAlignment;
+	UnsignedInt m_batchGrid;								///< Tiberium Project @feature the batch texture's frame grid (1: none)
 };

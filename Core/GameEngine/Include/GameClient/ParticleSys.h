@@ -587,6 +587,22 @@ public:
 	static void parseRandomRGBColor( INI* ini, void *instance, void *store, const void* /*userData*/ );
 	static void parseRandomRGBColorRate( INI* ini, void *instance, void *store, const void* /*userData*/ );
 
+	/// Tiberium Project @feature sprite-sheet particles (C&C4's "video textures"): the texture is a
+	/// square grid of frames, frame 0 top left, row by row. Drawing only.
+	enum TextureFrameMode
+	{
+		TEXTURE_FRAMES_LOOP = 0,		///< through all the frames by the particle's age, again and again
+		TEXTURE_FRAMES_RANDOM,			///< one frame per particle, picked at random, for its life
+		TEXTURE_FRAMES_ROW,				///< along one row (TextureFrameRow) by age, holding the last
+		TEXTURE_FRAMES_RANDOM_ROW		///< along a row picked at random by age, holding the last
+	};
+	UnsignedInt getTextureFrames() const { return m_textureFrames; }
+	UnsignedInt getTextureGrid() const { return m_textureGrid; }
+	UnsignedInt getTextureFramesPerRow() const { return m_textureFramesPerRow; }
+	Int getTextureFrameMode() const { return m_textureFrameMode; }
+	UnsignedInt getTextureFrameRow() const { return m_textureFrameRow; }
+	Real getTextureFrameSpeed() const { return m_textureFrameSpeed; }
+
 protected:
 	friend class ParticleSystemManager;					///< @todo remove this friendship
 	friend class ParticleSystem;								///< @todo remove this friendship
@@ -604,6 +620,15 @@ protected:
 
 	// This has to be mutable because of the delayed initialization thing in createSlaveSystem
 	mutable const ParticleSystemTemplate *m_slaveTemplate;		///< if non-null, use this to create a slave system
+
+	// Tiberium Project @feature sprite-sheet particles (TextureFrames etc.; on the template only, so
+	// saved games are unchanged)
+	UnsignedInt m_textureFrames;		///< frames in the texture; 0 or 1: the whole texture
+	UnsignedInt m_textureGrid;			///< columns (and rows) of its grid: 2, 4, 8 or 16
+	UnsignedInt m_textureFramesPerRow;	///< frames in a row of the animation (ROW, RANDOM_ROW), up to the grid's
+	Int m_textureFrameMode;				///< TextureFrameMode
+	UnsignedInt m_textureFrameRow;		///< the row ROW plays
+	Real m_textureFrameSpeed;			///< frames per frame of the particle's age
 
 	// template attribute data inherited from ParticleSystemInfo class
 };
@@ -706,7 +731,7 @@ public:
 	static ParticleInfo mergeRelatedParticleSystems( ParticleSystem *masterParticleSystem, ParticleSystem *slaveParticleSystem, Bool slaveNeedsFullPromotion);
 
 	/// @todo Const this (MSB)
-	const ParticleSystemTemplate *getTemplate() { return m_template; }	///< get the template used to create this system
+	const ParticleSystemTemplate *getTemplate() const { return m_template; }	///< get the template used to create this system
 
 	// @todo Const this jkmcd
 	Particle *getFirstParticle() { return m_systemParticlesHead; }

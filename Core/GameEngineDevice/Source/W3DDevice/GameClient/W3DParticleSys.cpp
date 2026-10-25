@@ -62,6 +62,8 @@ W3DParticleSystemManager::W3DParticleSystemManager()
 	m_RGBABuffer = nullptr;
 	m_sizeBuffer = nullptr;
 	m_angleBuffer = nullptr;
+	m_frameBuffer = nullptr;
+	m_batchGrid = 1;
 	m_readyToRender = false;
 
 	m_onScreenParticleCount = 0;
@@ -74,6 +76,7 @@ W3DParticleSystemManager::W3DParticleSystemManager()
 	m_RGBABuffer = NEW_REF( ShareBufferClass<Vector4>, (MAX_POINTS_PER_GROUP, "W3DParticleSystemManager::m_RGBABuffer") );
 	m_sizeBuffer = NEW_REF( ShareBufferClass<float>, (MAX_POINTS_PER_GROUP, "W3DParticleSystemManager::m_sizeBuffer") );
 	m_angleBuffer = NEW_REF( ShareBufferClass<uint8>, (MAX_POINTS_PER_GROUP, "W3DParticleSystemManager::m_angleBuffer") );
+	m_frameBuffer = NEW_REF( ShareBufferClass<uint8>, (MAX_POINTS_PER_GROUP, "W3DParticleSystemManager::m_frameBuffer") );
 }
 
 W3DParticleSystemManager::~W3DParticleSystemManager()
@@ -91,6 +94,7 @@ W3DParticleSystemManager::~W3DParticleSystemManager()
 	REF_PTR_RELEASE(m_RGBABuffer);
 	REF_PTR_RELEASE(m_sizeBuffer);
 	REF_PTR_RELEASE(m_angleBuffer);
+	REF_PTR_RELEASE(m_frameBuffer);
 }
 
 /**
@@ -110,6 +114,54 @@ void DoParticles( RenderInfoClass &rinfo )
 {
 	if (TheParticleSystemManager)
 		TheParticleSystemManager->doParticles(rinfo);
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature sprite-sheet particles: the frame grid of a system's texture (1: none;
+// the point groups take square grids of 2, 4, 8 or 16), and a particle's frame in it
+static UnsignedInt textureGrid(const ParticleSystem& sys)
+{
+	const ParticleSystemTemplate* t = sys.getTemplate();
+	if (t == nullptr || t->getTextureFrames() <= 1)
+		return 1;
+	const UnsignedInt grid = t->getTextureGrid();
+	return (grid == 2 || grid == 4 || grid == 8 || grid == 16) ? grid : 1;
+}
+
+static uint8 particleFrame(const ParticleSystemTemplate& t, Particle& p, UnsignedInt grid)
+{
+	UnsignedInt frames = t.getTextureFrames();
+	if (frames > grid * grid)
+		frames = grid * grid;
+	UnsignedInt perRow = t.getTextureFramesPerRow();
+	if (perRow == 0 || perRow > frames)
+		perRow = grid < frames ? grid : frames;
+	const UnsignedInt rows = (frames + perRow - 1) / perRow;
+	UnsignedInt seed = p.getPersonality() * 2654435761u;	// (the personality counts up; scatter it)
+	seed ^= seed >> 15;
+	const Real age = (Real)p.getElapsedFrames() * t.getTextureFrameSpeed();
+	const UnsignedInt step = age > 0.0f ? (UnsignedInt)age : 0;
+	UnsignedInt frame = 0;
+	switch (t.getTextureFrameMode())
+	{
+		case ParticleSystemTemplate::TEXTURE_FRAMES_RANDOM:
+			frame = seed % frames;
+			break;
+		case ParticleSystemTemplate::TEXTURE_FRAMES_ROW:
+		case ParticleSystemTemplate::TEXTURE_FRAMES_RANDOM_ROW:
+		{
+			UnsignedInt row = t.getTextureFrameMode() == ParticleSystemTemplate::TEXTURE_FRAMES_ROW
+				? t.getTextureFrameRow() : (seed >> 8) % rows;
+			if (row >= rows)
+				row = rows - 1;
+			frame = row * perRow + (step < perRow ? step : perRow - 1);
+			break;
+		}
+		default:
+			frame = step % frames;
+			break;
+	}
+	return (uint8)(frame < frames ? frame : frames - 1);
 }
 
 void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
@@ -277,6 +329,9 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		Real *sizeArray = m_sizeBuffer->Get_Array();
 		Vector4 *RGBAArray = m_RGBABuffer->Get_Array();
 		uint8 *angleArray = m_angleBuffer->Get_Array();
+		uint8 *frameArray = m_frameBuffer->Get_Array();
+		const UnsignedInt grid = textureGrid(*sys);
+		const ParticleSystemTemplate *sysTemplate = sys->getTemplate();
 		const Coord3D *pos;
 		const RGBColor *color;
 		Real psize;
@@ -337,6 +392,7 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 #endif
 
 			angleArray[pointCount] = (uint8)(p->getAngle() * 255.0f / (2.0f * PI));
+			frameArray[pointCount] = grid > 1 ? particleFrame(*sysTemplate, *p, grid) : 0;
 
 			if (++pointCount == MAX_POINTS_PER_GROUP)
 			{
@@ -438,11 +494,11 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 
 			/// @todo Use both QUADS and TRIS for particles
 			m_pointGroup->Set_Point_Mode( PointGroupClass::QUADS );
-			m_pointGroup->Set_Arrays( m_posBuffer, m_RGBABuffer, nullptr, m_sizeBuffer, m_angleBuffer, nullptr, pointCount );
+			m_pointGroup->Set_Frame_Row_Column_Count_Log2( (unsigned char)(grid >= 16 ? 4 : grid >= 8 ? 3 : grid >= 4 ? 2 : grid >= 2 ? 1 : 0) );
+			m_pointGroup->Set_Arrays( m_posBuffer, m_RGBABuffer, nullptr, m_sizeBuffer, m_angleBuffer, grid > 1 ? m_frameBuffer : nullptr, pointCount );
 			m_pointGroup->Set_Billboard(sys->getParticleAlignment() == ParticleSystemInfo::PARTICLE_ALIGNMENT_BILLBOARD);
 
-			/// @todo Support animated texture particles
-			/// @todo lorenzen sez: unimplemented code wastes cpu cycles
+			// Tiberium Project @feature animated texture particles: the frames above (sprite sheets)
 			m_pointGroup->Set_Point_Frame( 0 );
 
 			m_pointGroup->RenderVolumeParticle( rinfo, volumeParticleDepth);
@@ -496,7 +552,8 @@ Bool W3DParticleSystemManager::finishedBatch(const ParticleSystem& system, const
 {
 	return texture.Peek() != m_batchTexture.Peek() ||
 		system.getShaderType() != m_batchShaderType ||
-		system.getParticleAlignment() != m_batchParticleAlignment;
+		system.getParticleAlignment() != m_batchParticleAlignment ||
+		textureGrid(system) != m_batchGrid;
 }
 
 void W3DParticleSystemManager::initializeBatch(const ParticleSystem& system, const RefCountPtr<TextureClass>& texture)
@@ -504,6 +561,7 @@ void W3DParticleSystemManager::initializeBatch(const ParticleSystem& system, con
 	m_batchTexture = texture;
 	m_batchShaderType = system.getShaderType();
 	m_batchParticleAlignment = system.getParticleAlignment();
+	m_batchGrid = textureGrid(system);
 }
 
 void W3DParticleSystemManager::flushParticleBatch(RenderInfoClass& rinfo, UnsignedInt& pointCount)
@@ -530,7 +588,10 @@ void W3DParticleSystemManager::flushParticleBatch(RenderInfoClass& rinfo, Unsign
 
 		m_pointGroup->Set_Flag(PointGroupClass::TRANSFORM, true);
 		m_pointGroup->Set_Point_Mode(PointGroupClass::QUADS);
-		m_pointGroup->Set_Arrays(m_posBuffer, m_RGBABuffer, nullptr, m_sizeBuffer, m_angleBuffer, nullptr, pointCount);
+		// Tiberium Project @feature sprite-sheet particles: each particle's frame of the batch's grid
+		const UnsignedInt grid = m_batchGrid;
+		m_pointGroup->Set_Frame_Row_Column_Count_Log2((unsigned char)(grid >= 16 ? 4 : grid >= 8 ? 3 : grid >= 4 ? 2 : grid >= 2 ? 1 : 0));
+		m_pointGroup->Set_Arrays(m_posBuffer, m_RGBABuffer, nullptr, m_sizeBuffer, m_angleBuffer, grid > 1 ? m_frameBuffer : nullptr, pointCount);
 		m_pointGroup->Set_Billboard(m_batchParticleAlignment == ParticleSystemInfo::PARTICLE_ALIGNMENT_BILLBOARD);
 		m_pointGroup->Set_Point_Frame(0);
 #ifdef RTS_RENDERER_D3D9
@@ -549,4 +610,5 @@ void W3DParticleSystemManager::flushParticleBatch(RenderInfoClass& rinfo, Unsign
 	m_batchTexture.Clear();
 	m_batchParticleAlignment = ParticleSystemInfo::PARTICLE_ALIGNMENT_BILLBOARD;
 	m_batchShaderType = ParticleSystemInfo::INVALID_SHADER;
+	m_batchGrid = 1;
 }
