@@ -201,6 +201,10 @@ bool Sage2TerrainAtlasClass::Build(const char* const* terrainNames, int count, i
 		}
 		slotOf[i] = slot;
 	}
+	// Tiberium Project: the map's terrains left with Zero Hour's own tile (no line in the mapping)
+	for (int i = 0; i < count; ++i)
+		if (slotOf[i] < 0)
+			Sage2_Log("terrain atlas: '%s' has no C&C4 texture, Zero Hour's tile stays", terrainNames[i] ? terrainNames[i] : "");
 	if (textures.empty())
 	{
 		Sage2_Log("terrain atlas: none of the map's %d terrains has a C&C4 texture", count);
