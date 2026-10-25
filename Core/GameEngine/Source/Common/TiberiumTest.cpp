@@ -34,6 +34,7 @@
 #include "Common/GlobalData.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/FXList.h"
+#include "WWMath/matrix3d.h"
 #include "GameClient/Display.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/ParticleSys.h"
@@ -71,6 +72,7 @@ namespace
 	Int s_fireFrame = -1;
 	Int s_fxFrame = -1;
 	Int s_fxEvery = 0;
+	std::vector<std::string> s_fxLists;	// -testFXLists: the lists -testFX plays, in place of its own
 	Int s_unitsFrame = -1;
 	Int s_baseFrame = -1;
 	// -testBase: the structure being built (its construction runs over BASE_BUILD_FRAMES) and the one
@@ -338,6 +340,7 @@ void TiberiumTest::setScorchFrame( Int frame ) { if ( frame >= 0 ) { s_scorchFra
 void TiberiumTest::setLightsFrame( Int frame ) { if ( frame >= 0 ) { s_lightsFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setFireFrame( Int frame ) { if ( frame >= 0 ) { s_fireFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setFXFrame( Int frame, Int every ) { if ( frame >= 0 ) { s_fxFrame = frame; s_fxEvery = every > 0 ? every : 0; s_active = TRUE; } }
+void TiberiumTest::setFXLists( const char *lists ) { if ( lists != nullptr ) s_fxLists = split( lists, ';' ); }
 void TiberiumTest::setUnitsFrame( Int frame ) { if ( frame >= 0 ) { s_unitsFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setBaseFrame( Int frame ) { if ( frame >= 0 ) { s_baseFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setReveal( Bool reveal ) { s_reveal = reveal; if ( reveal ) s_active = TRUE; }
@@ -554,14 +557,19 @@ void TiberiumTest::update()
 		Int played = 0;
 		for ( Int k = 0; k < 6; ++k )
 		{
-			const FXList *fx = TheFXListStore->findFXList( LISTS[k] );
+			const char *name = s_fxLists.empty() ? LISTS[k] : ( k < (Int)s_fxLists.size() ? s_fxLists[k].c_str() : nullptr );
+			const FXList *fx = name != nullptr ? TheFXListStore->findFXList( name ) : nullptr;
 			if ( fx == nullptr )
 				continue;
 			Coord3D p = center;
 			p.x += SPOTS[k][0];
 			p.y += SPOTS[k][1];
-			p.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( p.x, p.y ) : 0.0f;
-			FXList::doFXPos( fx, &p );
+			p.z = ( TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( p.x, p.y ) : 0.0f ) + 10.0f;
+			// facing along +x (the view's right), ten units up, as a weapon's muzzle would be: the
+			// lists that orient their particles to the firer have a direction to take
+			Matrix3D mtx( true );
+			mtx.Set_Translation( Vector3( p.x, p.y, p.z ) );
+			FXList::doFXPos( fx, &p, &mtx );
 			++played;
 		}
 		log( "frame %d: %d explosions and hits around %.0f %.0f", (int)s_frame, (int)played, center.x, center.y );

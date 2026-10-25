@@ -61,6 +61,7 @@ public:
 	static void setScorchFrame( Int frame );
 	static void setLightsFrame( Int frame );	///< nine lasting light pulses around the view at that frame (client side)
 	static void setFireFrame( Int frame );	///< five lasting fires (particle systems) around the view at that frame (client side)
+	static void setFXLists( const char *lists );	///< up to six FX lists, separated by ';', for -testFX to play in place of its own
 	static void setFXFrame( Int frame, Int every );	///< six of Zero Hour's explosion and hit effects (FX lists) around the view at that frame and every so many frames after (client side)
 	static void setUnitsFrame( Int frame );	///< a few of the local player's vehicles and buildings around the view at that frame (changes the game: not with -testCRC)
 	static void setBaseFrame( Int frame );	///< America's core base around the view at that frame, whole, damaged, being built and destroyed (changes the game: not with -testCRC)

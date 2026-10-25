@@ -916,6 +916,14 @@ Int parseTestFX(char *args[], int num)
 	return 2;
 }
 
+// Tiberium Project @feature -testFXLists <a;b;...>: the FX lists -testFX plays
+Int parseTestFXLists(char *args[], int num)
+{
+	if (num > 1)
+		TiberiumTest::setFXLists(args[1]);
+	return 2;
+}
+
 // Tiberium Project @feature -testUnits <frame>: vehicles and buildings to light at night
 Int parseTestUnits(char *args[], int num)
 {
@@ -1353,6 +1361,7 @@ static CommandLineParam paramsForEngineInit[] =
 	{ "-testLights", parseTestLights },
 	{ "-testFire", parseTestFire },
 	{ "-testFX", parseTestFX },
+	{ "-testFXLists", parseTestFXLists },
 	{ "-testUnits", parseTestUnits },
 	{ "-testBase", parseTestBase },
 	{ "-testReveal", parseTestReveal },
