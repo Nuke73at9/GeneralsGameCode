@@ -25,6 +25,12 @@
 #include "WW3D2/rinfo.h"
 #include "WW3D2/camera.h"
 #include "WW3D2/assetmgr.h"
+#ifdef RTS_RENDERER_D3D9
+#include "Common/GlobalData.h"
+#include "WW3D2/sage2/sage2globals.h"	// Tiberium Project @feature lit snow
+#include "WW3D2/sage2/sage2lighting.h"
+#include "WW3D2/sage2/sage2scene.h"
+#endif
 
 
 
@@ -402,6 +408,42 @@ void W3DSnowManager::render(RenderInfoClass &rinfo)
 	DX8Wrapper::Set_Shader(ShaderClass::_PresetAlphaShader);
 
 	VertexMaterialClass *vmat=VertexMaterialClass::Get_Preset(VertexMaterialClass::PRELIT_DIFFUSE);
+#ifdef RTS_RENDERER_D3D9
+	// Tiberium Project @feature Lit snow: the flakes take the scene's light as the lit smoke does
+	// (Sage2LightingClass::Get_Particle_Light), so a snowfall at night is a dim, moonlit blue instead
+	// of glowing white; by day they are as before. A material that is all emissive gives that colour
+	// to every flake (the point sprites carry no colour of their own).
+	const Int timeOfDay = TheGlobalData != nullptr ? (Int)TheGlobalData->m_timeOfDay : -1;
+	if (Sage2SceneClass::Is_Particle_Lighting_Enabled() && Sage2LightingClass::Uses_Presets()
+		&& timeOfDay >= TIME_OF_DAY_FIRST && timeOfDay < TIME_OF_DAY_COUNT)
+	{
+		const GlobalData::TerrainLighting *lights = TheGlobalData->m_terrainObjectsLighting[timeOfDay];
+		const float ambient[3] = { lights[0].ambient.red, lights[0].ambient.green, lights[0].ambient.blue };
+		float diffuse[3][3] = { { 0.0f } };
+		for (Int j = 0; j < 3 && j < MAX_GLOBAL_LIGHTS; ++j)
+		{
+			diffuse[j][0] = lights[j].diffuse.red;
+			diffuse[j][1] = lights[j].diffuse.green;
+			diffuse[j][2] = lights[j].diffuse.blue;
+		}
+		float sceneLight[3], referenceLight[3], factor[3];
+		Sage2LightingClass::Get_Particle_Light(ambient, diffuse, sceneLight, referenceLight, factor);
+		REF_PTR_RELEASE(vmat);
+		vmat = NEW_REF(VertexMaterialClass, ());
+		vmat->Set_Lighting(true);
+		vmat->Set_Ambient(0.0f, 0.0f, 0.0f);
+		vmat->Set_Diffuse(0.0f, 0.0f, 0.0f);
+		vmat->Set_Specular(0.0f, 0.0f, 0.0f);
+		vmat->Set_Emissive(factor[0], factor[1], factor[2]);
+		vmat->Set_Opacity(1.0f);
+		static Int s_loggedTimeOfDay = -1;
+		if (s_loggedTimeOfDay != timeOfDay)
+		{
+			s_loggedTimeOfDay = timeOfDay;
+			Sage2_Log("lit snow: the flakes at (%.2f %.2f %.2f) of white (time of day %d)", factor[0], factor[1], factor[2], timeOfDay);
+		}
+	}
+#endif
 	DX8Wrapper::Set_Material(vmat);
 	REF_PTR_RELEASE(vmat);
 

@@ -159,27 +159,21 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 	Real referenceLight[3] = { 1.0f, 1.0f, 1.0f };
 	Real sceneFactor[3] = { 1.0f, 1.0f, 1.0f };
 	const Bool pointLit = Sage2SceneClass::Get_Point_Light_Count() > 0;
-	const Sage2LightingPreset *afternoon = Sage2LightingClass::Find("ra3_day");
 	const Int timeOfDay = TheGlobalData != nullptr ? (Int)TheGlobalData->m_timeOfDay : -1;
-	if (Sage2SceneClass::Is_Particle_Lighting_Enabled() && Sage2LightingClass::Uses_Presets() && afternoon != nullptr
+	if (Sage2SceneClass::Is_Particle_Lighting_Enabled() && Sage2LightingClass::Uses_Presets()
 		&& timeOfDay >= TIME_OF_DAY_FIRST && timeOfDay < TIME_OF_DAY_COUNT)
 	{
 		// a puff takes the ambient and, on average, half of each light
 		const GlobalData::TerrainLighting *lights = TheGlobalData->m_terrainObjectsLighting[timeOfDay];
-		const Real ambient[3] = { lights[0].ambient.red, lights[0].ambient.green, lights[0].ambient.blue };
-		for (Int c = 0; c < 3; ++c)
+		const float ambient[3] = { lights[0].ambient.red, lights[0].ambient.green, lights[0].ambient.blue };
+		float diffuse[3][3] = { { 0.0f } };
+		for (Int j = 0; j < 3 && j < MAX_GLOBAL_LIGHTS; ++j)
 		{
-			Real now = ambient[c];
-			Real reference = afternoon->ambient[c];
-			for (Int j = 0; j < 3 && j < MAX_GLOBAL_LIGHTS; ++j)
-			{
-				now += 0.5f * (c == 0 ? lights[j].diffuse.red : c == 1 ? lights[j].diffuse.green : lights[j].diffuse.blue);
-				reference += 0.5f * afternoon->light[j].diffuse[c];
-			}
-			referenceLight[c] = reference > 0.01f ? reference : 0.01f;
-			sceneLight[c] = now / referenceLight[c];
-			sceneFactor[c] = powf(sceneLight[c] < 0.0f ? 0.0f : (sceneLight[c] > 1.0f ? 1.0f : sceneLight[c]), 1.0f / 2.2f);
+			diffuse[j][0] = lights[j].diffuse.red;
+			diffuse[j][1] = lights[j].diffuse.green;
+			diffuse[j][2] = lights[j].diffuse.blue;
 		}
+		Sage2LightingClass::Get_Particle_Light(ambient, diffuse, sceneLight, referenceLight, sceneFactor);
 		litParticles = TRUE;
 		static Int s_loggedTimeOfDay = -1;
 		if (s_loggedTimeOfDay != timeOfDay)

@@ -67,6 +67,17 @@ public:
 	/// default light for that time of day (never brighter), and tinted with their colours.
 	static void Set_Mood(float mood);
 	static float Get_Mood();
+	/// Tiberium Project @tweak How strong the moonlight is on the maps that play at night (Options.ini
+	/// Sage2NightLight, a scale on the night set's ambient and lights; the lamps, windows and fires
+	/// keep their strength) and how much of the map's own night colour it takes (Sage2NightTint, 0..1)
+	static void Set_Night(float light, float tint);
+	/// Tiberium Project @feature The light a particle takes from the scene, as C&C4 and RA3 light
+	/// theirs (the colour times the directional lights): the ambient and half of each light, against
+	/// the same of RA3's afternoon, for which Zero Hour's particle colours read right. Gives, per
+	/// colour, that ratio (sceneLight), the afternoon's sum (referenceLight, to put point lights on the
+	/// same scale) and the ratio clamped to 0..1 on the display's curve (displayFactor).
+	static void Get_Particle_Light(const float ambient[3], const float diffuse[3][3], float sceneLight[3], float referenceLight[3],
+		float displayFactor[3]);
 	/// The preset to light a map with, given the map's own lights for the time of day it plays at
 	/// (ambient, and the diffuse colour of its three lights, as the map stores them): the preset
 	/// itself at mood 0, darkened and tinted towards the map's own light as the mood rises.

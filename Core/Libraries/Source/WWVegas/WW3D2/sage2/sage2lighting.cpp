@@ -109,6 +109,8 @@ namespace
 	const float ZH_DEFAULT_AMBIENT[4] = { 0.409f, 0.205f, 0.233f, 0.106f };
 	const float ZH_DEFAULT_SUN[4] = { 0.740f, 1.000f, 0.515f, 0.207f };
 	float s_mood = 0.0f;
+	float s_nightLight = 0.5f;
+	float s_nightTint = 0.0f;
 
 	float Luminance(const float c[3])
 	{
@@ -232,6 +234,32 @@ float Sage2LightingClass::Get_Mood()
 	return s_mood;
 }
 
+void Sage2LightingClass::Set_Night(float light, float tint)
+{
+	s_nightLight = Clamp(light, 0.05f, 2.0f);
+	s_nightTint = Clamp(tint, 0.0f, 1.0f);
+}
+
+//-------------------------------------------------------------------------------------------------
+void Sage2LightingClass::Get_Particle_Light(const float ambient[3], const float diffuse[3][3], float sceneLight[3], float referenceLight[3],
+	float displayFactor[3])
+{
+	const Sage2LightingPreset* afternoon = Find("ra3_day");
+	for (int c = 0; c < 3; ++c)
+	{
+		float now = ambient[c];
+		float reference = afternoon->ambient[c];
+		for (int j = 0; j < 3; ++j)
+		{
+			now += 0.5f * diffuse[j][c];
+			reference += 0.5f * afternoon->light[j].diffuse[c];
+		}
+		referenceLight[c] = reference > 0.01f ? reference : 0.01f;
+		sceneLight[c] = now / referenceLight[c];
+		displayFactor[c] = powf(Clamp(sceneLight[c], 0.0f, 1.0f), 1.0f / 2.2f);
+	}
+}
+
 //-------------------------------------------------------------------------------------------------
 Sage2LightingPreset Sage2LightingClass::Adapt(const Sage2LightingPreset& preset, int timeOfDay, const float mapAmbient[3], const float mapDiffuse[3][3])
 {
@@ -244,24 +272,45 @@ Sage2LightingPreset Sage2LightingClass::Adapt(const Sage2LightingPreset& preset,
 		mapAmbient[0], mapAmbient[1], mapAmbient[2], mapDiffuse[0][0], mapDiffuse[0][1], mapDiffuse[0][2],
 		mapDiffuse[1][0], mapDiffuse[1][1], mapDiffuse[1][2], mapDiffuse[2][0], mapDiffuse[2][1], mapDiffuse[2][2],
 		100.0f * mapLevel / defaultLevel);
-	if (s_mood <= 0.0f)
-		return out;
-
-	// The map's colours lit Zero Hour's gamma-space textures directly; C&C4's light works in linear
-	// light, so a map half as bright as the default is a quarter or so as bright here (power 2.2)
-	const float scale = 1.0f + (powf(ratio, 2.2f) - 1.0f) * s_mood;
 	float sunHue[3], ambientHue[3];
 	Hue(mapDiffuse[0], sunHue);
 	Hue(mapAmbient, ambientHue);
-	for (int i = 0; i < 3; ++i)
+	if (s_mood > 0.0f)
 	{
-		out.ambient[i] *= scale * (1.0f + (ambientHue[i] - 1.0f) * s_mood);
-		out.light[0].diffuse[i] *= scale * (1.0f + (sunHue[i] - 1.0f) * s_mood);
-		for (int j = 1; j < 3; ++j)
-			out.light[j].diffuse[i] *= scale * (1.0f + (ambientHue[i] - 1.0f) * s_mood);	// the fills, as the sky
+		// The map's colours lit Zero Hour's gamma-space textures directly; C&C4's light works in linear
+		// light, so a map half as bright as the default is a quarter or so as bright here (power 2.2)
+		const float scale = 1.0f + (powf(ratio, 2.2f) - 1.0f) * s_mood;
+		for (int i = 0; i < 3; ++i)
+		{
+			out.ambient[i] *= scale * (1.0f + (ambientHue[i] - 1.0f) * s_mood);
+			out.light[0].diffuse[i] *= scale * (1.0f + (sunHue[i] - 1.0f) * s_mood);
+			for (int j = 1; j < 3; ++j)
+				out.light[j].diffuse[i] *= scale * (1.0f + (ambientHue[i] - 1.0f) * s_mood);	// the fills, as the sky
+		}
+		Sage2_Log("lighting: with the map's mood (%.2f): light x%.2f, ambient (%.2f %.2f %.2f), sun (%.2f %.2f %.2f)",
+			s_mood, scale, out.ambient[0], out.ambient[1], out.ambient[2], out.light[0].diffuse[0], out.light[0].diffuse[1], out.light[0].diffuse[2]);
 	}
-	Sage2_Log("lighting: with the map's mood (%.2f): light x%.2f, ambient (%.2f %.2f %.2f), sun (%.2f %.2f %.2f)",
-		s_mood, scale, out.ambient[0], out.ambient[1], out.ambient[2], out.light[0].diffuse[0], out.light[0].diffuse[1], out.light[0].diffuse[2]);
+
+	// Tiberium Project @tweak The night. RA3's night set is its blue dawn's (four of its morning maps
+	// play with the same lights): a moon nearly as strong as its afternoon sun in linear light (about
+	// 0.7 of it, all lights summed), made night by the blue-shifting table and by maps painted dark for
+	// it. Zero Hour's night is a quarter of its day in display values, a twentieth in linear light, and
+	// its night maps are its day maps' textures: white towers came out white under RA3's moon. The
+	// moon is scaled for them, and takes the map's own night colour (its ambient for the sky's fills,
+	// its sun for the moon); the lamps, lit windows and fires are not touched, so they stand out more.
+	if (timeOfDay == 4 && (s_nightLight != 1.0f || s_nightTint > 0.0f))
+	{
+		for (int i = 0; i < 3; ++i)
+		{
+			out.ambient[i] *= s_nightLight * (1.0f + (ambientHue[i] - 1.0f) * s_nightTint);
+			out.light[0].diffuse[i] *= s_nightLight * (1.0f + (sunHue[i] - 1.0f) * s_nightTint);
+			for (int j = 1; j < 3; ++j)
+				out.light[j].diffuse[i] *= s_nightLight * (1.0f + (ambientHue[i] - 1.0f) * s_nightTint);
+		}
+		Sage2_Log("lighting: the night's moon x%.2f, tinted %.2f by the map's own: ambient (%.2f %.2f %.2f), moon (%.2f %.2f %.2f), fills (%.2f %.2f %.2f) (%.2f %.2f %.2f)",
+			s_nightLight, s_nightTint, out.ambient[0], out.ambient[1], out.ambient[2], out.light[0].diffuse[0], out.light[0].diffuse[1], out.light[0].diffuse[2],
+			out.light[1].diffuse[0], out.light[1].diffuse[1], out.light[1].diffuse[2], out.light[2].diffuse[0], out.light[2].diffuse[1], out.light[2].diffuse[2]);
+	}
 	return out;
 }
 

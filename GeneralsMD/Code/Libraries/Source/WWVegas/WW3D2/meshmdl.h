@@ -255,6 +255,7 @@ public:
 	// Tiberium Project: Zero Hour's night models (lights on at night)
 	static bool					Is_Night_Model_Name(const char *name);	///< a night model's mesh: an N in the model's suffix (_N, _DN, _SNG ...)
 	bool							Is_Night_Light_Pass(int pass) const;	///< an additive textured pass (lit windows, a lamp)
+	bool							Is_Night_Day_Pass(int pass) const;	///< the day texture added over a night texture (drawn unlit)
 	bool							Has_Night_Window_Pass() const;	///< a night model's mesh with a lit-window pass over its texture
 
 protected:
