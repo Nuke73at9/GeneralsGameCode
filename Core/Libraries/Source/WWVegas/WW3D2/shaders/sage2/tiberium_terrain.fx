@@ -35,6 +35,7 @@ SAMPLER_2D_BEGIN( BaseSampler,
 	string SasBindAddress = "Terrain.Atlas";
 	)
 	MinFilter = MinFilterBest;
+	MaxAnisotropy = 4;
 	MagFilter = MagFilterBest;
 	MipFilter = MipFilterBest;
 	AddressU = Clamp;
@@ -47,7 +48,10 @@ SAMPLER_2D_BEGIN( AtlasColor,
 	string UIWidget = "None";
 	string SasBindAddress = "Terrain.CNC4.Color";
 	)
-	MinFilter = Linear;
+	// Tiberium Project: distant ground seen at a slant kept sharp (C&C4 filters its objects 8x);
+	// four taps stay inside a slot's border at the mip levels the atlas has
+	MinFilter = Anisotropic;
+	MaxAnisotropy = 4;
 	MagFilter = Linear;
 	MipFilter = Linear;
 	AddressU = Clamp;
@@ -58,7 +62,8 @@ SAMPLER_2D_BEGIN( AtlasNormal,
 	string UIWidget = "None";
 	string SasBindAddress = "Terrain.CNC4.Normal";
 	)
-	MinFilter = Linear;
+	MinFilter = Anisotropic;
+	MaxAnisotropy = 4;
 	MagFilter = Linear;
 	MipFilter = Linear;
 	AddressU = Clamp;
