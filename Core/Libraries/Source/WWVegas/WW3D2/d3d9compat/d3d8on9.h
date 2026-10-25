@@ -194,6 +194,14 @@ public:
 	IDirect3DDevice9* Get_D3D9() const { return m_device; }
 	/// Forget what the adapter knows about shader, FVF and index state (after changing it through Direct3D 9)
 	void Invalidate_State();
+	/// Tiberium Project @feature The scene's depth buffer as a texture the shaders can read (INTZ, made in
+	/// place of the automatic depth buffer when D3D8On9_Set_Readable_Depth asked for it and the device
+	/// can), or nullptr. Its surface is the depth buffer bound while it exists.
+	IDirect3DTexture9* Get_Readable_Depth() const { return m_readableDepth; }
+	IDirect3DSurface9* Get_Readable_Depth_Surface() const { return m_readableDepthSurface; }
+	/// Make it (after creating or resetting the device) / let it go (before a reset)
+	void Make_Readable_Depth(const D3DPRESENT_PARAMETERS& params);
+	void Release_Readable_Depth();
 	/// Draw meshes in the fixed-function vertex format with this vertex shader instead of fixed-function
 	/// vertex processing (nullptr: back to fixed-function). The FVF still describes the vertices.
 	void Set_Vertex_Shader_Override(IDirect3DVertexShader9* shader);
@@ -307,6 +315,8 @@ private:
 	IDirect3DVertexDeclaration9* m_vertexDeclarationOverride;	///< used with FVFs instead of SetFVF, or nullptr
 	std::vector<VertexShader> m_vertexShaders;
 	std::vector<IDirect3DPixelShader9*> m_pixelShaders;
+	IDirect3DTexture9* m_readableDepth;
+	IDirect3DSurface9* m_readableDepthSurface;
 };
 #define IDirect3DDevice8 D3D8On9Device
 #define LPDIRECT3DDEVICE8 D3D8On9Device*
@@ -357,3 +367,7 @@ UINT D3D8On9_Surface_Size(const D3DSURFACE_DESC& desc);
 /// Direct3D 8 present parameters as Direct3D 9 expects them: windowed swap chains present at once
 /// unless the swap effect is D3DSWAPEFFECT_COPY_VSYNC (which Direct3D 9 doesn't have)
 D3DPRESENT_PARAMETERS D3D8On9_Present_Parameters(const D3DPRESENT_PARAMETERS& params8);
+
+/// Tiberium Project @feature Whether devices made from now on get a depth buffer the shaders can read
+/// (D3D8On9Device::Get_Readable_Depth; for SSAO). Off by default.
+void D3D8On9_Set_Readable_Depth(bool enabled);

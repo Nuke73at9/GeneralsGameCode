@@ -74,6 +74,7 @@ extern void DoShadows(RenderInfoClass & rinfo, Bool stencilPass);
 #ifdef RTS_RENDERER_D3D9
 #include "WW3D2/sage2/sage2shadow.h"	// Tiberium Project @feature C&C4's shadow map
 #include "WW3D2/sage2/sage2scene.h"	// Tiberium Project @feature point lights in the deferred pass
+#include "WW3D2/sage2/sage2ssao.h"	// Tiberium Project @feature screen-space ambient occlusion
 #include "Common/ThingTemplate.h"	// Tiberium Project: night lights
 #include "GameClient/GameClient.h"
 #include "W3DDevice/GameClient/Module/W3DModelDraw.h"
@@ -843,6 +844,14 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 #endif
 	// Draw the trees last so they alpha blend onto everything correctly.
 	DoTrees(rinfo);
+
+#ifdef RTS_RENDERER_D3D9
+	// Tiberium Project @feature the opaque scene is drawn (the ground, the objects, the trees): its
+	// ambient occlusion goes onto it before the water, the shadows' decals and everything translucent
+	if (m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE
+		&& !Sage2ShadowClass::Is_Rendering() && !ShaderClass::Is_Backface_Culling_Inverted())
+		Sage2SSAOClass::Apply();
+#endif
 
 	//don't draw shadows in this mode because they interfere with destination alpha
 	if (zhShadows && m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)

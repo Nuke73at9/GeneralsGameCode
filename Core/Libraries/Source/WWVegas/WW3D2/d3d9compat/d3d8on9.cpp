@@ -199,7 +199,9 @@ D3D8On9Device::D3D8On9Device(IDirect3DDevice9* device, DWORD behaviorFlags) :
 	m_baseVertexIndex(0),
 	m_vertexShader(~0u),	// nothing set yet, so the first SetVertexShader always applies
 	m_vertexShaderOverride(nullptr),
-	m_vertexDeclarationOverride(nullptr)
+	m_vertexDeclarationOverride(nullptr),
+	m_readableDepth(nullptr),
+	m_readableDepthSurface(nullptr)
 {
 }
 
@@ -214,7 +216,81 @@ D3D8On9Device::~D3D8On9Device()
 	{
 		if (m_pixelShaders[i]) m_pixelShaders[i]->Release();
 	}
+	Release_Readable_Depth();
 	m_device->Release();
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature The scene's depth buffer, readable by shaders (for SSAO): an INTZ texture
+// (24-bit depth and 8-bit stencil, as the automatic D24S8 buffer) bound in its place. The automatic one
+// stays made (a reset brings it back by itself) and takes over again whenever this can't be had: no
+// INTZ on the device, or a multisampled back buffer (a depth texture can't be multisampled).
+namespace
+{
+	bool s_wantReadableDepth = false;
+}
+
+void D3D8On9_Set_Readable_Depth(bool enabled)
+{
+	s_wantReadableDepth = enabled;
+}
+
+void D3D8On9Device::Make_Readable_Depth(const D3DPRESENT_PARAMETERS& params)
+{
+	Release_Readable_Depth();
+	if (!s_wantReadableDepth || !params.EnableAutoDepthStencil || params.MultiSampleType != D3DMULTISAMPLE_NONE)
+		return;
+	const D3DFORMAT FORMAT_INTZ = (D3DFORMAT)MAKEFOURCC('I', 'N', 'T', 'Z');
+	IDirect3D9* d3d = nullptr;
+	D3DDEVICE_CREATION_PARAMETERS creation;
+	D3DDISPLAYMODE mode;
+	bool supported = false;
+	if (SUCCEEDED(m_device->GetDirect3D(&d3d)) && d3d != nullptr)
+	{
+		if (SUCCEEDED(m_device->GetCreationParameters(&creation)) && SUCCEEDED(m_device->GetDisplayMode(0, &mode)))
+			supported = SUCCEEDED(d3d->CheckDeviceFormat(creation.AdapterOrdinal, creation.DeviceType, mode.Format,
+				D3DUSAGE_DEPTHSTENCIL, D3DRTYPE_TEXTURE, FORMAT_INTZ));
+		d3d->Release();
+	}
+	if (!supported)
+		return;
+	IDirect3DSurface9* backBuffer = nullptr;
+	if (FAILED(m_device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)) || backBuffer == nullptr)
+		return;
+	D3DSURFACE_DESC desc;
+	backBuffer->GetDesc(&desc);
+	backBuffer->Release();
+	if (FAILED(m_device->CreateTexture(desc.Width, desc.Height, 1, D3DUSAGE_DEPTHSTENCIL, FORMAT_INTZ, D3DPOOL_DEFAULT, &m_readableDepth, nullptr)))
+	{
+		m_readableDepth = nullptr;
+		return;
+	}
+	if (FAILED(m_readableDepth->GetSurfaceLevel(0, &m_readableDepthSurface)))
+	{
+		Release_Readable_Depth();
+		return;
+	}
+	m_device->SetDepthStencilSurface(m_readableDepthSurface);
+	m_device->Clear(0, nullptr, D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL, 0, 1.0f, 0);
+}
+
+void D3D8On9Device::Release_Readable_Depth()
+{
+	if (m_readableDepth == nullptr)
+		return;
+	// the automatic depth buffer back in its place, so the device holds nothing of this one
+	IDirect3DSurface9* current = nullptr;
+	if (SUCCEEDED(m_device->GetDepthStencilSurface(&current)) && current != nullptr)
+	{
+		if (current == m_readableDepthSurface)
+			m_device->SetDepthStencilSurface(nullptr);
+		current->Release();
+	}
+	if (m_readableDepthSurface != nullptr)
+		m_readableDepthSurface->Release();
+	m_readableDepthSurface = nullptr;
+	m_readableDepth->Release();
+	m_readableDepth = nullptr;
 }
 
 ULONG D3D8On9Device::Release()
@@ -274,7 +350,10 @@ HRESULT D3D8On9Device::CreateAdditionalSwapChain(D3DPRESENT_PARAMETERS* params, 
 HRESULT D3D8On9Device::Reset(D3DPRESENT_PARAMETERS* params)
 {
 	D3DPRESENT_PARAMETERS params9 = D3D8On9_Present_Parameters(*params);
+	Release_Readable_Depth();	// a default-pool texture: Reset fails while it lives
 	HRESULT hr = m_device->Reset(&params9);
+	if (SUCCEEDED(hr))
+		Make_Readable_Depth(params9);
 	returnPresentParameters(params9, params);
 	m_baseVertexIndex = 0;
 	Invalidate_State();
@@ -631,5 +710,7 @@ HRESULT D3D8On9Interface::CreateDevice(UINT adapter, D3DDEVTYPE type, HWND windo
 	HRESULT hr = m_d3d->CreateDevice(adapter, type, window, flags, &params9, &device9);
 	returnPresentParameters(params9, params);
 	*device = SUCCEEDED(hr) ? new D3D8On9Device(device9, flags) : nullptr;
+	if (*device != nullptr)
+		(*device)->Make_Readable_Depth(params9);
 	return hr;
 }

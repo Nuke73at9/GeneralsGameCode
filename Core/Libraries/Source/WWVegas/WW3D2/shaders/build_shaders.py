@@ -23,6 +23,10 @@ SHADERS = [
     ("softparticle.hlsl", "VS_Soft", "vs_3_0", "softparticle_vs.h", "SoftParticleVertexShader"),
     ("softparticle.hlsl", "PS_Soft", "ps_3_0", "softparticle_ps.h", "SoftParticlePixelShader"),
     ("fxaa.hlsl", "PSFXAA", "ps_3_0", "fxaa_ps.h", "FXAAPixelShader"),
+    ("ssao.hlsl", "VSMain", "vs_3_0", "ssao_vs.h", "SSAOVertexShader"),
+    ("ssao.hlsl", "PSAO", "ps_3_0", "ssao_ao_ps.h", "SSAOPixelShader"),
+    ("ssao.hlsl", "PSBlur", "ps_3_0", "ssao_blur_ps.h", "SSAOBlurPixelShader"),
+    ("ssao.hlsl", "PSApply", "ps_3_0", "ssao_apply_ps.h", "SSAOApplyPixelShader"),
 ]
 
 

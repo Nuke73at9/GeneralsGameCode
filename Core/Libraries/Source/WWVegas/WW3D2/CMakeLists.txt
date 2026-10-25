@@ -269,6 +269,8 @@ if(SAGE_USE_D3D9)
         sage2/sage2shadow.h
         sage2/sage2softparticle.cpp
         sage2/sage2softparticle.h
+        sage2/sage2ssao.cpp
+        sage2/sage2ssao.h
         sage2/sage2topview.cpp
         sage2/sage2topview.h
         sage2/sage2road.cpp

@@ -114,6 +114,7 @@ static void drawFramerateBar();
 #include "WW3D2/sage2/sage2road.h"
 #include "WW3D2/sage2/sage2water.h"
 #include "WW3D2/sage2/sage2globals.h"
+#include "WW3D2/sage2/sage2ssao.h"
 #include "WW3D2/sage2/sage2material.h"
 static void feedSceneLights();
 #endif
@@ -998,6 +999,13 @@ void W3DDisplay::init()
 			// Zero Hour's edges): on, how far a soft noise moves the edges, and their softness
 			Sage2TerrainClass::Set_Cross_Blend(prefs.getBool("Sage2TerrainCrossBlend", TRUE), prefs.getReal("Sage2TerrainCrossNoise", 0.5f),
 				prefs.getReal("Sage2TerrainCrossSoftness", 0.25f));
+			// Tiberium Project @feature screen-space ambient occlusion (our own; C&C4 shipped without):
+			// on, how far around a point the occluders count (world units), how dark a closed-off
+			// point gets, and how much of it goes onto the frame
+			Sage2SSAOClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2SSAO", TRUE));
+			Sage2SSAOClass::Set_Params(prefs.getReal("Sage2SSAORadius", 12.0f), prefs.getReal("Sage2SSAOIntensity", 1.0f),
+				prefs.getReal("Sage2SSAOStrength", 0.8f));
+			Sage2SSAOClass::Set_Debug(prefs.getBool("Sage2SSAODebug", FALSE));
 			Sage2PostClass::Set_Exposure(prefs.getReal("Sage2Exposure", 1.0f));
 			Sage2PostClass::Set_Lookup_Strength(prefs.getReal("Sage2LookupStrength", 1.0f));	// the grading table: 0 none, 1 as the look sets it
 			Sage2PostClass::Set_Auto_Exposure(prefs.getReal("Sage2AutoExposure", 0.5f));	// exposure for each map's ground: 0..1

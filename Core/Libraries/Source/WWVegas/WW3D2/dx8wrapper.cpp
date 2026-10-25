@@ -63,6 +63,7 @@
 #include "sage2/sage2topview.h"
 #include "sage2/sage2water.h"
 #include "sage2/sage2softparticle.h"
+#include "sage2/sage2ssao.h"
 #include "sage2/sage2terrainatlas.h"
 #include "sage2/sage2globals.h"	// Sage2_Log
 #include "postprocess.h"
@@ -1122,6 +1123,22 @@ bool DX8Wrapper::Create_Device()
 		&D3DDevice
 	);
 
+#ifdef RTS_RENDERER_D3D9
+	// Tiberium Project @bugfix a Direct3D 9 that will not make a mixed vertex processing device (Windows'
+	// D3D9On12, by the renderer comparison's crash) gets asked for a hardware one: every vertex the
+	// renderer draws goes through the graphics card anyway
+	if (FAILED(hr) && (Vertex_Processing_Behavior & D3DCREATE_MIXED_VERTEXPROCESSING) != 0)
+	{
+		Sage2_Log("renderer: CreateDevice with mixed vertex processing failed (0x%08lX); trying hardware vertex processing", (unsigned long)hr);
+		Vertex_Processing_Behavior = (Vertex_Processing_Behavior & ~D3DCREATE_MIXED_VERTEXPROCESSING) | D3DCREATE_HARDWARE_VERTEXPROCESSING;
+		hr = D3DInterface->CreateDevice(CurRenderDevice, WW3D_DEVTYPE, _Hwnd, Vertex_Processing_Behavior, &_PresentParameters, &D3DDevice);
+	}
+	if (FAILED(hr))
+		Sage2_Log("renderer: CreateDevice failed (0x%08lX), %ux%u, back buffer format %d, depth format %d, windowed %d, behaviour 0x%lX",
+			(unsigned long)hr, (unsigned)_PresentParameters.BackBufferWidth, (unsigned)_PresentParameters.BackBufferHeight,
+			(int)_PresentParameters.BackBufferFormat, (int)_PresentParameters.AutoDepthStencilFormat, (int)_PresentParameters.Windowed,
+			(unsigned long)Vertex_Processing_Behavior);
+#endif
 	if (FAILED(hr))
 	{
 		// The device selection may fail because the device lied that it supports 32 bit zbuffer with 16 bit
@@ -1180,6 +1197,7 @@ bool DX8Wrapper::Reset_Device(bool reload_assets)
 		Sage2ShadowClass::Release_Resources();	// Tiberium Project @feature the shadow map
 		Sage2TopViewClass::Release_Resources();	// Tiberium Project @feature the terrain top view
 		Sage2WaterClass::Release_Resources();	// Tiberium Project @feature C&C4-style water
+		Sage2SSAOClass::Release_Resources();	// Tiberium Project @feature SSAO targets
 #endif
 
 		for (unsigned i=0;i<MAX_VERTEX_STREAMS;++i)
@@ -1245,6 +1263,7 @@ void DX8Wrapper::Release_Device()
 		Sage2RoadClass::Shutdown();	// Tiberium Project @feature C&C4-style roads
 		Sage2WaterClass::Shutdown();	// Tiberium Project @feature C&C4-style water
 		Sage2SoftParticleClass::Shutdown();	// Tiberium Project @feature soft particles
+		Sage2SSAOClass::Shutdown();	// Tiberium Project @feature SSAO
 		Sage2TerrainAtlasClass::Release();	// Tiberium Project @feature C&C4 terrain texture atlases
 #endif
 
