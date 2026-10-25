@@ -480,6 +480,12 @@ public:
 	static void _Enable_Triangle_Draw(bool enable) { _EnableTriangleDraw=enable; }
 	static bool _Is_Triangle_Draw_Enabled() { return _EnableTriangleDraw; }
 
+	/// Tiberium Project @feature soft particles: the draws made while this is set are billboard
+	/// particles, drawn faded where they meet the scene (Direct3D 9; the sorting renderer keeps the
+	/// mark with each draw it defers)
+	static void Set_Soft_Particle(bool soft) { _SoftParticle=soft; }
+	static bool Is_Soft_Particle() { return _SoftParticle; }
+
 	/*
 	** Additional swap chain interface
 	**
@@ -675,6 +681,7 @@ protected:
 	static unsigned						_MainThreadID;
 
 	static bool								_EnableTriangleDraw;
+	static bool								_SoftParticle;
 
 	static int								CurRenderDevice;
 	static int								ResolutionWidth;

@@ -559,6 +559,11 @@ void Sage2SceneClass::Get_Point_Light_Particle(const float position[3], float li
 	}
 }
 
+IDirect3DTexture9* Sage2SceneClass::Get_Linear_Depth_Texture()
+{
+	return s_clearedThisFrame ? s_depthLinear : nullptr;
+}
+
 void Sage2SceneClass::Set_Particle_Lighting(bool enabled)
 {
 	s_particleLighting = enabled;

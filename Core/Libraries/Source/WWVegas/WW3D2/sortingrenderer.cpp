@@ -163,6 +163,7 @@ public:
 	unsigned short polygon_count;			// Polygon count to process (3 indices = one polygon)
 	unsigned short min_vertex_index;		// First index used in the vb
 	unsigned short vertex_count;			// Number of vertices used in vb
+	bool soft_particle;						// Tiberium Project @feature soft particles: DX8Wrapper::Is_Soft_Particle at insertion
 };
 
 typedef std::list<SortingNodeStruct*> SortingNodeStructList;
@@ -229,6 +230,7 @@ void SortingRendererClass::Insert_Triangles(
 	SortingNodeStruct* state=Get_Sorting_Struct();
 
 	DX8Wrapper::Get_Render_State(state->sorting_state);
+	state->soft_particle = DX8Wrapper::Is_Soft_Particle();
 
  	WWASSERT(
 		((state->sorting_state.index_buffer_type==BUFFER_TYPE_SORTING || state->sorting_state.index_buffer_type==BUFFER_TYPE_DYNAMIC_SORTING) &&
@@ -553,6 +555,7 @@ void SortingRendererClass::Flush_Sorting_Pool()
 			if (node_id!=tis[i].idx) {
 				SortingNodeStruct* state=overlapping_nodes[node_id];
 				Apply_Render_State(state->sorting_state);
+				DX8Wrapper::Set_Soft_Particle(state->soft_particle);
 
 				DX8Wrapper::Draw_Triangles(
 					start_index*3,
@@ -571,6 +574,7 @@ void SortingRendererClass::Flush_Sorting_Pool()
 		if (count_to_render) {
 			SortingNodeStruct* state=overlapping_nodes[node_id];
 			Apply_Render_State(state->sorting_state);
+			DX8Wrapper::Set_Soft_Particle(state->soft_particle);
 
 			DX8Wrapper::Draw_Triangles(
 				start_index*3,
@@ -581,6 +585,7 @@ void SortingRendererClass::Flush_Sorting_Pool()
 
 		chunkOffset += chunkCount;
 	}
+	DX8Wrapper::Set_Soft_Particle(false);
 
 	// Release all references and return nodes back to the clean list for the frame...
 	for (unsigned node_id=0;node_id<overlapping_node_count;++node_id) {
@@ -624,7 +629,9 @@ void SortingRendererClass::Flush()
 		}
 		else {
 			DX8Wrapper::Set_Render_State(state->sorting_state);
+			DX8Wrapper::Set_Soft_Particle(state->soft_particle);
 			DX8Wrapper::Draw_Triangles(state->start_index,state->polygon_count,state->min_vertex_index,state->vertex_count);
+			DX8Wrapper::Set_Soft_Particle(false);
 			DX8Wrapper::Release_Render_State();
 			Release_Refs(state);
 			clean_list.push_front(state);

@@ -105,6 +105,10 @@ public:
 	static void Set_Particle_Lighting(bool enabled);
 	static bool Is_Particle_Lighting_Enabled();
 
+	/// Tiberium Project @feature soft particles: the frame's linear (view-space) depth, as the
+	/// pre-pass left it (the ground and every deferred mesh); null when no pre-pass ran this frame
+	static IDirect3DTexture9* Get_Linear_Depth_Texture();
+
 	/// sRGB writes make the linear-space High techniques come out right on the ordinary frame buffer.
 	static bool Supports_SRGB_Write();
 

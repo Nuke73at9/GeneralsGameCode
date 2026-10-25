@@ -62,6 +62,7 @@
 #include "sage2/sage2road.h"
 #include "sage2/sage2topview.h"
 #include "sage2/sage2water.h"
+#include "sage2/sage2softparticle.h"
 #include "sage2/sage2terrainatlas.h"
 #include "postprocess.h"
 #endif
@@ -426,6 +427,7 @@ int DX8Wrapper_PreserveFPU = 0;
 static HWND						_Hwnd															= nullptr;
 bool								DX8Wrapper::IsInitted									= false;
 bool								DX8Wrapper::_EnableTriangleDraw						= true;
+bool								DX8Wrapper::_SoftParticle								= false;
 
 int								DX8Wrapper::CurRenderDevice							= -1;
 int								DX8Wrapper::ResolutionWidth							= DEFAULT_RESOLUTION_WIDTH;
@@ -1178,6 +1180,7 @@ void DX8Wrapper::Release_Device()
 		Sage2TopViewClass::Shutdown();	// Tiberium Project @feature the terrain top view
 		Sage2RoadClass::Shutdown();	// Tiberium Project @feature C&C4-style roads
 		Sage2WaterClass::Shutdown();	// Tiberium Project @feature C&C4-style water
+		Sage2SoftParticleClass::Shutdown();	// Tiberium Project @feature soft particles
 		Sage2TerrainAtlasClass::Release();	// Tiberium Project @feature C&C4 terrain texture atlases
 #endif
 
@@ -2677,12 +2680,21 @@ void DX8Wrapper::Draw(
 				}*/
 				DX8_RECORD_RENDER(polygon_count,vertex_count,render_state.shader);
 				DX8_RECORD_DRAW_CALLS();
+#ifdef RTS_RENDERER_D3D9
+				// Tiberium Project @feature soft particles: a marked particle draw, faded where it
+				// meets the scene
+				const bool soft = _SoftParticle && Sage2SoftParticleClass::Begin(render_state.shader);
+#endif
 				DX8CALL(DrawIndexedPrimitive(
 					(D3DPRIMITIVETYPE)primitive_type,
 					min_vertex_index,
 					vertex_count,
 					start_index+render_state.iba_offset,
 					polygon_count));
+#ifdef RTS_RENDERER_D3D9
+				if (soft)
+					Sage2SoftParticleClass::End();
+#endif
 			}
 			break;
 		case BUFFER_TYPE_SORTING:

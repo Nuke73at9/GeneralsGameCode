@@ -37,6 +37,7 @@
 #include "WW3D2/camera.h"
 #ifdef RTS_RENDERER_D3D9
 #include <math.h>
+#include "WW3D2/dx8wrapper.h"
 #include "WW3D2/sage2/sage2globals.h"	// Tiberium Project @feature lit smoke
 #include "WW3D2/sage2/sage2lighting.h"
 #include "WW3D2/sage2/sage2scene.h"
@@ -322,14 +323,14 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 				if (pointLit)
 				{
 					const float where[3] = { pos->x, pos->y, pos->z };
-					float near[3];
-					Sage2SceneClass::Get_Point_Light_Particle(where, near);
-					if (near[0] + near[1] + near[2] > 0.0f)
+					float nearLight[3];	// (not "near": a macro in the Windows headers)
+					Sage2SceneClass::Get_Point_Light_Particle(where, nearLight);
+					if (nearLight[0] + nearLight[1] + nearLight[2] > 0.0f)
 					{
 						for (Int c = 0; c < 3; ++c)
 						{
 							// in light, then to the display: up to half as bright again as by day
-							Real light = sceneLight[c] + near[c] / referenceLight[c];
+							Real light = sceneLight[c] + nearLight[c] / referenceLight[c];
 							light = light < 0.0f ? 0.0f : (light > 1.5f ? 1.5f : light);
 							factor[c] = powf(light, 1.0f / 2.2f);
 						}
@@ -538,7 +539,15 @@ void W3DParticleSystemManager::flushParticleBatch(RenderInfoClass& rinfo, Unsign
 		m_pointGroup->Set_Arrays(m_posBuffer, m_RGBABuffer, nullptr, m_sizeBuffer, m_angleBuffer, nullptr, pointCount);
 		m_pointGroup->Set_Billboard(m_batchParticleAlignment == ParticleSystemInfo::PARTICLE_ALIGNMENT_BILLBOARD);
 		m_pointGroup->Set_Point_Frame(0);
+#ifdef RTS_RENDERER_D3D9
+		// Tiberium Project @feature soft particles: billboards fade where they meet the scene, as
+		// C&C4's particles do (ground-aligned ones lie on it and stay as they are)
+		DX8Wrapper::Set_Soft_Particle(m_batchParticleAlignment == ParticleSystemInfo::PARTICLE_ALIGNMENT_BILLBOARD);
+#endif
 		m_pointGroup->Render(rinfo);
+#ifdef RTS_RENDERER_D3D9
+		DX8Wrapper::Set_Soft_Particle(false);
+#endif
 
 		pointCount = 0;
 	}
