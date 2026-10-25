@@ -1908,16 +1908,20 @@ void RTS3DScene::gatherSage2NightLights()
 		}
 		if (!lit)
 			continue;
+		// Tiberium Project @tweak a pool close round its walls, not a lit district: on the user's PC
+		// the first, wider and stronger pools (0.35, out to radius + 60) made the night read lighter
+		// than RA3's
 		const Real radius = max(geometry.getMajorRadius(), geometry.getMinorRadius());
 		point.position[0] = pos->x;
 		point.position[1] = pos->y;
 		point.position[2] = pos->z + max(8.0f, geometry.getMaxHeightAbovePosition() * 0.3f);
-		point.color[0] = 1.0f * 0.35f * dusk;
-		point.color[1] = 0.78f * 0.35f * dusk;
-		point.color[2] = 0.5f * 0.35f * dusk;
-		point.innerRadius = radius * 0.8f;
-		point.outerRadius = min(260.0f, radius + 60.0f);
+		point.color[0] = 1.0f * 0.25f * dusk;
+		point.color[1] = 0.78f * 0.25f * dusk;
+		point.color[2] = 0.5f * 0.25f * dusk;
+		point.innerRadius = radius * 0.7f;
+		point.outerRadius = min(200.0f, radius + 40.0f);
 		point.lightsObjects = false;	// its own windows already glow; the light is for the street
+		point.lightsParticles = false;
 		Sage2SceneClass::Add_Point_Light(point);
 	}
 }

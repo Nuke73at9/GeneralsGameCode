@@ -618,10 +618,13 @@ void Sage2GlobalsClass::Apply(Sage2EffectClass& effect, const Sage2DrawState& dr
 				Light_Color(v);
 				if (!Scene_Lights_Active())
 				{
-					// Tiberium Project @feature fires and lit buildings nearby brighten the object
-					const float position[3] = { world[0][3], world[1][3], world[2][3] };
+					// Tiberium Project @feature fires, lamps and headlights nearby brighten the object, by
+					// its bounding sphere (the whole object's, so its meshes are lit alike)
+					const bool bounded = draw.boundsRadius >= 0.0f;
+					const float position[3] = { bounded ? draw.boundsCenter[0] : world[0][3], bounded ? draw.boundsCenter[1] : world[1][3],
+						bounded ? draw.boundsCenter[2] : world[2][3] };
 					float pointAmbient[3];
-					Sage2SceneClass::Get_Point_Light_Ambient(position, pointAmbient);
+					Sage2SceneClass::Get_Point_Light_Ambient(position, bounded ? draw.boundsRadius : 0.0f, pointAmbient);
 					v[0] += pointAmbient[0]; v[1] += pointAmbient[1]; v[2] += pointAmbient[2];
 				}
 				effect.Set_Float(i, v, 3);

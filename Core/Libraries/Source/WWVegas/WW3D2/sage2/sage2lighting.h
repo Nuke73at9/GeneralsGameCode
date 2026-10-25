@@ -71,6 +71,10 @@ public:
 	/// (ambient, and the diffuse colour of its three lights, as the map stores them): the preset
 	/// itself at mood 0, darkened and tinted towards the map's own light as the mood rises.
 	static Sage2LightingPreset Adapt(const Sage2LightingPreset& preset, int timeOfDay, const float mapAmbient[3], const float mapDiffuse[3][3]);
+	/// Tiberium Project @bugfix Options.ini Sage2TreeLight: the trees (Zero Hour's tree buffer, lit
+	/// per vertex) take the presets' light as the SAGE 2 effects do, in linear light
+	static void Set_Tree_Light(bool enabled);
+	static bool Is_Tree_Light_Enabled();
 	/// The preset names, for diagnostics
 	static int Get_Preset_Count();
 	static const Sage2LightingPreset& Get_Preset(int index);

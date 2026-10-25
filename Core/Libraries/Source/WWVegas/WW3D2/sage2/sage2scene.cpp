@@ -20,6 +20,7 @@
 
 #include "sage2scene.h"
 
+#include <math.h>
 #include <string.h>
 #include <vector>
 
@@ -59,6 +60,7 @@ namespace
 	const unsigned MAX_POINT_LIGHTS = 64;
 	std::vector<Sage2SceneClass::PointLight> s_pointLights;
 	float s_pointLightStrength = 2.0f;	// Zero Hour lit the ground with a pulse's ambient and diffuse both
+	bool s_particleLighting = true;
 	bool s_pointLightsLogged = false;
 
 	IDirect3DSurface9* Surface(IDirect3DTexture9* t)
@@ -532,25 +534,71 @@ float Sage2SceneClass::Get_Point_Light_Strength()
 	return s_pointLightStrength;
 }
 
-void Sage2SceneClass::Get_Point_Light_Ambient(const float position[3], float ambient[3])
+void Sage2SceneClass::Get_Point_Light_Particle(const float position[3], float light[3])
+{
+	light[0] = light[1] = light[2] = 0.0f;
+	if (s_pointLightStrength <= 0.0f)
+		return;
+	for (size_t i = 0; i < s_pointLights.size(); ++i)
+	{
+		const PointLight& point = s_pointLights[i];
+		if (!point.lightsParticles)
+			continue;
+		const float dx = position[0] - point.position[0], dy = position[1] - point.position[1], dz = position[2] - point.position[2];
+		const float d2 = dx * dx + dy * dy + dz * dz;
+		const float outer2 = point.outerRadius * point.outerRadius, inner2 = point.innerRadius * point.innerRadius;
+		if (d2 >= outer2)
+			continue;
+		// C&C4's smooth step between the radii; a puff of smoke is lit on its near side, half of it
+		float t = outer2 > inner2 ? (outer2 - d2) / (outer2 - inner2) : 1.0f;
+		t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+		const float k = t * t * (3.0f - 2.0f * t) * 0.5f * s_pointLightStrength;
+		light[0] += point.color[0] * k;
+		light[1] += point.color[1] * k;
+		light[2] += point.color[2] * k;
+	}
+}
+
+void Sage2SceneClass::Set_Particle_Lighting(bool enabled)
+{
+	s_particleLighting = enabled;
+}
+
+bool Sage2SceneClass::Is_Particle_Lighting_Enabled()
+{
+	return s_particleLighting;
+}
+
+void Sage2SceneClass::Get_Point_Light_Ambient(const float position[3], float radius, float ambient[3])
 {
 	ambient[0] = ambient[1] = ambient[2] = 0.0f;
 	if (s_pointLightStrength <= 0.0f)
 		return;
+	radius = radius > 0.0f ? radius : 0.0f;
 	for (size_t i = 0; i < s_pointLights.size(); ++i)
 	{
 		const PointLight& light = s_pointLights[i];
 		if (!light.lightsObjects)
 			continue;
 		const float dx = position[0] - light.position[0], dy = position[1] - light.position[1], dz = position[2] - light.position[2];
-		const float d2 = dx * dx + dy * dy + dz * dz;
+		// Tiberium Project @bugfix a large building next to a lamp was lifted evenly on every side:
+		// count from its near side (half its radius in), and only the share of it the light reaches
+		float d = sqrtf(dx * dx + dy * dy + dz * dz) - radius * 0.5f;
+		d = d > 0.0f ? d : 0.0f;
+		const float d2 = d * d;
 		const float outer2 = light.outerRadius * light.outerRadius, inner2 = light.innerRadius * light.innerRadius;
 		if (d2 >= outer2)
 			continue;
+		float share = 1.0f;
+		if (radius * 2.5f > light.outerRadius)
+		{
+			share = light.outerRadius / (radius * 2.5f);
+			share *= share;
+		}
 		// C&C4's smooth step between the radii, half as strong as on the ground: it lights every side
 		float t = outer2 > inner2 ? (outer2 - d2) / (outer2 - inner2) : 1.0f;
 		t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
-		const float k = t * t * (3.0f - 2.0f * t) * 0.5f * s_pointLightStrength;
+		const float k = t * t * (3.0f - 2.0f * t) * 0.5f * s_pointLightStrength * share;
 		ambient[0] += light.color[0] * k;
 		ambient[1] += light.color[1] * k;
 		ambient[2] += light.color[2] * k;

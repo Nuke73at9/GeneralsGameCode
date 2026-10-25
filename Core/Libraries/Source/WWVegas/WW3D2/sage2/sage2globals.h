@@ -113,7 +113,12 @@ struct Sage2DrawState
 	unsigned houseColor;		// 0x00RRGGBB, 0 for none
 	float damage;				// 0 (pristine) .. 1 (wrecked)
 	bool stealth;
-	Sage2DrawState() : opacity(1.0f), houseColor(0), damage(0.0f), stealth(false) {}
+	float boundsCenter[3];		// the drawn object's bounding sphere, world space
+	float boundsRadius;			// below 0: unknown (the mesh's own position stands for it)
+	Sage2DrawState() : opacity(1.0f), houseColor(0), damage(0.0f), stealth(false), boundsRadius(-1.0f)
+	{
+		boundsCenter[0] = boundsCenter[1] = boundsCenter[2] = 0.0f;
+	}
 };
 
 /// Lights the draws made while it lives with the map's lights (Sage2GlobalsClass::Set_Scene_Lights)

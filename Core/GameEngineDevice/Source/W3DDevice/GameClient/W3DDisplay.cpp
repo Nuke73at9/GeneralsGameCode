@@ -1005,6 +1005,8 @@ void W3DDisplay::init()
 			Sage2WaterClass::Set_Shallow(prefs.getReal("Sage2WaterShallow", 20.0f));	// shallow water tinted as RA3's table is twenty units down
 			WW3D::Enable_Night_Lights_On_Load(cnc4Style && prefs.getBool("Sage2NightLights", TRUE));	// buildings' lit windows glow at night
 			Sage2SceneClass::Set_Point_Light_Strength(prefs.getReal("Sage2PointLights", 2.0f));	// explosions and fires light the ground, as Zero Hour's vertex lighting did (ambient plus diffuse; 0: off)
+			Sage2SceneClass::Set_Particle_Lighting(cnc4Style && prefs.getBool("Sage2LitParticles", TRUE));	// smoke and dust lit by the scene and by fires, as C&C4's lit particles
+			Sage2LightingClass::Set_Tree_Light(prefs.getBool("Sage2TreeLight", TRUE));	// trees lit in linear light, as the effects light the rest
 			// Zero Hour's plain meshes through C&C4's own effect for them: off | forward | deferred.
 			// Forward by default: lit by the same light as the ground, under its shadow map, at the
 			// same cost as W3D's fixed-function draw

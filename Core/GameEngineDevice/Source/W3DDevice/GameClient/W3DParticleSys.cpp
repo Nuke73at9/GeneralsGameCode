@@ -35,6 +35,12 @@
 #include "W3DDevice/GameClient/W3DSmudge.h"
 #include "W3DDevice/GameClient/W3DSnow.h"
 #include "WW3D2/camera.h"
+#ifdef RTS_RENDERER_D3D9
+#include <math.h>
+#include "WW3D2/sage2/sage2globals.h"	// Tiberium Project @feature lit smoke
+#include "WW3D2/sage2/sage2lighting.h"
+#include "WW3D2/sage2/sage2scene.h"
+#endif
 
 
 //------------------------------------------------------------------------------ Performance Timers
@@ -140,6 +146,50 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 
 	m_fieldParticleCount = 0;
 
+#ifdef RTS_RENDERER_D3D9
+	// Tiberium Project @feature Lit smoke, as C&C4 and RA3 light their particles
+	// (GPUParticleLitAccumLight.fx: the colour times the scene's directional lights): smoke, dust
+	// and debris (alpha-blended and alpha-tested systems; the additive ones glow on their own) take
+	// the scene's light against RA3's afternoon, for which Zero Hour's particle colours read right,
+	// so they dim and tint at evening and night instead of glowing grey, and they take the light of
+	// the fires, explosions and lamps near them: the smoke over a fire is lit from below.
+	Bool litParticles = FALSE;
+	Real sceneLight[3] = { 1.0f, 1.0f, 1.0f };
+	Real referenceLight[3] = { 1.0f, 1.0f, 1.0f };
+	Real sceneFactor[3] = { 1.0f, 1.0f, 1.0f };
+	const Bool pointLit = Sage2SceneClass::Get_Point_Light_Count() > 0;
+	const Sage2LightingPreset *afternoon = Sage2LightingClass::Find("ra3_day");
+	const Int timeOfDay = TheGlobalData != nullptr ? (Int)TheGlobalData->m_timeOfDay : -1;
+	if (Sage2SceneClass::Is_Particle_Lighting_Enabled() && Sage2LightingClass::Uses_Presets() && afternoon != nullptr
+		&& timeOfDay >= TIME_OF_DAY_FIRST && timeOfDay < TIME_OF_DAY_COUNT)
+	{
+		// a puff takes the ambient and, on average, half of each light
+		const GlobalData::TerrainLighting *lights = TheGlobalData->m_terrainObjectsLighting[timeOfDay];
+		const Real ambient[3] = { lights[0].ambient.red, lights[0].ambient.green, lights[0].ambient.blue };
+		for (Int c = 0; c < 3; ++c)
+		{
+			Real now = ambient[c];
+			Real reference = afternoon->ambient[c];
+			for (Int j = 0; j < 3 && j < MAX_GLOBAL_LIGHTS; ++j)
+			{
+				now += 0.5f * (c == 0 ? lights[j].diffuse.red : c == 1 ? lights[j].diffuse.green : lights[j].diffuse.blue);
+				reference += 0.5f * afternoon->light[j].diffuse[c];
+			}
+			referenceLight[c] = reference > 0.01f ? reference : 0.01f;
+			sceneLight[c] = now / referenceLight[c];
+			sceneFactor[c] = powf(sceneLight[c] < 0.0f ? 0.0f : (sceneLight[c] > 1.0f ? 1.0f : sceneLight[c]), 1.0f / 2.2f);
+		}
+		litParticles = TRUE;
+		static Int s_loggedTimeOfDay = -1;
+		if (s_loggedTimeOfDay != timeOfDay)
+		{
+			s_loggedTimeOfDay = timeOfDay;
+			Sage2_Log("lit particles: smoke and dust at (%.2f %.2f %.2f) of their colour (time of day %d, the light %.2f %.2f %.2f of RA3's afternoon)",
+				sceneFactor[0], sceneFactor[1], sceneFactor[2], timeOfDay, sceneLight[0], sceneLight[1], sceneLight[2]);
+		}
+	}
+#endif
+
 	const Bool drawSmudge = TheSmudgeManager && TheSmudgeManager->getHardwareSupport() && TheGlobalData->m_useHeatEffects;
 
 	if (drawSmudge)
@@ -235,8 +285,10 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		const Coord3D *pos;
 		const RGBColor *color;
 		Real psize;
-
-
+#ifdef RTS_RENDERER_D3D9
+		const Bool litSystem = litParticles
+			&& (sys->getShaderType() == ParticleSystemInfo::ALPHA || sys->getShaderType() == ParticleSystemInfo::ALPHA_TEST);
+#endif
 
 		//set-up all the per-particle
 		for (Particle *p = sys->getFirstParticle(); p; p = p->m_systemNext)
@@ -263,6 +315,31 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 			RGBAArray[pointCount].Y = color->green;
 			RGBAArray[pointCount].Z = color->blue;
 			RGBAArray[pointCount].W = p->getAlpha();
+#ifdef RTS_RENDERER_D3D9
+			if (litSystem)
+			{
+				Real factor[3] = { sceneFactor[0], sceneFactor[1], sceneFactor[2] };
+				if (pointLit)
+				{
+					const float where[3] = { pos->x, pos->y, pos->z };
+					float near[3];
+					Sage2SceneClass::Get_Point_Light_Particle(where, near);
+					if (near[0] + near[1] + near[2] > 0.0f)
+					{
+						for (Int c = 0; c < 3; ++c)
+						{
+							// in light, then to the display: up to half as bright again as by day
+							Real light = sceneLight[c] + near[c] / referenceLight[c];
+							light = light < 0.0f ? 0.0f : (light > 1.5f ? 1.5f : light);
+							factor[c] = powf(light, 1.0f / 2.2f);
+						}
+					}
+				}
+				RGBAArray[pointCount].X *= factor[0];
+				RGBAArray[pointCount].Y *= factor[1];
+				RGBAArray[pointCount].Z *= factor[2];
+			}
+#endif
 
 			angleArray[pointCount] = (uint8)(p->getAngle() * 255.0f / (2.0f * PI));
 

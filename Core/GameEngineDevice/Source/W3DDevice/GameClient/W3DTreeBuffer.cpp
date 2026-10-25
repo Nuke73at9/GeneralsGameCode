@@ -89,6 +89,10 @@ enum
 #include "WW3D2/meshmdl.h"
 #include "d3dx8tex.h"
 #ifdef RTS_RENDERER_D3D9
+#include <math.h>
+#include "WW3D2/sage2/sage2globals.h"	// Tiberium Project @bugfix trees lit as the SAGE 2 effects light the rest
+#include "WW3D2/sage2/sage2lighting.h"
+#include "WW3D2/sage2/sage2material.h"
 #include "WW3D2/sage2/sage2shadow.h"	// Tiberium Project @feature C&C4's shadow map
 #endif
 
@@ -251,6 +255,29 @@ void W3DTreeBuffer::W3DTreeTextureClass::Apply(unsigned int stage)
 #endif
 static ShaderClass detailAlphaShader(SC_ALPHA_DETAIL);
 static ShaderClass detailAlphaShader2X(SC_ALPHA_DETAIL_2X);
+
+#ifdef RTS_RENDERER_D3D9
+// Tiberium Project @bugfix Trees lit as the SAGE 2 effects light everything else. With the C&C4
+// renderer the map's lights are C&C4's and RA3's, in linear light, and the effects (the ground,
+// buildings, units, props) light their textures by them in linear light; the trees still lit
+// their vertices by the same numbers as display values, so their shaded sides came out far darker
+// than anything else (an ambient of 0.08 is 0.32 on the display's curve) and their lit sides could
+// not go past their texture. Now a tree vertex takes the light to the display's curve, at half for
+// a doubling blend (as alpha-tested and two-sided as before), so a sunlit tree is as bright as a
+// sunlit prop.
+#define SC_ALPHA_DETAIL_SAGE2 ( SHADE_CNST(ShaderClass::PASS_LEQUAL, ShaderClass::DEPTH_WRITE_ENABLE, ShaderClass::COLOR_WRITE_ENABLE, ShaderClass::SRCBLEND_ONE, \
+	ShaderClass::DSTBLEND_ZERO, ShaderClass::FOG_DISABLE, ShaderClass::GRADIENT_MODULATE2X, ShaderClass::SECONDARY_GRADIENT_DISABLE, ShaderClass::TEXTURING_ENABLE, \
+	ShaderClass::ALPHATEST_ENABLE, ShaderClass::CULL_MODE_DISABLE, \
+	ShaderClass::DETAILCOLOR_DISABLE, ShaderClass::DETAILALPHA_DISABLE) )
+static ShaderClass detailAlphaShaderSage2(SC_ALPHA_DETAIL_SAGE2);
+static Bool s_sage2TreeLight = false;	///< how the tree vertices were last lit
+
+static Bool useSage2TreeLight()
+{
+	return Sage2LightingClass::Uses_Presets() && Sage2LightingClass::Is_Tree_Light_Enabled()
+		&& Sage2MaterialClass::Get_Legacy_Mode() != Sage2MaterialClass::LEGACY_OFF;
+}
+#endif
 
 
 /*
@@ -660,6 +687,15 @@ UnsignedInt W3DTreeBuffer::doLighting(const Vector3 *normal,
 	shadeR *= scale;
 	shadeG *= scale;
 	shadeB *= scale;
+#ifdef RTS_RENDERER_D3D9
+	if (s_sage2TreeLight)
+	{
+		// the light (linear) to the display's curve, halved for the doubling blend
+		shadeR = shadeR > 0.0f ? powf(shadeR, 1.0f / 2.2f) * 0.5f : 0.0f;
+		shadeG = shadeG > 0.0f ? powf(shadeG, 1.0f / 2.2f) * 0.5f : 0.0f;
+		shadeB = shadeB > 0.0f ? powf(shadeB, 1.0f / 2.2f) * 0.5f : 0.0f;
+	}
+#endif
 
 	if (shadeR > 1.0) shadeR = 1.0;
 	if(shadeR < 0.0f) shadeR = 0.0f;
@@ -717,6 +753,21 @@ void W3DTreeBuffer::loadTreesInVertexAndIndexBuffers(RefRenderObjListIterator *p
 	Int curTree=0;
 	Int bNdx;
 	const GlobalData::TerrainLighting *objectLighting = TheGlobalData->m_terrainObjectsLighting[TheGlobalData->m_timeOfDay];
+#ifdef RTS_RENDERER_D3D9
+	{
+		const Bool sage2Light = useSage2TreeLight();
+		if (sage2Light != s_sage2TreeLight || m_numTrees > 0)
+		{
+			static Int s_loggedTrees = -1;
+			if (s_loggedTrees != m_numTrees)
+			{
+				s_loggedTrees = m_numTrees;
+				Sage2_Log("trees: %d in the tree buffer, lit %s", (int)m_numTrees, sage2Light ? "in linear light (as the effects)" : "Zero Hour's way");
+			}
+		}
+		s_sage2TreeLight = sage2Light;
+	}
+#endif
 	for (bNdx=0; bNdx<MAX_BUFFERS; bNdx++) {
 		m_curNumTreeVertices[bNdx] = 0;
 		m_curNumTreeIndices[bNdx] = 0;
@@ -1687,7 +1738,11 @@ void W3DTreeBuffer::drawTrees(CameraClass * camera, RefRenderObjListIterator *pD
 	if (m_curNumTreeIndices[0] == 0) {
 		return;
 	}
+#ifdef RTS_RENDERER_D3D9
+	DX8Wrapper::Set_Shader(s_sage2TreeLight ? detailAlphaShaderSage2 : detailAlphaShader);
+#else
 	DX8Wrapper::Set_Shader(detailAlphaShader);
+#endif
 
 	DX8Wrapper::Set_Texture(0,m_treeTexture);
 	DX8Wrapper::Set_Texture(1,nullptr);

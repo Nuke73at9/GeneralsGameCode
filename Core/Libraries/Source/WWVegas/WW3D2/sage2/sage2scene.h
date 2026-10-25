@@ -79,16 +79,31 @@ public:
 		float innerRadius;	///< full strength inside this
 		float outerRadius;	///< nothing beyond this (C&C4: a smooth step between the two)
 		bool lightsObjects;	///< also brightens forward-lit objects nearby (lights Zero Hour's light environment does not carry already)
+		bool lightsParticles;	///< lights the smoke and dust drawn through it (all but a building's window light)
+		PointLight() : innerRadius(0.0f), outerRadius(0.0f), lightsObjects(false), lightsParticles(true)
+		{
+			position[0] = position[1] = position[2] = 0.0f;
+			color[0] = color[1] = color[2] = 0.0f;
+		}
 	};
 	static void Clear_Point_Lights();
 	static void Add_Point_Light(const PointLight& light);
 	static unsigned Get_Point_Light_Count();
 	/// Options.ini: Sage2PointLights, how strong they are (0: none)
 	static void Set_Point_Light_Strength(float strength);
-	/// The light a forward-lit object at 'position' takes from the lights that light objects, as ambient
-	/// (it lights every side alike, as Zero Hour's light environment adds a light pulse's ambient)
-	static void Get_Point_Light_Ambient(const float position[3], float ambient[3]);
+	/// The light a forward-lit object takes from the lights that light objects, as ambient (it lights
+	/// every side alike, as Zero Hour's light environment adds a light pulse's ambient). 'position'
+	/// and 'radius' are its bounding sphere (radius 0: a point); a light reaches a large object's
+	/// near side, so it counts from there, and lifts only the share of the object it can reach
+	static void Get_Point_Light_Ambient(const float position[3], float radius, float ambient[3]);
 	static float Get_Point_Light_Strength();
+	/// Tiberium Project @feature lit smoke, as C&C4's lit particles (GPUParticleLitAccumLight.fx):
+	/// the light the point lights that light particles shed at 'position', strength included
+	static void Get_Point_Light_Particle(const float position[3], float light[3]);
+	/// Options.ini: Sage2LitParticles, smoke, dust and debris lit by the scene's light and the
+	/// point lights near them (the glowing, additive ones are not)
+	static void Set_Particle_Lighting(bool enabled);
+	static bool Is_Particle_Lighting_Enabled();
 
 	/// sRGB writes make the linear-space High techniques come out right on the ordinary frame buffer.
 	static bool Supports_SRGB_Write();

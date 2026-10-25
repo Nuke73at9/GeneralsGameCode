@@ -101,6 +101,7 @@ namespace
 	const int PRESET_COUNT = sizeof(PRESETS) / sizeof(PRESETS[0]);
 
 	bool s_ra3Look = true;		// Sage2Look: RA3's light and table for maps that are not snowy
+	bool s_treeLight = true;	// Sage2TreeLight
 
 	// Tiberium Project @feature the map's mood: Zero Hour's default terrain light for each time of
 	// day (GameData.ini, morning to night), as brightness (luminance, 0..1) of the ambient and of
@@ -274,4 +275,14 @@ int Sage2LightingClass::Get_Preset_Count()
 const Sage2LightingPreset& Sage2LightingClass::Get_Preset(int index)
 {
 	return PRESETS[index];
+}
+
+void Sage2LightingClass::Set_Tree_Light(bool enabled)
+{
+	s_treeLight = enabled;
+}
+
+bool Sage2LightingClass::Is_Tree_Light_Enabled()
+{
+	return s_treeLight;
 }

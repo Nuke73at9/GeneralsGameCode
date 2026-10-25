@@ -486,7 +486,24 @@ void TiberiumTest::update()
 			sys->setPosition( &p );
 			++made;
 		}
-		log( "frame %d: %d fires around %.0f %.0f", (int)s_frame, (int)made, center.x, center.y );
+		// smoke over three of the fires, and two columns of it away from them (lit smoke: the
+		// ones over the fires take their light, the others only the scene's)
+		static const Real SMOKES[5][2] = { { -240.0f, -60.0f }, { 0.0f, -60.0f }, { 240.0f, -60.0f }, { -120.0f, 260.0f }, { 120.0f, 260.0f } };
+		const ParticleSystemTemplate *smoke = TheParticleSystemManager->findTemplate( "SmokeFactionLarge" );
+		Int smokes = 0;
+		for ( Int k = 0; k < 5 && smoke != nullptr; ++k )
+		{
+			ParticleSystem *sys = TheParticleSystemManager->createParticleSystem( smoke );
+			if ( sys == nullptr )
+				continue;
+			Coord3D p = center;
+			p.x += SMOKES[k][0];
+			p.y += SMOKES[k][1];
+			p.z = ( TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( p.x, p.y ) : 0.0f ) + 10.0f;
+			sys->setPosition( &p );
+			++smokes;
+		}
+		log( "frame %d: %d fires and %d smoke columns around %.0f %.0f", (int)s_frame, (int)made, (int)smokes, center.x, center.y );
 	}
 	if ( s_fireFrame >= 0 && s_frame == s_fireFrame + 30 && TheParticleSystemManager != nullptr )
 		log( "frame %d: %u particles in %u systems", (int)s_frame, (unsigned)TheParticleSystemManager->getParticleCount(),

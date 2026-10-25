@@ -723,6 +723,14 @@ bool Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const
 	while (top->Get_Container() != nullptr)
 		top = top->Get_Container();
 	draw.houseColor = top->Get_ObjectColor() & 0x00FFFFFF;
+	if (Sage2SceneClass::Get_Point_Light_Count() > 0)
+	{
+		const SphereClass& bounds = top->Get_Bounding_Sphere();
+		draw.boundsCenter[0] = bounds.Center.X;
+		draw.boundsCenter[1] = bounds.Center.Y;
+		draw.boundsCenter[2] = bounds.Center.Z;
+		draw.boundsRadius = bounds.Radius;
+	}
 	Sage2GlobalsClass::Apply(*mat.effect, draw);
 
 	// the material's values
