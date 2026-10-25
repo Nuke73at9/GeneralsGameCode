@@ -2473,11 +2473,16 @@ void DX8Wrapper::Clear(bool clear_color, bool clear_z_stencil, const Vector3 &co
 	{
 		D3DSURFACE_DESC desc;
 		depthbuffer->GetDesc(&desc);
+		// Tiberium Project @bugfix INTZ: the readable depth buffer (for SSAO and soft particles) that stands
+		// in for the automatic D24S8 one has its stencil too. Left uncleared, the stencil kept every frame's
+		// occluded-unit marks and the player colours spread over the ground where units had been.
+		const D3DFORMAT FORMAT_INTZ = (D3DFORMAT)MAKEFOURCC('I', 'N', 'T', 'Z');
 		has_stencil=
 		(
 			desc.Format==D3DFMT_D15S1 ||
 			desc.Format==D3DFMT_D24S8 ||
-			desc.Format==D3DFMT_D24X4S4
+			desc.Format==D3DFMT_D24X4S4 ||
+			desc.Format==FORMAT_INTZ
 		);
 
 		// release ref
