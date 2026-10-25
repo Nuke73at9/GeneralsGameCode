@@ -519,6 +519,7 @@ private:
 	void nukeCurrentRender(Matrix3D* xform);
 	void doStartOrStopParticleSys();
 	void adjustAnimSpeedToMovementSpeed();
+	void adjustAnimFrameToConstruction();	///< Tiberium Project @feature ANIMATE_BY_CONSTRUCTION_PERCENT
 	static void hideAllMuzzleFlashes(const ModelConditionInfo* state, RenderObjClass* renderObject);
 	void hideAllHeadlights(Bool hide);
 #if defined(RTS_DEBUG)	//art wants to see buildings without flags as a test.

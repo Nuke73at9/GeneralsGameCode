@@ -222,6 +222,7 @@ enum ACBits CPP_11(: Int)
 	MAINTAIN_FRAME_ACROSS_STATES2,
 	MAINTAIN_FRAME_ACROSS_STATES3,
 	MAINTAIN_FRAME_ACROSS_STATES4,
+	ANIMATE_BY_CONSTRUCTION_PERCENT,	///< Tiberium Project @feature the animation's frame follows the construction (a build-up)
 
 	AC_BITS_COUNT
 };
@@ -238,6 +239,7 @@ static const char *const ACBitsNames[] =
 	"MAINTAIN_FRAME_ACROSS_STATES2",
 	"MAINTAIN_FRAME_ACROSS_STATES3",
 	"MAINTAIN_FRAME_ACROSS_STATES4",
+	"ANIMATE_BY_CONSTRUCTION_PERCENT",
 
 	nullptr
 };
@@ -2000,6 +2002,31 @@ void W3DModelDraw::adjustAnimSpeedToMovementSpeed()
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature ANIMATE_BY_CONSTRUCTION_PERCENT: a structure's build-up animation (the
+// SAGE 2 games unfold a building in one) shown at the frame its construction has reached, so it
+// unfolds as the dozer builds, and holds while the building waits for one. Drawing only.
+void W3DModelDraw::adjustAnimFrameToConstruction()
+{
+	if (m_curState == nullptr || m_renderObject == nullptr || !testFlagBit(m_curState->m_flags, ANIMATE_BY_CONSTRUCTION_PERCENT)
+		|| m_renderObject->Class_ID() != RenderObjClass::CLASSID_HLOD)
+		return;
+	const Object* obj = getDrawable()->getObject();
+	if (obj == nullptr)
+		return;
+	const Real pct = obj->getConstructionPercent();
+	if (pct < 0.0f)
+		return;
+	HLodClass* hlod = (HLodClass*)m_renderObject;
+	HAnimClass* anim = hlod->Peek_Animation();
+	if (anim == nullptr || anim->Get_Num_Frames() < 1)
+		return;
+	Real frame = (pct / 100.0f) * INT_TO_REAL(anim->Get_Num_Frames() - 1);
+	if (frame < 0.0f)
+		frame = 0.0f;
+	hlod->Set_Animation(anim, frame, RenderObjClass::ANIM_MODE_MANUAL);
+}
+
+//-------------------------------------------------------------------------------------------------
 void W3DModelDraw::adjustTransformMtx(Matrix3D& mtx) const
 {
 	const W3DModelDrawModuleData* d = getW3DModelDrawModuleData();
@@ -2099,6 +2126,7 @@ void W3DModelDraw::doDrawModule(const Matrix3D* transformMtx)
 	}
 
 	adjustAnimSpeedToMovementSpeed();
+	adjustAnimFrameToConstruction();	// Tiberium Project @feature
 
 	// set our position in the render object to our position of the drawable
 	if (m_renderObject)

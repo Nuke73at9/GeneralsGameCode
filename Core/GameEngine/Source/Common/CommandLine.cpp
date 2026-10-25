@@ -907,6 +907,14 @@ Int parseTestUnits(char *args[], int num)
 	return 2;
 }
 
+// Tiberium Project @feature -testBase <frame>: America's core base, in the states its art has
+Int parseTestBase(char *args[], int num)
+{
+	if (num > 1)
+		TiberiumTest::setBaseFrame(atoi(args[1]));
+	return 2;
+}
+
 Int parseTestReveal(char *args[], int num)
 {
 	if (num > 1)
@@ -1328,6 +1336,7 @@ static CommandLineParam paramsForEngineInit[] =
 	{ "-testLights", parseTestLights },
 	{ "-testFire", parseTestFire },
 	{ "-testUnits", parseTestUnits },
+	{ "-testBase", parseTestBase },
 	{ "-testReveal", parseTestReveal },
 	{ "-testCRC", parseTestCRC },
 	{ "-testQuit", parseTestQuit },

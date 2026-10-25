@@ -47,6 +47,8 @@
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "GameLogic/Object.h"
+#include "GameLogic/Module/BodyModule.h"
+#include "Common/BuildAssistant.h"
 
 namespace
 {
@@ -67,6 +69,14 @@ namespace
 	Int s_lightsFrame = -1;
 	Int s_fireFrame = -1;
 	Int s_unitsFrame = -1;
+	Int s_baseFrame = -1;
+	// -testBase: the structure being built (its construction runs over BASE_BUILD_FRAMES) and the one
+	// destroyed BASE_KILL_FRAMES in
+	std::vector<ObjectID> s_baseBuilding;
+	ObjectID s_baseVictim = INVALID_ID;
+	Coord3D s_baseVictimPos;
+	const Int BASE_BUILD_FRAMES = 600;
+	const Int BASE_KILL_FRAMES = 300;
 	Bool s_reveal = FALSE;
 	Bool s_revealed = FALSE;
 	Int s_controlBarStage = -1;	// ControlBarStages, or -1: as it is
@@ -324,6 +334,7 @@ void TiberiumTest::setScorchFrame( Int frame ) { if ( frame >= 0 ) { s_scorchFra
 void TiberiumTest::setLightsFrame( Int frame ) { if ( frame >= 0 ) { s_lightsFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setFireFrame( Int frame ) { if ( frame >= 0 ) { s_fireFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setUnitsFrame( Int frame ) { if ( frame >= 0 ) { s_unitsFrame = frame; s_active = TRUE; } }
+void TiberiumTest::setBaseFrame( Int frame ) { if ( frame >= 0 ) { s_baseFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setReveal( Bool reveal ) { s_reveal = reveal; if ( reveal ) s_active = TRUE; }
 void TiberiumTest::setCRCFrame( Int frame ) { if ( frame >= 0 ) { s_crcFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setQuitFrame( Int frame ) { if ( frame > 0 ) { s_quitFrame = frame; s_active = TRUE; } }
@@ -554,6 +565,102 @@ void TiberiumTest::update()
 			++made;
 		}
 		log( "frame %d: %d vehicles and buildings around %.0f %.0f", (int)s_frame, (int)made, center.x, center.y );
+	}
+
+	// Tiberium Project @feature America's core base around the view, in the states its art has: whole,
+	// damaged, really damaged, one being built (its construction runs from nothing to done) and one
+	// destroyed a while in; this adds to the game
+	if ( s_baseFrame >= 0 && s_frame == s_baseFrame && TheThingFactory != nullptr && ThePlayerList != nullptr
+		&& ThePlayerList->getLocalPlayer() != nullptr && TheTacticalView != nullptr )
+	{
+		enum { WHOLE, DAMAGED, REALLY_DAMAGED, BUILDING, VICTIM };
+		struct Placed { const char *name; Real dx, dy, angle; Int state; };
+		static const Placed THINGS[] = {
+			{ "AmericaCommandCenter", -150.0f, 250.0f, 0.0f, WHOLE }, { "AmericaPowerPlant", 0.0f, 260.0f, 0.0f, WHOLE },
+			{ "AmericaBarracks", 120.0f, 260.0f, 0.0f, WHOLE }, { "AmericaWarFactory", 290.0f, 250.0f, 0.0f, WHOLE },
+			{ "AmericaSupplyCenter", 440.0f, 250.0f, 0.0f, WHOLE },
+			{ "AmericaPowerPlant", -150.0f, -10.0f, 0.0f, BUILDING }, { "AmericaBarracks", -20.0f, 0.0f, 0.0f, DAMAGED },
+			{ "AmericaWarFactory", 140.0f, -10.0f, 0.0f, REALLY_DAMAGED }, { "AmericaPowerPlant", 290.0f, -10.0f, 0.0f, VICTIM },
+			{ "AmericaCommandCenter", -60.0f, -230.0f, 0.0f, BUILDING }, { "AmericaSupplyCenter", 180.0f, -230.0f, 0.0f, DAMAGED } };
+		Team *team = ThePlayerList->getLocalPlayer()->getDefaultTeam();
+		const Coord3D center = TheTacticalView->getPosition();
+		Int made = 0;
+		for ( Int k = 0; k < (Int)( sizeof( THINGS ) / sizeof( THINGS[0] ) ); ++k )
+		{
+			const ThingTemplate *tmpl = TheThingFactory->findTemplate( THINGS[k].name );
+			Object *obj = tmpl != nullptr && team != nullptr ? TheThingFactory->newObject( tmpl, team ) : nullptr;
+			if ( obj == nullptr )
+				continue;
+			Coord3D p = center;
+			p.x += THINGS[k].dx;
+			p.y += THINGS[k].dy;
+			p.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( p.x, p.y ) : 0.0f;
+			obj->setPosition( &p );
+			obj->setOrientation( THINGS[k].angle );
+			BodyModuleInterface *body = obj->getBodyModule();
+			if ( THINGS[k].state == DAMAGED && body != nullptr )
+				body->setInitialHealth( 45 );
+			else if ( THINGS[k].state == REALLY_DAMAGED && body != nullptr )
+				body->setInitialHealth( 15 );
+			else if ( THINGS[k].state == BUILDING )
+			{
+				obj->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_UNDER_CONSTRUCTION ) );
+				obj->setConstructionPercent( 0.0f );
+				obj->setModelConditionFlags( MAKE_MODELCONDITION_MASK2( MODELCONDITION_PARTIALLY_CONSTRUCTED, MODELCONDITION_ACTIVELY_BEING_CONSTRUCTED ) );
+				s_baseBuilding.push_back( obj->getID() );
+			}
+			else if ( THINGS[k].state == VICTIM )
+				s_baseVictim = obj->getID();
+			++made;
+		}
+		log( "frame %d: %d structures of America's base around %.0f %.0f", (int)s_frame, (int)made, center.x, center.y );
+	}
+	if ( s_baseFrame >= 0 && s_frame > s_baseFrame && TheGameLogic != nullptr )
+	{
+		const Real pct = 100.0f * (Real)( s_frame - s_baseFrame ) / (Real)BASE_BUILD_FRAMES;
+		for ( size_t k = 0; k < s_baseBuilding.size(); ++k )
+		{
+			Object *building = TheGameLogic->findObjectByID( s_baseBuilding[k] );
+			if ( building == nullptr )
+				continue;
+			if ( pct < 100.0f )
+				building->setConstructionPercent( pct );
+			else
+			{
+				building->setConstructionPercent( CONSTRUCTION_COMPLETE );
+				building->clearStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_UNDER_CONSTRUCTION ) );
+				building->clearModelConditionFlags( MAKE_MODELCONDITION_MASK2( MODELCONDITION_PARTIALLY_CONSTRUCTED, MODELCONDITION_ACTIVELY_BEING_CONSTRUCTED ) );
+			}
+		}
+		if ( pct >= 100.0f && !s_baseBuilding.empty() )
+		{
+			s_baseBuilding.clear();
+			log( "frame %d: the structures being built are done", (int)s_frame );
+		}
+		if ( s_frame == s_baseFrame + BASE_KILL_FRAMES && s_baseVictim != INVALID_ID )
+		{
+			Object *victim = TheGameLogic->findObjectByID( s_baseVictim );
+			if ( victim != nullptr )
+			{
+				s_baseVictimPos = *victim->getPosition();
+				victim->kill();
+				log( "frame %d: a structure destroyed", (int)s_frame );
+			}
+			s_baseVictim = INVALID_ID;
+		}
+		// what stands where it was a moment later (its collapse, debris)
+		if ( s_frame == s_baseFrame + BASE_KILL_FRAMES + 60 )
+		{
+			std::string near;
+			for ( Object *o = TheGameLogic->getFirstObject(); o != nullptr; o = o->getNextObject() )
+			{
+				const Coord3D *q = o->getPosition();
+				const Real dx = q->x - s_baseVictimPos.x, dy = q->y - s_baseVictimPos.y;
+				if ( dx * dx + dy * dy < 80.0f * 80.0f && near.size() < 400 )
+					near += std::string( " " ) + o->getTemplate()->getName().str();
+			}
+			log( "frame %d: where it stood:%s", (int)s_frame, near.c_str() );
+		}
 	}
 
 	if ( s_fireFrame >= 0 && s_frame == s_fireFrame + 30 && TheParticleSystemManager != nullptr )
