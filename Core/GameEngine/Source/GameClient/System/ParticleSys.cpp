@@ -291,6 +291,15 @@ void Particle::computeColorRate()
 }
 
 // ------------------------------------------------------------------------------------------------
+// Tiberium Project @feature ExactKeyFrames: the template of the system this particle belongs to asks
+// for the exact key frame timing
+Bool Particle::hasExactKeyFrames() const
+{
+	const ParticleSystemTemplate *t = m_system != nullptr ? m_system->getTemplate() : nullptr;
+	return t != nullptr && t->isExactKeyFrames();
+}
+
+// ------------------------------------------------------------------------------------------------
 /** Construct a particle from a particle template */
 // ------------------------------------------------------------------------------------------------
 Particle::Particle( ParticleSystem *system, const ParticleInfo *info )
@@ -339,17 +348,24 @@ Particle::Particle( ParticleSystem *system, const ParticleInfo *info )
 		m_alphaKey[i] = info->m_alphaKey[i];
 
 	m_alpha = m_alphaKey[0].value;
+	// Tiberium Project @feature a template may ask for the exact timing whatever the retail switch
+	const Bool exactKeyFrames = hasExactKeyFrames();
 #if PRESERVE_RETAIL_PARTICLES
-	// The original implementation ramps towards the second key frame from the creation frame, which reaches its value one
-	// frame early, or runs past it until its frame is reached if the first key frame starts later.
-	m_alphaTargetKey = 1;
-	computeAlphaRate();
-#else
-	// TheSuperHackers @tweak The first key frame holds its value until its frame has passed, and is therefore the first
-	// key frame to advance to.
-	m_alphaTargetKey = 0;
-	m_alphaRate = 0.0f;
+	if (!exactKeyFrames)
+	{
+		// The original implementation ramps towards the second key frame from the creation frame, which reaches its value one
+		// frame early, or runs past it until its frame is reached if the first key frame starts later.
+		m_alphaTargetKey = 1;
+		computeAlphaRate();
+	}
+	else
 #endif
+	{
+		// TheSuperHackers @tweak The first key frame holds its value until its frame has passed, and is therefore the first
+		// key frame to advance to.
+		m_alphaTargetKey = 0;
+		m_alphaRate = 0.0f;
+	}
 
 	// set up colors
 	for( i=0; i<MAX_KEYFRAMES; i++ )
@@ -357,20 +373,25 @@ Particle::Particle( ParticleSystem *system, const ParticleInfo *info )
 
 	m_color = m_colorKey[0].color;
 #if PRESERVE_RETAIL_PARTICLES
-	// The original implementation ramps towards the second key frame from the creation frame and therefore runs past its
-	// color. Unlike the alpha, the color is not overwritten with the key frame value, so this offset remains for the rest
-	// of the life of the particle. This can cause visual glitches, such as greenish flames from Dragon Tanks
-	// and Inferno Cannons.
-	m_colorTargetKey = 1;
-	computeColorRate();
-#else
-	// TheSuperHackers @tweak The first key frame holds its color until its frame has passed, like the alpha does, so that
-	// every key frame interval ends exactly on its key frame.
-	m_colorTargetKey = 0;
-	m_colorRate.red = 0.0f;
-	m_colorRate.green = 0.0f;
-	m_colorRate.blue = 0.0f;
+	if (!exactKeyFrames)
+	{
+		// The original implementation ramps towards the second key frame from the creation frame and therefore runs past its
+		// color. Unlike the alpha, the color is not overwritten with the key frame value, so this offset remains for the rest
+		// of the life of the particle. This can cause visual glitches, such as greenish flames from Dragon Tanks
+		// and Inferno Cannons.
+		m_colorTargetKey = 1;
+		computeColorRate();
+	}
+	else
 #endif
+	{
+		// TheSuperHackers @tweak The first key frame holds its color until its frame has passed, like the alpha does, so that
+		// every key frame interval ends exactly on its key frame.
+		m_colorTargetKey = 0;
+		m_colorRate.red = 0.0f;
+		m_colorRate.green = 0.0f;
+		m_colorRate.blue = 0.0f;
+	}
 
 	m_colorScale = info->m_colorScale;
 
@@ -478,7 +499,7 @@ Bool Particle::update()
 #if PRESERVE_RETAIL_PARTICLES
 		// The first key frame interval starts on the creation frame and therefore arrives at its key frame early.
 		// On the key frame, the alpha is set to the key frame value and held for that frame.
-		if (m_alphaTargetKey == 1 && frameCount == m_alphaKey[ 1 ].frame)
+		if (m_alphaTargetKey == 1 && frameCount == m_alphaKey[ 1 ].frame && !hasExactKeyFrames())
 		{
 			m_alpha = m_alphaKey[ 1 ].value;
 			m_alphaRate = 0.0f;
@@ -2888,6 +2909,12 @@ static const char *const TextureFrameModeNames[] =
 	"LOOP", "RANDOM", "ROW", "RANDOM_ROW", nullptr
 };
 
+// Tiberium Project @feature the particles' lighting: ParticleLighting
+static const char *const ParticleLightingNames[] =
+{
+	"AUTO", "LIT", "UNLIT", nullptr
+};
+
 const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 {
 	{ "Priority",								INI::parseIndexList, ParticlePriorityNames, offsetof( ParticleSystemTemplate, m_priority ) },
@@ -2999,6 +3026,12 @@ const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 	{ "TextureFrameMode",				INI::parseIndexList,		TextureFrameModeNames,	offsetof( ParticleSystemTemplate, m_textureFrameMode ) },
 	{ "TextureFrameRow",				INI::parseUnsignedInt,	nullptr,	offsetof( ParticleSystemTemplate, m_textureFrameRow ) },
 	{ "TextureFrameSpeed",			INI::parseReal,					nullptr,	offsetof( ParticleSystemTemplate, m_textureFrameSpeed ) },
+	// Tiberium Project @feature whether the scene's light falls on the particles
+	{ "Lighting",								INI::parseIndexList,		ParticleLightingNames,	offsetof( ParticleSystemTemplate, m_lighting ) },
+	// Tiberium Project @feature key frames timed exactly whatever the retail timing
+	{ "ExactKeyFrames",					INI::parseBool,					nullptr,	offsetof( ParticleSystemTemplate, m_exactKeyFrames ) },
+	// Tiberium Project @feature colours drawn twice as bright
+	{ "BrightColors",						INI::parseBool,					nullptr,	offsetof( ParticleSystemTemplate, m_brightColors ) },
 
 
 	{ nullptr,											nullptr,																					nullptr,		0 },
@@ -3097,6 +3130,9 @@ ParticleSystemTemplate::ParticleSystemTemplate( const AsciiString &name ) :
 	m_textureFrameMode = TEXTURE_FRAMES_LOOP;
 	m_textureFrameRow = 0;
 	m_textureFrameSpeed = 1.0f;
+	m_lighting = PARTICLE_LIGHTING_AUTO;
+	m_exactKeyFrames = FALSE;
+	m_brightColors = FALSE;
 }
 
 // ------------------------------------------------------------------------------------------------

@@ -19,7 +19,8 @@ float4x4 WorldView : register(c4);
 
 // pixel shader constants
 float4 SoftParams : register(c0);	// x: 1 / fade distance (world units), y: additive, z: multiplied, w: alpha blended
-float4 FrameParams : register(c1);	// xy: 1 / the frame's size in pixels
+float4 FrameParams : register(c1);	// xy: 1 / the frame's size in pixels, z: the colour's scale (1, or 2 for
+									// W3D's modulate 2x sprites)
 
 sampler2D ParticleSampler : register(s0);	// the particle's texture, as W3D bound it
 sampler2D DepthSampler : register(s3);		// the scene's linear depth (R32F, view-space z)
@@ -60,6 +61,7 @@ VSOutput VS_Soft(VSInput In)
 float4 PS_Soft(PSInput In, float2 Pixel : VPOS) : COLOR
 {
 	float4 color = tex2D(ParticleSampler, In.TexCoord) * In.Color;
+	color.rgb *= FrameParams.z;
 	float sceneDepth = abs(tex2D(DepthSampler, (Pixel + 0.5) * FrameParams.xy).x);
 	float fade = saturate((sceneDepth - In.ViewDepth) * SoftParams.x);
 	color.rgb = lerp(color.rgb, color.rgb * fade, SoftParams.y);

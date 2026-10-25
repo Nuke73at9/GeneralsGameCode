@@ -64,6 +64,7 @@ W3DParticleSystemManager::W3DParticleSystemManager()
 	m_angleBuffer = nullptr;
 	m_frameBuffer = nullptr;
 	m_batchGrid = 1;
+	m_batchBright = FALSE;
 	m_readyToRender = false;
 
 	m_onScreenParticleCount = 0;
@@ -126,6 +127,21 @@ static UnsignedInt textureGrid(const ParticleSystem& sys)
 		return 1;
 	const UnsignedInt grid = t->getTextureGrid();
 	return (grid == 2 || grid == 4 || grid == 8 || grid == 16) ? grid : 1;
+}
+
+// Tiberium Project @feature colours drawn twice as bright (the template's BrightColors)
+static Bool isBright(const ParticleSystem& sys)
+{
+	const ParticleSystemTemplate* t = sys.getTemplate();
+	return t != nullptr && t->isBrightColors();
+}
+
+// the sprite shader with the texture times twice the colour
+static ShaderClass brightShader(const ShaderClass& preset)
+{
+	ShaderClass shader(preset);
+	shader.Set_Primary_Gradient(ShaderClass::GRADIENT_MODULATE2X);
+	return shader;
 }
 
 static uint8 particleFrame(const ParticleSystemTemplate& t, Particle& p, UnsignedInt grid)
@@ -336,8 +352,11 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		const RGBColor *color;
 		Real psize;
 #ifdef RTS_RENDERER_D3D9
-		const Bool litSystem = litParticles
-			&& (sys->getShaderType() == ParticleSystemInfo::ALPHA || sys->getShaderType() == ParticleSystemInfo::ALPHA_TEST);
+		// Tiberium Project @feature a system can say whether it takes the light (Lighting)
+		const Int lighting = sysTemplate != nullptr ? sysTemplate->getLighting() : (Int)ParticleSystemTemplate::PARTICLE_LIGHTING_AUTO;
+		const Bool litSystem = litParticles && lighting != ParticleSystemTemplate::PARTICLE_LIGHTING_UNLIT
+			&& (lighting == ParticleSystemTemplate::PARTICLE_LIGHTING_LIT
+				|| sys->getShaderType() == ParticleSystemInfo::ALPHA || sys->getShaderType() == ParticleSystemInfo::ALPHA_TEST);
 #endif
 
 		//set-up all the per-particle
@@ -553,7 +572,8 @@ Bool W3DParticleSystemManager::finishedBatch(const ParticleSystem& system, const
 	return texture.Peek() != m_batchTexture.Peek() ||
 		system.getShaderType() != m_batchShaderType ||
 		system.getParticleAlignment() != m_batchParticleAlignment ||
-		textureGrid(system) != m_batchGrid;
+		textureGrid(system) != m_batchGrid ||
+		isBright(system) != m_batchBright;
 }
 
 void W3DParticleSystemManager::initializeBatch(const ParticleSystem& system, const RefCountPtr<TextureClass>& texture)
@@ -562,6 +582,7 @@ void W3DParticleSystemManager::initializeBatch(const ParticleSystem& system, con
 	m_batchShaderType = system.getShaderType();
 	m_batchParticleAlignment = system.getParticleAlignment();
 	m_batchGrid = textureGrid(system);
+	m_batchBright = isBright(system);
 }
 
 void W3DParticleSystemManager::flushParticleBatch(RenderInfoClass& rinfo, UnsignedInt& pointCount)
@@ -573,13 +594,13 @@ void W3DParticleSystemManager::flushParticleBatch(RenderInfoClass& rinfo, Unsign
 		switch (m_batchShaderType)
 		{
 		case ParticleSystemInfo::ADDITIVE:
-			m_pointGroup->Set_Shader(ShaderClass::_PresetAdditiveSpriteShader);
+			m_pointGroup->Set_Shader(m_batchBright ? brightShader(ShaderClass::_PresetAdditiveSpriteShader) : ShaderClass::_PresetAdditiveSpriteShader);
 			break;
 		case ParticleSystemInfo::ALPHA:
-			m_pointGroup->Set_Shader(ShaderClass::_PresetAlphaSpriteShader);
+			m_pointGroup->Set_Shader(m_batchBright ? brightShader(ShaderClass::_PresetAlphaSpriteShader) : ShaderClass::_PresetAlphaSpriteShader);
 			break;
 		case ParticleSystemInfo::ALPHA_TEST:
-			m_pointGroup->Set_Shader(ShaderClass::_PresetATestSpriteShader);
+			m_pointGroup->Set_Shader(m_batchBright ? brightShader(ShaderClass::_PresetATestSpriteShader) : ShaderClass::_PresetATestSpriteShader);
 			break;
 		case ParticleSystemInfo::MULTIPLY:
 			m_pointGroup->Set_Shader(ShaderClass::_PresetMultiplicativeSpriteShader);
@@ -611,4 +632,5 @@ void W3DParticleSystemManager::flushParticleBatch(RenderInfoClass& rinfo, Unsign
 	m_batchParticleAlignment = ParticleSystemInfo::PARTICLE_ALIGNMENT_BILLBOARD;
 	m_batchShaderType = ParticleSystemInfo::INVALID_SHADER;
 	m_batchGrid = 1;
+	m_batchBright = FALSE;
 }

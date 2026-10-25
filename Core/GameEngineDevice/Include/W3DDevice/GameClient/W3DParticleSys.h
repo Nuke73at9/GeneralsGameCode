@@ -68,5 +68,6 @@ private:
 	ParticleSystemInfo::ParticleShaderType m_batchShaderType;
 	Bool m_readyToRender;											///< if true, it is OK to render
 	ParticleSystemInfo::ParticleAlignmentType m_batchParticleAlignment;
+	Bool m_batchBright;									///< Tiberium Project @feature the batch's colours drawn twice as bright (BrightColors)
 	UnsignedInt m_batchGrid;								///< Tiberium Project @feature the batch texture's frame grid (1: none)
 };

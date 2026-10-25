@@ -218,6 +218,7 @@ protected:
 
 	void computeAlphaRate();							///< compute alpha rate to get to next key
 	void computeColorRate();							///< compute color change to get to next key
+	Bool hasExactKeyFrames() const;				///< Tiberium Project: the system's template asks for ExactKeyFrames
 
 public:
 	Particle *				m_systemNext;
@@ -603,6 +604,29 @@ public:
 	UnsignedInt getTextureFrameRow() const { return m_textureFrameRow; }
 	Real getTextureFrameSpeed() const { return m_textureFrameSpeed; }
 
+	/// Tiberium Project @feature whether the scene's light falls on the particles (lit smoke). Drawing
+	/// only. C&C4 lights only the systems it draws with its lit particle shader, so its fireballs, which
+	/// are alpha-blended sprite sheets, glow at night as they should.
+	enum ParticleLighting
+	{
+		PARTICLE_LIGHTING_AUTO = 0,		///< alpha-blended and alpha-tested systems lit, additive ones not
+		PARTICLE_LIGHTING_LIT,			///< lit whatever the shader
+		PARTICLE_LIGHTING_UNLIT			///< never lit: fire, explosions and other things that give light
+	};
+	Int getLighting() const { return m_lighting; }
+
+	/// Tiberium Project @feature the particles' alpha and colour keys timed exactly (TheSuperHackers'
+	/// timing: the first key held until its frame has passed, each ramp ending on its key) even while
+	/// the retail timing is kept for Zero Hour's own systems; the retail colour ramp runs a frame past
+	/// the second key and keeps the offset, which C&C4's short ramps (yellow to grey in four frames)
+	/// turned into a blue cast. Drawing only.
+	Bool isExactKeyFrames() const { return m_exactKeyFrames; }
+
+	/// Tiberium Project @feature the colours drawn twice as bright (the texture times twice the colour:
+	/// C&C4 scales its particle colours past white, which brightens the dark frames of its fireball
+	/// sheets; a colour stays within white otherwise). Drawing only.
+	Bool isBrightColors() const { return m_brightColors; }
+
 protected:
 	friend class ParticleSystemManager;					///< @todo remove this friendship
 	friend class ParticleSystem;								///< @todo remove this friendship
@@ -629,6 +653,9 @@ protected:
 	Int m_textureFrameMode;				///< TextureFrameMode
 	UnsignedInt m_textureFrameRow;		///< the row ROW plays
 	Real m_textureFrameSpeed;			///< frames per frame of the particle's age
+	Int m_lighting;						///< ParticleLighting (Lighting; on the template only)
+	Bool m_exactKeyFrames;				///< ExactKeyFrames (on the template only)
+	Bool m_brightColors;				///< BrightColors (on the template only)
 
 	// template attribute data inherited from ParticleSystemInfo class
 };

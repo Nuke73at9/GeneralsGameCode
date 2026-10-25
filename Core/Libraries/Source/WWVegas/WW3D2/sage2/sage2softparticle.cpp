@@ -150,7 +150,10 @@ bool Sage2SoftParticleClass::Begin(const ShaderClass& shader)
 	float constants[32];
 	Transposed(worldViewProjection, constants);
 	Transposed(worldView, constants + 16);
-	const float frame[4] = { 1.0f / (float)desc.Width, 1.0f / (float)desc.Height, 0.0f, 0.0f };
+	// z: the colour's scale, 2 for a sprite shader that modulates by twice the colour (the particles'
+	// BrightColors)
+	const float frame[4] = { 1.0f / (float)desc.Width, 1.0f / (float)desc.Height,
+		shader.Get_Primary_Gradient() == ShaderClass::GRADIENT_MODULATE2X ? 2.0f : 1.0f, 0.0f };
 
 	IDirect3DDevice9* device = DX8Wrapper::_Get_D3D_Device8()->Get_D3D9();
 	device->SetVertexShader(s_vertexShader);
