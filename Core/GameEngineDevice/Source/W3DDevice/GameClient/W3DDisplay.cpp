@@ -1006,6 +1006,9 @@ void W3DDisplay::init()
 			Sage2SSAOClass::Set_Params(prefs.getReal("Sage2SSAORadius", 12.0f), prefs.getReal("Sage2SSAOIntensity", 1.0f),
 				prefs.getReal("Sage2SSAOStrength", 0.8f));
 			Sage2SSAOClass::Set_Debug(prefs.getBool("Sage2SSAODebug", FALSE));
+			// Tiberium Project @feature what W3D still draws without shaders goes through shaders that do
+			// the same (groundwork for a backend without a fixed-function pipeline)
+			D3D8On9_Set_Fixed_Function_Shaders(prefs.getBool("Sage2FixedFunctionShaders", TRUE));
 			Sage2PostClass::Set_Exposure(prefs.getReal("Sage2Exposure", 1.0f));
 			Sage2PostClass::Set_Lookup_Strength(prefs.getReal("Sage2LookupStrength", 1.0f));	// the grading table: 0 none, 1 as the look sets it
 			Sage2PostClass::Set_Auto_Exposure(prefs.getReal("Sage2AutoExposure", 0.5f));	// exposure for each map's ground: 0..1
@@ -2046,6 +2049,9 @@ void W3DDisplay::calculateTerrainLOD()
 					D3D8On9_Set_Draw_Stats(false);
 					D3D8On9DrawStats stats[24];
 					const int phases = D3D8On9_Get_Draw_Stats(stats, 24);
+					unsigned emulated = 0, left = 0, reasons = 0;
+					D3D8On9_Get_Fixed_Function_Counts(emulated, left, reasons);
+					Sage2_Log("draws: fixed-function draws through shaders so far %u, left fixed-function %u (why: 0x%X)", emulated, left, reasons);
 					for (int i = 0; i < phases; ++i)
 						Sage2_Log("draws: frame %u, %-24s %5u draws (%u fixed-function vertex, %u fixed-function pixel; of those %u lit, %u fogged, "
 							"%u with two texture stages; FVF %X x%u, %X x%u, %X x%u, %X x%u), %u primitives",
@@ -2481,6 +2487,9 @@ AGAIN:
 					D3D8On9_Set_Draw_Stats(false);
 					D3D8On9DrawStats stats[24];
 					const int phases = D3D8On9_Get_Draw_Stats(stats, 24);
+					unsigned emulated = 0, left = 0, reasons = 0;
+					D3D8On9_Get_Fixed_Function_Counts(emulated, left, reasons);
+					Sage2_Log("draws: fixed-function draws through shaders so far %u, left fixed-function %u (why: 0x%X)", emulated, left, reasons);
 					for (int i = 0; i < phases; ++i)
 						Sage2_Log("draws: frame %u, %-24s %5u draws (%u fixed-function vertex, %u fixed-function pixel; of those %u lit, %u fogged, "
 							"%u with two texture stages; FVF %X x%u, %X x%u, %X x%u, %X x%u), %u primitives",

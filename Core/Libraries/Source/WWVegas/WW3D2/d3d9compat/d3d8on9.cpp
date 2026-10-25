@@ -20,7 +20,11 @@
 
 #include "d3d8on9.h"
 
+#include "../shaders/fixedfunction_vs.h"	// Tiberium Project @feature from shaders/fixedfunction.hlsl (build_shaders.py)
+#include "../shaders/fixedfunction_ps.h"
+
 #include <cstring>
+#include <cmath>
 
 namespace
 {
@@ -201,7 +205,10 @@ D3D8On9Device::D3D8On9Device(IDirect3DDevice9* device, DWORD behaviorFlags) :
 	m_vertexShaderOverride(nullptr),
 	m_vertexDeclarationOverride(nullptr),
 	m_readableDepth(nullptr),
-	m_readableDepthSurface(nullptr)
+	m_readableDepthSurface(nullptr),
+	m_ffVertexShader(nullptr),
+	m_ffPixelShader(nullptr),
+	m_ffTried(false)
 {
 }
 
@@ -217,6 +224,8 @@ D3D8On9Device::~D3D8On9Device()
 		if (m_pixelShaders[i]) m_pixelShaders[i]->Release();
 	}
 	Release_Readable_Depth();
+	if (m_ffVertexShader) m_ffVertexShader->Release();
+	if (m_ffPixelShader) m_ffPixelShader->Release();
 	m_device->Release();
 }
 
@@ -235,6 +244,371 @@ namespace
 	const char* s_drawPhase = "unnamed";
 	D3D8On9DrawStats s_drawPhases[MAX_DRAW_PHASES];
 	int s_drawPhaseCount = 0;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature The fixed-function pipeline as shaders (see shaders/fixedfunction.hlsl)
+namespace
+{
+	bool s_ffShaders = false;
+	unsigned s_ffEmulated = 0, s_ffLeft = 0, s_ffReasons = 0;
+
+	enum FFReason
+	{
+		FF_FOG = 1, FF_BLEND = 2, FF_POSITION = 4, FF_POINT_SIZE = 8, FF_STAGES = 16, FF_OPERATION = 32,
+		FF_LIGHTS = 64, FF_TEXGEN = 128, FF_PIXEL_SHADER = 256, FF_SHADERS = 512
+	};
+
+	void Color_To_Float(D3DCOLOR c, float out[4])
+	{
+		out[0] = ((c >> 16) & 0xFF) / 255.0f;
+		out[1] = ((c >> 8) & 0xFF) / 255.0f;
+		out[2] = (c & 0xFF) / 255.0f;
+		out[3] = ((c >> 24) & 0xFF) / 255.0f;
+	}
+
+	void Value_To_Float(const D3DCOLORVALUE& c, float out[4])
+	{
+		out[0] = c.r; out[1] = c.g; out[2] = c.b; out[3] = c.a;
+	}
+
+	void Multiply_Matrix(const D3DMATRIX& a, const D3DMATRIX& b, D3DMATRIX& out)
+	{
+		D3DMATRIX r;
+		for (int i = 0; i < 4; ++i)
+			for (int j = 0; j < 4; ++j)
+				r.m[i][j] = a.m[i][0] * b.m[0][j] + a.m[i][1] * b.m[1][j] + a.m[i][2] * b.m[2][j] + a.m[i][3] * b.m[3][j];
+		out = r;
+	}
+
+	void Transposed_Matrix(const D3DMATRIX& m, float out[16])
+	{
+		for (int i = 0; i < 4; ++i)
+			for (int j = 0; j < 4; ++j)
+				out[i * 4 + j] = m.m[j][i];
+	}
+
+	float DWORD_Float(DWORD v)
+	{
+		float f;
+		memcpy(&f, &v, sizeof(f));
+		return f;
+	}
+
+	/// a texture stage argument as the pixel shader takes it (which, complemented, alpha replicated),
+	/// false for the ones it does not do (temp, constant)
+	bool Stage_Argument(DWORD arg, float& which, float& complement, float& replicate)
+	{
+		const DWORD select = arg & D3DTA_SELECTMASK;
+		if (select > D3DTA_SPECULAR)
+			return false;
+		which = (float)select;	// diffuse 0, current 1, texture 2, texture factor 3, specular 4
+		complement = (arg & D3DTA_COMPLEMENT) ? 1.0f : 0.0f;
+		replicate = (arg & D3DTA_ALPHAREPLICATE) ? 1.0f : 0.0f;
+		return true;
+	}
+
+	bool Supported_Operation(DWORD op)
+	{
+		return op >= D3DTOP_DISABLE && op <= D3DTOP_DOTPRODUCT3 && op != D3DTOP_PREMODULATE
+			&& op != D3DTOP_BUMPENVMAP && op != D3DTOP_BUMPENVMAPLUMINANCE;
+	}
+}
+
+void D3D8On9_Set_Fixed_Function_Shaders(bool enabled)
+{
+	s_ffShaders = enabled;
+}
+
+void D3D8On9_Get_Fixed_Function_Counts(unsigned& emulated, unsigned& left, unsigned& reasonMask)
+{
+	emulated = s_ffEmulated;
+	left = s_ffLeft;
+	reasonMask = s_ffReasons;
+}
+
+bool D3D8On9Device::Emulate_Fixed_Function()
+{
+	if (!s_ffShaders || m_vertexShaderOverride != nullptr)
+		return false;
+	DWORD fvf = Get_Current_FVF();
+	if (fvf == 0 && m_vertexShader == ~0u)
+		m_device->GetFVF(&fvf);	// forgotten after a SAGE 2 effect (Invalidate_State) while still set on the device
+	if (fvf == 0)
+		return false;	// a Direct3D 8 vertex shader of the game's own, or a declaration of someone else's
+	IDirect3DVertexShader9* vs = nullptr;
+	m_device->GetVertexShader(&vs);
+	if (vs != nullptr)
+	{
+		vs->Release();
+		return false;	// someone else's shaders (the SAGE 2 effects, the tree buffer)
+	}
+	unsigned reason = 0;
+	IDirect3DPixelShader9* ps = nullptr;
+	m_device->GetPixelShader(&ps);
+	if (ps != nullptr)
+	{
+		ps->Release();
+		reason |= FF_PIXEL_SHADER;
+	}
+	if ((fvf & D3DFVF_POSITION_MASK) != D3DFVF_XYZ)
+		reason |= FF_POSITION;	// pre-transformed or blended vertices
+	if (fvf & D3DFVF_PSIZE)
+		reason |= FF_POINT_SIZE;
+	DWORD value = 0;
+	m_device->GetRenderState(D3DRS_FOGENABLE, &value);
+	if (value)
+		reason |= FF_FOG;
+	m_device->GetRenderState(D3DRS_VERTEXBLEND, &value);
+	if (value != D3DVBF_DISABLE)
+		reason |= FF_BLEND;
+	m_device->GetRenderState(D3DRS_INDEXEDVERTEXBLENDENABLE, &value);
+	if (value)
+		reason |= FF_BLEND;
+
+	// the texture stages: two at most, the operations and arguments the pixel shader does
+	float stageConstants[8][4];
+	memset(stageConstants, 0, sizeof(stageConstants));
+	float texGen[2][4] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 } };
+	float hasTexture[4] = { 0, 0, 0, 0 };
+	bool stage1On = false;
+	for (DWORD stage = 0; stage < 2 && reason == 0; ++stage)
+	{
+		DWORD colorOp, colorArg1, colorArg2, alphaOp, alphaArg1, alphaArg2, tci, ttf;
+		m_device->GetTextureStageState(stage, D3DTSS_COLOROP, &colorOp);
+		if (stage == 1)
+		{
+			// a disabled first stage ends the cascade: the second is not looked at
+			stage1On = colorOp != D3DTOP_DISABLE && stageConstants[0][0] != (float)D3DTOP_DISABLE;
+			if (!stage1On)
+				break;
+		}
+		m_device->GetTextureStageState(stage, D3DTSS_COLORARG1, &colorArg1);
+		m_device->GetTextureStageState(stage, D3DTSS_COLORARG2, &colorArg2);
+		m_device->GetTextureStageState(stage, D3DTSS_ALPHAOP, &alphaOp);
+		m_device->GetTextureStageState(stage, D3DTSS_ALPHAARG1, &alphaArg1);
+		m_device->GetTextureStageState(stage, D3DTSS_ALPHAARG2, &alphaArg2);
+		m_device->GetTextureStageState(stage, D3DTSS_TEXCOORDINDEX, &tci);
+		m_device->GetTextureStageState(stage, D3DTSS_TEXTURETRANSFORMFLAGS, &ttf);
+		if (!Supported_Operation(colorOp) || !Supported_Operation(alphaOp))
+		{
+			reason |= FF_OPERATION;
+			break;
+		}
+		float* c = stageConstants[stage * 4 + 0];
+		float* cm = stageConstants[stage * 4 + 1];
+		float* a = stageConstants[stage * 4 + 2];
+		float* am = stageConstants[stage * 4 + 3];
+		c[0] = (float)colorOp;
+		a[0] = (float)alphaOp;
+		if (!Stage_Argument(colorArg1, c[1], cm[0], cm[1]) || !Stage_Argument(colorArg2, c[2], cm[2], cm[3])
+			|| !Stage_Argument(alphaArg1, a[1], am[0], am[1]) || !Stage_Argument(alphaArg2, a[2], am[2], am[3]))
+		{
+			reason |= FF_OPERATION;
+			break;
+		}
+		// the texture coordinates: a stored set, or generated in camera space; the texture transform
+		const DWORD generation = tci & 0xFFFF0000;
+		const DWORD set = tci & 0xFFFF;
+		texGen[stage][0] = (float)set;
+		if (generation == D3DTSS_TCI_PASSTHRU)
+			texGen[stage][1] = 0.0f;
+		else if (generation == D3DTSS_TCI_CAMERASPACENORMAL)
+			texGen[stage][1] = 1.0f;
+		else if (generation == D3DTSS_TCI_CAMERASPACEPOSITION)
+			texGen[stage][1] = 2.0f;
+		else if (generation == D3DTSS_TCI_CAMERASPACEREFLECTIONVECTOR)
+			texGen[stage][1] = 3.0f;
+		else
+		{
+			reason |= FF_TEXGEN;
+			break;
+		}
+		if (set > 3)
+		{
+			reason |= FF_TEXGEN;
+			break;
+		}
+		texGen[stage][2] = (float)(ttf & 0xFF);
+		texGen[stage][3] = (ttf & D3DTTFF_PROJECTED) ? 1.0f : 0.0f;
+		IDirect3DBaseTexture9* texture = nullptr;
+		m_device->GetTexture(stage, &texture);
+		if (texture != nullptr)
+		{
+			hasTexture[stage] = 1.0f;
+			texture->Release();
+		}
+	}
+	if (stage1On && reason == 0)
+	{
+		DWORD stage2 = D3DTOP_DISABLE;
+		m_device->GetTextureStageState(2, D3DTSS_COLOROP, &stage2);
+		if (stage2 != D3DTOP_DISABLE)
+			reason |= FF_STAGES;
+	}
+
+	// the lights
+	DWORD lighting = FALSE;
+	m_device->GetRenderState(D3DRS_LIGHTING, &lighting);
+	D3DLIGHT9 lights[4];
+	int lightCount = 0;
+	if (lighting && reason == 0)
+	{
+		for (DWORD index = 0; index < 8; ++index)
+		{
+			BOOL on = FALSE;
+			if (FAILED(m_device->GetLightEnable(index, &on)) || !on)
+				continue;
+			if (lightCount == 4)
+			{
+				reason |= FF_LIGHTS;
+				break;
+			}
+			m_device->GetLight(index, &lights[lightCount++]);
+		}
+	}
+
+	if (reason != 0)
+	{
+		++s_ffLeft;
+		s_ffReasons |= reason;
+		return false;
+	}
+	if (!m_ffTried)
+	{
+		m_ffTried = true;
+		if (FAILED(m_device->CreateVertexShader(FixedFunctionVertexShader, &m_ffVertexShader))
+			|| FAILED(m_device->CreatePixelShader(FixedFunctionPixelShader, &m_ffPixelShader)))
+		{
+			if (m_ffVertexShader) { m_ffVertexShader->Release(); m_ffVertexShader = nullptr; }
+			if (m_ffPixelShader) { m_ffPixelShader->Release(); m_ffPixelShader = nullptr; }
+		}
+	}
+	if (m_ffVertexShader == nullptr || m_ffPixelShader == nullptr)
+	{
+		++s_ffLeft;
+		s_ffReasons |= FF_SHADERS;
+		return false;
+	}
+
+	// vertex shader constants
+	D3DMATRIX world, view, projection, worldView, worldViewProjection, tex0, tex1;
+	m_device->GetTransform(D3DTS_WORLD, &world);
+	m_device->GetTransform(D3DTS_VIEW, &view);
+	m_device->GetTransform(D3DTS_PROJECTION, &projection);
+	m_device->GetTransform(D3DTS_TEXTURE0, &tex0);
+	m_device->GetTransform(D3DTS_TEXTURE1, &tex1);
+	Multiply_Matrix(world, view, worldView);
+	Multiply_Matrix(worldView, projection, worldViewProjection);
+	float vsc[58][4];
+	memset(vsc, 0, sizeof(vsc));
+	Transposed_Matrix(worldViewProjection, &vsc[0][0]);
+	Transposed_Matrix(worldView, &vsc[4][0]);
+	DWORD specularOn = FALSE, localViewer = TRUE, colorVertex = TRUE, normalize = FALSE;
+	DWORD diffuseSource = D3DMCS_COLOR1, ambientSource = D3DMCS_MATERIAL, specularSource = D3DMCS_COLOR2, emissiveSource = D3DMCS_MATERIAL;
+	DWORD ambient = 0, textureFactor = 0xFFFFFFFF;
+	m_device->GetRenderState(D3DRS_SPECULARENABLE, &specularOn);
+	m_device->GetRenderState(D3DRS_LOCALVIEWER, &localViewer);
+	m_device->GetRenderState(D3DRS_COLORVERTEX, &colorVertex);
+	m_device->GetRenderState(D3DRS_NORMALIZENORMALS, &normalize);
+	m_device->GetRenderState(D3DRS_DIFFUSEMATERIALSOURCE, &diffuseSource);
+	m_device->GetRenderState(D3DRS_AMBIENTMATERIALSOURCE, &ambientSource);
+	m_device->GetRenderState(D3DRS_SPECULARMATERIALSOURCE, &specularSource);
+	m_device->GetRenderState(D3DRS_EMISSIVEMATERIALSOURCE, &emissiveSource);
+	m_device->GetRenderState(D3DRS_AMBIENT, &ambient);
+	m_device->GetRenderState(D3DRS_TEXTUREFACTOR, &textureFactor);
+	vsc[8][0] = lighting ? 1.0f : 0.0f;
+	vsc[8][1] = (fvf & D3DFVF_NORMAL) ? 1.0f : 0.0f;
+	vsc[8][2] = (fvf & D3DFVF_DIFFUSE) ? 1.0f : 0.0f;
+	vsc[8][3] = (fvf & D3DFVF_SPECULAR) ? 1.0f : 0.0f;
+	vsc[9][0] = specularOn ? 1.0f : 0.0f;
+	vsc[9][1] = localViewer ? 1.0f : 0.0f;
+	vsc[9][2] = colorVertex ? 1.0f : 0.0f;
+	vsc[9][3] = normalize ? 1.0f : 0.0f;
+	vsc[10][0] = (float)diffuseSource;
+	vsc[10][1] = (float)ambientSource;
+	vsc[10][2] = (float)specularSource;
+	vsc[10][3] = (float)emissiveSource;
+	D3DMATERIAL9 material;
+	memset(&material, 0, sizeof(material));
+	m_device->GetMaterial(&material);
+	Value_To_Float(material.Diffuse, vsc[11]);
+	Value_To_Float(material.Ambient, vsc[12]);
+	Value_To_Float(material.Specular, vsc[13]);
+	Value_To_Float(material.Emissive, vsc[14]);
+	vsc[15][0] = material.Power;
+	Color_To_Float(ambient, vsc[16]);
+	vsc[17][0] = (float)lightCount;
+	for (int i = 0; i < lightCount; ++i)
+	{
+		const D3DLIGHT9& l = lights[i];
+		float* r = vsc[18 + i * 7];
+		Value_To_Float(l.Diffuse, r);
+		Value_To_Float(l.Specular, r + 4);
+		Value_To_Float(l.Ambient, r + 8);
+		// position and direction into camera space
+		const float px = l.Position.x, py = l.Position.y, pz = l.Position.z;
+		r[12] = px * view._11 + py * view._21 + pz * view._31 + view._41;
+		r[13] = px * view._12 + py * view._22 + pz * view._32 + view._42;
+		r[14] = px * view._13 + py * view._23 + pz * view._33 + view._43;
+		r[15] = l.Type == D3DLIGHT_POINT ? 1.0f : (l.Type == D3DLIGHT_SPOT ? 2.0f : 3.0f);
+		float dx = l.Direction.x * view._11 + l.Direction.y * view._21 + l.Direction.z * view._31;
+		float dy = l.Direction.x * view._12 + l.Direction.y * view._22 + l.Direction.z * view._32;
+		float dz = l.Direction.x * view._13 + l.Direction.y * view._23 + l.Direction.z * view._33;
+		const float length = sqrtf(dx * dx + dy * dy + dz * dz);
+		if (length > 0.0f) { dx /= length; dy /= length; dz /= length; }
+		r[16] = dx; r[17] = dy; r[18] = dz;
+		r[19] = l.Range > 0.0f ? l.Range : 1e30f;
+		r[20] = l.Attenuation0; r[21] = l.Attenuation1; r[22] = l.Attenuation2; r[23] = l.Falloff;
+		r[24] = cosf(l.Theta * 0.5f); r[25] = cosf(l.Phi * 0.5f);
+	}
+	memcpy(vsc[46], texGen, sizeof(texGen));
+	Transposed_Matrix(tex0, &vsc[48][0]);
+	Transposed_Matrix(tex1, &vsc[52][0]);
+	DWORD pointSize = 0, pointScale = FALSE, pointMin = 0, pointMax = 0, scaleA = 0, scaleB = 0, scaleC = 0;
+	m_device->GetRenderState(D3DRS_POINTSIZE, &pointSize);
+	m_device->GetRenderState(D3DRS_POINTSCALEENABLE, &pointScale);
+	m_device->GetRenderState(D3DRS_POINTSIZE_MIN, &pointMin);
+	m_device->GetRenderState(D3DRS_POINTSIZE_MAX, &pointMax);
+	m_device->GetRenderState(D3DRS_POINTSCALE_A, &scaleA);
+	m_device->GetRenderState(D3DRS_POINTSCALE_B, &scaleB);
+	m_device->GetRenderState(D3DRS_POINTSCALE_C, &scaleC);
+	D3DVIEWPORT9 viewport;
+	m_device->GetViewport(&viewport);
+	vsc[56][0] = DWORD_Float(pointSize);
+	vsc[56][1] = pointScale ? 1.0f : 0.0f;
+	vsc[56][2] = DWORD_Float(pointMin);
+	vsc[56][3] = DWORD_Float(pointMax) > 0.0f ? DWORD_Float(pointMax) : 256.0f;
+	vsc[57][0] = DWORD_Float(scaleA);
+	vsc[57][1] = DWORD_Float(scaleB);
+	vsc[57][2] = DWORD_Float(scaleC);
+	vsc[57][3] = (float)viewport.Height;
+
+	// pixel shader constants
+	float psc[11][4];
+	memset(psc, 0, sizeof(psc));
+	memcpy(psc[0], stageConstants, sizeof(stageConstants));
+	Color_To_Float(textureFactor, psc[8]);
+	psc[9][0] = specularOn ? 1.0f : 0.0f;
+	psc[9][1] = stage1On ? 1.0f : 0.0f;
+	psc[9][2] = texGen[0][3];
+	psc[9][3] = texGen[1][3];
+	psc[10][0] = hasTexture[0];
+	psc[10][1] = hasTexture[1];
+
+	m_device->SetVertexShader(m_ffVertexShader);
+	m_device->SetPixelShader(m_ffPixelShader);
+	m_device->SetVertexShaderConstantF(0, &vsc[0][0], 58);
+	m_device->SetPixelShaderConstantF(0, &psc[0][0], 11);
+	++s_ffEmulated;
+	return true;
+}
+
+void D3D8On9Device::End_Fixed_Function()
+{
+	// back to fixed-function, as the renderer left it
+	m_device->SetVertexShader(nullptr);
+	m_device->SetPixelShader(nullptr);
 }
 
 void D3D8On9_Set_Draw_Phase(const char* phase)

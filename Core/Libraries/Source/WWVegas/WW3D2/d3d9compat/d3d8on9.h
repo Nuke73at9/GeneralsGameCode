@@ -279,13 +279,38 @@ public:
 	HRESULT SetStreamSource(UINT stream, IDirect3DVertexBuffer9* buffer, UINT stride)
 		{ return m_device->SetStreamSource(stream, buffer, 0, stride); }
 	HRESULT SetIndices(IDirect3DIndexBuffer9* buffer, UINT baseVertexIndex);
-	HRESULT DrawPrimitive(D3DPRIMITIVETYPE type, UINT start, UINT count) { Count_Draw(count); return m_device->DrawPrimitive(type, start, count); }
+	HRESULT DrawPrimitive(D3DPRIMITIVETYPE type, UINT start, UINT count)
+	{
+		const bool emulated = Emulate_Fixed_Function();
+		Count_Draw(count);
+		HRESULT hr = m_device->DrawPrimitive(type, start, count);
+		if (emulated) End_Fixed_Function();
+		return hr;
+	}
 	HRESULT DrawIndexedPrimitive(D3DPRIMITIVETYPE type, UINT minIndex, UINT numVertices, UINT startIndex, UINT primCount)
-		{ Count_Draw(primCount); return m_device->DrawIndexedPrimitive(type, (INT)m_baseVertexIndex, minIndex, numVertices, startIndex, primCount); }
+	{
+		const bool emulated = Emulate_Fixed_Function();
+		Count_Draw(primCount);
+		HRESULT hr = m_device->DrawIndexedPrimitive(type, (INT)m_baseVertexIndex, minIndex, numVertices, startIndex, primCount);
+		if (emulated) End_Fixed_Function();
+		return hr;
+	}
 	HRESULT DrawPrimitiveUP(D3DPRIMITIVETYPE type, UINT primCount, const void* data, UINT stride)
-		{ Count_Draw(primCount); return m_device->DrawPrimitiveUP(type, primCount, data, stride); }
+	{
+		const bool emulated = Emulate_Fixed_Function();
+		Count_Draw(primCount);
+		HRESULT hr = m_device->DrawPrimitiveUP(type, primCount, data, stride);
+		if (emulated) End_Fixed_Function();
+		return hr;
+	}
 	HRESULT DrawIndexedPrimitiveUP(D3DPRIMITIVETYPE type, UINT minIndex, UINT numVertices, UINT primCount, const void* indices, D3DFORMAT format, const void* data, UINT stride)
-		{ Count_Draw(primCount); return m_device->DrawIndexedPrimitiveUP(type, minIndex, numVertices, primCount, indices, format, data, stride); }
+	{
+		const bool emulated = Emulate_Fixed_Function();
+		Count_Draw(primCount);
+		HRESULT hr = m_device->DrawIndexedPrimitiveUP(type, minIndex, numVertices, primCount, indices, format, data, stride);
+		if (emulated) End_Fixed_Function();
+		return hr;
+	}
 	HRESULT ProcessVertices(UINT srcStart, UINT dstIndex, UINT count, IDirect3DVertexBuffer9* dst, DWORD flags)
 		{ return m_device->ProcessVertices(srcStart, dstIndex, count, dst, nullptr, flags); }
 
@@ -305,6 +330,14 @@ private:
 	~D3D8On9Device();
 	/// Tiberium Project @feature counts a draw for D3D8On9_Get_Draw_Stats, while counting is on
 	void Count_Draw(UINT primitives);
+	/// Tiberium Project @feature a draw left to the fixed-function pipeline goes through its shader
+	/// emulation instead (D3D8On9_Set_Fixed_Function_Shaders): true when the shaders are bound, which
+	/// End_Fixed_Function unbinds after the draw
+	bool Emulate_Fixed_Function();
+	void End_Fixed_Function();
+	IDirect3DVertexShader9* m_ffVertexShader;
+	IDirect3DPixelShader9* m_ffPixelShader;
+	bool m_ffTried;
 
 	struct VertexShader { IDirect3DVertexDeclaration9* decl; IDirect3DVertexShader9* shader; };
 
@@ -388,6 +421,12 @@ struct D3D8On9DrawStats
 	unsigned fixedTwoStages;	///< fixed-function draws with a second texture stage on
 };
 void D3D8On9_Set_Draw_Phase(const char* phase);
+/// Tiberium Project @feature Draws left to the fixed-function pipeline go through shaders that do the
+/// same (shaders/fixedfunction.hlsl) where they can: no fog, no vertex blending, pre-transformed or
+/// per-vertex point sizes, two texture stages at most with the common operations, four lights.
+void D3D8On9_Set_Fixed_Function_Shaders(bool enabled);
+/// How many draws went through them / stayed fixed-function since counting started (for the log)
+void D3D8On9_Get_Fixed_Function_Counts(unsigned& emulated, unsigned& left, unsigned& reasonMask);
 void D3D8On9_Set_Draw_Stats(bool counting);	///< on: counting starts from zero
 int D3D8On9_Get_Draw_Stats(D3D8On9DrawStats* stats, int max);	///< the phases counted, in the order first seen
 
