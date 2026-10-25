@@ -430,6 +430,7 @@ static HWND						_Hwnd															= nullptr;
 bool								DX8Wrapper::IsInitted									= false;
 bool								DX8Wrapper::_EnableTriangleDraw						= true;
 bool								DX8Wrapper::_SoftParticle								= false;
+bool								DX8Wrapper::_DrawsOnDXVK								= true;
 
 int								DX8Wrapper::CurRenderDevice							= -1;
 int								DX8Wrapper::ResolutionWidth							= DEFAULT_RESOLUTION_WIDTH;
@@ -574,6 +575,7 @@ static IDirect3D8* Create_D3D9_Interface()
 				HMODULE pinned = nullptr;
 				GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
 					reinterpret_cast<LPCSTR>(lib), &pinned);
+				DX8Wrapper::Set_Draws_On_DXVK(false);
 				fprintf(stderr, "DX8Wrapper::Init() - drawing with Direct3D 9 on Direct3D 12 (D3D9On12)\n");
 				fflush(stderr);
 				Sage2_Log("renderer: Direct3D 9 on Direct3D 12 (Windows' D3D9On12)");
@@ -621,6 +623,7 @@ static IDirect3D8* Create_D3D9_Interface()
 		return nullptr;
 	}
 #if defined(_WIN32)
+	DX8Wrapper::Set_Draws_On_DXVK(loadedDxvk);
 	fprintf(stderr, "DX8Wrapper::Init() - drawing with Direct3D 9 (%s)\n", loadedDxvk ? "DXVK, on Vulkan" : "the system's");
 	Sage2_Log("renderer: Direct3D 9, %s", loadedDxvk ? "DXVK's, on Vulkan" : "Windows' own, on the graphics driver");
 #else

@@ -1007,8 +1007,12 @@ void W3DDisplay::init()
 				prefs.getReal("Sage2SSAOStrength", 0.8f));
 			Sage2SSAOClass::Set_Debug(prefs.getBool("Sage2SSAODebug", FALSE));
 			// Tiberium Project @feature what W3D still draws without shaders goes through shaders that do
-			// the same (groundwork for a backend without a fixed-function pipeline)
-			D3D8On9_Set_Fixed_Function_Shaders(prefs.getBool("Sage2FixedFunctionShaders", TRUE));
+			// the same (groundwork for a backend without a fixed-function pipeline). On by default on
+			// Windows' own Direct3D 9, where it is faster than the driver's fixed-function (2.7 against
+			// 3.1 ms a frame on the user's PC); off on DXVK 2.6, which looks a pipeline up by a linear
+			// search among the states one shader pair has drawn with, and the shared emulation shaders
+			// draw with many (3.4 to 11 ms there)
+			D3D8On9_Set_Fixed_Function_Shaders(prefs.getBool("Sage2FixedFunctionShaders", !DX8Wrapper::Draws_On_DXVK()));
 			Sage2PostClass::Set_Exposure(prefs.getReal("Sage2Exposure", 1.0f));
 			Sage2PostClass::Set_Lookup_Strength(prefs.getReal("Sage2LookupStrength", 1.0f));	// the grading table: 0 none, 1 as the look sets it
 			Sage2PostClass::Set_Auto_Exposure(prefs.getReal("Sage2AutoExposure", 0.5f));	// exposure for each map's ground: 0..1

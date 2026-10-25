@@ -485,6 +485,9 @@ public:
 	/// mark with each draw it defers)
 	static void Set_Soft_Particle(bool soft) { _SoftParticle=soft; }
 	static bool Is_Soft_Particle() { return _SoftParticle; }
+	/// Tiberium Project @feature whether the Direct3D 9 that draws is DXVK's (on Vulkan) rather than Windows' own
+	static bool Draws_On_DXVK() { return _DrawsOnDXVK; }
+	static void Set_Draws_On_DXVK(bool dxvk) { _DrawsOnDXVK = dxvk; }
 
 	/*
 	** Additional swap chain interface
@@ -682,6 +685,7 @@ protected:
 
 	static bool								_EnableTriangleDraw;
 	static bool								_SoftParticle;
+	static bool								_DrawsOnDXVK;
 
 	static int								CurRenderDevice;
 	static int								ResolutionWidth;
