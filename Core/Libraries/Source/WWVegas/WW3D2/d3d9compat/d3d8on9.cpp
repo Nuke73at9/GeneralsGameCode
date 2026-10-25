@@ -216,6 +216,7 @@ D3D8On9Device::D3D8On9Device(IDirect3DDevice9* device, DWORD behaviorFlags) :
 	m_ffTextureShader(nullptr),
 	m_ffTried(false)
 {
+	memset(&m_ff, 0, sizeof(m_ff));	// nothing known: read from the device before the first draw
 }
 
 D3D8On9Device::~D3D8On9Device()
@@ -332,43 +333,104 @@ void D3D8On9_Get_Fixed_Function_Counts(unsigned& emulated, unsigned& left, unsig
 	reasonMask = s_ffReasons;
 }
 
-bool D3D8On9Device::Emulate_Fixed_Function()
+namespace
 {
-	if (!s_ffShaders || m_vertexShaderOverride != nullptr)
+	// Tiberium Project @performance the render states and texture stage states the fixed-function
+	// shaders read: the adapter keeps them as the renderer sets them, so a draw reads nothing back
+	const D3DRENDERSTATETYPE FF_RENDER_STATES[] =
+	{
+		D3DRS_FOGENABLE, D3DRS_SPECULARENABLE, D3DRS_TEXTUREFACTOR, D3DRS_LIGHTING, D3DRS_AMBIENT,
+		D3DRS_COLORVERTEX, D3DRS_LOCALVIEWER, D3DRS_NORMALIZENORMALS, D3DRS_DIFFUSEMATERIALSOURCE,
+		D3DRS_SPECULARMATERIALSOURCE, D3DRS_AMBIENTMATERIALSOURCE, D3DRS_EMISSIVEMATERIALSOURCE,
+		D3DRS_VERTEXBLEND, D3DRS_INDEXEDVERTEXBLENDENABLE, D3DRS_POINTSIZE, D3DRS_POINTSIZE_MIN,
+		D3DRS_POINTSIZE_MAX, D3DRS_POINTSCALEENABLE, D3DRS_POINTSCALE_A, D3DRS_POINTSCALE_B, D3DRS_POINTSCALE_C
+	};
+	const D3DTEXTURESTAGESTATETYPE FF_STAGE_STATES[] =
+	{
+		D3DTSS_COLOROP, D3DTSS_COLORARG1, D3DTSS_COLORARG2, D3DTSS_ALPHAOP, D3DTSS_ALPHAARG1, D3DTSS_ALPHAARG2,
+		D3DTSS_TEXCOORDINDEX, D3DTSS_TEXTURETRANSFORMFLAGS
+	};
+
+	bool Is_Fixed_Function_Render_State(D3DRENDERSTATETYPE state)
+	{
+		for (size_t i = 0; i < sizeof(FF_RENDER_STATES) / sizeof(FF_RENDER_STATES[0]); ++i)
+			if (FF_RENDER_STATES[i] == state)
+				return true;
 		return false;
-	DWORD fvf = Get_Current_FVF();
-	if (fvf == 0 && m_vertexShader == ~0u)
-		m_device->GetFVF(&fvf);	// forgotten after a SAGE 2 effect (Invalidate_State) while still set on the device
-	if (fvf == 0)
-		return false;	// a Direct3D 8 vertex shader of the game's own, or a declaration of someone else's
-	IDirect3DVertexShader9* vs = nullptr;
-	m_device->GetVertexShader(&vs);
-	if (vs != nullptr)
-	{
-		vs->Release();
-		return false;	// someone else's shaders (the SAGE 2 effects, the tree buffer)
 	}
+
+	bool Is_Fixed_Function_Stage_State(D3DTEXTURESTAGESTATETYPE type)
+	{
+		for (size_t i = 0; i < sizeof(FF_STAGE_STATES) / sizeof(FF_STAGE_STATES[0]); ++i)
+			if (FF_STAGE_STATES[i] == type)
+				return true;
+		return false;
+	}
+
+	bool Same_Matrix(const D3DMATRIX& a, const D3DMATRIX& b)
+	{
+		return memcmp(&a, &b, sizeof(D3DMATRIX)) == 0;
+	}
+}
+
+void D3D8On9Device::Read_Fixed_Function_State()
+{
+	for (size_t i = 0; i < sizeof(FF_RENDER_STATES) / sizeof(FF_RENDER_STATES[0]); ++i)
+	{
+		DWORD value = 0;
+		m_device->GetRenderState(FF_RENDER_STATES[i], &value);
+		m_ff.renderStates[FF_RENDER_STATES[i]] = value;
+	}
+	for (DWORD stage = 0; stage < 3; ++stage)
+		for (size_t i = 0; i < sizeof(FF_STAGE_STATES) / sizeof(FF_STAGE_STATES[0]); ++i)
+		{
+			DWORD value = 0;
+			m_device->GetTextureStageState(stage, FF_STAGE_STATES[i], &value);
+			m_ff.stages[stage][FF_STAGE_STATES[i]] = value;
+		}
+	for (DWORD stage = 0; stage < 2; ++stage)
+	{
+		IDirect3DBaseTexture9* texture = nullptr;
+		m_device->GetTexture(stage, &texture);
+		m_ff.textures[stage] = texture != nullptr;
+		if (texture != nullptr)
+			texture->Release();
+	}
+	m_device->GetTransform(D3DTS_WORLD, &m_ff.world);
+	m_device->GetTransform(D3DTS_VIEW, &m_ff.view);
+	m_device->GetTransform(D3DTS_PROJECTION, &m_ff.projection);
+	m_device->GetTransform(D3DTS_TEXTURE0, &m_ff.texture[0]);
+	m_device->GetTransform(D3DTS_TEXTURE1, &m_ff.texture[1]);
+	for (DWORD index = 0; index < 8; ++index)
+	{
+		// all eight, enabled or not: the renderer may switch one on later without setting it again
+		if (FAILED(m_device->GetLight(index, &m_ff.lights[index])))
+			memset(&m_ff.lights[index], 0, sizeof(D3DLIGHT9));
+		m_ff.lightOn[index] = FALSE;
+		m_device->GetLightEnable(index, &m_ff.lightOn[index]);
+	}
+	memset(&m_ff.material, 0, sizeof(m_ff.material));
+	m_device->GetMaterial(&m_ff.material);
+	D3DVIEWPORT9 viewport;
+	memset(&viewport, 0, sizeof(viewport));
+	m_device->GetViewport(&viewport);
+	m_ff.viewportHeight = viewport.Height;
+}
+
+void D3D8On9Device::Build_Fixed_Function(DWORD fvf)
+{
+	m_ff.reason = 0;
+	m_ff.pixelShader = nullptr;
+	m_ff.lightRows = 0;
+	const DWORD* rs = m_ff.renderStates;
 	unsigned reason = 0;
-	IDirect3DPixelShader9* ps = nullptr;
-	m_device->GetPixelShader(&ps);
-	if (ps != nullptr)
-	{
-		ps->Release();
-		reason |= FF_PIXEL_SHADER;
-	}
 	if ((fvf & D3DFVF_POSITION_MASK) != D3DFVF_XYZ)
 		reason |= FF_POSITION;	// pre-transformed or blended vertices
 	if (fvf & D3DFVF_PSIZE)
 		reason |= FF_POINT_SIZE;
-	DWORD value = 0;
-	m_device->GetRenderState(D3DRS_FOGENABLE, &value);
-	if (value)
+	if (rs[D3DRS_FOGENABLE])
 		reason |= FF_FOG;
-	m_device->GetRenderState(D3DRS_VERTEXBLEND, &value);
-	if (value != D3DVBF_DISABLE)
-		reason |= FF_BLEND;
-	m_device->GetRenderState(D3DRS_INDEXEDVERTEXBLENDENABLE, &value);
-	if (value)
+	if (rs[D3DRS_VERTEXBLEND] != D3DVBF_DISABLE || rs[D3DRS_INDEXEDVERTEXBLENDENABLE])
 		reason |= FF_BLEND;
 
 	// the texture stages: two at most, the operations and arguments the pixel shader does
@@ -379,8 +441,8 @@ bool D3D8On9Device::Emulate_Fixed_Function()
 	bool stage1On = false;
 	for (DWORD stage = 0; stage < 2 && reason == 0; ++stage)
 	{
-		DWORD colorOp, colorArg1, colorArg2, alphaOp, alphaArg1, alphaArg2, tci, ttf;
-		m_device->GetTextureStageState(stage, D3DTSS_COLOROP, &colorOp);
+		const DWORD* ts = m_ff.stages[stage];
+		const DWORD colorOp = ts[D3DTSS_COLOROP];
 		if (stage == 1)
 		{
 			// a disabled first stage ends the cascade: the second is not looked at
@@ -388,13 +450,7 @@ bool D3D8On9Device::Emulate_Fixed_Function()
 			if (!stage1On)
 				break;
 		}
-		m_device->GetTextureStageState(stage, D3DTSS_COLORARG1, &colorArg1);
-		m_device->GetTextureStageState(stage, D3DTSS_COLORARG2, &colorArg2);
-		m_device->GetTextureStageState(stage, D3DTSS_ALPHAOP, &alphaOp);
-		m_device->GetTextureStageState(stage, D3DTSS_ALPHAARG1, &alphaArg1);
-		m_device->GetTextureStageState(stage, D3DTSS_ALPHAARG2, &alphaArg2);
-		m_device->GetTextureStageState(stage, D3DTSS_TEXCOORDINDEX, &tci);
-		m_device->GetTextureStageState(stage, D3DTSS_TEXTURETRANSFORMFLAGS, &ttf);
+		const DWORD alphaOp = ts[D3DTSS_ALPHAOP];
 		if (!Supported_Operation(colorOp) || !Supported_Operation(alphaOp))
 		{
 			reason |= FF_OPERATION;
@@ -406,13 +462,15 @@ bool D3D8On9Device::Emulate_Fixed_Function()
 		float* am = stageConstants[stage * 4 + 3];
 		c[0] = (float)colorOp;
 		a[0] = (float)alphaOp;
-		if (!Stage_Argument(colorArg1, c[1], cm[0], cm[1]) || !Stage_Argument(colorArg2, c[2], cm[2], cm[3])
-			|| !Stage_Argument(alphaArg1, a[1], am[0], am[1]) || !Stage_Argument(alphaArg2, a[2], am[2], am[3]))
+		if (!Stage_Argument(ts[D3DTSS_COLORARG1], c[1], cm[0], cm[1]) || !Stage_Argument(ts[D3DTSS_COLORARG2], c[2], cm[2], cm[3])
+			|| !Stage_Argument(ts[D3DTSS_ALPHAARG1], a[1], am[0], am[1]) || !Stage_Argument(ts[D3DTSS_ALPHAARG2], a[2], am[2], am[3]))
 		{
 			reason |= FF_OPERATION;
 			break;
 		}
 		// the texture coordinates: a stored set, or generated in camera space; the texture transform
+		const DWORD tci = ts[D3DTSS_TEXCOORDINDEX];
+		const DWORD ttf = ts[D3DTSS_TEXTURETRANSFORMFLAGS];
 		const DWORD generation = tci & 0xFFFF0000;
 		const DWORD set = tci & 0xFFFF;
 		texGen[stage][0] = (float)set;
@@ -436,117 +494,68 @@ bool D3D8On9Device::Emulate_Fixed_Function()
 		}
 		texGen[stage][2] = (float)(ttf & 0xFF);
 		texGen[stage][3] = (ttf & D3DTTFF_PROJECTED) ? 1.0f : 0.0f;
-		IDirect3DBaseTexture9* texture = nullptr;
-		m_device->GetTexture(stage, &texture);
-		if (texture != nullptr)
-		{
-			hasTexture[stage] = 1.0f;
-			texture->Release();
-		}
+		hasTexture[stage] = m_ff.textures[stage] ? 1.0f : 0.0f;
 	}
-	if (stage1On && reason == 0)
-	{
-		DWORD stage2 = D3DTOP_DISABLE;
-		m_device->GetTextureStageState(2, D3DTSS_COLOROP, &stage2);
-		if (stage2 != D3DTOP_DISABLE)
-			reason |= FF_STAGES;
-	}
+	if (stage1On && reason == 0 && m_ff.stages[2][D3DTSS_COLOROP] != D3DTOP_DISABLE)
+		reason |= FF_STAGES;
 
 	// the lights
-	DWORD lighting = FALSE;
-	m_device->GetRenderState(D3DRS_LIGHTING, &lighting);
-	D3DLIGHT9 lights[4];
+	const DWORD lighting = rs[D3DRS_LIGHTING];
+	int lightIndex[4];
 	int lightCount = 0;
 	if (lighting && reason == 0)
 	{
-		for (DWORD index = 0; index < 8; ++index)
+		for (int index = 0; index < 8; ++index)
 		{
-			BOOL on = FALSE;
-			if (FAILED(m_device->GetLightEnable(index, &on)) || !on)
+			if (!m_ff.lightOn[index])
 				continue;
 			if (lightCount == 4)
 			{
 				reason |= FF_LIGHTS;
 				break;
 			}
-			m_device->GetLight(index, &lights[lightCount++]);
+			lightIndex[lightCount++] = index;
 		}
 	}
-
 	if (reason != 0)
 	{
-		++s_ffLeft;
-		s_ffReasons |= reason;
-		return false;
-	}
-	if (!m_ffTried)
-	{
-		m_ffTried = true;
-		if (FAILED(m_device->CreateVertexShader(FixedFunctionVertexShader, &m_ffVertexShader))
-			|| FAILED(m_device->CreatePixelShader(FixedFunctionPixelShader, &m_ffPixelShader))
-			|| FAILED(m_device->CreatePixelShader(FixedFunctionModulatePixelShader, &m_ffModulateShader))
-			|| FAILED(m_device->CreatePixelShader(FixedFunctionDiffusePixelShader, &m_ffDiffuseShader))
-			|| FAILED(m_device->CreatePixelShader(FixedFunctionTexturePixelShader, &m_ffTextureShader)))
-			Release_Fixed_Function_Shaders();
-	}
-	if (m_ffVertexShader == nullptr || m_ffPixelShader == nullptr)
-	{
-		++s_ffLeft;
-		s_ffReasons |= FF_SHADERS;
-		return false;
+		m_ff.reason = reason;
+		return;
 	}
 
 	// vertex shader constants
-	D3DMATRIX world, view, projection, worldView, worldViewProjection, tex0, tex1;
-	m_device->GetTransform(D3DTS_WORLD, &world);
-	m_device->GetTransform(D3DTS_VIEW, &view);
-	m_device->GetTransform(D3DTS_PROJECTION, &projection);
-	m_device->GetTransform(D3DTS_TEXTURE0, &tex0);
-	m_device->GetTransform(D3DTS_TEXTURE1, &tex1);
-	Multiply_Matrix(world, view, worldView);
-	Multiply_Matrix(worldView, projection, worldViewProjection);
-	float vsc[58][4];
-	memset(vsc, 0, sizeof(vsc));
+	const D3DMATRIX& view = m_ff.view;
+	D3DMATRIX worldView, worldViewProjection;
+	Multiply_Matrix(m_ff.world, view, worldView);
+	Multiply_Matrix(worldView, m_ff.projection, worldViewProjection);
+	float (*vsc)[4] = m_ff.vs;
+	memset(m_ff.vs, 0, sizeof(m_ff.vs));
 	Transposed_Matrix(worldViewProjection, &vsc[0][0]);
 	Transposed_Matrix(worldView, &vsc[4][0]);
-	DWORD specularOn = FALSE, localViewer = TRUE, colorVertex = TRUE, normalize = FALSE;
-	DWORD diffuseSource = D3DMCS_COLOR1, ambientSource = D3DMCS_MATERIAL, specularSource = D3DMCS_COLOR2, emissiveSource = D3DMCS_MATERIAL;
-	DWORD ambient = 0, textureFactor = 0xFFFFFFFF;
-	m_device->GetRenderState(D3DRS_SPECULARENABLE, &specularOn);
-	m_device->GetRenderState(D3DRS_LOCALVIEWER, &localViewer);
-	m_device->GetRenderState(D3DRS_COLORVERTEX, &colorVertex);
-	m_device->GetRenderState(D3DRS_NORMALIZENORMALS, &normalize);
-	m_device->GetRenderState(D3DRS_DIFFUSEMATERIALSOURCE, &diffuseSource);
-	m_device->GetRenderState(D3DRS_AMBIENTMATERIALSOURCE, &ambientSource);
-	m_device->GetRenderState(D3DRS_SPECULARMATERIALSOURCE, &specularSource);
-	m_device->GetRenderState(D3DRS_EMISSIVEMATERIALSOURCE, &emissiveSource);
-	m_device->GetRenderState(D3DRS_AMBIENT, &ambient);
-	m_device->GetRenderState(D3DRS_TEXTUREFACTOR, &textureFactor);
+	const DWORD specularOn = rs[D3DRS_SPECULARENABLE];
 	vsc[8][0] = lighting ? 1.0f : 0.0f;
 	vsc[8][1] = (fvf & D3DFVF_NORMAL) ? 1.0f : 0.0f;
 	vsc[8][2] = (fvf & D3DFVF_DIFFUSE) ? 1.0f : 0.0f;
 	vsc[8][3] = (fvf & D3DFVF_SPECULAR) ? 1.0f : 0.0f;
 	vsc[9][0] = specularOn ? 1.0f : 0.0f;
-	vsc[9][1] = localViewer ? 1.0f : 0.0f;
-	vsc[9][2] = colorVertex ? 1.0f : 0.0f;
-	vsc[9][3] = normalize ? 1.0f : 0.0f;
-	vsc[10][0] = (float)diffuseSource;
-	vsc[10][1] = (float)ambientSource;
-	vsc[10][2] = (float)specularSource;
-	vsc[10][3] = (float)emissiveSource;
-	D3DMATERIAL9 material;
-	memset(&material, 0, sizeof(material));
-	m_device->GetMaterial(&material);
+	vsc[9][1] = rs[D3DRS_LOCALVIEWER] ? 1.0f : 0.0f;
+	vsc[9][2] = rs[D3DRS_COLORVERTEX] ? 1.0f : 0.0f;
+	vsc[9][3] = rs[D3DRS_NORMALIZENORMALS] ? 1.0f : 0.0f;
+	vsc[10][0] = (float)rs[D3DRS_DIFFUSEMATERIALSOURCE];
+	vsc[10][1] = (float)rs[D3DRS_AMBIENTMATERIALSOURCE];
+	vsc[10][2] = (float)rs[D3DRS_SPECULARMATERIALSOURCE];
+	vsc[10][3] = (float)rs[D3DRS_EMISSIVEMATERIALSOURCE];
+	const D3DMATERIAL9& material = m_ff.material;
 	Value_To_Float(material.Diffuse, vsc[11]);
 	Value_To_Float(material.Ambient, vsc[12]);
 	Value_To_Float(material.Specular, vsc[13]);
 	Value_To_Float(material.Emissive, vsc[14]);
 	vsc[15][0] = material.Power;
-	Color_To_Float(ambient, vsc[16]);
+	Color_To_Float(rs[D3DRS_AMBIENT], vsc[16]);
 	vsc[17][0] = (float)lightCount;
 	for (int i = 0; i < lightCount; ++i)
 	{
-		const D3DLIGHT9& l = lights[i];
+		const D3DLIGHT9& l = m_ff.lights[lightIndex[i]];
 		float* r = vsc[18 + i * 7];
 		Value_To_Float(l.Diffuse, r);
 		Value_To_Float(l.Specular, r + 4);
@@ -567,33 +576,24 @@ bool D3D8On9Device::Emulate_Fixed_Function()
 		r[20] = l.Attenuation0; r[21] = l.Attenuation1; r[22] = l.Attenuation2; r[23] = l.Falloff;
 		r[24] = cosf(l.Theta * 0.5f); r[25] = cosf(l.Phi * 0.5f);
 	}
+	m_ff.lightRows = lighting ? 7 * lightCount : 0;	// the lights only when lit
 	memcpy(vsc[46], texGen, sizeof(texGen));
-	Transposed_Matrix(tex0, &vsc[48][0]);
-	Transposed_Matrix(tex1, &vsc[52][0]);
-	DWORD pointSize = 0, pointScale = FALSE, pointMin = 0, pointMax = 0, scaleA = 0, scaleB = 0, scaleC = 0;
-	m_device->GetRenderState(D3DRS_POINTSIZE, &pointSize);
-	m_device->GetRenderState(D3DRS_POINTSCALEENABLE, &pointScale);
-	m_device->GetRenderState(D3DRS_POINTSIZE_MIN, &pointMin);
-	m_device->GetRenderState(D3DRS_POINTSIZE_MAX, &pointMax);
-	m_device->GetRenderState(D3DRS_POINTSCALE_A, &scaleA);
-	m_device->GetRenderState(D3DRS_POINTSCALE_B, &scaleB);
-	m_device->GetRenderState(D3DRS_POINTSCALE_C, &scaleC);
-	D3DVIEWPORT9 viewport;
-	m_device->GetViewport(&viewport);
-	vsc[56][0] = DWORD_Float(pointSize);
-	vsc[56][1] = pointScale ? 1.0f : 0.0f;
-	vsc[56][2] = DWORD_Float(pointMin);
-	vsc[56][3] = DWORD_Float(pointMax) > 0.0f ? DWORD_Float(pointMax) : 256.0f;
-	vsc[57][0] = DWORD_Float(scaleA);
-	vsc[57][1] = DWORD_Float(scaleB);
-	vsc[57][2] = DWORD_Float(scaleC);
-	vsc[57][3] = (float)viewport.Height;
+	Transposed_Matrix(m_ff.texture[0], &vsc[48][0]);
+	Transposed_Matrix(m_ff.texture[1], &vsc[52][0]);
+	vsc[56][0] = DWORD_Float(rs[D3DRS_POINTSIZE]);
+	vsc[56][1] = rs[D3DRS_POINTSCALEENABLE] ? 1.0f : 0.0f;
+	vsc[56][2] = DWORD_Float(rs[D3DRS_POINTSIZE_MIN]);
+	vsc[56][3] = DWORD_Float(rs[D3DRS_POINTSIZE_MAX]) > 0.0f ? DWORD_Float(rs[D3DRS_POINTSIZE_MAX]) : 256.0f;
+	vsc[57][0] = DWORD_Float(rs[D3DRS_POINTSCALE_A]);
+	vsc[57][1] = DWORD_Float(rs[D3DRS_POINTSCALE_B]);
+	vsc[57][2] = DWORD_Float(rs[D3DRS_POINTSCALE_C]);
+	vsc[57][3] = (float)m_ff.viewportHeight;
 
 	// pixel shader constants
-	float psc[11][4];
-	memset(psc, 0, sizeof(psc));
+	float (*psc)[4] = m_ff.ps;
+	memset(m_ff.ps, 0, sizeof(m_ff.ps));
 	memcpy(psc[0], stageConstants, sizeof(stageConstants));
-	Color_To_Float(textureFactor, psc[8]);
+	Color_To_Float(rs[D3DRS_TEXTUREFACTOR], psc[8]);
 	psc[9][0] = specularOn ? 1.0f : 0.0f;
 	psc[9][1] = stage1On ? 1.0f : 0.0f;
 	psc[9][2] = texGen[0][3];
@@ -637,18 +637,217 @@ bool D3D8On9Device::Emulate_Fixed_Function()
 				pixelShader = m_ffModulateShader;
 		}
 	}
+	m_ff.pixelShader = pixelShader;
+}
 
-	m_device->SetVertexShader(m_ffVertexShader);
-	m_device->SetPixelShader(pixelShader);
-	// the constants the draw uses: the lights only when lit
-	m_device->SetVertexShaderConstantF(0, &vsc[0][0], 18);
-	if (lighting && lightCount > 0)
-		m_device->SetVertexShaderConstantF(18, &vsc[18][0], 7 * lightCount);
-	m_device->SetVertexShaderConstantF(46, &vsc[46][0], 12);
-	if (pixelShader == m_ffPixelShader)
-		m_device->SetPixelShaderConstantF(0, &psc[0][0], 11);
+void D3D8On9Device::Unbind_Bound_Fixed_Function_Shaders()
+{
+	if (m_ff.vsBound)
+		m_device->SetVertexShader(nullptr);
+	if (m_ff.psBound != nullptr)
+		m_device->SetPixelShader(nullptr);
+	m_ff.vsBound = false;
+	m_ff.psBound = nullptr;
+}
+
+bool D3D8On9Device::Emulate_Fixed_Function()
+{
+	if (!s_ffShaders)
+		return false;
+	if (m_vertexShaderOverride != nullptr)
+	{
+		Unbind_Fixed_Function_Shaders();	// the override draws in place of the vertex shader; no pixel shader of ours
+		return false;
+	}
+	DWORD fvf = Get_Current_FVF();
+	if (fvf == 0 && m_vertexShader == ~0u)
+		m_device->GetFVF(&fvf);	// forgotten after a SAGE 2 effect (Invalidate_State) while still set on the device
+	if (fvf == 0)
+	{
+		Unbind_Fixed_Function_Shaders();	// a Direct3D 8 vertex shader of the game's own, or a declaration of someone else's
+		return false;
+	}
+	if (!m_ffTried)
+	{
+		m_ffTried = true;
+		if (FAILED(m_device->CreateVertexShader(FixedFunctionVertexShader, &m_ffVertexShader))
+			|| FAILED(m_device->CreatePixelShader(FixedFunctionPixelShader, &m_ffPixelShader))
+			|| FAILED(m_device->CreatePixelShader(FixedFunctionModulatePixelShader, &m_ffModulateShader))
+			|| FAILED(m_device->CreatePixelShader(FixedFunctionDiffusePixelShader, &m_ffDiffuseShader))
+			|| FAILED(m_device->CreatePixelShader(FixedFunctionTexturePixelShader, &m_ffTextureShader)))
+			Release_Fixed_Function_Shaders();
+	}
+	if (m_ffVertexShader == nullptr)
+	{
+		++s_ffLeft;
+		s_ffReasons |= FF_SHADERS;
+		return false;
+	}
+
+	// what the device has bound: ours (left from the draw before), nothing, or someone else's
+	IDirect3DVertexShader9* vs = nullptr;
+	m_device->GetVertexShader(&vs);
+	if (vs != nullptr)
+		vs->Release();
+	if (vs != nullptr && vs != m_ffVertexShader)
+	{
+		m_ff.vsBound = false;
+		Unbind_Fixed_Function_Shaders();
+		return false;	// someone else's shaders (the SAGE 2 effects, the tree buffer)
+	}
+	m_ff.vsBound = vs != nullptr;
+	IDirect3DPixelShader9* ps = nullptr;
+	m_device->GetPixelShader(&ps);
+	if (ps != nullptr)
+		ps->Release();
+	if (ps != nullptr && ps != m_ffPixelShader && ps != m_ffModulateShader && ps != m_ffDiffuseShader && ps != m_ffTextureShader)
+	{
+		m_ff.psBound = nullptr;
+		Unbind_Fixed_Function_Shaders();
+		++s_ffLeft;
+		s_ffReasons |= FF_PIXEL_SHADER;
+		return false;	// the renderer's own pixel shader
+	}
+	m_ff.psBound = ps;
+
+	// what the state makes, again only when it changed
+	if (!m_ff.stateKnown)
+	{
+		Read_Fixed_Function_State();
+		m_ff.stateKnown = true;
+		m_ff.changed = true;
+	}
+	if (m_ff.changed || fvf != m_ff.fvf)
+	{
+		Build_Fixed_Function(fvf);
+		m_ff.changed = false;
+		m_ff.fvf = fvf;
+	}
+	if (m_ff.reason != 0)
+	{
+		++s_ffLeft;
+		s_ffReasons |= m_ff.reason;
+		Unbind_Fixed_Function_Shaders();
+		return false;
+	}
+
+	// the shaders, when not bound already, and the constants that differ from what the device has
+	if (!m_ff.vsBound)
+	{
+		m_device->SetVertexShader(m_ffVertexShader);
+		m_ff.vsBound = true;
+	}
+	if (m_ff.psBound != m_ff.pixelShader)
+	{
+		m_device->SetPixelShader(m_ff.pixelShader);
+		m_ff.psBound = m_ff.pixelShader;
+	}
+	const size_t ROW = sizeof(float) * 4;
+	const bool vsKnown = m_ff.vsConstantsKnown;
+	if (!vsKnown || memcmp(m_ff.vsUploaded[0], m_ff.vs[0], 18 * ROW) != 0)
+	{
+		m_device->SetVertexShaderConstantF(0, m_ff.vs[0], 18);
+		memcpy(m_ff.vsUploaded[0], m_ff.vs[0], 18 * ROW);
+	}
+	const int lightRows = m_ff.lightRows;
+	if (lightRows > 0)
+	{
+		const int known = vsKnown ? m_ff.lightRowsUploaded : 0;
+		if (lightRows > known || memcmp(m_ff.vsUploaded[18], m_ff.vs[18], lightRows * ROW) != 0)
+		{
+			m_device->SetVertexShaderConstantF(18, m_ff.vs[18], lightRows);
+			memcpy(m_ff.vsUploaded[18], m_ff.vs[18], lightRows * ROW);
+			m_ff.lightRowsUploaded = lightRows > known ? lightRows : known;
+		}
+	}
+	else if (!vsKnown)
+		m_ff.lightRowsUploaded = 0;
+	if (!vsKnown || memcmp(m_ff.vsUploaded[46], m_ff.vs[46], 12 * ROW) != 0)
+	{
+		m_device->SetVertexShaderConstantF(46, m_ff.vs[46], 12);
+		memcpy(m_ff.vsUploaded[46], m_ff.vs[46], 12 * ROW);
+	}
+	m_ff.vsConstantsKnown = true;
+	if (m_ff.pixelShader == m_ffPixelShader
+		&& (!m_ff.psConstantsKnown || memcmp(m_ff.psUploaded, m_ff.ps, sizeof(m_ff.ps)) != 0))
+	{
+		m_device->SetPixelShaderConstantF(0, m_ff.ps[0], 11);
+		memcpy(m_ff.psUploaded, m_ff.ps, sizeof(m_ff.ps));
+		m_ff.psConstantsKnown = true;
+	}
 	++s_ffEmulated;
 	return true;
+}
+
+// Tiberium Project @performance the state the fixed-function shaders read, kept as it is set
+HRESULT D3D8On9Device::SetTransform(D3DTRANSFORMSTATETYPE state, const D3DMATRIX* m)
+{
+	D3DMATRIX* kept = nullptr;
+	switch ((int)state)
+	{
+		case D3DTS_WORLD: kept = &m_ff.world; break;
+		case D3DTS_VIEW: kept = &m_ff.view; break;
+		case D3DTS_PROJECTION: kept = &m_ff.projection; break;
+		case D3DTS_TEXTURE0: kept = &m_ff.texture[0]; break;
+		case D3DTS_TEXTURE1: kept = &m_ff.texture[1]; break;
+		default: break;
+	}
+	if (kept != nullptr && m != nullptr && !Same_Matrix(*kept, *m))
+	{
+		*kept = *m;
+		m_ff.changed = true;
+	}
+	return m_device->SetTransform(state, m);
+}
+
+HRESULT D3D8On9Device::SetViewport(const D3DVIEWPORT9* vp)
+{
+	if (vp != nullptr && vp->Height != m_ff.viewportHeight)
+	{
+		m_ff.viewportHeight = vp->Height;
+		m_ff.changed = true;
+	}
+	return m_device->SetViewport(vp);
+}
+
+HRESULT D3D8On9Device::SetMaterial(const D3DMATERIAL9* m)
+{
+	if (m != nullptr && memcmp(&m_ff.material, m, sizeof(D3DMATERIAL9)) != 0)
+	{
+		m_ff.material = *m;
+		m_ff.changed = true;
+	}
+	return m_device->SetMaterial(m);
+}
+
+HRESULT D3D8On9Device::SetLight(DWORD index, const D3DLIGHT9* light)
+{
+	if (index < 8 && light != nullptr && memcmp(&m_ff.lights[index], light, sizeof(D3DLIGHT9)) != 0)
+	{
+		m_ff.lights[index] = *light;
+		m_ff.changed = true;
+	}
+	return m_device->SetLight(index, light);
+}
+
+HRESULT D3D8On9Device::LightEnable(DWORD index, BOOL enable)
+{
+	if (index < 8 && (m_ff.lightOn[index] != FALSE) != (enable != FALSE))
+	{
+		m_ff.lightOn[index] = enable;
+		m_ff.changed = true;
+	}
+	return m_device->LightEnable(index, enable);
+}
+
+HRESULT D3D8On9Device::SetTexture(DWORD stage, IDirect3DBaseTexture9* texture)
+{
+	if (stage < 2 && m_ff.textures[stage] != (texture != nullptr))
+	{
+		m_ff.textures[stage] = texture != nullptr;
+		m_ff.changed = true;
+	}
+	return m_device->SetTexture(stage, texture);
 }
 
 void D3D8On9Device::Release_Fixed_Function_Shaders()
@@ -660,13 +859,6 @@ void D3D8On9Device::Release_Fixed_Function_Shaders()
 	if (m_ffTextureShader) { m_ffTextureShader->Release(); m_ffTextureShader = nullptr; }
 }
 
-void D3D8On9Device::End_Fixed_Function()
-{
-	// back to fixed-function, as the renderer left it
-	m_device->SetVertexShader(nullptr);
-	m_device->SetPixelShader(nullptr);
-}
-
 void D3D8On9_Set_Draw_Phase(const char* phase)
 {
 	s_drawPhase = phase != nullptr ? phase : "unnamed";
@@ -674,7 +866,7 @@ void D3D8On9_Set_Draw_Phase(const char* phase)
 
 void D3D8On9_Set_Draw_Stats(bool counting)
 {
-	if (counting)
+	if (counting && !s_drawStats)
 		s_drawPhaseCount = 0;
 	s_drawStats = counting;
 }
@@ -816,6 +1008,7 @@ ULONG D3D8On9Device::Release()
 void D3D8On9Device::Invalidate_State()
 {
 	m_vertexShader = ~0u;
+	m_ff.stateKnown = false;	// Tiberium Project @performance
 }
 
 void D3D8On9Device::Set_Vertex_Shader_Override(IDirect3DVertexShader9* shader)
@@ -824,7 +1017,10 @@ void D3D8On9Device::Set_Vertex_Shader_Override(IDirect3DVertexShader9* shader)
 		return;
 	m_vertexShaderOverride = shader;
 	if (m_vertexShader != ~0u && (m_vertexShader & SHADER_HANDLE_BIT) == 0)
+	{
 		m_device->SetVertexShader(shader);
+		m_ff.vsBound = false;	// Tiberium Project @performance in place of the fixed-function shader
+	}
 }
 
 void D3D8On9Device::Set_Vertex_Declaration_Override(IDirect3DVertexDeclaration9* declaration)
@@ -869,6 +1065,11 @@ HRESULT D3D8On9Device::Reset(D3DPRESENT_PARAMETERS* params)
 	returnPresentParameters(params9, params);
 	m_baseVertexIndex = 0;
 	Invalidate_State();
+	// Tiberium Project @performance a reset device has no shaders bound and its state back to the defaults
+	m_ff.vsBound = false;
+	m_ff.psBound = nullptr;
+	m_ff.vsConstantsKnown = false;
+	m_ff.psConstantsKnown = false;
 	return hr;
 }
 
@@ -967,7 +1168,15 @@ HRESULT D3D8On9Device::SetRenderState(D3DRENDERSTATETYPE state, DWORD value)
 		case 10: case 30: case 164: case 172: case 173: // line pattern, z-visible, patches: unused
 			return D3D_OK;
 		default:
+		{
+			// Tiberium Project @performance kept for the fixed-function shaders
+			if (Is_Fixed_Function_Render_State(state) && m_ff.renderStates[state] != value)
+			{
+				m_ff.renderStates[state] = value;
+				m_ff.changed = true;
+			}
 			return m_device->SetRenderState(state, value);
+		}
 	}
 }
 
@@ -1002,6 +1211,12 @@ HRESULT D3D8On9Device::SetTextureStageState(DWORD stage, D3DTEXTURESTAGESTATETYP
 	D3DSAMPLERSTATETYPE sampler;
 	if (isSamplerState(type, &sampler))
 		return m_device->SetSamplerState(stage, sampler, value);
+	// Tiberium Project @performance kept for the fixed-function shaders
+	if (stage < 3 && Is_Fixed_Function_Stage_State(type) && m_ff.stages[stage][type] != value)
+	{
+		m_ff.stages[stage][type] = value;
+		m_ff.changed = true;
+	}
 	return m_device->SetTextureStageState(stage, type, value);
 }
 
@@ -1086,6 +1301,7 @@ HRESULT D3D8On9Device::SetVertexShader(DWORD handle)
 	if ((handle & SHADER_HANDLE_BIT) == 0)
 	{
 		m_device->SetVertexShader(m_vertexShaderOverride);	// usually none: fixed-function
+		m_ff.vsBound = false;	// Tiberium Project @performance
 		if (m_vertexDeclarationOverride != nullptr)
 			return m_device->SetVertexDeclaration(m_vertexDeclarationOverride);
 		return m_device->SetFVF(handle);
@@ -1094,6 +1310,7 @@ HRESULT D3D8On9Device::SetVertexShader(DWORD handle)
 	if (index >= m_vertexShaders.size() || m_vertexShaders[index].decl == nullptr)
 		return D3DERR_INVALIDCALL;
 	m_device->SetVertexDeclaration(m_vertexShaders[index].decl);
+	m_ff.vsBound = false;	// Tiberium Project @performance
 	return m_device->SetVertexShader(m_vertexShaders[index].shader);
 }
 
@@ -1107,6 +1324,7 @@ HRESULT D3D8On9Device::DeleteVertexShader(DWORD handle)
 	{
 		m_device->SetVertexShader(nullptr);
 		m_vertexShader = ~0u;
+		m_ff.vsBound = false;	// Tiberium Project @performance
 	}
 	if (vs.decl) vs.decl->Release();
 	if (vs.shader) vs.shader->Release();
@@ -1128,6 +1346,7 @@ HRESULT D3D8On9Device::CreatePixelShader(const DWORD* function, DWORD* handle)
 
 HRESULT D3D8On9Device::SetPixelShader(DWORD handle)
 {
+	m_ff.psBound = nullptr;	// Tiberium Project @performance the renderer's own, in place of the fixed-function one
 	if (handle == 0)
 		return m_device->SetPixelShader(nullptr);
 	if (handle > m_pixelShaders.size())

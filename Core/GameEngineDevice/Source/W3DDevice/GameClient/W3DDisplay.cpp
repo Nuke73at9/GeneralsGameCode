@@ -2170,6 +2170,11 @@ void W3DDisplay::step()
 /** Draw the entire W3D Display */
 //=============================================================================
 //DECLARE_PERF_TIMER(W3DDisplay_draw)
+#ifdef RTS_RENDERER_D3D9
+// Tiberium Project @feature the frames drawn, for the draw statistics
+static UnsignedInt s_tibStatsFrame = 0;
+#endif
+
 void W3DDisplay::draw()
 {
 	//USE_PERF_TIMER(W3DDisplay_draw)
@@ -2276,6 +2281,14 @@ AGAIN:
 
 	Debug_Statistics::Begin_Statistics();	//reset all counters (polygons, vertices, etc) before drawing
 
+#ifdef RTS_RENDERER_D3D9
+	// Tiberium Project @feature the draw statistics' frames (Sage2.log "draws:") count from here, so
+	// the passes before the world (shroud, shadow map, reflections, projected shadows) are in them
+	if (s_tibStatsFrame + 1 == 400 || s_tibStatsFrame + 1 == 1200)
+		D3D8On9_Set_Draw_Stats(true);
+	D3D8On9_Set_Draw_Phase("shroud");
+#endif
+
 	if(TheGlobalData->m_loadScreenRender != TRUE)
 	{
 		//Shroud data is needed to render all other views, so handle this first.
@@ -2326,11 +2339,17 @@ AGAIN:
 			feedSceneLights();
 #endif
 
+#ifdef RTS_RENDERER_D3D9
+			D3D8On9_Set_Draw_Phase("water reflection");
+#endif
 			if (TheWaterRenderObj && TheGlobalData->m_waterType == 2)
 				TheWaterRenderObj->updateRenderTargetTextures(primaryW3DView->get3DCamera());	//do a render into each texture
 
 			//Can't render into textures while rendering to screen so these textures need to be updated
 			//before we enter main rendering loop.
+#ifdef RTS_RENDERER_D3D9
+			D3D8On9_Set_Draw_Phase("projected shadows");
+#endif
 			if (TheW3DProjectedShadowManager)
 				TheW3DProjectedShadowManager->updateRenderTargetTextures();
 		}
@@ -2373,9 +2392,10 @@ AGAIN:
 #ifdef RTS_RENDERER_D3D9
 				// Tiberium Project @feature what still draws without shaders, counted over one frame twice
 				// a run (Sage2.log "draws:"), by the part of the frame drawing
-				static UnsignedInt s_statsFrame = 0;
-				++s_statsFrame;
-				const Bool countDraws = s_statsFrame == 400 || s_statsFrame == 1200;
+				static unsigned s_emulatedBefore = 0, s_leftBefore = 0;
+				const UnsignedInt statsFrame = ++s_tibStatsFrame;
+				const Bool countDraws = statsFrame == 400 || statsFrame == 1200;
+				const Bool countFrom = statsFrame == 399 || statsFrame == 1199;	// the whole of the next frame, the passes before it included
 				D3D8On9_Set_Draw_Stats(countDraws);
 				D3D8On9_Set_Draw_Phase("world");
 #endif
@@ -2490,13 +2510,20 @@ AGAIN:
 					unsigned emulated = 0, left = 0, reasons = 0;
 					D3D8On9_Get_Fixed_Function_Counts(emulated, left, reasons);
 					Sage2_Log("draws: fixed-function draws through shaders so far %u, left fixed-function %u (why: 0x%X)", emulated, left, reasons);
+					Sage2_Log("draws: frame %u, the whole frame (the shadow map, reflections and shroud before it too): %u fixed-function draws through shaders, %u left fixed-function",
+						(unsigned)statsFrame, emulated - s_emulatedBefore, left - s_leftBefore);
 					for (int i = 0; i < phases; ++i)
 						Sage2_Log("draws: frame %u, %-24s %5u draws (%u fixed-function vertex, %u fixed-function pixel; of those %u lit, %u fogged, "
 							"%u with two texture stages; FVF %X x%u, %X x%u, %X x%u, %X x%u), %u primitives",
-							(unsigned)s_statsFrame, stats[i].phase, stats[i].draws, stats[i].fixedVertex, stats[i].fixedPixel,
+							(unsigned)statsFrame, stats[i].phase, stats[i].draws, stats[i].fixedVertex, stats[i].fixedPixel,
 							stats[i].fixedLit, stats[i].fixedFog, stats[i].fixedTwoStages,
 							stats[i].fixedFVF[0], stats[i].fixedFVFDraws[0], stats[i].fixedFVF[1], stats[i].fixedFVFDraws[1],
 							stats[i].fixedFVF[2], stats[i].fixedFVFDraws[2], stats[i].fixedFVF[3], stats[i].fixedFVFDraws[3], stats[i].primitives);
+				}
+				if (countFrom)
+				{
+					unsigned reasons = 0;
+					D3D8On9_Get_Fixed_Function_Counts(s_emulatedBefore, s_leftBefore, reasons);
 				}
 				D3D8On9_Set_Draw_Phase("other");
 #endif

@@ -191,7 +191,10 @@ public:
 
 	ULONG AddRef() { return ++m_refs; }
 	ULONG Release();
-	IDirect3DDevice9* Get_D3D9() const { return m_device; }
+	/// The Direct3D 9 device, for drawing through it directly. Tiberium Project @performance It comes back
+	/// as the renderer left it: the fixed-function shaders, which stay bound between the draws they do,
+	/// are taken off first, and the adapter reads the device's state again before its next such draw.
+	IDirect3DDevice9* Get_D3D9() { Leave_Fixed_Function_Shaders(); return m_device; }
 	/// Forget what the adapter knows about shader, FVF and index state (after changing it through Direct3D 9)
 	void Invalidate_State();
 	/// Tiberium Project @feature The scene's depth buffer as a texture the shaders can read (INTZ, made in
@@ -260,17 +263,17 @@ public:
 	HRESULT EndScene() { return m_device->EndScene(); }
 	HRESULT Clear(DWORD count, const D3DRECT* rects, DWORD flags, D3DCOLOR color, float z, DWORD stencil)
 		{ return m_device->Clear(count, rects, flags, color, z, stencil); }
-	HRESULT SetTransform(D3DTRANSFORMSTATETYPE state, const D3DMATRIX* m) { return m_device->SetTransform(state, m); }
+	HRESULT SetTransform(D3DTRANSFORMSTATETYPE state, const D3DMATRIX* m);
 	HRESULT GetTransform(D3DTRANSFORMSTATETYPE state, D3DMATRIX* m) { return m_device->GetTransform(state, m); }
-	HRESULT SetViewport(const D3DVIEWPORT9* vp) { return m_device->SetViewport(vp); }
+	HRESULT SetViewport(const D3DVIEWPORT9* vp);
 	HRESULT GetViewport(D3DVIEWPORT9* vp) { return m_device->GetViewport(vp); }
-	HRESULT SetMaterial(const D3DMATERIAL9* m) { return m_device->SetMaterial(m); }
-	HRESULT SetLight(DWORD index, const D3DLIGHT9* light) { return m_device->SetLight(index, light); }
-	HRESULT LightEnable(DWORD index, BOOL enable) { return m_device->LightEnable(index, enable); }
+	HRESULT SetMaterial(const D3DMATERIAL9* m);
+	HRESULT SetLight(DWORD index, const D3DLIGHT9* light);
+	HRESULT LightEnable(DWORD index, BOOL enable);
 	HRESULT SetClipPlane(DWORD index, const float* plane) { return m_device->SetClipPlane(index, plane); }
 	HRESULT SetRenderState(D3DRENDERSTATETYPE state, DWORD value);
 	HRESULT GetRenderState(D3DRENDERSTATETYPE state, DWORD* value);
-	HRESULT SetTexture(DWORD stage, IDirect3DBaseTexture9* texture) { return m_device->SetTexture(stage, texture); }
+	HRESULT SetTexture(DWORD stage, IDirect3DBaseTexture9* texture);
 	HRESULT SetTextureStageState(DWORD stage, D3DTEXTURESTAGESTATETYPE type, DWORD value);
 	HRESULT GetTextureStageState(DWORD stage, D3DTEXTURESTAGESTATETYPE type, DWORD* value);
 	HRESULT ValidateDevice(DWORD* passes) { return m_device->ValidateDevice(passes); }
@@ -281,61 +284,104 @@ public:
 	HRESULT SetIndices(IDirect3DIndexBuffer9* buffer, UINT baseVertexIndex);
 	HRESULT DrawPrimitive(D3DPRIMITIVETYPE type, UINT start, UINT count)
 	{
-		const bool emulated = Emulate_Fixed_Function();
+		Emulate_Fixed_Function();
 		Count_Draw(count);
-		HRESULT hr = m_device->DrawPrimitive(type, start, count);
-		if (emulated) End_Fixed_Function();
-		return hr;
+		return m_device->DrawPrimitive(type, start, count);
 	}
 	HRESULT DrawIndexedPrimitive(D3DPRIMITIVETYPE type, UINT minIndex, UINT numVertices, UINT startIndex, UINT primCount)
 	{
-		const bool emulated = Emulate_Fixed_Function();
+		Emulate_Fixed_Function();
 		Count_Draw(primCount);
-		HRESULT hr = m_device->DrawIndexedPrimitive(type, (INT)m_baseVertexIndex, minIndex, numVertices, startIndex, primCount);
-		if (emulated) End_Fixed_Function();
-		return hr;
+		return m_device->DrawIndexedPrimitive(type, (INT)m_baseVertexIndex, minIndex, numVertices, startIndex, primCount);
 	}
 	HRESULT DrawPrimitiveUP(D3DPRIMITIVETYPE type, UINT primCount, const void* data, UINT stride)
 	{
-		const bool emulated = Emulate_Fixed_Function();
+		Emulate_Fixed_Function();
 		Count_Draw(primCount);
-		HRESULT hr = m_device->DrawPrimitiveUP(type, primCount, data, stride);
-		if (emulated) End_Fixed_Function();
-		return hr;
+		return m_device->DrawPrimitiveUP(type, primCount, data, stride);
 	}
 	HRESULT DrawIndexedPrimitiveUP(D3DPRIMITIVETYPE type, UINT minIndex, UINT numVertices, UINT primCount, const void* indices, D3DFORMAT format, const void* data, UINT stride)
 	{
-		const bool emulated = Emulate_Fixed_Function();
+		Emulate_Fixed_Function();
 		Count_Draw(primCount);
-		HRESULT hr = m_device->DrawIndexedPrimitiveUP(type, minIndex, numVertices, primCount, indices, format, data, stride);
-		if (emulated) End_Fixed_Function();
-		return hr;
+		return m_device->DrawIndexedPrimitiveUP(type, minIndex, numVertices, primCount, indices, format, data, stride);
 	}
 	HRESULT ProcessVertices(UINT srcStart, UINT dstIndex, UINT count, IDirect3DVertexBuffer9* dst, DWORD flags)
-		{ return m_device->ProcessVertices(srcStart, dstIndex, count, dst, nullptr, flags); }
+		{ Unbind_Fixed_Function_Shaders(); return m_device->ProcessVertices(srcStart, dstIndex, count, dst, nullptr, flags); }
 
 	// shaders: Direct3D 8 hands out DWORD handles; an FVF code is a valid vertex shader handle
 	HRESULT CreateVertexShader(const DWORD* declaration, const DWORD* function, DWORD* handle, DWORD usage);
 	HRESULT SetVertexShader(DWORD handle);
 	HRESULT DeleteVertexShader(DWORD handle);
 	HRESULT SetVertexShaderConstant(DWORD reg, const void* data, DWORD count)
-		{ return m_device->SetVertexShaderConstantF(reg, (const float*)data, count); }
+		{ m_ff.vsConstantsKnown = false; return m_device->SetVertexShaderConstantF(reg, (const float*)data, count); }
 	HRESULT CreatePixelShader(const DWORD* function, DWORD* handle);
 	HRESULT SetPixelShader(DWORD handle);
 	HRESULT DeletePixelShader(DWORD handle);
 	HRESULT SetPixelShaderConstant(DWORD reg, const void* data, DWORD count)
-		{ return m_device->SetPixelShaderConstantF(reg, (const float*)data, count); }
+		{ m_ff.psConstantsKnown = false; return m_device->SetPixelShaderConstantF(reg, (const float*)data, count); }
 
 private:
 	~D3D8On9Device();
 	/// Tiberium Project @feature counts a draw for D3D8On9_Get_Draw_Stats, while counting is on
 	void Count_Draw(UINT primitives);
 	/// Tiberium Project @feature a draw left to the fixed-function pipeline goes through its shader
-	/// emulation instead (D3D8On9_Set_Fixed_Function_Shaders): true when the shaders are bound, which
-	/// End_Fixed_Function unbinds after the draw
+	/// emulation instead (D3D8On9_Set_Fixed_Function_Shaders): true when the shaders are bound for it.
+	/// Tiberium Project @performance They stay bound for the draws after it, until a draw that can't
+	/// use them, the renderer binding shaders of its own, or someone taking the device (Get_D3D9).
 	bool Emulate_Fixed_Function();
-	void End_Fixed_Function();
+	/// what the emulation makes of the state the adapter keeps (m_ff): whether it can draw, the pixel
+	/// shader and the constants
+	void Build_Fixed_Function(DWORD fvf);
+	/// the state the emulation reads, from the device (after someone drew through it directly)
+	void Read_Fixed_Function_State();
+	/// takes the shaders off (the device as fixed-function drawing expects it)
+	void Unbind_Fixed_Function_Shaders()
+	{
+		if (m_ff.vsBound || m_ff.psBound != nullptr)
+			Unbind_Bound_Fixed_Function_Shaders();
+	}
+	void Unbind_Bound_Fixed_Function_Shaders();
+	/// takes them off and forgets what the adapter knows of the device (Get_D3D9)
+	void Leave_Fixed_Function_Shaders()
+	{
+		Unbind_Fixed_Function_Shaders();
+		m_ff.stateKnown = false;
+		m_ff.vsConstantsKnown = false;
+		m_ff.psConstantsKnown = false;
+	}
 	void Release_Fixed_Function_Shaders();
+	/// Tiberium Project @performance the state the emulation reads, as the renderer set it through the
+	/// adapter (read from the device when not known), and what it made of it
+	struct FixedFunctionState
+	{
+		bool stateKnown;		///< false: read it from the device before the next draw
+		bool changed;			///< since the last build
+		DWORD fvf;				///< of the last build
+		DWORD renderStates[256];
+		DWORD stages[3][33];	///< texture stage states (not the sampler ones), stages 0 to 2
+		bool textures[2];
+		D3DMATRIX world, view, projection, texture[2];
+		D3DLIGHT9 lights[8];
+		BOOL lightOn[8];
+		D3DMATERIAL9 material;
+		DWORD viewportHeight;
+		// the last build
+		unsigned reason;		///< why it can't draw through the shaders, 0 when it can
+		IDirect3DPixelShader9* pixelShader;
+		int lightRows;			///< vertex shader constants for the lights, from c18
+		float vs[58][4];
+		float ps[11][4];
+		// what the device has
+		bool vsBound;
+		IDirect3DPixelShader9* psBound;
+		bool vsConstantsKnown;	///< vsUploaded holds what c0 to c17, c46 to c57 and the light rows hold
+		bool psConstantsKnown;
+		int lightRowsUploaded;
+		float vsUploaded[58][4];
+		float psUploaded[11][4];
+	};
+	FixedFunctionState m_ff;
 	IDirect3DVertexShader9* m_ffVertexShader;
 	IDirect3DPixelShader9* m_ffPixelShader;		///< the general one
 	IDirect3DPixelShader9* m_ffModulateShader;	///< the common set-ups: texture times diffuse,
@@ -431,7 +477,7 @@ void D3D8On9_Set_Draw_Phase(const char* phase);
 void D3D8On9_Set_Fixed_Function_Shaders(bool enabled);
 /// How many draws went through them / stayed fixed-function since counting started (for the log)
 void D3D8On9_Get_Fixed_Function_Counts(unsigned& emulated, unsigned& left, unsigned& reasonMask);
-void D3D8On9_Set_Draw_Stats(bool counting);	///< on: counting starts from zero
+void D3D8On9_Set_Draw_Stats(bool counting);	///< on: counting starts from zero (when it was off)
 int D3D8On9_Get_Draw_Stats(D3D8On9DrawStats* stats, int max);	///< the phases counted, in the order first seen
 
 /// Tiberium Project @feature Whether devices made from now on get a depth buffer the shaders can read
