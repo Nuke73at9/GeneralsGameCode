@@ -24,6 +24,7 @@
 #include "dx8wrapper.h"
 #include "sage2globals.h"
 #include "sage2scene.h"
+#include "sage2ssao.h"
 #include "shader.h"
 
 #include "../shaders/softparticle_ps.h"
@@ -121,7 +122,11 @@ bool Sage2SoftParticleClass::Begin(const ShaderClass& shader)
 		soft[3] = 1.0f;
 	else
 		return false;
-	IDirect3DTexture9* depth = Sage2SceneClass::Get_Linear_Depth_Texture();
+	// Tiberium Project @feature the opaque scene's depth with the objects in it (SSAO's pass), or
+	// else the deferred pre-pass's (the ground and the deferred meshes)
+	IDirect3DTexture9* depth = Sage2SSAOClass::Get_Scene_Depth_Texture();
+	if (depth == nullptr)
+		depth = Sage2SceneClass::Get_Linear_Depth_Texture();
 	if (depth == nullptr)
 		return false;
 	if (s_state == NOT_TRIED)

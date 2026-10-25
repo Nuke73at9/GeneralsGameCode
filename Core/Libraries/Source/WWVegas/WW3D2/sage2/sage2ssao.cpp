@@ -28,6 +28,8 @@
 #include "../shaders/ssao_ao_ps.h"
 #include "../shaders/ssao_blur_ps.h"
 #include "../shaders/ssao_apply_ps.h"
+#include "../shaders/ssao_depth_ps.h"
+#include "ww3d.h"
 
 namespace
 {
@@ -47,10 +49,13 @@ namespace
 	IDirect3DPixelShader9* s_aoShader = nullptr;
 	IDirect3DPixelShader9* s_blurShader = nullptr;
 	IDirect3DPixelShader9* s_applyShader = nullptr;
+	IDirect3DPixelShader9* s_depthShader = nullptr;	// the scene's view distance, for the soft particles
 	IDirect3DVertexDeclaration9* s_declaration = nullptr;
 	IDirect3DStateBlock9* s_savedState = nullptr;
 	IDirect3DTexture9* s_aoA = nullptr;		// half size
 	IDirect3DTexture9* s_aoB = nullptr;
+	IDirect3DTexture9* s_sceneDepth = nullptr;	// R32F, the frame's size (none if the device has no R32F target)
+	unsigned int s_sceneDepthFrame = 0xFFFFFFFF;	// the WW3D frame it was written in
 	UINT s_width = 0, s_height = 0;		// the frame's
 	bool s_loggedOn = false, s_loggedNoDepth = false;
 
@@ -74,6 +79,7 @@ namespace
 			|| FAILED(device->CreatePixelShader(SSAOPixelShader, &s_aoShader))
 			|| FAILED(device->CreatePixelShader(SSAOBlurPixelShader, &s_blurShader))
 			|| FAILED(device->CreatePixelShader(SSAOApplyPixelShader, &s_applyShader))
+			|| FAILED(device->CreatePixelShader(SSAODepthPixelShader, &s_depthShader))
 			|| FAILED(device->CreateVertexDeclaration(elements, &s_declaration)))
 		{
 			Sage2SSAOClass::Shutdown();
@@ -91,6 +97,7 @@ namespace
 			return true;
 		Release(s_aoA);
 		Release(s_aoB);
+		Release(s_sceneDepth);
 		const UINT hw = width / 2 > 0 ? width / 2 : 1, hh = height / 2 > 0 ? height / 2 : 1;
 		if (FAILED(device->CreateTexture(hw, hh, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &s_aoA, nullptr))
 			|| FAILED(device->CreateTexture(hw, hh, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &s_aoB, nullptr)))
@@ -99,6 +106,10 @@ namespace
 			Release(s_aoB);
 			return false;
 		}
+		// the scene's depth for the soft particles; without an R32F target they keep the deferred
+		// pre-pass's (the ground and the deferred meshes only)
+		if (FAILED(device->CreateTexture(width, height, 1, D3DUSAGE_RENDERTARGET, D3DFMT_R32F, D3DPOOL_DEFAULT, &s_sceneDepth, nullptr)))
+			s_sceneDepth = nullptr;
 		s_width = width;
 		s_height = height;
 		return true;
@@ -277,6 +288,15 @@ void Sage2SSAOClass::Apply()
 	device->SetTexture(1, s_aoB);
 	device->SetPixelShaderConstantF(5, blurDown, 1);
 	Draw_Quad(device, hw, hh, 0.0f, 0.0f, 1.0f, 1.0f);
+	// Tiberium Project @feature the scene's view distance, the whole frame, for the soft particles
+	if (s_sceneDepth != nullptr)
+	{
+		Set_Target(device, s_sceneDepth, s_width, s_height);
+		device->SetTexture(1, nullptr);
+		device->SetPixelShader(s_depthShader);
+		Draw_Quad(device, s_width, s_height, 0.0f, 0.0f, 1.0f, 1.0f);
+		s_sceneDepthFrame = WW3D::Get_Frame_Count();
+	}
 	// 4. onto the scene's view: the frame times the occlusion
 	device->SetRenderTarget(0, frame);
 	device->SetViewport(&view);
@@ -299,10 +319,18 @@ void Sage2SSAOClass::Apply()
 }
 
 //-------------------------------------------------------------------------------------------------
+IDirect3DTexture9* Sage2SSAOClass::Get_Scene_Depth_Texture()
+{
+	return s_sceneDepth != nullptr && s_sceneDepthFrame == WW3D::Get_Frame_Count() ? s_sceneDepth : nullptr;
+}
+
+//-------------------------------------------------------------------------------------------------
 void Sage2SSAOClass::Release_Resources()
 {
 	Release(s_aoA);
 	Release(s_aoB);
+	Release(s_sceneDepth);
+	s_sceneDepthFrame = 0xFFFFFFFF;
 	s_width = s_height = 0;
 	Release(s_savedState);	// it holds references to whatever was bound
 }
@@ -314,6 +342,7 @@ void Sage2SSAOClass::Shutdown()
 	Release(s_aoShader);
 	Release(s_blurShader);
 	Release(s_applyShader);
+	Release(s_depthShader);
 	Release(s_declaration);
 	s_state = NOT_TRIED;
 }

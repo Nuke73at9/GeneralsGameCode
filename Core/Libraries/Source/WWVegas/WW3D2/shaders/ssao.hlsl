@@ -63,6 +63,14 @@ float SceneDepth(float2 uv)
 }
 
 // the ambient occlusion at a pixel of the half-size target (r: AO, 1 open, 0 closed; g: unused)
+// Tiberium Project: the scene's view distance at each pixel (the sky far away), which the soft
+// particles fade against: the deferred pre-pass's depth has the ground and the deferred meshes only
+float4 PSSceneDepth(float2 uv : TEXCOORD0) : COLOR
+{
+	float d = SceneDepth(uv);
+	return float4(d >= 1.0 ? 1.0e6 : ViewZ(d), 0.0, 0.0, 1.0);
+}
+
 float4 PSAO(float2 uv : TEXCOORD0, float2 vpos : VPOS) : COLOR
 {
 	// on the centre of a full-size texel (a half-size pixel's centre falls between four, and the

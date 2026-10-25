@@ -23,6 +23,8 @@
 
 #pragma once
 
+struct IDirect3DTexture9;
+
 class Sage2SSAOClass
 {
 public:
@@ -37,6 +39,11 @@ public:
 	/// The scene's opaque geometry is drawn: darken it (the frame's colour times the occlusion).
 	/// Nothing happens without a readable depth buffer bound (the adapter's), or when off.
 	static void Apply();
+	/// Tiberium Project @feature the opaque scene's view distance at each pixel (R32F, the frame's
+	/// size), written with the occlusion from the same depth buffer: the ground, the objects and the
+	/// trees. Null when it was not written this frame (SSAO off, no readable depth). The soft
+	/// particles fade against it, so smoke no longer cuts a hard line into units and buildings.
+	static IDirect3DTexture9* Get_Scene_Depth_Texture();
 	/// Render targets go before a device reset, everything at shutdown
 	static void Release_Resources();
 	static void Shutdown();
