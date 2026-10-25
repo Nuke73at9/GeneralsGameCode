@@ -899,6 +899,17 @@ Int parseTestFire(char *args[], int num)
 	return 2;
 }
 
+// Tiberium Project @feature -testFX <frame>[,<every>]: explosions and hits around the view
+Int parseTestFX(char *args[], int num)
+{
+	if (num > 1)
+	{
+		const char *comma = strchr(args[1], ',');
+		TiberiumTest::setFXFrame(atoi(args[1]), comma != nullptr ? atoi(comma + 1) : 0);
+	}
+	return 2;
+}
+
 // Tiberium Project @feature -testUnits <frame>: vehicles and buildings to light at night
 Int parseTestUnits(char *args[], int num)
 {
@@ -1335,6 +1346,7 @@ static CommandLineParam paramsForEngineInit[] =
 	{ "-testScorch", parseTestScorch },
 	{ "-testLights", parseTestLights },
 	{ "-testFire", parseTestFire },
+	{ "-testFX", parseTestFX },
 	{ "-testUnits", parseTestUnits },
 	{ "-testBase", parseTestBase },
 	{ "-testReveal", parseTestReveal },

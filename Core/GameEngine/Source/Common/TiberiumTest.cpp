@@ -33,6 +33,7 @@
 #include "Common/GameEngine.h"
 #include "Common/GlobalData.h"
 #include "GameClient/ControlBar.h"
+#include "GameClient/FXList.h"
 #include "GameClient/Display.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/ParticleSys.h"
@@ -68,6 +69,8 @@ namespace
 	Int s_scorchFrame = -1;
 	Int s_lightsFrame = -1;
 	Int s_fireFrame = -1;
+	Int s_fxFrame = -1;
+	Int s_fxEvery = 0;
 	Int s_unitsFrame = -1;
 	Int s_baseFrame = -1;
 	// -testBase: the structure being built (its construction runs over BASE_BUILD_FRAMES) and the one
@@ -333,6 +336,7 @@ void TiberiumTest::setShotInterval( Int frames ) { if ( frames > 0 ) { s_shotInt
 void TiberiumTest::setScorchFrame( Int frame ) { if ( frame >= 0 ) { s_scorchFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setLightsFrame( Int frame ) { if ( frame >= 0 ) { s_lightsFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setFireFrame( Int frame ) { if ( frame >= 0 ) { s_fireFrame = frame; s_active = TRUE; } }
+void TiberiumTest::setFXFrame( Int frame, Int every ) { if ( frame >= 0 ) { s_fxFrame = frame; s_fxEvery = every > 0 ? every : 0; s_active = TRUE; } }
 void TiberiumTest::setUnitsFrame( Int frame ) { if ( frame >= 0 ) { s_unitsFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setBaseFrame( Int frame ) { if ( frame >= 0 ) { s_baseFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setReveal( Bool reveal ) { s_reveal = reveal; if ( reveal ) s_active = TRUE; }
@@ -534,6 +538,61 @@ void TiberiumTest::update()
 			++smokes;
 		}
 		log( "frame %d: %d fires and %d smoke columns around %.0f %.0f", (int)s_frame, (int)made, (int)smokes, center.x, center.y );
+	}
+	// Tiberium Project @feature explosions and hits around the view (Zero Hour's own FX lists: a tank
+	// shell's and a missile's detonation, a tank's, a car's, a light vehicle's and a structure's
+	// death), client side only, to see what the particle systems they use look like
+	if ( s_fxFrame >= 0 && s_frame >= s_fxFrame && TheFXListStore != nullptr && TheTacticalView != nullptr
+		&& ( s_frame == s_fxFrame || ( s_fxEvery > 0 && ( s_frame - s_fxFrame ) % s_fxEvery == 0 ) ) )
+	{
+		static const char *const LISTS[6] = { "WeaponFX_GenericTankShellDetonation", "FX_GenericTankDeathExplosion", "FX_GenericCarExplode",
+			"WeaponFX_RocketBuggyMissileDetonation", "FX_StructureMediumDeath", "FX_BattleMasterExplosionOneFinal" };
+		// in a row across the view, left to right in that order
+		static const Real SPOTS[6][2] = { { -250.0f, 0.0f }, { -150.0f, 0.0f }, { -50.0f, 0.0f }, { 50.0f, 0.0f }, { 150.0f, 0.0f }, { 250.0f, 0.0f } };
+		const Coord3D center = TheTacticalView->getPosition();
+		Int played = 0;
+		for ( Int k = 0; k < 6; ++k )
+		{
+			const FXList *fx = TheFXListStore->findFXList( LISTS[k] );
+			if ( fx == nullptr )
+				continue;
+			Coord3D p = center;
+			p.x += SPOTS[k][0];
+			p.y += SPOTS[k][1];
+			p.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( p.x, p.y ) : 0.0f;
+			FXList::doFXPos( fx, &p );
+			++played;
+		}
+		log( "frame %d: %d explosions and hits around %.0f %.0f", (int)s_frame, (int)played, center.x, center.y );
+	}
+	if ( s_fxFrame >= 0 && s_frame > s_fxFrame && ( s_frame - s_fxFrame ) % 10 == 0 && TheParticleSystemManager != nullptr )
+	{
+		// which systems are alive, by template, with their particles and their largest particle
+		std::string alive;
+		ParticleSystemManager::ParticleSystemList &systems = TheParticleSystemManager->getAllParticleSystems();
+		for ( ParticleSystemManager::ParticleSystemListIt it = systems.begin(); it != systems.end(); ++it )
+		{
+			ParticleSystem *sys = *it;
+			if ( sys == nullptr || sys->getParticleCount() == 0 || sys->getTemplate() == nullptr )
+				continue;
+			Real largest = 0.0f;
+			Real r = 0.0f, g = 0.0f, b = 0.0f, a = 0.0f;
+			for ( Particle *p = sys->getFirstParticle(); p != nullptr; p = p->m_systemNext )
+			{
+				largest = max( largest, p->getSize() );
+				r += p->getColor()->red;
+				g += p->getColor()->green;
+				b += p->getColor()->blue;
+				a += p->getAlpha();
+			}
+			const Real n = (Real)sys->getParticleCount();
+			char entry[256];
+			snprintf( entry, sizeof( entry ), " %s:%u(%.0f)[%s %.2f %.2f %.2f a%.2f]", sys->getTemplate()->getName().str(), (unsigned)sys->getParticleCount(), largest,
+				sys->getParticleTypeName().str(), r / n, g / n, b / n, a / n );
+			alive += entry;
+		}
+		log( "frame %d: %u particles in %u systems:%s", (int)s_frame, (unsigned)TheParticleSystemManager->getParticleCount(),
+			(unsigned)TheParticleSystemManager->getParticleSystemCount(), alive.c_str() );
 	}
 	// Tiberium Project @feature vehicles and buildings of the local player's around the view, to see
 	// what lights them (headlights, floodlights, lit windows at night); this adds to the game
