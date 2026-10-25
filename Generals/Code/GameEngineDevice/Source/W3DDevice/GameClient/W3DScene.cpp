@@ -1745,13 +1745,83 @@ static Bool hasNightLights(RenderObjClass *robj, Int depth)
 }
 
 //=============================================================================
+// Night lamps
+//=============================================================================
+/** Tiberium Project: the lamps a night model carries (its spotlights, beacons, runway and warning
+	lights: single additive meshes, see MeshModelClass::Get_Night_Lamp_Texture), by their texture: the
+	colour of its bright texels (Textures.big), how strongly the lamp lights the ground and how far. */
+//=============================================================================
+struct NightLampKind
+{
+	const char *key;
+	Real red, green, blue;
+	Real strength;
+	Real reach;
+};
+static const NightLampKind NIGHT_LAMP_KINDS[] =
+{
+	{ "spotlight",    1.00f, 0.98f, 0.60f, 0.45f, 70.0f },	// floodlights on bases
+	{ "coplight4",    1.00f, 0.98f, 0.55f, 0.35f, 50.0f },	// airfield lamps
+	{ "coplight3",    1.00f, 0.81f, 0.45f, 0.35f, 50.0f },
+	{ "coplight2",    0.15f, 0.35f, 1.00f, 0.25f, 35.0f },
+	{ "coplight",     1.00f, 0.20f, 0.15f, 0.25f, 35.0f },
+	{ "yellowlite",   1.00f, 0.95f, 0.35f, 0.30f, 45.0f },
+	{ "runwaylightr", 1.00f, 0.38f, 0.39f, 0.20f, 30.0f },	// before "runwaylight"
+	{ "runwaylight",  0.38f, 0.85f, 1.00f, 0.20f, 30.0f },
+	{ "redlight",     1.00f, 0.27f, 0.27f, 0.20f, 30.0f },
+	{ "greenlight",   0.21f, 1.00f, 0.21f, 0.20f, 30.0f },
+};
+static const Int NIGHT_LAMP_KIND_COUNT = sizeof(NIGHT_LAMP_KINDS) / sizeof(NIGHT_LAMP_KINDS[0]);
+static const Int MAX_LAMPS_PER_KIND = 32;
+
+struct NightLampGroup
+{
+	Int count;
+	Vector3 positions[MAX_LAMPS_PER_KIND];
+};
+
+static Int nightLampKind(const char *texture)
+{
+	char lower[64];
+	Int i = 0;
+	for (; texture[i] != '\0' && i < (Int)sizeof(lower) - 1; ++i)
+		lower[i] = (char)tolower((unsigned char)texture[i]);
+	lower[i] = '\0';
+	for (Int k = 0; k < NIGHT_LAMP_KIND_COUNT; ++k)
+		if (strstr(lower, NIGHT_LAMP_KINDS[k].key) != nullptr)
+			return k;
+	return -1;
+}
+
+static void collectNightLamps(RenderObjClass *robj, Int depth, NightLampGroup groups[])
+{
+	if (robj == nullptr || depth > 3 || robj->Is_Hidden())
+		return;
+	if (robj->Class_ID() == RenderObjClass::CLASSID_MESH)
+	{
+		MeshModelClass *model = ((MeshClass *)robj)->Peek_Model();
+		const char *texture = model != nullptr ? model->Get_Night_Lamp_Texture() : nullptr;
+		const Int kind = texture != nullptr ? nightLampKind(texture) : -1;
+		if (kind >= 0 && groups[kind].count < MAX_LAMPS_PER_KIND)
+			groups[kind].positions[groups[kind].count++] = robj->Get_Bounding_Sphere().Center;
+		return;
+	}
+	for (Int i = 0; i < robj->Get_Num_Sub_Objects(); ++i)
+	{
+		RenderObjClass *sub = robj->Get_Sub_Object(i);
+		collectNightLamps(sub, depth + 1, groups);
+		REF_PTR_RELEASE(sub);
+	}
+}
+
+//=============================================================================
 // RTS3DScene::gatherSage2NightLights
 //=============================================================================
 /** Tiberium Project @feature Lights on at night: in the evening and at night, each visible building
 	whose model has a lit-window pass (Zero Hour's night models) spills a soft warm light onto the
-	ground around it, each street lamp lights the ground under it, and each vehicle with its headlight
-	cones showing lights the ground ahead. Zero Hour drew the windows, lamps and cones but they lit
-	nothing. Visual only. */
+	ground around it and its floodlights and beacons light theirs, each street lamp lights the ground
+	under it, and each vehicle with its headlight cones showing lights the ground ahead. Zero Hour drew
+	the windows, lamps and cones but they lit nothing. Visual only. */
 //=============================================================================
 void RTS3DScene::gatherSage2NightLights()
 {
@@ -1854,6 +1924,49 @@ void RTS3DScene::gatherSage2NightLights()
 		}
 		if (!draw->isKindOf(KINDOF_STRUCTURE))
 			continue;
+		// Tiberium Project @feature its lamps light the ground too: one light for each colour of lamp
+		// it carries, at their middle, reaching past the farthest of them (a base's floodlights, an
+		// airfield's runway lights; Zero Hour drew them glowing but lighting nothing)
+		NightLampGroup lamps[NIGHT_LAMP_KIND_COUNT];
+		for (Int k = 0; k < NIGHT_LAMP_KIND_COUNT; ++k)
+			lamps[k].count = 0;
+		for (DrawModule **dm = draw->getDrawModules(); *dm != nullptr; ++dm)
+		{
+			ObjectDrawInterface *odi = (*dm)->getObjectDrawInterface();
+			if (odi != nullptr)
+				collectNightLamps(static_cast<W3DModelDraw *>(odi)->getRenderObject(), 0, lamps);
+		}
+		for (Int k = 0; k < NIGHT_LAMP_KIND_COUNT; ++k)
+		{
+			const NightLampGroup &group = lamps[k];
+			if (group.count == 0)
+				continue;
+			Vector3 middle(0.0f, 0.0f, 0.0f);
+			for (Int i = 0; i < group.count; ++i)
+				middle += group.positions[i];
+			middle /= (Real)group.count;
+			Real spread = 0.0f;
+			for (Int i = 0; i < group.count; ++i)
+			{
+				const Real dx = group.positions[i].X - middle.X;
+				const Real dy = group.positions[i].Y - middle.Y;
+				spread = max(spread, WWMath::Sqrt(dx * dx + dy * dy));
+			}
+			const NightLampKind &kind = NIGHT_LAMP_KINDS[k];
+			const Real strength = kind.strength * dusk * (group.count > 1 ? 1.25f : 1.0f);
+			Sage2SceneClass::PointLight lamp;
+			lamp.position[0] = middle.X;
+			lamp.position[1] = middle.Y;
+			lamp.position[2] = middle.Z;
+			lamp.color[0] = kind.red * strength;
+			lamp.color[1] = kind.green * strength;
+			lamp.color[2] = kind.blue * strength;
+			lamp.innerRadius = 6.0f + spread * 0.5f;
+			lamp.outerRadius = min(160.0f, spread + kind.reach);
+			lamp.lightsObjects = true;
+			lamp.lightsParticles = false;
+			Sage2SceneClass::Add_Point_Light(lamp);
+		}
 		// a building with its lights on: the model drawn now has a lit-window pass
 		Bool lit = FALSE;
 		for (DrawModule **dm = draw->getDrawModules(); *dm != nullptr && !lit; ++dm)

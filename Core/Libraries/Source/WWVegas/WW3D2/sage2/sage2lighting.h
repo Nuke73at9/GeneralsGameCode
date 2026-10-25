@@ -69,8 +69,10 @@ public:
 	static float Get_Mood();
 	/// Tiberium Project @tweak How strong the moonlight is on the maps that play at night (Options.ini
 	/// Sage2NightLight, a scale on the night set's ambient and lights; the lamps, windows and fires
-	/// keep their strength) and how much of the map's own night colour it takes (Sage2NightTint, 0..1)
-	static void Set_Night(float light, float tint);
+	/// keep their strength), the same on snow maps at night (Sage2NightLightSnow: snow reflects most
+	/// of the moon, so it takes less) and how much of the map's own night colour it takes
+	/// (Sage2NightTint, 0..1)
+	static void Set_Night(float light, float snowLight, float tint);
 	/// Tiberium Project @feature The light a particle takes from the scene, as C&C4 and RA3 light
 	/// theirs (the colour times the directional lights): the ambient and half of each light, against
 	/// the same of RA3's afternoon, for which Zero Hour's particle colours read right. Gives, per
@@ -81,7 +83,7 @@ public:
 	/// The preset to light a map with, given the map's own lights for the time of day it plays at
 	/// (ambient, and the diffuse colour of its three lights, as the map stores them): the preset
 	/// itself at mood 0, darkened and tinted towards the map's own light as the mood rises.
-	static Sage2LightingPreset Adapt(const Sage2LightingPreset& preset, int timeOfDay, const float mapAmbient[3], const float mapDiffuse[3][3]);
+	static Sage2LightingPreset Adapt(const Sage2LightingPreset& preset, int timeOfDay, bool snowy, const float mapAmbient[3], const float mapDiffuse[3][3]);
 	/// Tiberium Project @bugfix Options.ini Sage2TreeLight: the trees (Zero Hour's tree buffer, lit
 	/// per vertex) take the presets' light as the SAGE 2 effects do, in linear light
 	static void Set_Tree_Light(bool enabled);

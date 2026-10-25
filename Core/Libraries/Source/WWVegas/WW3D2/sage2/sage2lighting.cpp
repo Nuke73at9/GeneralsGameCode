@@ -110,6 +110,7 @@ namespace
 	const float ZH_DEFAULT_SUN[4] = { 0.740f, 1.000f, 0.515f, 0.207f };
 	float s_mood = 0.0f;
 	float s_nightLight = 0.5f;
+	float s_nightLightSnow = 0.25f;
 	float s_nightTint = 0.0f;
 
 	float Luminance(const float c[3])
@@ -234,9 +235,10 @@ float Sage2LightingClass::Get_Mood()
 	return s_mood;
 }
 
-void Sage2LightingClass::Set_Night(float light, float tint)
+void Sage2LightingClass::Set_Night(float light, float snowLight, float tint)
 {
 	s_nightLight = Clamp(light, 0.05f, 2.0f);
+	s_nightLightSnow = Clamp(snowLight, 0.05f, 2.0f);
 	s_nightTint = Clamp(tint, 0.0f, 1.0f);
 }
 
@@ -261,7 +263,7 @@ void Sage2LightingClass::Get_Particle_Light(const float ambient[3], const float 
 }
 
 //-------------------------------------------------------------------------------------------------
-Sage2LightingPreset Sage2LightingClass::Adapt(const Sage2LightingPreset& preset, int timeOfDay, const float mapAmbient[3], const float mapDiffuse[3][3])
+Sage2LightingPreset Sage2LightingClass::Adapt(const Sage2LightingPreset& preset, int timeOfDay, bool snowy, const float mapAmbient[3], const float mapDiffuse[3][3])
 {
 	Sage2LightingPreset out = preset;
 	const int t = timeOfDay < 1 ? 0 : (timeOfDay > 4 ? 3 : timeOfDay - 1);
@@ -298,17 +300,20 @@ Sage2LightingPreset Sage2LightingClass::Adapt(const Sage2LightingPreset& preset,
 	// its night maps are its day maps' textures: white towers came out white under RA3's moon. The
 	// moon is scaled for them, and takes the map's own night colour (its ambient for the sky's fills,
 	// its sun for the moon); the lamps, lit windows and fires are not touched, so they stand out more.
-	if (timeOfDay == 4 && (s_nightLight != 1.0f || s_nightTint > 0.0f))
+	// Snow reflects most of the moon: at a half, the two snow maps at night (Lights Out, Tournament
+	// Tundra) stayed about twice as bright as the others, so they take a quarter.
+	const float moon = snowy ? s_nightLightSnow : s_nightLight;
+	if (timeOfDay == 4 && (moon != 1.0f || s_nightTint > 0.0f))
 	{
 		for (int i = 0; i < 3; ++i)
 		{
-			out.ambient[i] *= s_nightLight * (1.0f + (ambientHue[i] - 1.0f) * s_nightTint);
-			out.light[0].diffuse[i] *= s_nightLight * (1.0f + (sunHue[i] - 1.0f) * s_nightTint);
+			out.ambient[i] *= moon * (1.0f + (ambientHue[i] - 1.0f) * s_nightTint);
+			out.light[0].diffuse[i] *= moon * (1.0f + (sunHue[i] - 1.0f) * s_nightTint);
 			for (int j = 1; j < 3; ++j)
-				out.light[j].diffuse[i] *= s_nightLight * (1.0f + (ambientHue[i] - 1.0f) * s_nightTint);
+				out.light[j].diffuse[i] *= moon * (1.0f + (ambientHue[i] - 1.0f) * s_nightTint);
 		}
-		Sage2_Log("lighting: the night's moon x%.2f, tinted %.2f by the map's own: ambient (%.2f %.2f %.2f), moon (%.2f %.2f %.2f), fills (%.2f %.2f %.2f) (%.2f %.2f %.2f)",
-			s_nightLight, s_nightTint, out.ambient[0], out.ambient[1], out.ambient[2], out.light[0].diffuse[0], out.light[0].diffuse[1], out.light[0].diffuse[2],
+		Sage2_Log("lighting: the night's moon x%.2f%s, tinted %.2f by the map's own: ambient (%.2f %.2f %.2f), moon (%.2f %.2f %.2f), fills (%.2f %.2f %.2f) (%.2f %.2f %.2f)",
+			moon, snowy ? " (snow)" : "", s_nightTint, out.ambient[0], out.ambient[1], out.ambient[2], out.light[0].diffuse[0], out.light[0].diffuse[1], out.light[0].diffuse[2],
 			out.light[1].diffuse[0], out.light[1].diffuse[1], out.light[1].diffuse[2], out.light[2].diffuse[0], out.light[2].diffuse[1], out.light[2].diffuse[2]);
 	}
 	return out;

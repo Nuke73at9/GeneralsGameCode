@@ -36,6 +36,7 @@
 #include "GameClient/Display.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/ParticleSys.h"
+#include "GameClient/Shell.h"
 #include "GameClient/View.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/TerrainLogic.h"
@@ -72,6 +73,9 @@ namespace
 	Bool s_crcLogged = FALSE;
 	Int s_quitFrame = -1;
 	Bool s_quitIssued = FALSE;
+	std::string s_menu;			// a shell screen to open before a game
+	Bool s_menuPushed = FALSE;
+	const Int MENU_FRAME = 60;
 	Int s_frame = 0;
 	Int s_lastShotFrame = -1000;
 	std::chrono::steady_clock::time_point s_lastShotTime;
@@ -317,6 +321,7 @@ void TiberiumTest::setFireFrame( Int frame ) { if ( frame >= 0 ) { s_fireFrame =
 void TiberiumTest::setReveal( Bool reveal ) { s_reveal = reveal; if ( reveal ) s_active = TRUE; }
 void TiberiumTest::setCRCFrame( Int frame ) { if ( frame >= 0 ) { s_crcFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setQuitFrame( Int frame ) { if ( frame > 0 ) { s_quitFrame = frame; s_active = TRUE; } }
+void TiberiumTest::setMenu( const char *layout ) { if ( layout != nullptr && *layout != '\0' ) { s_menu = layout; s_active = TRUE; } }
 Bool TiberiumTest::isActive() { return s_active; }
 
 //-------------------------------------------------------------------------------------------------
@@ -396,6 +401,14 @@ void TiberiumTest::update()
 		s_controlBarSet = TRUE;
 		TheControlBar->switchControlBarStage( (ControlBarStages)s_controlBarStage );
 		log( "frame %d: control bar stage %d", (int)s_frame, (int)s_controlBarStage );
+	}
+
+	// a shell screen (the options menu, say), opened on top of the main menu before any game
+	if ( !s_menu.empty() && !s_menuPushed && !inGame && s_frame >= MENU_FRAME && TheShell != nullptr )
+	{
+		s_menuPushed = TRUE;
+		TheShell->push( AsciiString( s_menu.c_str() ) );
+		log( "frame %d: shell screen '%s' opened", (int)s_frame, s_menu.c_str() );
 	}
 
 	// the camera, client-side only

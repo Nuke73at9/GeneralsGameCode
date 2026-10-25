@@ -837,7 +837,7 @@ Bool WorldHeightMap::ParseLightingDataChunk(DataChunkInput &file, DataChunkInfo 
 					mapDiffuse[j][0] = own[j].diffuse.red; mapDiffuse[j][1] = own[j].diffuse.green; mapDiffuse[j][2] = own[j].diffuse.blue;
 				}
 			}
-			const Sage2LightingPreset adapted = Sage2LightingClass::Adapt(*chosen, tod, mapAmbient, mapDiffuse);
+			const Sage2LightingPreset adapted = Sage2LightingClass::Adapt(*chosen, tod, TheGlobalData->m_weather == WEATHER_SNOWY, mapAmbient, mapDiffuse);
 			const Sage2LightingPreset* preset = &adapted;
 			for (i=0; i<4; i++) {
 				for (Int j=0; j<MAX_GLOBAL_LIGHTS && j<3; j++) {

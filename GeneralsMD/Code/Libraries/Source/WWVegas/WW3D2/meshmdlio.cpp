@@ -1756,6 +1756,21 @@ bool MeshModelClass::Is_Night_Day_Pass(int pass) const
 }
 
 /***********************************************************************************************
+ * MeshModelClass::Get_Night_Lamp_Texture -- a night model's lamp, by its texture               *
+ *                                                                                             *
+ * Tiberium Project: a night model's mesh drawn as a single additive pass (a spotlight, beacon, *
+ * runway or warning light): the name of its texture, which says what colour the lamp is.      *
+ *=============================================================================================*/
+const char *MeshModelClass::Get_Night_Lamp_Texture() const
+{
+	if (DefMatDesc->PassCount != 1 || !Is_Night_Light_Pass(0) || !Is_Night_Model_Name(Get_Name())) {
+		return nullptr;
+	}
+	TextureClass *texture = DefMatDesc->Peek_Texture(0, 0, 0);
+	return texture != nullptr ? (const char *)texture->Get_Texture_Name() : nullptr;
+}
+
+/***********************************************************************************************
  * MeshModelClass::Has_Night_Window_Pass -- a night model's mesh with a lit-window layer         *
  *=============================================================================================*/
 bool MeshModelClass::Has_Night_Window_Pass() const

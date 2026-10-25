@@ -257,6 +257,7 @@ public:
 	bool							Is_Night_Light_Pass(int pass) const;	///< an additive textured pass (lit windows, a lamp)
 	bool							Is_Night_Day_Pass(int pass) const;	///< the day texture added over a night texture (drawn unlit)
 	bool							Has_Night_Window_Pass() const;	///< a night model's mesh with a lit-window pass over its texture
+	const char *					Get_Night_Lamp_Texture() const;	///< a night model's lamp (one additive pass): its texture's name, else nullptr
 
 protected:
 

@@ -850,6 +850,13 @@ Int parseTestCamera(char *args[], int num)
 	return 2;
 }
 
+Int parseTestMenu(char *args[], int num)
+{
+	if (num > 1)
+		TiberiumTest::setMenu(args[1]);
+	return 2;
+}
+
 Int parseTestControlBar(char *args[], int num)
 {
 	if (num > 1)
@@ -1306,6 +1313,7 @@ static CommandLineParam paramsForEngineInit[] =
 	{ "-testMap", parseTestMap },
 	{ "-testCamera", parseTestCamera },
 	{ "-testControlBar", parseTestControlBar },
+	{ "-testMenu", parseTestMenu },
 	{ "-testTour", parseTestTour },
 	{ "-testShots", parseTestShots },
 	{ "-testScorch", parseTestScorch },

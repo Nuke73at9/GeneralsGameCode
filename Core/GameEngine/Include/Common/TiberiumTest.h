@@ -37,6 +37,8 @@
 //   -testShots 100                                       a PNG screenshot every 100 frames
 //   -testScorch 50                                       a field of scorch marks around the view at frame 50
 //   -testCRC 300                                         log the logic CRC at logic frame 300
+//   -testMenu Menus/OptionsMenu.wnd                      open that shell screen at frame 60 (before a game:
+//                                                        with -noshellmap and no -testMap), for screenshots
 //   -testQuit 400                                        quit at frame 400 (no sooner than 5 seconds after
 //                                                        the last screenshot, which is still being written)
 //
@@ -61,6 +63,7 @@ public:
 	static void setReveal( Bool reveal );	///< reveal the map to the local player at the start (changes the logic's state: not with -testCRC)
 	static void setCRCFrame( Int frame );
 	static void setQuitFrame( Int frame );
+	static void setMenu( const char *layout );	///< a shell screen (a .wnd) pushed at frame 60, before a game
 
 	/// True when any test option was given
 	static Bool isActive();

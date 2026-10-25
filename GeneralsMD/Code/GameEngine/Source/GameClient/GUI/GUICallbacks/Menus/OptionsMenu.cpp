@@ -32,6 +32,7 @@
 
 #include "gamespy/ghttp/ghttp.h"
 
+#include "Common/TiberiumTest.h"
 #include "Common/AudioAffect.h"
 #include "Common/AudioSettings.h"
 #include "Common/GameAudio.h"
@@ -194,6 +195,10 @@ static GameWindow *   checkUnlockFps   = nullptr;
 
 static NameKeyType    checkHeatEffectsID = NAMEKEY_INVALID;
 static GameWindow *   checkHeatEffects   = nullptr;
+// Tiberium Project @feature "Enable C&C4 style": the C&C4 renderer on or off (CNC4Style in
+// Options.ini; the Tiberium mod's OptionsMenu.wnd adds the box, takes effect after a restart)
+static NameKeyType    checkCNC4StyleID = NAMEKEY_INVALID;
+static GameWindow *   checkCNC4Style   = nullptr;
 
 /*
 
@@ -350,6 +355,12 @@ static void setDefaults()
 		GadgetCheckBoxSetChecked( checkHeatEffects, TheGlobalData->m_useHeatEffects);
 
 		//-------------------------------------------------------------------------------------------------
+		// C&C4 style (Tiberium Project)
+		//
+		if (checkCNC4Style)
+			GadgetCheckBoxSetChecked( checkCNC4Style, TRUE );
+
+		//-------------------------------------------------------------------------------------------------
  		// Building Occlusion checkbox
 		//
 		GadgetCheckBoxSetChecked( checkBuildingOcclusion, TheGlobalData->m_enableBehindBuildingMarkers);
@@ -441,6 +452,10 @@ static void saveOptions()
 
 		TheWritableGlobalData->m_useHeatEffects = GadgetCheckBoxIsChecked( checkHeatEffects );
 		(*pref)["HeatEffects"] = TheGlobalData->m_useHeatEffects ? "yes" : "no";
+
+		// Tiberium Project: the C&C4 renderer is chosen at startup, so this takes effect after a restart
+		if (checkCNC4Style)
+			(*pref)["CNC4Style"] = GadgetCheckBoxIsChecked( checkCNC4Style ) ? "yes" : "no";
 
 		// Never write this out
 		//TheWritableGlobalData->m_useFpsLimit = !GadgetCheckBoxIsChecked( checkUnlockFps );
@@ -1051,6 +1066,12 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 
 	checkHeatEffectsID = TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:CheckHeatEffects" );
 	checkHeatEffects   = TheWindowManager->winGetWindowFromId( nullptr, checkHeatEffectsID);
+	checkCNC4StyleID = TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:CheckCNC4Style" );
+	checkCNC4Style   = TheWindowManager->winGetWindowFromId( nullptr, checkCNC4StyleID );
+	if (checkCNC4Style)
+		GadgetCheckBoxSetText( checkCNC4Style, UnicodeString(L"Enable C&C4 style (after a restart)") );
+	if (TiberiumTest::isActive())
+		TiberiumTest::log( "options menu: the C&C4 style box %s", checkCNC4Style ? "is there" : "is missing (the mod's OptionsMenu.wnd is not loaded)" );
 
 	checkUnlockFpsID = TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:CheckUnlockFPS" );
 	checkUnlockFps   = TheWindowManager->winGetWindowFromId( nullptr, checkUnlockFpsID);
@@ -1287,6 +1308,9 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 	GadgetCheckBoxSetChecked( checkNoDynamicLod, !TheGlobalData->m_enableDynamicLOD);
 
 	GadgetCheckBoxSetChecked( checkHeatEffects, TheGlobalData->m_useHeatEffects);
+
+	if (checkCNC4Style)
+		GadgetCheckBoxSetChecked( checkCNC4Style, pref->getBool("CNC4Style", TRUE) );
 
 	GadgetCheckBoxSetChecked( checkUnlockFps, !TheGlobalData->m_useFpsLimit);
 
