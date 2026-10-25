@@ -228,6 +228,88 @@ D3D8On9Device::~D3D8On9Device()
 namespace
 {
 	bool s_wantReadableDepth = false;
+
+	// draw statistics (D3D8On9_Get_Draw_Stats)
+	const int MAX_DRAW_PHASES = 24;
+	bool s_drawStats = false;
+	const char* s_drawPhase = "unnamed";
+	D3D8On9DrawStats s_drawPhases[MAX_DRAW_PHASES];
+	int s_drawPhaseCount = 0;
+}
+
+void D3D8On9_Set_Draw_Phase(const char* phase)
+{
+	s_drawPhase = phase != nullptr ? phase : "unnamed";
+}
+
+void D3D8On9_Set_Draw_Stats(bool counting)
+{
+	if (counting)
+		s_drawPhaseCount = 0;
+	s_drawStats = counting;
+}
+
+int D3D8On9_Get_Draw_Stats(D3D8On9DrawStats* stats, int max)
+{
+	int n = s_drawPhaseCount < max ? s_drawPhaseCount : max;
+	for (int i = 0; i < n; ++i)
+		stats[i] = s_drawPhases[i];
+	return n;
+}
+
+void D3D8On9Device::Count_Draw(UINT primitives)
+{
+	if (!s_drawStats)
+		return;
+	D3D8On9DrawStats* entry = nullptr;
+	for (int i = 0; i < s_drawPhaseCount && entry == nullptr; ++i)
+		if (s_drawPhases[i].phase == s_drawPhase || strcmp(s_drawPhases[i].phase, s_drawPhase) == 0)
+			entry = &s_drawPhases[i];
+	if (entry == nullptr)
+	{
+		if (s_drawPhaseCount >= MAX_DRAW_PHASES)
+			return;
+		entry = &s_drawPhases[s_drawPhaseCount++];
+		entry->phase = s_drawPhase;
+		entry->draws = entry->fixedVertex = entry->fixedPixel = entry->primitives = 0;
+		entry->fixedLit = entry->fixedFog = entry->fixedTwoStages = 0;
+		for (int k = 0; k < 4; ++k)
+			entry->fixedFVF[k] = entry->fixedFVFDraws[k] = 0;
+	}
+	++entry->draws;
+	entry->primitives += primitives;
+	IDirect3DVertexShader9* vs = nullptr;
+	IDirect3DPixelShader9* ps = nullptr;
+	m_device->GetVertexShader(&vs);
+	m_device->GetPixelShader(&ps);
+	if (vs == nullptr)
+		++entry->fixedVertex;
+	else
+		vs->Release();
+	if (ps == nullptr)
+		++entry->fixedPixel;
+	else
+		ps->Release();
+	if (vs == nullptr || ps == nullptr)
+	{
+		const DWORD fvf = Get_Current_FVF();
+		for (int k = 0; k < 4; ++k)
+		{
+			if (entry->fixedFVFDraws[k] == 0 || entry->fixedFVF[k] == fvf)
+			{
+				entry->fixedFVF[k] = fvf;
+				++entry->fixedFVFDraws[k];
+				break;
+			}
+		}
+		DWORD lit = 0, fog = 0, stage1 = D3DTOP_DISABLE;
+		m_device->GetRenderState(D3DRS_LIGHTING, &lit);
+		m_device->GetRenderState(D3DRS_FOGENABLE, &fog);
+		m_device->GetTextureStageState(1, D3DTSS_COLOROP, &stage1);
+		if (lit) ++entry->fixedLit;
+		if (fog) ++entry->fixedFog;
+		if (stage1 != D3DTOP_DISABLE) ++entry->fixedTwoStages;
+	}
 }
 
 void D3D8On9_Set_Readable_Depth(bool enabled)

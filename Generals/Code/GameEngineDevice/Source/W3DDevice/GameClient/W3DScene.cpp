@@ -833,6 +833,10 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 	if (zhShadows && m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
 		DoShadows(rinfo, false);	//draw all non-stencil shadows (decals) since they fall under other objects.
 
+#ifdef RTS_RENDERER_D3D9
+	if (!Sage2ShadowClass::Is_Rendering())
+		D3D8On9_Set_Draw_Phase("opaque objects");	// Tiberium Project @feature draw statistics
+#endif
 	TheDX8MeshRenderer.Flush();	//draw all non-translucent objects.
 
 	//draw all non-translucent objects which were separated because they are hidden and need custom rendering.
@@ -843,6 +847,10 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 		flushOccludedObjectsIntoStencil(rinfo);
 #endif
 	// Draw the trees last so they alpha blend onto everything correctly.
+#ifdef RTS_RENDERER_D3D9
+	if (!Sage2ShadowClass::Is_Rendering())
+		D3D8On9_Set_Draw_Phase("trees");
+#endif
 	DoTrees(rinfo);
 
 #ifdef RTS_RENDERER_D3D9
@@ -857,10 +865,20 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 	if (zhShadows && m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
 		DoShadows(rinfo, true);	//draw all stencil shadows
 
+#ifdef RTS_RENDERER_D3D9
+	if (!Sage2ShadowClass::Is_Rendering())
+		D3D8On9_Set_Draw_Phase("water and sorted lists");
+#endif
 	WW3D::Render_And_Clear_Static_Sort_Lists(rinfo);	//draws things like water
 
 	if (m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
+	{
+#ifdef RTS_RENDERER_D3D9
+		if (!Sage2ShadowClass::Is_Rendering())
+			D3D8On9_Set_Draw_Phase("translucent objects");
+#endif
 		flushTranslucentObjects(rinfo);	//draw all translucent meshes which don't need per-polygon sorting.
+	}
 
 	{
 		//USE_PERF_TIMER(translucentRender)
@@ -873,6 +891,10 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 			)
 			DoParticles(rinfo);	//queue up particles for rendering.
 
+#ifdef RTS_RENDERER_D3D9
+		if (!Sage2ShadowClass::Is_Rendering())
+			D3D8On9_Set_Draw_Phase("particles and sorted polygons");
+#endif
 		SortingRendererClass::Flush();	//draw sorted translucent polygons like particles.
 	}
 	TheDX8MeshRenderer.Clear_Pending_Delete_Lists();
@@ -1091,6 +1113,10 @@ void RTS3DScene::Render(RenderInfoClass & rinfo)
 //=============================================================================
 void RTS3DScene::Customized_Render( RenderInfoClass &rinfo )
 {
+#ifdef RTS_RENDERER_D3D9
+	if (!Sage2ShadowClass::Is_Rendering())
+		D3D8On9_Set_Draw_Phase("terrain and scene list");	// Tiberium Project @feature draw statistics
+#endif
 #ifdef DIRTY_CONDITION_FLAGS
 	StDrawableDirtyStuffLocker lockDirtyStuff;
 #endif

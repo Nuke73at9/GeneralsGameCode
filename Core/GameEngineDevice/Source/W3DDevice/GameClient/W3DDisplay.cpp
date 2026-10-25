@@ -2029,8 +2029,33 @@ void W3DDisplay::calculateTerrainLOD()
 			updateViews();
 			if (WW3D::Begin_Render( true, true, Vector3( 0.0f, 0.0f, 0.0f ) ) == WW3D_ERROR_OK)
 			{
+#ifdef RTS_RENDERER_D3D9
+				// Tiberium Project @feature what still draws without shaders, counted over one frame twice
+				// a run (Sage2.log "draws:"), by the part of the frame drawing
+				static UnsignedInt s_statsFrame = 0;
+				++s_statsFrame;
+				const Bool countDraws = s_statsFrame == 400 || s_statsFrame == 1200;
+				D3D8On9_Set_Draw_Stats(countDraws);
+				D3D8On9_Set_Draw_Phase("world");
+#endif
 				// draw all views of the world
 				drawViews();
+#ifdef RTS_RENDERER_D3D9
+				if (countDraws)
+				{
+					D3D8On9_Set_Draw_Stats(false);
+					D3D8On9DrawStats stats[24];
+					const int phases = D3D8On9_Get_Draw_Stats(stats, 24);
+					for (int i = 0; i < phases; ++i)
+						Sage2_Log("draws: frame %u, %-24s %5u draws (%u fixed-function vertex, %u fixed-function pixel; of those %u lit, %u fogged, "
+							"%u with two texture stages; FVF %X x%u, %X x%u, %X x%u, %X x%u), %u primitives",
+							(unsigned)s_statsFrame, stats[i].phase, stats[i].draws, stats[i].fixedVertex, stats[i].fixedPixel,
+							stats[i].fixedLit, stats[i].fixedFog, stats[i].fixedTwoStages,
+							stats[i].fixedFVF[0], stats[i].fixedFVFDraws[0], stats[i].fixedFVF[1], stats[i].fixedFVFDraws[1],
+							stats[i].fixedFVF[2], stats[i].fixedFVFDraws[2], stats[i].fixedFVF[3], stats[i].fixedFVFDraws[3], stats[i].primitives);
+				}
+				D3D8On9_Set_Draw_Phase("other");
+#endif
 				// render is all done!
 				WW3D::End_Render();
 			}
@@ -2339,6 +2364,15 @@ AGAIN:
 				if (numRenderTargetPolygons || numRenderTargetVertices)
 					Debug_Statistics::Record_DX8_Polys_And_Vertices(numRenderTargetPolygons,numRenderTargetVertices,ShaderClass::_PresetOpaqueShader);
 
+#ifdef RTS_RENDERER_D3D9
+				// Tiberium Project @feature what still draws without shaders, counted over one frame twice
+				// a run (Sage2.log "draws:"), by the part of the frame drawing
+				static UnsignedInt s_statsFrame = 0;
+				++s_statsFrame;
+				const Bool countDraws = s_statsFrame == 400 || s_statsFrame == 1200;
+				D3D8On9_Set_Draw_Stats(countDraws);
+				D3D8On9_Set_Draw_Phase("world");
+#endif
 				// draw all views of the world
 				drawViews();
 
@@ -2359,6 +2393,9 @@ AGAIN:
 				}
 #endif
 
+#ifdef RTS_RENDERER_D3D9
+				D3D8On9_Set_Draw_Phase("interface");
+#endif
 				// draw the user interface
 				TheInGameUI->DRAW();
 
@@ -2437,6 +2474,22 @@ AGAIN:
 				{
 					m_profilerFrameCapture->Capture(getWidth(), getHeight());
 				}
+#endif
+#ifdef RTS_RENDERER_D3D9
+				if (countDraws)
+				{
+					D3D8On9_Set_Draw_Stats(false);
+					D3D8On9DrawStats stats[24];
+					const int phases = D3D8On9_Get_Draw_Stats(stats, 24);
+					for (int i = 0; i < phases; ++i)
+						Sage2_Log("draws: frame %u, %-24s %5u draws (%u fixed-function vertex, %u fixed-function pixel; of those %u lit, %u fogged, "
+							"%u with two texture stages; FVF %X x%u, %X x%u, %X x%u, %X x%u), %u primitives",
+							(unsigned)s_statsFrame, stats[i].phase, stats[i].draws, stats[i].fixedVertex, stats[i].fixedPixel,
+							stats[i].fixedLit, stats[i].fixedFog, stats[i].fixedTwoStages,
+							stats[i].fixedFVF[0], stats[i].fixedFVFDraws[0], stats[i].fixedFVF[1], stats[i].fixedFVFDraws[1],
+							stats[i].fixedFVF[2], stats[i].fixedFVFDraws[2], stats[i].fixedFVF[3], stats[i].fixedFVFDraws[3], stats[i].primitives);
+				}
+				D3D8On9_Set_Draw_Phase("other");
 #endif
 				// render is all done!
 				WW3D::End_Render();
@@ -2684,6 +2737,7 @@ void W3DDisplay::renderShadowMap()
 		return;
 	if (WW3D::Begin_Render(false, false, Vector3(0.0f, 0.0f, 0.0f)) == WW3D_ERROR_OK)
 	{
+		D3D8On9_Set_Draw_Phase("shadow map");	// Tiberium Project @feature draw statistics
 		WW3D::Render(m_3DScene, Sage2ShadowClass::Get_Camera());
 		WW3D::End_Render(false);
 	}

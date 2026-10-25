@@ -279,13 +279,13 @@ public:
 	HRESULT SetStreamSource(UINT stream, IDirect3DVertexBuffer9* buffer, UINT stride)
 		{ return m_device->SetStreamSource(stream, buffer, 0, stride); }
 	HRESULT SetIndices(IDirect3DIndexBuffer9* buffer, UINT baseVertexIndex);
-	HRESULT DrawPrimitive(D3DPRIMITIVETYPE type, UINT start, UINT count) { return m_device->DrawPrimitive(type, start, count); }
+	HRESULT DrawPrimitive(D3DPRIMITIVETYPE type, UINT start, UINT count) { Count_Draw(count); return m_device->DrawPrimitive(type, start, count); }
 	HRESULT DrawIndexedPrimitive(D3DPRIMITIVETYPE type, UINT minIndex, UINT numVertices, UINT startIndex, UINT primCount)
-		{ return m_device->DrawIndexedPrimitive(type, (INT)m_baseVertexIndex, minIndex, numVertices, startIndex, primCount); }
+		{ Count_Draw(primCount); return m_device->DrawIndexedPrimitive(type, (INT)m_baseVertexIndex, minIndex, numVertices, startIndex, primCount); }
 	HRESULT DrawPrimitiveUP(D3DPRIMITIVETYPE type, UINT primCount, const void* data, UINT stride)
-		{ return m_device->DrawPrimitiveUP(type, primCount, data, stride); }
+		{ Count_Draw(primCount); return m_device->DrawPrimitiveUP(type, primCount, data, stride); }
 	HRESULT DrawIndexedPrimitiveUP(D3DPRIMITIVETYPE type, UINT minIndex, UINT numVertices, UINT primCount, const void* indices, D3DFORMAT format, const void* data, UINT stride)
-		{ return m_device->DrawIndexedPrimitiveUP(type, minIndex, numVertices, primCount, indices, format, data, stride); }
+		{ Count_Draw(primCount); return m_device->DrawIndexedPrimitiveUP(type, minIndex, numVertices, primCount, indices, format, data, stride); }
 	HRESULT ProcessVertices(UINT srcStart, UINT dstIndex, UINT count, IDirect3DVertexBuffer9* dst, DWORD flags)
 		{ return m_device->ProcessVertices(srcStart, dstIndex, count, dst, nullptr, flags); }
 
@@ -303,6 +303,8 @@ public:
 
 private:
 	~D3D8On9Device();
+	/// Tiberium Project @feature counts a draw for D3D8On9_Get_Draw_Stats, while counting is on
+	void Count_Draw(UINT primitives);
 
 	struct VertexShader { IDirect3DVertexDeclaration9* decl; IDirect3DVertexShader9* shader; };
 
@@ -367,6 +369,27 @@ UINT D3D8On9_Surface_Size(const D3DSURFACE_DESC& desc);
 /// Direct3D 8 present parameters as Direct3D 9 expects them: windowed swap chains present at once
 /// unless the swap effect is D3DSWAPEFFECT_COPY_VSYNC (which Direct3D 9 doesn't have)
 D3DPRESENT_PARAMETERS D3D8On9_Present_Parameters(const D3DPRESENT_PARAMETERS& params8);
+
+/// Tiberium Project @feature What still draws without shaders: the draws through this adapter (W3D's
+/// own path; the SAGE 2 effects draw through Direct3D 9 directly) counted by phase, the part of the
+/// frame the engine says it is drawing (D3D8On9_Set_Draw_Phase, a string that lives on), and how many
+/// of them ran fixed-function vertex or pixel processing.
+struct D3D8On9DrawStats
+{
+	const char* phase;
+	unsigned draws;
+	unsigned fixedVertex;	///< without a vertex shader
+	unsigned fixedPixel;	///< without a pixel shader
+	unsigned primitives;
+	unsigned fixedFVF[4];		///< the FVFs of the fixed-function draws, the first four seen
+	unsigned fixedFVFDraws[4];
+	unsigned fixedLit;			///< fixed-function draws with lighting on
+	unsigned fixedFog;			///< fixed-function draws with fog on
+	unsigned fixedTwoStages;	///< fixed-function draws with a second texture stage on
+};
+void D3D8On9_Set_Draw_Phase(const char* phase);
+void D3D8On9_Set_Draw_Stats(bool counting);	///< on: counting starts from zero
+int D3D8On9_Get_Draw_Stats(D3D8On9DrawStats* stats, int max);	///< the phases counted, in the order first seen
 
 /// Tiberium Project @feature Whether devices made from now on get a depth buffer the shaders can read
 /// (D3D8On9Device::Get_Readable_Depth; for SSAO). Off by default.
