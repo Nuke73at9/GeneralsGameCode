@@ -32,6 +32,9 @@
 #include "sage2material.h"
 #include "sage2texture.h"
 
+#include "../shaders/fxaa_ps.h"
+#include "../shaders/postprocess_vs.h"
+
 namespace
 {
 	enum InitState { NOT_TRIED, READY, UNAVAILABLE };
@@ -77,6 +80,16 @@ namespace
 	IDirect3DVertexBuffer9* s_quad = nullptr;
 	IDirect3DVertexDeclaration9* s_quadDeclaration = nullptr;
 	IDirect3DStateBlock9* s_savedState = nullptr;
+
+	// Tiberium Project @feature edge anti-aliasing after the grade
+	bool s_aaEnabled = true;
+	float s_aaSubpixel = 0.5f;
+	enum AAState { AA_NOT_TRIED, AA_READY, AA_UNAVAILABLE };
+	AAState s_aaState = AA_NOT_TRIED;
+	IDirect3DTexture9* s_graded = nullptr;		// the graded frame, the anti-aliasing's source
+	IDirect3DVertexShader9* s_aaVertexShader = nullptr;
+	IDirect3DPixelShader9* s_aaPixelShader = nullptr;
+	IDirect3DVertexDeclaration9* s_aaDeclaration = nullptr;
 
 	template <class T> void Release(T*& p) { if (p) { p->Release(); p = nullptr; } }
 
@@ -247,6 +260,69 @@ namespace
 		}
 		~Target() { Release(surface); }
 	};
+
+	bool Make_Anti_Aliasing(IDirect3DDevice9* device)
+	{
+		if (s_aaState != AA_NOT_TRIED)
+			return s_aaState == AA_READY;
+		s_aaState = AA_UNAVAILABLE;
+		const D3DVERTEXELEMENT9 elements[] =
+		{
+			{ 0, 0, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
+			{ 0, 8, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
+			D3DDECL_END()
+		};
+		if (FAILED(device->CreateVertexShader(PostProcessVertexShader, &s_aaVertexShader))
+			|| FAILED(device->CreatePixelShader(FXAAPixelShader, &s_aaPixelShader))
+			|| FAILED(device->CreateVertexDeclaration(elements, &s_aaDeclaration)))
+		{
+			Release(s_aaVertexShader);
+			Release(s_aaPixelShader);
+			Release(s_aaDeclaration);
+			Sage2_Log("post: edge anti-aliasing unavailable");
+			return false;
+		}
+		s_aaState = AA_READY;
+		return true;
+	}
+
+	// the anti-aliasing pass: the graded frame in, the frame out
+	void Draw_Anti_Aliasing(IDirect3DDevice9* device, IDirect3DSurface9* target, UINT w, UINT h)
+	{
+		device->SetRenderTarget(0, target);
+		D3DVIEWPORT9 vp = { 0, 0, w, h, 0.0f, 1.0f };
+		device->SetViewport(&vp);
+		device->SetVertexDeclaration(s_aaDeclaration);
+		device->SetVertexShader(s_aaVertexShader);
+		device->SetPixelShader(s_aaPixelShader);
+		const float halfPixel[4] = { -1.0f / (float)w, 1.0f / (float)h, 0.0f, 0.0f };
+		device->SetVertexShaderConstantF(0, halfPixel, 1);
+		// the edge threshold (a step of an eighth of the local brightness), and a floor for the darks
+		const float params[2][4] = { { 1.0f / (float)w, 1.0f / (float)h, s_aaSubpixel, 0.125f }, { 0.0312f, 0.0f, 0.0f, 0.0f } };
+		device->SetPixelShaderConstantF(0, &params[0][0], 2);
+		device->SetTexture(0, s_graded);
+		device->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+		device->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+		device->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+		device->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
+		device->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
+		device->SetSamplerState(0, D3DSAMP_SRGBTEXTURE, FALSE);
+		device->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+		device->SetRenderState(D3DRS_ALPHATESTENABLE, FALSE);
+		device->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
+		device->SetRenderState(D3DRS_SRGBWRITEENABLE, FALSE);
+		const float quad[4][4] =
+		{
+			{ -1.0f,  1.0f, 0.0f, 0.0f },
+			{  1.0f,  1.0f, 1.0f, 0.0f },
+			{ -1.0f, -1.0f, 0.0f, 1.0f },
+			{  1.0f, -1.0f, 1.0f, 1.0f },
+		};
+		device->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, quad, sizeof(quad[0]));
+		device->SetTexture(0, nullptr);
+		device->SetVertexShader(nullptr);
+		device->SetPixelShader(nullptr);
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -259,6 +335,13 @@ void Sage2PostClass::Set_Look(const char* lookupTexture, float lookupBlend, floa
 	s_lookupName = lookupTexture != nullptr ? lookupTexture : "";
 	s_lookupBlend = lookupBlend;
 	s_bloomIntensity = bloomIntensity;
+}
+
+//-------------------------------------------------------------------------------------------------
+void Sage2PostClass::Set_Anti_Aliasing(bool enabled, float subpixel)
+{
+	s_aaEnabled = enabled;
+	s_aaSubpixel = subpixel < 0.0f ? 0.0f : (subpixel > 1.0f ? 1.0f : subpixel);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -392,7 +475,19 @@ bool Sage2PostClass::Apply()
 	grade.Set_Bool("ApplyOverlay", false);
 	grade.Set_Bool("ApplyFalloffAndGrain", false);
 	grade.Set_Bool("ApplyColorMask", false);
-	Draw(device, grade, s_techLookup, frame, desc.Width, desc.Height, nullptr);
+	// Tiberium Project @feature with edge anti-aliasing the grade goes to a copy, which the last
+	// pass smooths back into the frame
+	IDirect3DSurface9* gradeTarget = frame;
+	IDirect3DSurface9* gradedSurface = nullptr;
+	if (s_aaEnabled && Make_Anti_Aliasing(device))
+	{
+		if (s_graded == nullptr)
+			s_graded = Make_Target(device, desc.Width, desc.Height, D3DFMT_A8R8G8B8);
+		gradedSurface = Surface(s_graded);
+		if (gradedSurface != nullptr)
+			gradeTarget = gradedSurface;
+	}
+	Draw(device, grade, s_techLookup, gradeTarget, desc.Width, desc.Height, nullptr);
 	// Tiberium Project @bugfix Zero Hour's black kept black: C&C4's tables lift black (the
 	// Pan-American one to a dark purple), and Zero Hour leaves the world black past the map's
 	// edge and under the shroud, which came out as a purple sky at a far or low camera
@@ -401,7 +496,12 @@ bool Sage2PostClass::Apply()
 		// the frame as the scene left it, before the bloom: the bloom's glow spreads over the
 		// black and would otherwise count as picture there
 		s_keepBlack->Set_Texture("SourceTexture", s_frame);
-		Draw(device, *s_keepBlack, s_techKeepBlack, frame, desc.Width, desc.Height, nullptr);
+		Draw(device, *s_keepBlack, s_techKeepBlack, gradeTarget, desc.Width, desc.Height, nullptr);
+	}
+	if (gradedSurface != nullptr)
+	{
+		Draw_Anti_Aliasing(device, frame, desc.Width, desc.Height);
+		gradedSurface->Release();
 	}
 
 	device->SetRenderTarget(0, frame);
@@ -415,8 +515,9 @@ bool Sage2PostClass::Apply()
 	if (!logged)
 	{
 		logged = true;
-		Sage2_Log("post: C&C4 chain applied: bloom %.2f, table %s%s blend %.2f, exposure %.2f", s_bloomIntensity, s_lookupName.c_str(),
-			lookup != nullptr || s_lookupName.empty() ? "" : " (not in the mod: no grading)", blend[0], exposure);
+		Sage2_Log("post: C&C4 chain applied: bloom %.2f, table %s%s blend %.2f, exposure %.2f, edge anti-aliasing %s", s_bloomIntensity, s_lookupName.c_str(),
+			lookup != nullptr || s_lookupName.empty() ? "" : " (not in the mod: no grading)", blend[0], exposure,
+			s_graded != nullptr && s_aaEnabled ? "on" : "off");
 	}
 	return true;
 }
@@ -426,6 +527,7 @@ void Sage2PostClass::Release_Resources()
 {
 	Release(s_frame);
 	Release(s_linear);
+	Release(s_graded);
 	for (int i = 0; i < 2; ++i)
 	{
 		Release(s_high[i]);
@@ -441,6 +543,10 @@ void Sage2PostClass::Shutdown()
 {
 	Release_Resources();
 	Release(s_quadDeclaration);
+	Release(s_aaVertexShader);
+	Release(s_aaPixelShader);
+	Release(s_aaDeclaration);
+	s_aaState = AA_NOT_TRIED;
 	s_bloom = s_lookup = s_keepBlack = nullptr;	// owned by the effect cache
 	s_keepBlackTried = false;
 	s_techKeepBlack = -1;

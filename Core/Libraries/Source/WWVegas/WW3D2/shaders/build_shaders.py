@@ -22,6 +22,7 @@ SHADERS = [
     ("postprocess.hlsl", "PSCombine", "ps_3_0", "postprocess_combine_ps.h", "PostProcessCombinePixelShader"),
     ("softparticle.hlsl", "VS_Soft", "vs_3_0", "softparticle_vs.h", "SoftParticleVertexShader"),
     ("softparticle.hlsl", "PS_Soft", "ps_3_0", "softparticle_ps.h", "SoftParticlePixelShader"),
+    ("fxaa.hlsl", "PSFXAA", "ps_3_0", "fxaa_ps.h", "FXAAPixelShader"),
 ]
 
 

@@ -53,6 +53,11 @@ public:
 	/// tiberium_keepblack.fxo), so the world past the map's edge and under the shroud is not lifted
 	static void Set_Keep_Black(bool enabled);
 
+	/// Tiberium Project @feature Sage2AntiAliasing (default on): edge anti-aliasing (shaders/fxaa.hlsl)
+	/// over the graded frame, in place of the multisampling RA3 and C&C4 had; the sub-pixel blending
+	/// (Sage2AntiAliasingSubpixel, 0..1) softens lone bright pixels too
+	static void Set_Anti_Aliasing(bool enabled, float subpixel);
+
 	/// Runs the chain on the current render target (between the 3D scene and the interface).
 	/// Returns false when the effects or textures are not available, so a fallback can run.
 	static bool Apply();

@@ -1010,6 +1010,7 @@ void W3DDisplay::init()
 			Sage2LightingClass::Set_Tree_Light(prefs.getBool("Sage2TreeLight", TRUE));	// trees lit in linear light, as the effects light the rest
 			Sage2SoftParticleClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2SoftParticles", TRUE));	// particles fade where they meet the ground, as C&C4's
 			Sage2SoftParticleClass::Set_Fade_Distance(prefs.getReal("Sage2SoftParticleFade", 10.0f));	// over this many world units
+			Sage2PostClass::Set_Anti_Aliasing(prefs.getBool("Sage2AntiAliasing", TRUE), prefs.getReal("Sage2AntiAliasingSubpixel", 0.5f));	// edge anti-aliasing after the grade
 			// Zero Hour's plain meshes through C&C4's own effect for them: off | forward | deferred.
 			// Forward by default: lit by the same light as the ground, under its shadow map, at the
 			// same cost as W3D's fixed-function draw

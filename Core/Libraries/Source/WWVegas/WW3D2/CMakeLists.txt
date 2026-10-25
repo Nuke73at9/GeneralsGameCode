@@ -284,6 +284,7 @@ if(SAGE_USE_D3D9)
         shaders/postprocess_vs.h
         shaders/sage2object_ps.h
         shaders/sage2object_vs.h
+        shaders/fxaa_ps.h
         shaders/softparticle_ps.h
         shaders/softparticle_vs.h
     )
