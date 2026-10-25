@@ -69,10 +69,13 @@ public:
 	static float Get_Mood();
 	/// Tiberium Project @tweak How strong the moonlight is on the maps that play at night (Options.ini
 	/// Sage2NightLight, a scale on the night set's ambient and lights; the lamps, windows and fires
-	/// keep their strength), the same on snow maps at night (Sage2NightLightSnow: snow reflects most
-	/// of the moon, so it takes less) and how much of the map's own night colour it takes
-	/// (Sage2NightTint, 0..1)
+	/// keep their strength), on the ground of snow maps at night (Sage2NightLightSnow: snow reflects
+	/// most of the moon, so it takes less; the objects on it take Sage2NightLight) and how much of
+	/// the map's own night colour it takes (Sage2NightTint, 0..1)
 	static void Set_Night(float light, float snowLight, float tint);
+	/// The share of the scene's light the ground (terrain, roads, tracks) takes, all lights alike:
+	/// 1 but on snow maps at night (Set_Night), set by Adapt for the map being loaded
+	static float Get_Ground_Light();
 	/// Tiberium Project @feature The light a particle takes from the scene, as C&C4 and RA3 light
 	/// theirs (the colour times the directional lights): the ambient and half of each light, against
 	/// the same of RA3's afternoon, for which Zero Hour's particle colours read right. Gives, per

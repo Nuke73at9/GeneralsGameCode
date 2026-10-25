@@ -65,6 +65,19 @@ public:
 	/// Sage2TerrainFillSpecular): 1 as C&C4's light pass gives it, 0 as Red Alert 3's terrain (the sun's alone)
 	static void Set_Fill_Specular(float amount);
 
+	/// Tiberium Project @feature The map's cells for blending terrains across the cell borders (see
+	/// CrossCellTerrains in tiberium_terrain.fx): 'cells' holds width x height entries of four bytes,
+	/// row by row from the map's first cell: the base terrain's C&C4 slot, the blend terrain's and the
+	/// extra blend's (the third terrain Zero Hour's extra pass lays on; 255: none), and flags: 64 where
+	/// the cell keeps Zero Hour's own edges (paving and other built ground, special edge tiles,
+	/// terrains without a C&C4 texture), plus 4 x the quarters of the cell the blend covers, plus the
+	/// quarters the extra blend covers.
+	/// 'border' is the map's border in cells (cell index = world / cell size + border). Null: none.
+	static void Set_Cell_Map(const unsigned char* cells, int width, int height, int border, float cellSize);
+	/// Options.ini Sage2TerrainCrossBlend (on), Sage2TerrainCrossNoise (how far a soft noise moves
+	/// the edges, 0.5), Sage2TerrainCrossSoftness (the edges' softness, 0.25; 0.5 a plain ramp)
+	static void Set_Cross_Blend(bool enabled, float noise, float softness);
+
 	/// The map's shroud, multiplied over the terrain at the end of the pass (Zero Hour draws it
 	/// as an extra pass that needs an equal depth, which a different vertex pipeline cannot
 	/// give it): the texture, one texel a cell, and how a world position reaches its texel:

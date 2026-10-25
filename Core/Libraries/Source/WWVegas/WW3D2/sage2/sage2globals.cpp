@@ -19,6 +19,7 @@
 // Tiberium Project @feature The engine-side values SAGE 2 effects ask for (see sage2globals.h)
 
 #include "sage2globals.h"
+#include "sage2lighting.h"
 #include "sage2scene.h"
 #include "sage2shadow.h"
 #include "sage2texture.h"
@@ -149,6 +150,7 @@ namespace
 		{ "Sas.HasShadow", SAGE2_BIND_HAS_SHADOW },
 		{ "Terrain.TopViewTexture", SAGE2_BIND_TEXTURE_TOP_VIEW },
 		{ "Terrain.ScorchMarkUVOffsetMultiplier", SAGE2_BIND_SCORCH_UV },
+		{ "Terrain.GroundLight", SAGE2_BIND_GROUND_LIGHT },
 		{ "Terrain.Cloud.Texture", SAGE2_BIND_TEXTURE_CLOUD },
 		{ "Terrain.Cloud.WorldPositionMultiplier_XYZZ", SAGE2_BIND_CLOUD_MULTIPLIER },
 		{ "Terrain.Cloud.CurrentOffsetUV", SAGE2_BIND_CLOUD_OFFSET },
@@ -700,6 +702,10 @@ void Sage2GlobalsClass::Apply(Sage2EffectClass& effect, const Sage2DrawState& dr
 				Sage2ShadowClass::Get_Soft(v[0], v[1]);
 				v[2] = 1.0f;	// ENABLE_SOFTSHADOW_TOGGLE builds: soft on
 				effect.Set_Float(i, v, 4);
+				break;
+			case SAGE2_BIND_GROUND_LIGHT:
+				v[0] = Sage2LightingClass::Get_Ground_Light();
+				effect.Set_Float(i, v, 1);
 				break;
 			case SAGE2_BIND_SCORCH_UV:
 				if (Sage2TopViewClass::Is_Available())

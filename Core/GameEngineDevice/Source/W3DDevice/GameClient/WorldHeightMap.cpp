@@ -54,6 +54,7 @@
 #include "WW3D2/sage2/sage2lighting.h"	// Tiberium Project @feature C&C4 map lighting presets
 #include "WW3D2/sage2/sage2terrainatlas.h"	// Tiberium Project @feature C&C4 terrain textures
 #include "WW3D2/sage2/sage2post.h"	// Tiberium Project @feature exposure for the map's ground
+#include "WW3D2/sage2/sage2terrain.h"	// Tiberium Project @feature terrains blended across cell borders
 #endif
 
 #include "Common/file.h"
@@ -2282,6 +2283,80 @@ Int WorldHeightMap::getCNC4ExtraSlot(Int xIndex, Int yIndex)
 	Int extraClass = getTextureClassIndexFromNdx(m_blendedTiles[blendNdx].blendNdx);
 	return extraClass >= 0 ? m_cnc4Slots[extraClass] : -1;
 }
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature The map's cells for blending the C&C4 terrains across the cell borders
+	(Sage2TerrainClass::Set_Cell_Map): each cell's base, blend and extra blend terrain (C&C4 slots),
+	how much of the cell each blend tile covers, and whether it keeps Zero Hour's own edges: built ground (asphalt,
+	concrete, urban and residential paving, cobblestones, boardwalks, China's paving), special edge
+	tiles, and terrains without a C&C4 texture, whose straight edges are meant. */
+//-------------------------------------------------------------------------------------------------
+void WorldHeightMap::buildCNC4CellMap()
+{
+	if (!m_cnc4Atlas || m_tileNdxes == nullptr || m_blendTileNdxes == nullptr || m_width <= 0 || m_height <= 0
+		|| m_dataSize < m_width * m_height) {
+		Sage2TerrainClass::Set_Cell_Map(nullptr, 0, 0, 0, MAP_XY_FACTOR);
+		return;
+	}
+	Bool keepClass[NUM_TEXTURE_CLASSES];
+	for (Int c = 0; c < NUM_TEXTURE_CLASSES; c++) {
+		keepClass[c] = TRUE;
+		if (c >= m_numTextureClasses)
+			continue;
+		TerrainType *type = TheTerrainTypes != nullptr ? TheTerrainTypes->findTerrain(m_textureClasses[c].name) : nullptr;
+		const TerrainClass terrainClass = type != nullptr ? type->getClass() : TERRAIN_NONE;
+		keepClass[c] = terrainClass == TERRAIN_ASPHALT || terrainClass == TERRAIN_CONCRETE || terrainClass == TERRAIN_URBAN
+			|| terrainClass == TERRAIN_RESIDENTIAL || terrainClass == TERRAIN_COBBLESTONE_GRASS || terrainClass == TERRAIN_WOOD
+			|| terrainClass == TERRAIN_CHINA || terrainClass == TERRAIN_BLEND_EDGES || m_cnc4Slots[c] < 0 || m_cnc4Slots[c] > 254;
+	}
+	// the blend tile's alpha: half the cell along an edge, a quarter in a corner (three quarters
+	// turned inside out), half along a long diagonal; in quarters (1..3), 0 for no blend
+	struct Local
+	{
+		static Int quarters(const TBlendTileInfo &blend)
+		{
+			if ((blend.rightDiagonal || blend.leftDiagonal) && !blend.longDiagonal)
+				return blend.inverted ? 3 : 1;
+			return 2;
+		}
+	};
+	std::vector<UnsignedByte> cells(m_width * m_height * 4);
+	for (Int i = 0; i < m_width * m_height; i++) {
+		UnsignedByte *cell = &cells[i * 4];
+		const Int baseClass = getTextureClassIndexFromNdx(m_tileNdxes[i]);
+		Bool keep = baseClass < 0 || baseClass >= NUM_TEXTURE_CLASSES || keepClass[baseClass];
+		Int blendSlot = 255, blendQuarters = 0, extraSlot = 255, extraQuarters = 0;
+		const Short blendNdx = m_blendTileNdxes[i];
+		if (blendNdx != 0) {
+			const TBlendTileInfo &blend = m_blendedTiles[blendNdx];
+			const Int blendClass = blend.customBlendEdgeClass < 0 ? getTextureClassIndexFromNdx(blend.blendNdx) : -1;
+			if (blendClass < 0 || blendClass >= NUM_TEXTURE_CLASSES || keepClass[blendClass]) {
+				keep = TRUE;
+			} else {
+				blendSlot = m_cnc4Slots[blendClass];
+				blendQuarters = Local::quarters(blend);
+			}
+		}
+		// the third terrain Zero Hour's extra blend pass lays over the cell
+		const Short extraNdx = m_extraBlendTileNdxes != nullptr ? m_extraBlendTileNdxes[i] : 0;
+		if (extraNdx != 0) {
+			const TBlendTileInfo &extra = m_blendedTiles[extraNdx];
+			const Int extraClass = extra.customBlendEdgeClass < 0 ? getTextureClassIndexFromNdx(extra.blendNdx) : -1;
+			if (extraClass < 0 || extraClass >= NUM_TEXTURE_CLASSES || keepClass[extraClass]) {
+				keep = TRUE;
+			} else {
+				extraSlot = m_cnc4Slots[extraClass];
+				extraQuarters = Local::quarters(extra);
+			}
+		}
+		cell[0] = keep ? 255 : (UnsignedByte)m_cnc4Slots[baseClass];
+		cell[1] = (UnsignedByte)blendSlot;
+		cell[2] = (UnsignedByte)extraSlot;
+		// keep (64), the blend's quarters (x4), the extra blend's quarters
+		cell[3] = (UnsignedByte)((keep ? 64 : 0) + blendQuarters * 4 + extraQuarters);
+	}
+	Sage2TerrainClass::Set_Cell_Map(&cells[0], m_width, m_height, m_borderSize, MAP_XY_FACTOR);
+}
 #endif
 
 void WorldHeightMap::setTextureLOD(Int lod)
@@ -2335,6 +2410,7 @@ TextureClass *WorldHeightMap::getTerrainTexture()
 				}
 				Sage2PostClass::Set_Scene_Albedo(cells > 0 ? (float)(sum / cells) : -1.0f);
 			}
+			buildCNC4CellMap();
 		}
 #endif
 

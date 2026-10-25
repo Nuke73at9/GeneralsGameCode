@@ -211,6 +211,9 @@ protected:
 	Bool getUVForTileIndex(Int ndx, Short tileNdx, float U[4], float V[4]);
 	Int getTextureClassFromNdx(Int tileNdx);
 	Int getTextureClassIndexFromNdx(Int tileNdx);	///< Tiberium Project @feature the map's own class index
+#ifdef RTS_RENDERER_D3D9
+	void buildCNC4CellMap();	///< Tiberium Project @feature the cells for the cross-cell terrain blend
+#endif
 	void readTexClass(TXTextureClass *texClass, TileData **tileData);
 	Int updateTileTexturePositions(Int *edgeHeight); ///< Places each tile in the texture.
 	void initCliffFlagsFromHeights();

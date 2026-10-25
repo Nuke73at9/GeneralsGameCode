@@ -137,13 +137,21 @@ float4 Finish(VSOutput In, float3 color, float opacity)
 // ----------------------------------------------------------------------------
 // Default: lit from the light buffers the terrain's pre-pass produced under the road
 // ----------------------------------------------------------------------------
+// Tiberium Project @tweak the share of the scene's light the ground takes (all lights alike): less
+// on snow at night, which reflects most of the moon, than on the objects on it
+float GroundLight
+<
+	string UIWidget = "None";
+	string SasBindAddress = "Terrain.GroundLight";
+> = 1.0;
+
 float4 PS_Road(VSOutput In, float2 vPos : PIXELLOC) : COLOR
 {
 	float3 color;
 	float opacity;
 	RoadSurface(In, color, opacity);
 	float2 screenTexCoord = GetScreenTexcoordCoord(vPos);
-	color = (SampleDiffuseLight(screenTexCoord) + AmbientLightColor) * color;
+	color = (SampleDiffuseLight(screenTexCoord) + AmbientLightColor) * color * GroundLight;
 	return Finish(In, color, opacity);
 }
 
@@ -177,7 +185,7 @@ float4 PS_Road_M(VSOutput In) : COLOR
 		+ DirectionalLight_0_Color.xyz * max(0, dot(normal, DirectionalLight_0_Direction.xyz))
 		+ DirectionalLight_1_Color.xyz * max(0, dot(normal, DirectionalLight_1_Direction.xyz))
 		+ DirectionalLight_2_Color.xyz * max(0, dot(normal, DirectionalLight_2_Direction.xyz));
-	return Finish(In, light * color, opacity);
+	return Finish(In, light * color * GroundLight, opacity);
 }
 
 technique Default_M

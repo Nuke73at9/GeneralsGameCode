@@ -167,7 +167,9 @@ private:
 	bool Parse_Shader(IDirect3DDevice9* device, Object& object, unsigned objectIndex);
 	bool Parse_Ctab(const DWORD* tokens, unsigned count, std::vector<CtabSymbol>& symbols);
 	bool Parse_Preshader(const DWORD* tokens, unsigned count, Preshader& out);
-	void Run_Preshader(const Preshader& pre, float* outputs, unsigned outputCount) const;
+	// Tiberium Project @bugfix boolOutputs: the bool registers the preshader sets (a uniform condition
+	// such as 'if (Params.x > 0)' turns into a static branch on one), 0 or 1 each
+	void Run_Preshader(const Preshader& pre, float* outputs, unsigned outputCount, BOOL* boolOutputs = nullptr, unsigned boolCount = 0) const;
 	int Select_Shader(const Object& arrayObject, const Preshader* selector) const;
 	void Apply_Constants(IDirect3DDevice9* device, const Shader& shader);
 	void Apply_Samplers(IDirect3DDevice9* device, const Shader& shader);

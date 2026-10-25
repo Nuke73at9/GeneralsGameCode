@@ -112,6 +112,7 @@ namespace
 	float s_nightLight = 0.5f;
 	float s_nightLightSnow = 0.25f;
 	float s_nightTint = 0.0f;
+	float s_groundLight = 1.0f;		// the share of the light the ground takes (snow at night: less)
 
 	float Luminance(const float c[3])
 	{
@@ -180,6 +181,7 @@ bool Sage2LightingClass::Uses_Presets() { return s_mode != MODE_MAP; }
 const Sage2LightingPreset* Sage2LightingClass::Choose(int timeOfDay, bool snowy)
 {
 	const Sage2LightingPreset* preset = nullptr;
+	s_groundLight = 1.0f;	// until Adapt says otherwise
 	if (s_mode == MODE_FIXED)
 		preset = s_fixed;
 	else if (s_mode == MODE_AUTO)
@@ -301,8 +303,13 @@ Sage2LightingPreset Sage2LightingClass::Adapt(const Sage2LightingPreset& preset,
 	// moon is scaled for them, and takes the map's own night colour (its ambient for the sky's fills,
 	// its sun for the moon); the lamps, lit windows and fires are not touched, so they stand out more.
 	// Snow reflects most of the moon: at a half, the two snow maps at night (Lights Out, Tournament
-	// Tundra) stayed about twice as bright as the others, so they take a quarter.
-	const float moon = snowy ? s_nightLightSnow : s_nightLight;
+	// Tundra) stayed about twice as bright as the others, so the ground takes a quarter. Tiberium
+	// Project @tweak Only the ground: with the whole scene at a quarter, the tanks and buildings on the
+	// snow went near black; they take the half other night maps give them (Get_Ground_Light).
+	const float moon = s_nightLight;
+	s_groundLight = timeOfDay == 4 && snowy ? s_nightLightSnow / s_nightLight : 1.0f;
+	if (s_groundLight != 1.0f)
+		Sage2_Log("lighting: the snow takes x%.2f of the night's light", s_groundLight);
 	if (timeOfDay == 4 && (moon != 1.0f || s_nightTint > 0.0f))
 	{
 		for (int i = 0; i < 3; ++i)
@@ -317,6 +324,12 @@ Sage2LightingPreset Sage2LightingClass::Adapt(const Sage2LightingPreset& preset,
 			out.light[1].diffuse[0], out.light[1].diffuse[1], out.light[1].diffuse[2], out.light[2].diffuse[0], out.light[2].diffuse[1], out.light[2].diffuse[2]);
 	}
 	return out;
+}
+
+//-------------------------------------------------------------------------------------------------
+float Sage2LightingClass::Get_Ground_Light()
+{
+	return s_groundLight;
 }
 
 //-------------------------------------------------------------------------------------------------

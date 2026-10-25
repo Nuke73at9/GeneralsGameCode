@@ -176,12 +176,157 @@ float FillSpecular
 	string SasBindAddress = "Terrain.FillSpecular";
 > = 1.0;
 
+// Tiberium Project @tweak the share of the scene's light the ground takes (all lights alike): less
+// on snow at night, which reflects most of the moon, than on the objects on it
+float GroundLight
+<
+	string UIWidget = "None";
+	string SasBindAddress = "Terrain.GroundLight";
+> = 1.0;
+
 // world units per macro texture repeat
 float MacroScale
 <
 	string UIWidget = "None";
 	string SasBindAddress = "Terrain.MacroScale";
 > = 1.0 / 660.0;
+
+// Tiberium Project @feature Patch edges across cell borders. Zero Hour's blend tiles turn one
+// terrain into the next within a cell, so between C&C4's contrasting textures the edges of a
+// patch trace the cell grid in one-cell stair steps. The map's cells (one texel each: x the base
+// terrain's C&C4 slot, y the blend terrain's, z the extra blend's (Zero Hour's third terrain), w
+// flags: whether the cell keeps Zero Hour's own edges (paving, roads, special edge tiles, terrains
+// without a C&C4 texture) and how much of it each blend covers) give, around each pixel, how much
+// of each terrain the nine nearest cells hold; the two
+// strongest are blended by that, the edge moved by a soft noise and sharpened, so it runs across the
+// cell borders as a painted edge would. Near cells that keep their own edges, Zero Hour's blend is
+// used as before.
+SAMPLER_2D_BEGIN( CellMap,
+	string UIWidget = "None";
+	string SasBindAddress = "Terrain.CellMap";
+	)
+	MinFilter = Point;
+	MagFilter = Point;
+	MipFilter = None;
+	AddressU = Clamp;
+	AddressV = Clamp;
+SAMPLER_2D_END
+
+// x: 1 / the map's width in cells, y: 1 / its height, z: the border (cells), w: 1 / a cell's size
+// in world units; x <= 0: no cell map, Zero Hour's blends only
+float4 CellMapParams
+<
+	string UIWidget = "None";
+	string SasBindAddress = "Terrain.CellMapParams";
+> = float4(0, 0, 0, 0.1);
+
+// x: how far the noise moves the edge, y: 1 / the noise's size in world units, z: the edge's
+// softness (0.5: a plain ramp)
+float4 CrossBlend
+<
+	string UIWidget = "None";
+	string SasBindAddress = "Terrain.CrossBlend";
+> = float4(0.5, 1.0 / 20.0, 0.25, 0);
+
+float CrossHash(float2 p)
+{
+	return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+}
+
+float CrossValueNoise(float2 p)
+{
+	float2 i = floor(p);
+	float2 f = frac(p);
+	f = f * f * (3.0 - 2.0 * f);
+	float a = CrossHash(i);
+	float b = CrossHash(i + float2(1.0, 0.0));
+	float c = CrossHash(i + float2(0.0, 1.0));
+	float d = CrossHash(i + float2(1.0, 1.0));
+	return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
+}
+
+// one terrain's share into the running list of the four strongest (slot ids, weights); 255 is no
+// terrain (a cell that keeps Zero Hour's own edges), which only counts towards 'keep'
+void AddTerrain(inout float4 ids, inout float4 weights, float id, float w)
+{
+	if (w <= 0.0 || id > 254.5)
+		return;
+	if (ids.x == id) { weights.x += w; return; }
+	if (ids.y == id) { weights.y += w; return; }
+	if (ids.z == id) { weights.z += w; return; }
+	if (ids.w == id) { weights.w += w; return; }
+	if (ids.x < 0.0) { ids.x = id; weights.x = w; return; }
+	if (ids.y < 0.0) { ids.y = id; weights.y = w; return; }
+	if (ids.z < 0.0) { ids.z = id; weights.z = w; return; }
+	if (ids.w < 0.0) { ids.w = id; weights.w = w; return; }
+}
+
+// The two strongest terrains around a pixel and the blend between them, and how much of the
+// neighbourhood keeps Zero Hour's own edges (0: none, the cross-cell blend applies in full)
+void CrossCellTerrains(float2 worldXY, out float slotA, out float slotB, out float w, out float keep)
+{
+	// a quadratic B-spline over the nine nearest cells (rounder than a bilinear blend of four: the
+	// stair steps a straight blend would keep turn into curves, and a lone cell stays a small patch)
+	float2 cell = worldXY * CellMapParams.w + CellMapParams.z;
+	float2 centre = floor(cell);			// the cell the pixel is in
+	float2 x = cell - centre - 0.5;		// from its centre, -0.5..0.5
+	float3 wx3 = float3(0.5 * (0.5 - x.x) * (0.5 - x.x), 0.75 - x.x * x.x, 0.5 * (0.5 + x.x) * (0.5 + x.x));
+	float3 wy3 = float3(0.5 * (0.5 - x.y) * (0.5 - x.y), 0.75 - x.y * x.y, 0.5 * (0.5 + x.y) * (0.5 + x.y));
+	float4 ids = float4(-1, -1, -1, -1);
+	float4 weights = float4(0, 0, 0, 0);
+	keep = 0.0;
+	[unroll]
+	for (int j = 0; j < 3; ++j)
+	{
+		[unroll]
+		for (int i = 0; i < 3; ++i)
+		{
+			float bw = wx3[i] * wy3[j];
+			float4 c = tex2Dlod(SAMPLER(CellMap), float4((centre + float2(i - 1, j - 1) + 0.5) * CellMapParams.xy, 0, 0));
+			// x: base slot, y: blend slot, z: extra blend slot, w: 64 (keeps Zero Hour's edges)
+			// + 4 x the blend's quarters + the extra blend's quarters
+			float flags = floor(c.w * 255.0 + 0.5);
+			float keeps = flags >= 64.0 ? 1.0 : 0.0;
+			float rest = flags - 64.0 * keeps;
+			float blendQuarters = floor(rest / 4.0 + 0.01);
+			float coverBlend = blendQuarters * 0.25;
+			float coverExtra = (rest - 4.0 * blendQuarters) * 0.25;
+			keep += keeps * bw;
+			AddTerrain(ids, weights, floor(c.x * 255.0 + 0.5), bw * (1.0 - coverBlend) * (1.0 - coverExtra));
+			AddTerrain(ids, weights, floor(c.y * 255.0 + 0.5), bw * coverBlend * (1.0 - coverExtra));
+			AddTerrain(ids, weights, floor(c.z * 255.0 + 0.5), bw * coverExtra);
+		}
+	}
+	// the strongest two
+	float4 order = weights;
+	float best = max(max(order.x, order.y), max(order.z, order.w));
+	slotA = ids.x;
+	if (order.y == best) slotA = ids.y;
+	if (order.z == best) slotA = ids.z;
+	if (order.w == best) slotA = ids.w;
+	float4 rest = weights * float4(ids.x != slotA, ids.y != slotA, ids.z != slotA, ids.w != slotA);
+	float second = max(max(rest.x, rest.y), max(rest.z, rest.w));
+	slotB = slotA;
+	if (rest.x == second && ids.x >= 0.0) slotB = ids.x;
+	if (rest.y == second && ids.y >= 0.0) slotB = ids.y;
+	if (rest.z == second && ids.z >= 0.0) slotB = ids.z;
+	if (rest.w == second && ids.w >= 0.0) slotB = ids.w;
+	// in slot order, so the noise moves the edge the same way on both sides of where the two swap
+	// places as the stronger
+	w = second > 0.0 ? second / (best + second) : 0.0;
+	if (slotB < slotA)
+	{
+		float s = slotA;
+		slotA = slotB;
+		slotB = s;
+		w = 1.0 - w;
+	}
+	// the edge moved by the noise (most halfway, none where one terrain holds it all) and sharpened
+	float2 p = worldXY * CrossBlend.y;
+	float n = (0.65 * CrossValueNoise(p) + 0.35 * CrossValueNoise(p * 2.7 + 17.3)) * 2.0 - 1.0;
+	w = saturate(w + n * CrossBlend.x * 4.0 * w * (1.0 - w));
+	w = smoothstep(0.5 - CrossBlend.z, 0.5 + CrossBlend.z, w);
+}
 
 // ----------------------------------------------------------------------------
 // Vertex input: Zero Hour's terrain vertex (stream 0) and the engine's normal (stream 1)
@@ -196,8 +341,9 @@ struct VSInput
 	float2 Slots : TEXCOORD2;		// C&C4 atlas slots of the base and blend terrains, -1 for none
 };
 
-// one projection of a world-aligned C&C4 texture: the slot's tile at plane coordinates p
-void SampleC4Plane(float slot, float2 p, out float4 c, out float4 n)
+// one projection of a world-aligned C&C4 texture: the slot's tile at plane coordinates p, with the
+// coordinates' screen gradients given (so it can be sampled inside a branch)
+void SampleC4Plane(float slot, float2 p, float2 dpdx, float2 dpdy, out float4 c, out float4 n)
 {
 	float2 w = p / AtlasParams.w;
 	float2 f = frac(w);
@@ -207,8 +353,8 @@ void SampleC4Plane(float slot, float2 p, out float4 c, out float4 n)
 	float col = slot - row * AtlasParams.x;
 	float2 uv = float2(col, row) * pitch + AtlasParams.z + f * AtlasParams.y;
 	// gradients from the unwrapped coordinate, so the mip level does not jump at the wrap
-	float2 dx = ddx(w) * AtlasParams.y;
-	float2 dy = ddy(w) * AtlasParams.y;
+	float2 dx = dpdx / AtlasParams.w * AtlasParams.y;
+	float2 dy = dpdy / AtlasParams.w * AtlasParams.y;
 	c = tex2Dgrad(SAMPLER(AtlasColor), uv, dx, dy);
 	n = tex2Dgrad(SAMPLER(AtlasNormal), uv, dx, dy);
 }
@@ -216,19 +362,25 @@ void SampleC4Plane(float slot, float2 p, out float4 c, out float4 n)
 // Tiberium Project @feature one world-aligned C&C4 texture: colour (linear), specular mask and
 // tangent-space normal. Projected from above, and on steep ground from the two sides as well,
 // weighted by the slope (triplanar): seen only from above, a cliff face stretches the texture into
-// long streaks.
-void SampleC4(float slot, float3 worldPos, float3 worldNormal, out float3 color, out float spec, out float3 normalTS)
+// long streaks. dWdx, dWdy: the world position's screen gradients.
+void SampleC4(float slot, float3 worldPos, float3 worldNormal, float3 dWdx, float3 dWdy, out float3 color, out float spec, out float3 normalTS)
 {
-	float4 c, n, cx, nx, cy, ny;
-	SampleC4Plane(slot, worldPos.xy, c, n);
-	SampleC4Plane(slot, worldPos.yz, cx, nx);	// seen along x
-	SampleC4Plane(slot, worldPos.xz, cy, ny);	// seen along y
+	float4 c, n;
+	SampleC4Plane(slot, worldPos.xy, dWdx.xy, dWdy.xy, c, n);
 	// weights from the slope; a vertex without a normal (some of Zero Hour's blend quads) takes
 	// the view from above alone rather than dividing by zero
 	float3 b = pow(abs(worldNormal), 4.0) + float3(0.0, 0.0, 1e-6);
 	b /= (b.x + b.y + b.z);
-	c = c * b.z + cx * b.x + cy * b.y;
-	n = n * b.z + nx * b.x + ny * b.y;
+	// the views from the sides only where the slope gives them a say (most of a map is near flat)
+	[branch]
+	if (b.z < 0.998)
+	{
+		float4 cx, nx, cy, ny;
+		SampleC4Plane(slot, worldPos.yz, dWdx.yz, dWdy.yz, cx, nx);	// seen along x
+		SampleC4Plane(slot, worldPos.xz, dWdx.xz, dWdy.xz, cy, ny);	// seen along y
+		c = c * b.z + cx * b.x + cy * b.y;
+		n = n * b.z + nx * b.x + ny * b.y;
+	}
 	color = GammaToLinear(c.xyz);
 	spec = c.w;
 	normalTS = n.xyz * 2.0 - 1.0;
@@ -237,30 +389,80 @@ void SampleC4(float slot, float3 worldPos, float3 worldNormal, out float3 color,
 
 // The ground at a pixel: Zero Hour's base tile and blend tile from the atlas, each replaced by its
 // C&C4 texture where the map's terrain has one, blended by the tile's alpha edge times the vertex
-// alpha (how Zero Hour's second fixed-function pass blends). Colour in linear light, with the
-// specular mask and the tangent-space normal (flat where a Zero Hour tile stays).
+// alpha (how Zero Hour's second fixed-function pass blends); away from paving and the other cells
+// that keep Zero Hour's own edges, the two strongest terrains of the four nearest cells instead,
+// blended across the cell borders (CrossCellTerrains). Colour in linear light, with the specular
+// mask and the tangent-space normal (flat where a Zero Hour tile stays).
 void SampleGround(float2 baseTexCoord, float2 blendTexCoord, float vertexAlpha, float2 slots, float3 worldPos, float3 worldNormal,
 	out float3 color, out float spec, out float3 normalTS)
 {
+	float3 dWdx = ddx(worldPos);
+	float3 dWdy = ddy(worldPos);
 	float4 zhBase = tex2D(SAMPLER(BaseSampler), baseTexCoord);
 	float4 zhBlend = tex2D(SAMPLER(BaseSampler), blendTexCoord);
-	float3 cBase, cBlend, nBase, nBlend;
-	float sBase, sBlend;
-	SampleC4(max(slots.x, 0.0), worldPos, worldNormal, cBase, sBase, nBase);
-	SampleC4(max(slots.y, 0.0), worldPos, worldNormal, cBlend, sBlend, nBlend);
-	float hasBase = slots.x >= 0.0 ? 1.0 : 0.0;
-	float hasBlend = slots.y >= 0.0 ? 1.0 : 0.0;
 	float3 flat = float3(0, 0, 1);
-	cBase = lerp(GammaToLinear(zhBase.xyz) * AlbedoScale, cBase, hasBase);
-	cBlend = lerp(GammaToLinear(zhBlend.xyz) * AlbedoScale, cBlend, hasBlend);
-	nBase = lerp(flat, nBase, hasBase);
-	nBlend = lerp(flat, nBlend, hasBlend);
-	sBase = lerp(0.0, sBase, hasBase);
-	sBlend = lerp(0.0, sBlend, hasBlend);
-	float w = zhBlend.w * vertexAlpha;
-	color = lerp(cBase, cBlend, w);
-	spec = lerp(sBase, sBlend, w);
-	normalTS = normalize(lerp(nBase, nBlend, w));
+
+	float slotA = 0.0, slotB = 0.0, wx = 0.0, keep = 1.0;
+	if (CellMapParams.x > 0.0)
+		CrossCellTerrains(worldPos.xy, slotA, slotB, wx, keep);
+	// Zero Hour's own edges take over as soon as a cell that keeps them has a quarter of the say
+	float useOwn = saturate(keep * 4.0);
+
+	float3 crossColor = float3(0, 0, 0), crossNormal = flat;
+	float crossSpec = 0.0;
+	[branch]
+	if (useOwn < 1.0)
+	{
+		// one terrain where the edge has run out (most of the ground), both along it
+		float onlyOne = (slotA == slotB || wx <= 0.002 || wx >= 0.998) ? 1.0 : 0.0;
+		float firstSlot = wx >= 0.998 ? slotB : slotA;
+		SampleC4(firstSlot, worldPos, worldNormal, dWdx, dWdy, crossColor, crossSpec, crossNormal);
+		[branch]
+		if (onlyOne < 0.5)
+		{
+			float3 cB, nB;
+			float sB;
+			SampleC4(slotB, worldPos, worldNormal, dWdx, dWdy, cB, sB, nB);
+			crossColor = lerp(crossColor, cB, wx);
+			crossSpec = lerp(crossSpec, sB, wx);
+			crossNormal = normalize(lerp(crossNormal, nB, wx));
+		}
+	}
+
+	float3 ownColor = float3(0, 0, 0), ownNormal = flat;
+	float ownSpec = 0.0;
+	[branch]
+	if (useOwn > 0.0)
+	{
+		float3 cBase, nBase;
+		float sBase;
+		SampleC4(max(slots.x, 0.0), worldPos, worldNormal, dWdx, dWdy, cBase, sBase, nBase);
+		float hasBase = slots.x >= 0.0 ? 1.0 : 0.0;
+		ownColor = lerp(GammaToLinear(zhBase.xyz) * AlbedoScale, cBase, hasBase);
+		ownNormal = lerp(flat, nBase, hasBase);
+		ownSpec = lerp(0.0, sBase, hasBase);
+		float w = zhBlend.w * vertexAlpha;
+		// the blend tile only where it shows
+		[branch]
+		if (w > 0.002)
+		{
+			float3 cBlend, nBlend;
+			float sBlend;
+			SampleC4(max(slots.y, 0.0), worldPos, worldNormal, dWdx, dWdy, cBlend, sBlend, nBlend);
+			float hasBlend = slots.y >= 0.0 ? 1.0 : 0.0;
+			cBlend = lerp(GammaToLinear(zhBlend.xyz) * AlbedoScale, cBlend, hasBlend);
+			nBlend = lerp(flat, nBlend, hasBlend);
+			sBlend = lerp(0.0, sBlend, hasBlend);
+			ownColor = lerp(ownColor, cBlend, w);
+			ownSpec = lerp(ownSpec, sBlend, w);
+			ownNormal = lerp(ownNormal, nBlend, w);
+		}
+		ownNormal = normalize(ownNormal);
+	}
+
+	color = lerp(crossColor, ownColor, useOwn);
+	spec = lerp(crossSpec, ownSpec, useOwn);
+	normalTS = normalize(lerp(crossNormal, ownNormal, useOwn));
 }
 
 // the bumped world normal, with C&C4's terrain tangent frame
@@ -419,6 +621,7 @@ float4 PS_Default(VSOutputDefault In, float2 vPos : PIXELLOC) : COLOR
 	float2 screenTexCoord = GetScreenTexcoordCoord(vPos);
 	float3 color = (SampleDiffuseLight(screenTexCoord) + AmbientLightColor) * baseColor
 		+ GroundSpecularLight(screenTexCoord, normalTS, In.Normal_WorldZ.xyz, float3(In.WorldXY_Slots.xy, In.Normal_WorldZ.w)) * SpecularColor * spec;
+	color *= GroundLight;
 	float3 macro = GammaToLinear(tex2D(SAMPLER(MacroSampler), In.MacroTexCoord_Fog_BlendAlpha.xy).xyz);
 	color *= macro;
 	color = lerp(Fog.Color.xyz, color, In.MacroTexCoord_Fog_BlendAlpha.z);
@@ -486,7 +689,8 @@ float4 PS_ExtraBlend(VSOutput_ExtraBlend In, float2 vPos : PIXELLOC) : COLOR
 	float slot = In.ShroudTexCoord_Slot.z;
 	float3 c4, normalTS;
 	float spec;
-	SampleC4(max(slot, 0.0), float3(In.TexCoord_WorldXY.zw, In.Normal_WorldZ.w), In.Normal_WorldZ.xyz, c4, spec, normalTS);
+	float3 extraPos = float3(In.TexCoord_WorldXY.zw, In.Normal_WorldZ.w);
+	SampleC4(max(slot, 0.0), extraPos, In.Normal_WorldZ.xyz, ddx(extraPos), ddy(extraPos), c4, spec, normalTS);
 	float hasC4 = slot >= 0.0 ? 1.0 : 0.0;
 	float3 baseColor = lerp(GammaToLinear(zh.xyz) * AlbedoScale, c4, hasC4);
 	spec = lerp(0.0, spec, hasC4);
@@ -494,11 +698,16 @@ float4 PS_ExtraBlend(VSOutput_ExtraBlend In, float2 vPos : PIXELLOC) : COLOR
 	float2 screenTexCoord = GetScreenTexcoordCoord(vPos);
 	float3 color = (SampleDiffuseLight(screenTexCoord) + AmbientLightColor) * baseColor
 		+ GroundSpecularLight(screenTexCoord, normalTS, In.Normal_WorldZ.xyz, float3(In.TexCoord_WorldXY.zw, In.Normal_WorldZ.w)) * SpecularColor * spec;
+	color *= GroundLight;
 	color *= GammaToLinear(tex2D(SAMPLER(MacroSampler), In.MacroTexCoord_Fog_Alpha.xy).xyz);
 	color = lerp(Fog.Color.xyz, color, In.MacroTexCoord_Fog_Alpha.z);
 	color *= GammaToLinear(tex2D(SAMPLER(ShroudTexture), In.ShroudTexCoord_Slot.xy).xyz);
-	// Zero Hour's blend: the tile's alpha by the vertex alpha
-	return float4(color, zh.w * In.MacroTexCoord_Fog_Alpha.w);
+	// Zero Hour's blend: the tile's alpha by the vertex alpha; where the main pass already blended the
+	// third terrain across the cell borders (CrossCellTerrains), nothing more
+	float slotA, slotB, wx, keep = 1.0;
+	if (CellMapParams.x > 0.0)
+		CrossCellTerrains(In.TexCoord_WorldXY.zw, slotA, slotB, wx, keep);
+	return float4(color, zh.w * In.MacroTexCoord_Fog_Alpha.w * saturate(keep * 4.0));
 }
 
 technique ExtraBlend
@@ -560,7 +769,7 @@ float4 PS_Default_M(VSOutput_M In) : COLOR
 		+ DirectionalLight_0_Color.xyz * cloud * max(0, dot(normal, DirectionalLight_0_Direction.xyz))
 		+ DirectionalLight_1_Color.xyz * max(0, dot(normal, DirectionalLight_1_Direction.xyz))
 		+ DirectionalLight_2_Color.xyz * max(0, dot(normal, DirectionalLight_2_Direction.xyz));
-	float3 color = light * baseColor;
+	float3 color = light * baseColor * GroundLight;
 	float3 macro = GammaToLinear(tex2D(SAMPLER(MacroSampler), In.CloudTexCoord_MacroTexCoord.zw).xyz);
 	color *= macro;
 	color = lerp(Fog.Color.xyz, color, In.Normal_Fog.w);

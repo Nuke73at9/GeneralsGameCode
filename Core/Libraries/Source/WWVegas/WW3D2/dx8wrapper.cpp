@@ -64,6 +64,7 @@
 #include "sage2/sage2water.h"
 #include "sage2/sage2softparticle.h"
 #include "sage2/sage2terrainatlas.h"
+#include "sage2/sage2globals.h"	// Sage2_Log
 #include "postprocess.h"
 #endif
 // GeneralsX @build BenderAI 10/02/2026 - Need LoadLibrary/GetProcAddress/FreeLibrary for dynamic loading
@@ -510,19 +511,77 @@ static IDirect3D8* Create_D3D9_Interface()
 	typedef IDirect3D9* (WINAPI *Direct3DCreate9Type)(UINT SDKVersion);
 	HINSTANCE lib = nullptr;
 #if defined(_WIN32)
+	// Tiberium Project @feature which Direct3D 9 draws, for comparing them (environment variable
+	// GX_D3D9_BACKEND): "dxvk" (the default: DXVK's, next to the game, on Vulkan), "native" (Windows'
+	// own, on the graphics driver's Direct3D 9) or "d3d12" (Windows' own, through its D3D9On12 layer)
+	const char* backend = getenv("GX_D3D9_BACKEND");
+	const bool useDxvk = backend == nullptr || backend[0] == '\0' || _stricmp(backend, "dxvk") == 0;
+	const bool useOn12 = backend != nullptr && _stricmp(backend, "d3d12") == 0;
 	char path[MAX_PATH];
-	DWORD len = GetModuleFileNameA(nullptr, path, MAX_PATH);
+	DWORD len = useDxvk ? GetModuleFileNameA(nullptr, path, MAX_PATH) : 0;
 	char* lastSlash = (len > 0 && len < MAX_PATH) ? strrchr(path, '\\') : nullptr;
 	if (lastSlash != nullptr && (size_t)(lastSlash - path) + sizeof("\\dxvk\\d3d9.dll") < MAX_PATH)
 	{
 		strcpy(lastSlash, "\\dxvk\\d3d9.dll");
 		lib = LoadLibraryExA(path, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
 	}
+	const bool loadedDxvk = lib != nullptr;
 	if (lib == nullptr)
 	{
-		fprintf(stderr, "WARNING: DX8Wrapper::Init() - dxvk\\d3d9.dll not found next to the game, trying the system d3d9.dll\n");
+		if (useDxvk)
+		{
+			fprintf(stderr, "WARNING: DX8Wrapper::Init() - dxvk\\d3d9.dll not found next to the game, trying the system d3d9.dll\n");
+			fflush(stderr);
+		}
+		// Windows' own, from the system folder (never a d3d9.dll lying next to the game)
+		char system[MAX_PATH];
+		UINT n = GetSystemDirectoryA(system, MAX_PATH);
+		if (n > 0 && n + sizeof("\\d3d9.dll") < MAX_PATH)
+		{
+			strcat(system, "\\d3d9.dll");
+			lib = LoadLibraryA(system);
+		}
+		if (lib == nullptr)
+			lib = LoadLibrary("D3D9.DLL");
+	}
+	if (lib != nullptr && useOn12)
+	{
+		// D3D9On12: the same interface, its calls turned into Direct3D 12 by Windows (d3d9.dll's
+		// Direct3DCreate9On12, Windows 10 and later); the arguments as d3d9.h declares them
+		struct D3D9On12Args
+		{
+			BOOL Enable9On12;
+			IUnknown* pD3D12Device;
+			IUnknown* ppD3D12Queues[2];
+			UINT NumQueues;
+			UINT NodeMask;
+		};
+		typedef IDirect3D9* (WINAPI *Direct3DCreate9On12Type)(UINT SDKVersion, D3D9On12Args* overrides, UINT overrideCount);
+		Direct3DCreate9On12Type createOn12 = (Direct3DCreate9On12Type)GetProcAddress(lib, "Direct3DCreate9On12");
+		if (createOn12 != nullptr)
+		{
+			D3D9On12Args args;
+			memset(&args, 0, sizeof(args));
+			args.Enable9On12 = TRUE;
+			IDirect3D9* on12 = nullptr;
+			{
+				DbgHelpGuard dbgHelpGuard;
+				on12 = createOn12(D3D_SDK_VERSION, &args, 1);
+			}
+			if (on12 != nullptr)
+			{
+				HMODULE pinned = nullptr;
+				GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+					reinterpret_cast<LPCSTR>(lib), &pinned);
+				fprintf(stderr, "DX8Wrapper::Init() - drawing with Direct3D 9 on Direct3D 12 (D3D9On12)\n");
+				fflush(stderr);
+				Sage2_Log("renderer: Direct3D 9 on Direct3D 12 (Windows' D3D9On12)");
+				return new D3D8On9Interface(on12);
+			}
+		}
+		fprintf(stderr, "WARNING: DX8Wrapper::Init() - D3D9On12 not available, drawing with the system Direct3D 9\n");
 		fflush(stderr);
-		lib = LoadLibrary("D3D9.DLL");
+		Sage2_Log("renderer: D3D9On12 not available (Direct3DCreate9On12 %s)", createOn12 != nullptr ? "failed" : "missing");
 	}
 	if (lib != nullptr)
 	{
@@ -560,7 +619,12 @@ static IDirect3D8* Create_D3D9_Interface()
 		fflush(stderr);
 		return nullptr;
 	}
+#if defined(_WIN32)
+	fprintf(stderr, "DX8Wrapper::Init() - drawing with Direct3D 9 (%s)\n", loadedDxvk ? "DXVK, on Vulkan" : "the system's");
+	Sage2_Log("renderer: Direct3D 9, %s", loadedDxvk ? "DXVK's, on Vulkan" : "Windows' own, on the graphics driver");
+#else
 	fprintf(stderr, "DX8Wrapper::Init() - drawing with Direct3D 9\n");
+#endif
 	fflush(stderr);
 	return new D3D8On9Interface(d3d9);
 }

@@ -899,6 +899,14 @@ Int parseTestFire(char *args[], int num)
 	return 2;
 }
 
+// Tiberium Project @feature -testUnits <frame>: vehicles and buildings to light at night
+Int parseTestUnits(char *args[], int num)
+{
+	if (num > 1)
+		TiberiumTest::setUnitsFrame(atoi(args[1]));
+	return 2;
+}
+
 Int parseTestReveal(char *args[], int num)
 {
 	if (num > 1)
@@ -1319,6 +1327,7 @@ static CommandLineParam paramsForEngineInit[] =
 	{ "-testScorch", parseTestScorch },
 	{ "-testLights", parseTestLights },
 	{ "-testFire", parseTestFire },
+	{ "-testUnits", parseTestUnits },
 	{ "-testReveal", parseTestReveal },
 	{ "-testCRC", parseTestCRC },
 	{ "-testQuit", parseTestQuit },

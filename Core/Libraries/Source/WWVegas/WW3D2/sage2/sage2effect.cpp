@@ -110,7 +110,7 @@ namespace
 	enum { CTAB_REGSET_BOOL = 0, CTAB_REGSET_INT4 = 1, CTAB_REGSET_FLOAT4 = 2, CTAB_REGSET_SAMPLER = 3 };
 	enum { CTAB_CLASS_MATRIX_ROWS = 2, CTAB_CLASS_MATRIX_COLUMNS = 3 };
 
-	enum { PRE_OPERAND_LITERAL = 1, PRE_OPERAND_INPUT = 2, PRE_OPERAND_OUTPUT = 4, PRE_OPERAND_TEMP = 7 };
+	enum { PRE_OPERAND_LITERAL = 1, PRE_OPERAND_INPUT = 2, PRE_OPERAND_OUTPUT = 4, PRE_OPERAND_OUTPUT_BOOL = 5, PRE_OPERAND_TEMP = 7 };
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -772,7 +772,7 @@ void Sage2EffectClass::Gather_Preshader_Inputs(const Preshader& pre, std::vector
 	}
 }
 
-void Sage2EffectClass::Run_Preshader(const Preshader& pre, float* outputs, unsigned outputCount) const
+void Sage2EffectClass::Run_Preshader(const Preshader& pre, float* outputs, unsigned outputCount, BOOL* boolOutputs, unsigned boolCount) const
 {
 	std::vector<float> inputs;
 	Gather_Preshader_Inputs(pre, inputs);
@@ -890,7 +890,14 @@ void Sage2EffectClass::Run_Preshader(const Preshader& pre, float* outputs, unsig
 				if ((size_t)out.index + e < temps.size())
 					temps[out.index + e] = dst[e];
 		}
-		else
+		else if (out.type == PRE_OPERAND_OUTPUT_BOOL)
+		{
+			// Tiberium Project @bugfix a bool register (four components to a register, as the float ones)
+			for (unsigned e = 0; e < elems; ++e)
+				if (boolOutputs != nullptr && (out.index + e) / 4 < boolCount && (out.index + e) % 4 == 0)
+					boolOutputs[(out.index + e) / 4] = dst[e] != 0.0 ? TRUE : FALSE;
+		}
+		else if (out.type == PRE_OPERAND_OUTPUT)
 		{
 			for (unsigned e = 0; e < elems; ++e)
 				if ((size_t)out.index + e < outputCount)
@@ -980,7 +987,23 @@ void Sage2EffectClass::Apply_Constants(IDirect3DDevice9* device, const Shader& s
 				maxReg = out.index / 4 + 1;
 		}
 		std::vector<float> outputs((size_t)maxReg * 4, 0.0f);
-		Run_Preshader(shader.preshader, outputs.data(), (unsigned)outputs.size());
+		// Tiberium Project @bugfix the bool registers it sets too (static branches on uniform conditions)
+		unsigned maxBool = 0;
+		for (size_t n = 0; n < shader.preshader.instructions.size(); ++n)
+		{
+			const PreshaderOperand& out = shader.preshader.instructions[n].operands.back();
+			if (out.type == PRE_OPERAND_OUTPUT_BOOL && out.index / 4 + 1 > maxBool)
+				maxBool = out.index / 4 + 1;
+		}
+		BOOL bools[16] = { FALSE };
+		if (maxBool > 16)
+			maxBool = 16;
+		Run_Preshader(shader.preshader, outputs.data(), (unsigned)outputs.size(), bools, maxBool);
+		if (maxBool > 0)
+		{
+			if (vs) device->SetVertexShaderConstantB(0, bools, maxBool);
+			else device->SetPixelShaderConstantB(0, bools, maxBool);
+		}
 		if (!shader.preshader.outputMap.empty())
 		{
 			for (size_t i = 0; i + 1 < shader.preshader.outputMap.size(); i += 2)

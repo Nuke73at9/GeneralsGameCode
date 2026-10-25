@@ -43,6 +43,10 @@
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "GameLogic/PartitionManager.h"
+#include "Common/Team.h"
+#include "Common/ThingFactory.h"
+#include "Common/ThingTemplate.h"
+#include "GameLogic/Object.h"
 
 namespace
 {
@@ -62,6 +66,7 @@ namespace
 	Int s_scorchFrame = -1;
 	Int s_lightsFrame = -1;
 	Int s_fireFrame = -1;
+	Int s_unitsFrame = -1;
 	Bool s_reveal = FALSE;
 	Bool s_revealed = FALSE;
 	Int s_controlBarStage = -1;	// ControlBarStages, or -1: as it is
@@ -318,6 +323,7 @@ void TiberiumTest::setShotInterval( Int frames ) { if ( frames > 0 ) { s_shotInt
 void TiberiumTest::setScorchFrame( Int frame ) { if ( frame >= 0 ) { s_scorchFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setLightsFrame( Int frame ) { if ( frame >= 0 ) { s_lightsFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setFireFrame( Int frame ) { if ( frame >= 0 ) { s_fireFrame = frame; s_active = TRUE; } }
+void TiberiumTest::setUnitsFrame( Int frame ) { if ( frame >= 0 ) { s_unitsFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setReveal( Bool reveal ) { s_reveal = reveal; if ( reveal ) s_active = TRUE; }
 void TiberiumTest::setCRCFrame( Int frame ) { if ( frame >= 0 ) { s_crcFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setQuitFrame( Int frame ) { if ( frame > 0 ) { s_quitFrame = frame; s_active = TRUE; } }
@@ -518,6 +524,38 @@ void TiberiumTest::update()
 		}
 		log( "frame %d: %d fires and %d smoke columns around %.0f %.0f", (int)s_frame, (int)made, (int)smokes, center.x, center.y );
 	}
+	// Tiberium Project @feature vehicles and buildings of the local player's around the view, to see
+	// what lights them (headlights, floodlights, lit windows at night); this adds to the game
+	if ( s_unitsFrame >= 0 && s_frame == s_unitsFrame && TheThingFactory != nullptr && ThePlayerList != nullptr
+		&& ThePlayerList->getLocalPlayer() != nullptr && TheTacticalView != nullptr )
+	{
+		struct Placed { const char *name; Real dx, dy, angle; };
+		static const Placed THINGS[] = {
+			{ "AmericaVehicleHumvee", -120.0f, -40.0f, 0.0f }, { "AmericaTankCrusader", -40.0f, -40.0f, 0.5f },
+			{ "ChinaTankOverlord", 40.0f, -40.0f, 1.57f }, { "ChinaVehicleDozer", 120.0f, -40.0f, 3.14f },
+			{ "AmericaVehicleAmbulance", -80.0f, 60.0f, -0.8f }, { "ChinaTankBattleMaster", 80.0f, 60.0f, 2.4f },
+			{ "AmericaWarFactory", -260.0f, 200.0f, 0.0f }, { "ChinaCommandCenter", 260.0f, 200.0f, 0.0f },
+			{ "AmericaPowerPlant", 0.0f, 260.0f, 0.0f } };
+		Team *team = ThePlayerList->getLocalPlayer()->getDefaultTeam();
+		const Coord3D center = TheTacticalView->getPosition();
+		Int made = 0;
+		for ( Int k = 0; k < (Int)( sizeof( THINGS ) / sizeof( THINGS[0] ) ); ++k )
+		{
+			const ThingTemplate *tmpl = TheThingFactory->findTemplate( THINGS[k].name );
+			Object *obj = tmpl != nullptr && team != nullptr ? TheThingFactory->newObject( tmpl, team ) : nullptr;
+			if ( obj == nullptr )
+				continue;
+			Coord3D p = center;
+			p.x += THINGS[k].dx;
+			p.y += THINGS[k].dy;
+			p.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( p.x, p.y ) : 0.0f;
+			obj->setPosition( &p );
+			obj->setOrientation( THINGS[k].angle );
+			++made;
+		}
+		log( "frame %d: %d vehicles and buildings around %.0f %.0f", (int)s_frame, (int)made, center.x, center.y );
+	}
+
 	if ( s_fireFrame >= 0 && s_frame == s_fireFrame + 30 && TheParticleSystemManager != nullptr )
 		log( "frame %d: %u particles in %u systems", (int)s_frame, (unsigned)TheParticleSystemManager->getParticleCount(),
 			(unsigned)TheParticleSystemManager->getAllParticleSystems().size() );

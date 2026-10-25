@@ -48,6 +48,10 @@ namespace
 	Sage2TerrainClass::Shroud s_shroud = { nullptr, 0.0f, 0.0f, 0.0f, 0.0f };
 	float s_bumpScale = 0.75f;			// C&C4's terrain, High
 	float s_fillSpecular = 1.0f;		// the fills' share of the ground's highlight
+	IDirect3DTexture9* s_cellMap = nullptr;		// the map's cells, one texel each (Set_Cell_Map)
+	float s_cellMapParams[4] = { 0.0f, 0.0f, 0.0f, 0.1f };	// 1/width, 1/height (the texture's), border, 1/cell size
+	bool s_crossBlend = true;
+	float s_crossBlendParams[4] = { 0.5f, 1.0f / 20.0f, 0.25f, 0.0f };	// noise amount, 1/noise size, softness
 	InitState s_state = NOT_TRIED;
 	Sage2EffectClass* s_effect = nullptr;
 	int s_techDefault = -1, s_techForward = -1, s_techPrepass = -1, s_techShadow = -1, s_techExtraBlend = -1;
@@ -190,6 +194,67 @@ void Sage2TerrainClass::Set_Fill_Specular(float amount) { s_fillSpecular = amoun
 void Sage2TerrainClass::Set_Bump(bool flipY, float scale) { s_bumpSign = flipY ? -1.0f : 1.0f; s_bumpScale = scale >= 0.0f ? scale : 0.75f; }
 
 //-------------------------------------------------------------------------------------------------
+void Sage2TerrainClass::Set_Cross_Blend(bool enabled, float noise, float softness)
+{
+	s_crossBlend = enabled;
+	s_crossBlendParams[0] = noise < 0.0f ? 0.0f : (noise > 1.0f ? 1.0f : noise);
+	s_crossBlendParams[2] = softness < 0.05f ? 0.05f : (softness > 0.5f ? 0.5f : softness);
+}
+
+//-------------------------------------------------------------------------------------------------
+void Sage2TerrainClass::Set_Cell_Map(const unsigned char* cells, int width, int height, int border, float cellSize)
+{
+	Release(s_cellMap);
+	s_cellMapParams[0] = 0.0f;
+	IDirect3DDevice8* device8 = DX8Wrapper::_Get_D3D_Device8();
+	if (cells == nullptr || width <= 0 || height <= 0 || device8 == nullptr || cellSize <= 0.0f)
+		return;
+	IDirect3DDevice9* device = device8->Get_D3D9();
+	// a power of two each way, the map in its corner (clamped, point-sampled: the padding is never read)
+	unsigned w = 1, h = 1;
+	while (w < (unsigned)width) w <<= 1;
+	while (h < (unsigned)height) h <<= 1;
+	if (FAILED(device->CreateTexture(w, h, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &s_cellMap, nullptr)))
+	{
+		s_cellMap = nullptr;
+		Sage2_Log("terrain: no cell map (%ux%u texture failed), Zero Hour's blends only", w, h);
+		return;
+	}
+	D3DLOCKED_RECT locked;
+	if (FAILED(s_cellMap->LockRect(0, &locked, nullptr, 0)))
+	{
+		Release(s_cellMap);
+		return;
+	}
+	unsigned kept = 0, crossed = 0;
+	for (unsigned y = 0; y < h; ++y)
+	{
+		DWORD* row = (DWORD*)((unsigned char*)locked.pBits + y * locked.Pitch);
+		for (unsigned x = 0; x < w; ++x)
+		{
+			if (x >= (unsigned)width || y >= (unsigned)height)
+			{
+				row[x] = 0x40FFFFFFu;	// padding: no terrain, keeps its own edges
+				continue;
+			}
+			const unsigned char* cell = cells + 4 * (y * width + x);
+			row[x] = ((DWORD)cell[3] << 24) | ((DWORD)cell[0] << 16) | ((DWORD)cell[1] << 8) | (DWORD)cell[2];
+			if (cell[3] >= 64)
+				++kept;
+			else
+				++crossed;
+		}
+	}
+	s_cellMap->UnlockRect(0);
+	s_cellMapParams[0] = 1.0f / (float)w;
+	s_cellMapParams[1] = 1.0f / (float)h;
+	s_cellMapParams[2] = (float)border;
+	s_cellMapParams[3] = 1.0f / cellSize;
+	Sage2_Log("terrain: cell map %dx%d (%ux%u texture), %u cells blend across their borders, %u keep Zero Hour's own edges",
+		width, height, w, h, crossed, kept);
+}
+
+//-------------------------------------------------------------------------------------------------
 bool Sage2TerrainClass::Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuffer, const Tile* tiles, int tileCount,
 	unsigned vertexCount, unsigned polygonCount, const Shroud& shroud)
 {
@@ -213,6 +278,13 @@ bool Sage2TerrainClass::Draw(TextureClass* atlas, DX8IndexBufferClass* indexBuff
 	s_effect->Set_Texture("BaseSampler", atlasTexture);
 	s_effect->Set_Float1("AlbedoScale", s_albedoScale);
 	s_effect->Set_Float1("FillSpecular", s_fillSpecular);
+	{
+		const bool cross = s_crossBlend && s_cellMap != nullptr && s_cellMapParams[0] > 0.0f;
+		const float off[4] = { 0.0f, 0.0f, 0.0f, 0.1f };
+		s_effect->Set_Texture("CellMap", cross ? s_cellMap : nullptr);
+		s_effect->Set_Float("CellMapParams", cross ? s_cellMapParams : off, 4);
+		s_effect->Set_Float("CrossBlend", s_crossBlendParams, 4);
+	}
 	// the C&C4 textures of this map, world-aligned by slot; none: every slot is -1 and the tiles show
 	IDirect3DBaseTexture9* c4Color = Sage2TerrainAtlasClass::Get_Color();
 	IDirect3DBaseTexture9* c4Normal = Sage2TerrainAtlasClass::Get_Normal();
@@ -307,6 +379,13 @@ bool Sage2TerrainClass::Draw_Extra_Blend(TextureClass* tiles, unsigned vertexCou
 	s_effect->Set_Texture("BaseSampler", tileTexture);
 	s_effect->Set_Float1("AlbedoScale", s_albedoScale);
 	s_effect->Set_Float1("FillSpecular", s_fillSpecular);
+	{
+		const bool cross = s_crossBlend && s_cellMap != nullptr && s_cellMapParams[0] > 0.0f;
+		const float off[4] = { 0.0f, 0.0f, 0.0f, 0.1f };
+		s_effect->Set_Texture("CellMap", cross ? s_cellMap : nullptr);
+		s_effect->Set_Float("CellMapParams", cross ? s_cellMapParams : off, 4);
+		s_effect->Set_Float("CrossBlend", s_crossBlendParams, 4);
+	}
 	s_effect->Set_Texture("AtlasColor", Sage2TerrainAtlasClass::Get_Color());
 	s_effect->Set_Texture("AtlasNormal", Sage2TerrainAtlasClass::Get_Normal());
 	float atlasParams[4] = { (float)Sage2TerrainAtlasClass::Get_Slots_Per_Row(), Sage2TerrainAtlasClass::Get_Slot_Size(),
@@ -407,6 +486,8 @@ void Sage2TerrainClass::Shutdown()
 	Release_Resources();
 	Release(s_declaration);
 	Release(s_extraBlendDeclaration);
+	Release(s_cellMap);
+	s_cellMapParams[0] = 0.0f;
 	s_techExtraBlend = -1;
 	s_effect = nullptr;	// owned by the effect cache
 	s_state = NOT_TRIED;

@@ -994,6 +994,10 @@ void W3DDisplay::init()
 			Sage2TerrainClass::Set_Bump(prefs.getBool("Sage2TerrainBumpFlip", FALSE), prefs.getReal("Sage2TerrainBumpScale", 0.75f));	// normal map green flipped; bump strength
 			// the fills' highlight on the ground: RA3's terrain takes the sun's alone, C&C4's light pass all three
 			Sage2TerrainClass::Set_Fill_Specular(prefs.getReal("Sage2TerrainFillSpecular", Sage2LightingClass::Is_RA3_Look() ? 0.0f : 1.0f));
+			// patch edges between natural terrains blended across the cell borders (built ground keeps
+			// Zero Hour's edges): on, how far a soft noise moves the edges, and their softness
+			Sage2TerrainClass::Set_Cross_Blend(prefs.getBool("Sage2TerrainCrossBlend", TRUE), prefs.getReal("Sage2TerrainCrossNoise", 0.5f),
+				prefs.getReal("Sage2TerrainCrossSoftness", 0.25f));
 			Sage2PostClass::Set_Exposure(prefs.getReal("Sage2Exposure", 1.0f));
 			Sage2PostClass::Set_Lookup_Strength(prefs.getReal("Sage2LookupStrength", 1.0f));	// the grading table: 0 none, 1 as the look sets it
 			Sage2PostClass::Set_Auto_Exposure(prefs.getReal("Sage2AutoExposure", 0.5f));	// exposure for each map's ground: 0..1

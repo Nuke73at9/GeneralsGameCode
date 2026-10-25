@@ -85,6 +85,7 @@ enum Sage2Binding
 	SAGE2_BIND_SHADOW_MAP_TEXEL,		// Shadowmap_Zero_Zero_OneOverMapSize_OneOverMapSize
 	SAGE2_BIND_SOFT_SHADOW_PARMS,		// SoftShadowParms: kernel size, jitter
 	SAGE2_BIND_SCORCH_UV,				// ScorchMarkUVOffsetMultiplier: world xy -> the terrain top view's texel
+	SAGE2_BIND_GROUND_LIGHT,			// Terrain.GroundLight: the share of the light the ground takes (Sage2LightingClass)
 
 	// textures the scene provides (stand-ins until the matching passes exist)
 	SAGE2_BIND_TEXTURE_WHITE,			// shadow map, cloud, macro, shroud: "no effect"

@@ -1975,12 +1975,14 @@ void RTS3DScene::gatherSage2NightLights()
 			point.direction[0] = beam.X;
 			point.direction[1] = beam.Y;
 			point.direction[2] = beam.Z;
-			point.cosInner = 0.93f;		// full within about 21 degrees of the beam
-			point.cosOuter = 0.80f;		// gone past about 37
-			point.color[0] = 1.0f * 0.9f * dusk;
-			point.color[1] = 0.92f * 0.9f * dusk;
-			point.color[2] = 0.75f * 0.9f * dusk;
-			point.innerRadius = 20.0f;
+			// Tiberium Project @tweak a soft beam that fades from the nose and across its width: a
+			// narrower full beam and a wider fade (it was a hard-edged white pool on the snow)
+			point.cosInner = 0.97f;		// full within about 14 degrees of the beam
+			point.cosOuter = 0.70f;		// gone past about 46
+			point.color[0] = 1.0f * 0.7f * dusk;
+			point.color[1] = 0.92f * 0.7f * dusk;
+			point.color[2] = 0.75f * 0.7f * dusk;
+			point.innerRadius = 4.0f;
 			point.outerRadius = min(160.0f, reach * 2.5f + 60.0f);
 			point.lightsObjects = true;
 			Sage2SceneClass::Add_Point_Light(point);
