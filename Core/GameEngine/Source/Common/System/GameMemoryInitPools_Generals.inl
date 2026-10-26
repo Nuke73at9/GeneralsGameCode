@@ -313,6 +313,7 @@ static PoolSizeRec PoolSizes[] =
 	{ "W3DTreeDraw", 16, 16 },
 	{ "W3DPropDraw", 16, 16 },
 	{ "W3DTracerDraw", 64, 32 },
+	{ "W3DLightDraw", 64, 32 },	// Tiberium Project @feature C&C4's LightDraw
 	{ "W3DTruckDraw", 128, 32 },
 	{ "W3DDynamicsDraw", 32, 32 },	// Tiberium Project @feature wrecks that fall apart
 	{ "W3DTankTruckDraw", 32, 16 },

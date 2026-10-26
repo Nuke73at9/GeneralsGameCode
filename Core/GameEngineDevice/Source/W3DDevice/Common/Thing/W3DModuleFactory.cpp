@@ -46,6 +46,7 @@
 #include "W3DDevice/GameClient/Module/W3DTruckDraw.h"
 #include "W3DDevice/GameClient/Module/W3DTankTruckDraw.h"
 #include "W3DDevice/GameClient/Module/W3DTracerDraw.h"
+#include "W3DDevice/GameClient/Module/W3DLightDraw.h"	// Tiberium Project @feature
 #include "W3DDevice/GameClient/Module/W3DTreeDraw.h"
 #include "W3DDevice/GameClient/Module/W3DPropDraw.h"
 #include "W3DDevice/GameClient/Module/W3DDynamicsDraw.h"
@@ -78,6 +79,7 @@ void W3DModuleFactory::init()
 	addModule( W3DTankDraw );
 	addModule( W3DTruckDraw );
 	addModule( W3DTracerDraw );
+	addModule( W3DLightDraw );	// Tiberium Project @feature C&C4's LightDraw
 	addModule( W3DTankTruckDraw );
 #if !(RTS_GENERALS && RETAIL_COMPATIBLE_CRC)
 	addModule( W3DTreeDraw );

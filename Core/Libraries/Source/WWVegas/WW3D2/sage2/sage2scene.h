@@ -98,6 +98,12 @@ public:
 	};
 	static void Clear_Point_Lights();
 	static void Add_Point_Light(const PointLight& light);
+	/// Tiberium Project @feature a light a draw module gives off this frame (W3DLightDraw: a shell's
+	/// glow, a crawler's floodlights), handed over while the drawables update; the frame's light
+	/// gathering (Clear_Point_Lights) starts from them
+	static void Add_Draw_Light(const PointLight& light);
+	/// Options.ini: Sage2DrawLights, how strong the draw modules' lights are (1: C&C4's; 0: none)
+	static void Set_Draw_Light_Strength(float strength);
 	static unsigned Get_Point_Light_Count();
 	/// Options.ini: Sage2PointLights, how strong they are (0: none)
 	static void Set_Point_Light_Strength(float strength);

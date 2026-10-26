@@ -32,6 +32,7 @@
 #include "sage2effect.h"
 #include "sage2globals.h"
 #include "sage2material.h"
+#include "ww3d.h"
 #include "WWMath/aabox.h"
 
 namespace
@@ -60,8 +61,14 @@ namespace
 	// Tiberium Project @feature this frame's point lights
 	const unsigned MAX_POINT_LIGHTS = 128;	// Tiberium Project @tweak a pulse is three (gatherSage2PointLights)
 	std::vector<Sage2SceneClass::PointLight> s_pointLights;
+	// Tiberium Project @feature the lights the draw modules hand over (W3DLightDraw), while the
+	// drawables update before the frame is rendered: every light gathering of that frame takes them
+	// (they are marked with the frame they came in; a frame without any leaves none behind)
+	std::vector<Sage2SceneClass::PointLight> s_drawLights;
+	unsigned s_drawLightsFrame = 0;
 	float s_pointLightStrength = 2.0f;	// Zero Hour lit the ground with a pulse's ambient and diffuse both
 	float s_pulseLightStrength = 1.0f;	// Tiberium Project @tweak the light pulses' own (see Set_Pulse_Light_Strength)
+	float s_drawLightStrength = 1.0f;	// Tiberium Project @feature the draw modules' lights' own (C&C4's values as given)
 	bool s_particleLighting = true;
 	bool s_pointLightsLogged = false;
 
@@ -546,6 +553,40 @@ bool Sage2SceneClass::Light_Batch(Sage2EffectClass& effect, int prepassTechnique
 void Sage2SceneClass::Clear_Point_Lights()
 {
 	s_pointLights.clear();
+	if (WW3D::Get_Frame_Count() - s_drawLightsFrame > 1)
+		s_drawLights.clear();
+	// C&C4's colours as C&C4 gives them: the light pass multiplies every light by the point lights'
+	// strength, so the draw lights take theirs in its place
+	const float scale = s_pointLightStrength > 0.0f ? s_drawLightStrength / s_pointLightStrength : 0.0f;
+	for (size_t i = 0; i < s_drawLights.size() && scale > 0.0f; ++i)
+	{
+		PointLight light = s_drawLights[i];
+		light.color[0] *= scale;
+		light.color[1] *= scale;
+		light.color[2] *= scale;
+		Add_Point_Light(light);
+	}
+	static bool logged = false;
+	if (!logged && !s_drawLights.empty())
+	{
+		logged = true;
+		const PointLight& l = s_drawLights[0];
+		Sage2_Log("draw lights: %u this frame; the first at (%.0f %.0f %.0f), colour (%.2f %.2f %.2f), radius %.0f..%.0f%s",
+			(unsigned)s_drawLights.size(), l.position[0], l.position[1], l.position[2], l.color[0], l.color[1], l.color[2],
+			l.innerRadius, l.outerRadius, l.spot ? ", a spot" : "");
+	}
+}
+
+void Sage2SceneClass::Add_Draw_Light(const PointLight& light)
+{
+	const unsigned frame = WW3D::Get_Frame_Count();
+	if (frame != s_drawLightsFrame)
+	{
+		s_drawLights.clear();
+		s_drawLightsFrame = frame;
+	}
+	if (s_drawLights.size() < MAX_POINT_LIGHTS / 2 && light.outerRadius > 0.0f)
+		s_drawLights.push_back(light);
 }
 
 void Sage2SceneClass::Add_Point_Light(const PointLight& light)
@@ -572,6 +613,11 @@ float Sage2SceneClass::Get_Point_Light_Strength()
 void Sage2SceneClass::Set_Pulse_Light_Strength(float strength)
 {
 	s_pulseLightStrength = strength < 0.0f ? 0.0f : (strength > 4.0f ? 4.0f : strength);
+}
+
+void Sage2SceneClass::Set_Draw_Light_Strength(float strength)
+{
+	s_drawLightStrength = strength < 0.0f ? 0.0f : (strength > 4.0f ? 4.0f : strength);
 }
 
 float Sage2SceneClass::Get_Pulse_Light_Strength()

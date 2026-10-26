@@ -27,6 +27,7 @@ set(GAMEENGINEDEVICE_SRC
     Include/W3DDevice/GameClient/Module/W3DSupplyDraw.h
     Include/W3DDevice/GameClient/Module/W3DTankDraw.h
     Include/W3DDevice/GameClient/Module/W3DTankTruckDraw.h
+    Include/W3DDevice/GameClient/Module/W3DLightDraw.h
     Include/W3DDevice/GameClient/Module/W3DTracerDraw.h
     Include/W3DDevice/GameClient/Module/W3DTreeDraw.h
     Include/W3DDevice/GameClient/Module/W3DTruckDraw.h
@@ -116,6 +117,7 @@ set(GAMEENGINEDEVICE_SRC
     Source/W3DDevice/GameClient/Drawable/Draw/W3DSupplyDraw.cpp
     Source/W3DDevice/GameClient/Drawable/Draw/W3DTankDraw.cpp
     Source/W3DDevice/GameClient/Drawable/Draw/W3DTankTruckDraw.cpp
+    Source/W3DDevice/GameClient/Drawable/Draw/W3DLightDraw.cpp
     Source/W3DDevice/GameClient/Drawable/Draw/W3DTracerDraw.cpp
     Source/W3DDevice/GameClient/Drawable/Draw/W3DTreeDraw.cpp
     Source/W3DDevice/GameClient/Drawable/Draw/W3DTruckDraw.cpp
