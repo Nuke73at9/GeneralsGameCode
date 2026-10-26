@@ -25,6 +25,7 @@ SHADERS = [
     ("fxaa.hlsl", "PSFXAA", "ps_3_0", "fxaa_ps.h", "FXAAPixelShader"),
     ("fixedfunction.hlsl", "VSMain", "vs_3_0", "fixedfunction_vs.h", "FixedFunctionVertexShader"),
     ("fixedfunction.hlsl", "VSScreen", "vs_3_0", "fixedfunction_screen_vs.h", "FixedFunctionScreenVertexShader"),
+    ("fixedfunction.hlsl", "VSTrees", "vs_3_0", "fixedfunction_trees_vs.h", "FixedFunctionTreesVertexShader"),
     ("fixedfunction.hlsl", "PSMain", "ps_3_0", "fixedfunction_ps.h", "FixedFunctionPixelShader"),
     ("fixedfunction.hlsl", "PSModulate", "ps_3_0", "fixedfunction_modulate_ps.h", "FixedFunctionModulatePixelShader"),
     ("fixedfunction.hlsl", "PSDiffuse", "ps_3_0", "fixedfunction_diffuse_ps.h", "FixedFunctionDiffusePixelShader"),

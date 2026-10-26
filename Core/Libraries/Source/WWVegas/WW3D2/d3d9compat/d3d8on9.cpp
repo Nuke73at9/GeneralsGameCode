@@ -22,6 +22,7 @@
 
 #include "../shaders/fixedfunction_vs.h"	// Tiberium Project @feature from shaders/fixedfunction.hlsl (build_shaders.py)
 #include "../shaders/fixedfunction_screen_vs.h"
+#include "../shaders/fixedfunction_trees_vs.h"
 #include "../shaders/fixedfunction_ps.h"
 #include "../shaders/fixedfunction_modulate_ps.h"
 #include "../shaders/fixedfunction_diffuse_ps.h"
@@ -262,6 +263,7 @@ D3D8On9Device::~D3D8On9Device()
 	{
 		if (m_vertexShaders[i].decl) m_vertexShaders[i].decl->Release();
 		if (m_vertexShaders[i].shader) m_vertexShaders[i].shader->Release();
+		if (m_vertexShaders[i].substitute) m_vertexShaders[i].substitute->Release();
 	}
 	for (size_t i = 0; i < m_pixelShaders.size(); ++i)
 	{
@@ -301,6 +303,7 @@ namespace
 		FF_FOG = 1, FF_BLEND = 2, FF_POSITION = 4, FF_POINT_SIZE = 8, FF_STAGES = 16, FF_OPERATION = 32,
 		FF_LIGHTS = 64, FF_TEXGEN = 128, FF_PIXEL_SHADER = 256, FF_SHADERS = 512
 	};
+	const DWORD FF_PROGRAMMABLE = 0xFFFFFFFF;	// Build_Fixed_Function: the pixel stage after a stand-in vertex shader
 
 	void Color_To_Float(D3DCOLOR c, float out[4])
 	{
@@ -463,16 +466,19 @@ void D3D8On9Device::Build_Fixed_Function(DWORD fvf)
 	unsigned reason = 0;
 	// Tiberium Project @feature pre-transformed vertices through the screen vertex shader; blended
 	// ones stay fixed-function, as do pre-transformed ones while a declaration stands in for FVFs
-	const DWORD position = fvf & D3DFVF_POSITION_MASK;
+	// Tiberium Project @feature the pixel stage only, after a stand-in vertex shader: the vertex side's
+	// state (position, point size, blending, lights, coordinate generation) is the shader's
+	const bool programmable = fvf == FF_PROGRAMMABLE;
+	const DWORD position = programmable ? (DWORD)D3DFVF_XYZ : (fvf & D3DFVF_POSITION_MASK);
 	const bool transformed = position == D3DFVF_XYZRHW;
 	m_ff.transformed = transformed;
 	if (position != D3DFVF_XYZ && (!transformed || m_vertexDeclarationOverride != nullptr))
 		reason |= FF_POSITION;
-	if (fvf & D3DFVF_PSIZE)
+	if (!programmable && (fvf & D3DFVF_PSIZE))
 		reason |= FF_POINT_SIZE;
 	if (rs[D3DRS_FOGENABLE])
 		reason |= FF_FOG;
-	if (rs[D3DRS_VERTEXBLEND] != D3DVBF_DISABLE || rs[D3DRS_INDEXEDVERTEXBLENDENABLE])
+	if (!programmable && (rs[D3DRS_VERTEXBLEND] != D3DVBF_DISABLE || rs[D3DRS_INDEXEDVERTEXBLENDENABLE]))
 		reason |= FF_BLEND;
 
 	// the texture stages: two at most, the operations and arguments the pixel shader does
@@ -515,6 +521,11 @@ void D3D8On9Device::Build_Fixed_Function(DWORD fvf)
 		const DWORD ttf = ts[D3DTSS_TEXTURETRANSFORMFLAGS];
 		const DWORD generation = tci & 0xFFFF0000;
 		const DWORD set = tci & 0xFFFF;
+		if (programmable && ((tci & 0xFFFF) != stage || ttf != D3DTTFF_DISABLE))
+		{
+			reason |= FF_TEXGEN;	// after a vertex shader: each stage its own output, as Direct3D asks
+			break;
+		}
 		texGen[stage][0] = (float)set;
 		if (generation == D3DTSS_TCI_PASSTHRU)
 			texGen[stage][1] = 0.0f;
@@ -547,7 +558,7 @@ void D3D8On9Device::Build_Fixed_Function(DWORD fvf)
 		reason |= FF_STAGES;
 
 	// the lights (Direct3D does not light pre-transformed vertices)
-	const DWORD lighting = transformed ? 0 : rs[D3DRS_LIGHTING];
+	const DWORD lighting = (transformed || programmable) ? 0 : rs[D3DRS_LIGHTING];
 	int lightIndex[4];
 	int lightCount = 0;
 	if (lighting && reason == 0)
@@ -695,6 +706,14 @@ void D3D8On9Device::Build_Fixed_Function(DWORD fvf)
 
 void D3D8On9Device::Unbind_Bound_Fixed_Function_Shaders()
 {
+	if (m_ff.substituteBound)
+	{
+		// Tiberium Project @feature the game's own vertex shader back in place of its stand-in
+		const size_t index = m_vertexShader >> 1;
+		if (m_vertexShader != ~0u && (m_vertexShader & SHADER_HANDLE_BIT) != 0 && index < m_vertexShaders.size())
+			m_device->SetVertexShader(m_vertexShaders[index].shader);
+		m_ff.substituteBound = false;
+	}
 	if (m_ff.vsBound)
 		m_device->SetVertexShader(nullptr);
 	if (m_ff.psBound != nullptr)
@@ -730,11 +749,6 @@ bool D3D8On9Device::Emulate_Fixed_Function_Draw()
 		else
 			m_device->GetFVF(&fvf);
 	}
-	if (fvf == 0)
-	{
-		Unbind_Fixed_Function_Shaders();	// a Direct3D 8 vertex shader of the game's own, or a declaration of someone else's
-		return false;
-	}
 	if (!m_ffTried)
 	{
 		m_ffTried = true;
@@ -745,6 +759,15 @@ bool D3D8On9Device::Emulate_Fixed_Function_Draw()
 			|| FAILED(m_device->CreatePixelShader(FixedFunctionDiffusePixelShader, &m_ffDiffuseShader))
 			|| FAILED(m_device->CreatePixelShader(FixedFunctionTexturePixelShader, &m_ffTextureShader)))
 			Release_Fixed_Function_Shaders();
+	}
+	if (fvf == 0)
+	{
+		// a Direct3D 8 vertex shader of the game's own (Tiberium Project @feature its stand-in, when it has
+		// one), or a declaration of someone else's
+		if (m_vertexShader != ~0u && (m_vertexShader & SHADER_HANDLE_BIT) != 0)
+			return Emulate_Pixel_Stage();
+		Unbind_Fixed_Function_Shaders();
+		return false;
 	}
 	if (m_ffVertexShader == nullptr)
 	{
@@ -854,6 +877,13 @@ bool D3D8On9Device::Emulate_Fixed_Function_Draw()
 		memcpy(m_ff.vsUploaded[46], m_ff.vs[46], 13 * ROW);
 	}
 	m_ff.vsConstantsKnown = true;
+	Upload_Pixel_Constants();
+	++s_ffEmulated;
+	return true;
+}
+
+void D3D8On9Device::Upload_Pixel_Constants()
+{
 	if (m_ff.pixelShader == m_ffPixelShader
 		&& (!m_ff.psConstantsKnown || memcmp(m_ff.psUploaded, m_ff.ps, sizeof(m_ff.ps)) != 0))
 	{
@@ -861,8 +891,88 @@ bool D3D8On9Device::Emulate_Fixed_Function_Draw()
 		memcpy(m_ff.psUploaded, m_ff.ps, sizeof(m_ff.ps));
 		m_ff.psConstantsKnown = true;
 	}
+}
+
+// Tiberium Project @feature the game's own vertex shader (the trees') through its vs_3_0 stand-in, so the
+// texture stages after it go through the emulation's pixel shader; its constants are the game's, as
+// it set them
+bool D3D8On9Device::Emulate_Pixel_Stage()
+{
+	const size_t index = m_vertexShader >> 1;
+	if (index >= m_vertexShaders.size() || m_vertexShaders[index].substitute == nullptr || m_ffPixelShader == nullptr)
+	{
+		Unbind_Fixed_Function_Shaders();
+		return false;
+	}
+	IDirect3DPixelShader9* ps = nullptr;
+	m_device->GetPixelShader(&ps);
+	if (ps != nullptr)
+		ps->Release();
+	if (ps != nullptr && ps != m_ffPixelShader && ps != m_ffModulateShader && ps != m_ffDiffuseShader && ps != m_ffTextureShader)
+	{
+		m_ff.psBound = nullptr;
+		Unbind_Fixed_Function_Shaders();
+		return false;	// a pixel shader of the renderer's own: the game's shader goes with it
+	}
+	m_ff.psBound = ps;
+	if (!m_ff.stateKnown)
+	{
+		Read_Fixed_Function_State();
+		m_ff.stateKnown = true;
+		m_ff.changed = true;
+	}
+	if (m_ff.changed || m_ff.fvf != FF_PROGRAMMABLE)
+	{
+		Build_Fixed_Function(FF_PROGRAMMABLE);
+		m_ff.changed = false;
+		m_ff.fvf = FF_PROGRAMMABLE;
+	}
+	if (m_ff.reason != 0)
+	{
+		++s_ffLeft;
+		s_ffReasons |= m_ff.reason;
+		Unbind_Fixed_Function_Shaders();	// the game's own shader back, if the stand-in was bound
+		return false;
+	}
+	if (!m_ff.substituteBound)
+	{
+		m_device->SetVertexShader(m_vertexShaders[index].substitute);
+		m_ff.substituteBound = true;
+		m_ff.vsBound = false;
+	}
+	if (m_ff.psBound != m_ff.pixelShader)
+	{
+		m_device->SetPixelShader(m_ff.pixelShader);
+		m_ff.psBound = m_ff.pixelShader;
+	}
+	Upload_Pixel_Constants();
 	++s_ffEmulated;
 	return true;
+}
+
+HRESULT D3D8On9Device::Set_Vertex_Shader_Substitute(DWORD handle, Substitute which)
+{
+	const size_t index = handle >> 1;
+	if ((handle & SHADER_HANDLE_BIT) == 0 || index >= m_vertexShaders.size() || m_vertexShaders[index].shader == nullptr)
+		return D3DERR_INVALIDCALL;
+	const DWORD* function = nullptr;
+	switch (which)
+	{
+		case SUBSTITUTE_TREES: function = FixedFunctionTreesVertexShader; break;
+	}
+	if (function == nullptr)
+		return D3DERR_INVALIDCALL;
+	IDirect3DVertexShader9* substitute = nullptr;
+	HRESULT hr = m_device->CreateVertexShader(function, &substitute);
+	if (FAILED(hr))
+		return hr;
+	VertexShader& entry = m_vertexShaders[index];
+	if (m_ff.substituteBound && m_vertexShader == handle)
+		Unbind_Fixed_Function_Shaders();
+	if (entry.substitute != nullptr)
+		entry.substitute->Release();
+	entry.substitute = substitute;
+	return D3D_OK;
 }
 
 // Tiberium Project @performance the state the fixed-function shaders read, kept as it is set
@@ -1210,6 +1320,7 @@ HRESULT D3D8On9Device::Reset(D3DPRESENT_PARAMETERS* params)
 	// Tiberium Project @performance a reset device has no shaders bound and its state back to the defaults
 	m_ff.vsBound = false;
 	m_ff.declarationFvf = 0;
+	m_ff.substituteBound = false;
 	m_ff.psBound = nullptr;
 	m_ff.vsConstantsKnown = false;
 	m_ff.psConstantsKnown = false;
@@ -1470,7 +1581,7 @@ HRESULT D3D8On9Device::CreateVertexShader(const DWORD* declaration, const DWORD*
 		}
 	}
 
-	VertexShader vs = { nullptr, nullptr };
+	VertexShader vs = { nullptr, nullptr, nullptr };
 	HRESULT hr = m_device->CreateVertexDeclaration(&elements[0], &vs.decl);
 	if (SUCCEEDED(hr) && function != nullptr)
 		hr = m_device->CreateVertexShader(code.empty() ? function : &code[0], &vs.shader);	// vs_1_1 bytecode is valid in Direct3D 9
@@ -1490,6 +1601,7 @@ HRESULT D3D8On9Device::SetVertexShader(DWORD handle)
 		return D3D_OK;	// Tiberium Project @feature a screen declaration in its place goes at the next draw
 	m_vertexShader = handle;
 	m_ff.declarationFvf = 0;	// Tiberium Project @feature what is set now replaces the screen declaration
+	m_ff.substituteBound = false;	// and a stand-in
 	if ((handle & SHADER_HANDLE_BIT) == 0)
 	{
 		m_device->SetVertexShader(m_vertexShaderOverride);	// usually none: fixed-function
@@ -1517,11 +1629,14 @@ HRESULT D3D8On9Device::DeleteVertexShader(DWORD handle)
 		m_device->SetVertexShader(nullptr);
 		m_vertexShader = ~0u;
 		m_ff.vsBound = false;	// Tiberium Project @performance
+		m_ff.substituteBound = false;
 	}
 	if (vs.decl) vs.decl->Release();
 	if (vs.shader) vs.shader->Release();
+	if (vs.substitute) vs.substitute->Release();	// Tiberium Project @feature
 	vs.decl = nullptr;
 	vs.shader = nullptr;
+	vs.substitute = nullptr;
 	return D3D_OK;
 }
 

@@ -212,6 +212,12 @@ public:
 	/// Tiberium Project @feature SAGE 2 materials: describe the fixed-function-format vertices with this
 	/// declaration instead of the FVF (for extra streams the FVF cannot name; nullptr: back to the FVF).
 	void Set_Vertex_Declaration_Override(IDirect3DVertexDeclaration9* declaration);
+	/// Tiberium Project @feature a vs_3_0 stand-in for one of the game's own vs_1_1 shaders (the same
+	/// registers and inputs, the fixed-function emulation's outputs): while the emulation is on
+	/// (D3D8On9_Set_Fixed_Function_Shaders) draws with the handle go through it and the emulation's
+	/// pixel shader, which cannot follow a vs_1_1 shader
+	enum Substitute { SUBSTITUTE_TREES };
+	HRESULT Set_Vertex_Shader_Substitute(DWORD handle, Substitute which);
 	/// The current FVF, or 0 when a vertex shader handle is current
 	DWORD Get_Current_FVF() const { return (m_vertexShader != ~0u && (m_vertexShader & 1) == 0) ? m_vertexShader : 0; }	// bit 0: a shader handle
 
@@ -334,13 +340,18 @@ private:
 	bool Emulate_Fixed_Function();
 	/// what the emulation makes of the state the adapter keeps (m_ff): whether it can draw, the pixel
 	/// shader and the constants
-	void Build_Fixed_Function(DWORD fvf);
+	void Build_Fixed_Function(DWORD fvf);	// FF_PROGRAMMABLE: the pixel stage after a stand-in
+	/// Tiberium Project @feature a draw with one of the game's vertex shaders that has a stand-in: the
+	/// stand-in and the emulation's pixel shader, when the texture stages allow
+	bool Emulate_Pixel_Stage();
+	/// the emulation's general pixel shader's constants, where they differ from what the device has
+	void Upload_Pixel_Constants();
 	/// the state the emulation reads, from the device (after someone drew through it directly)
 	void Read_Fixed_Function_State();
 	/// takes the shaders off (the device as fixed-function drawing expects it)
 	void Unbind_Fixed_Function_Shaders()
 	{
-		if (m_ff.vsBound || m_ff.psBound != nullptr)
+		if (m_ff.vsBound || m_ff.psBound != nullptr || m_ff.substituteBound)
 			Unbind_Bound_Fixed_Function_Shaders();
 	}
 	void Unbind_Bound_Fixed_Function_Shaders();
@@ -379,6 +390,7 @@ private:
 		// what the device has
 		bool vsBound;
 		bool vsBoundTransformed;	///< the one bound is the screen vertex shader
+		bool substituteBound;	///< a stand-in in place of the current handle's own vertex shader
 		DWORD declarationFvf;	///< the FVF a declaration of ours stands in for on the device, 0 none
 		IDirect3DPixelShader9* psBound;
 		bool vsConstantsKnown;	///< vsUploaded holds what c0 to c17, c46 to c58 and the light rows hold
@@ -415,7 +427,12 @@ private:
 	IDirect3DPixelShader9* m_ffTextureShader;	///< the texture
 	bool m_ffTried;
 
-	struct VertexShader { IDirect3DVertexDeclaration9* decl; IDirect3DVertexShader9* shader; };
+	struct VertexShader
+	{
+		IDirect3DVertexDeclaration9* decl;
+		IDirect3DVertexShader9* shader;
+		IDirect3DVertexShader9* substitute;	///< Tiberium Project @feature its vs_3_0 stand-in, or nullptr
+	};
 
 	IDirect3DDevice9* m_device;
 	DWORD m_behaviorFlags;

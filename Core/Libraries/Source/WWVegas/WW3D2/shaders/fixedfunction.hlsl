@@ -14,7 +14,8 @@
 //           the specular colour added.
 // Fog and vertex blending are not here: draws that use them stay fixed-function.
 // Pre-transformed vertices (already in screen pixels: the screen filters, the shadow darkening, the
-// heat haze) have a vertex shader of their own, VSScreen.
+// heat haze) have a vertex shader of their own, VSScreen, and the trees' own vs_1_1 shader one in
+// vs_3_0, VSTrees.
 //
 // Not an effect: plain shaders, compiled by build_shaders.py to fixedfunction_vs.h and
 // fixedfunction_ps.h.
@@ -250,6 +251,45 @@ VSOut VSScreen(VSScreenIn v)
 	o.Tex0 = ScreenCoordinates(v, TexGen[0].x);
 	o.Tex1 = ScreenCoordinates(v, TexGen[1].x);
 	o.PointSize = clamp(PointParams.x, PointParams.z, PointParams.w);
+	return o;
+}
+
+// ---------------------------------------------------------------------------- the trees
+// Tiberium Project @feature Zero Hour's tree and grass vertex shader (Shaders/Trees.nvv, vs.1.1)
+// again as vs_3_0, with this vertex shader's outputs, so the emulation's pixel shader can draw the
+// trees' texture stages after it (a vs_1_1 shader goes only with the fixed-function pixel stage or
+// ps_1/ps_2). The registers the tree buffer sets: c4 to c7 the world-view-projection matrix (rows),
+// c8 no sway and c9 on the sway of each type, c32 and c33 the shroud's offset and scale. The
+// inputs as the adapter declares Direct3D 8's registers: v0 the position, v1 (blend weight) the
+// sway type, the darkening and the height of the tree's base, v2 (blend indices) the colour, v7
+// the texture coordinates.
+float4 TreeMatrix[4] : register(c4);
+float4 TreeSway[24] : register(c8);
+float4 TreeShroudOffset : register(c32);
+float4 TreeShroudScale : register(c33);
+
+struct VSTreeIn
+{
+	float4 Position : POSITION;
+	float4 Data : BLENDWEIGHT;
+	float4 Color : BLENDINDICES;
+	float4 Tex : TEXCOORD0;
+};
+
+VSOut VSTrees(VSTreeIn v)
+{
+	VSOut o;
+	float4 position = float4(v.Position.xyz, 1.0);
+	// the sway, more the higher above its base
+	float4 sway = TreeSway[(int)(v.Data.x + 0.5)];
+	float4 swayed = float4(position.xyz + (position.z - v.Data.z) * sway.xyz, 1.0);
+	o.Position = float4(dot(swayed, TreeMatrix[0]), dot(swayed, TreeMatrix[1]), dot(swayed, TreeMatrix[2]),
+		dot(swayed, TreeMatrix[3]));
+	o.Diffuse = saturate(float4(v.Color.rgb * v.Data.y, v.Color.a));
+	o.Specular = float4(0.0, 0.0, 0.0, 0.0);
+	o.Tex0 = float4(v.Tex.xy, 0.0, 1.0);
+	o.Tex1 = (position + TreeShroudOffset) * TreeShroudScale;
+	o.PointSize = 1.0;
 	return o;
 }
 

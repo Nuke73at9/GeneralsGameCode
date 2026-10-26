@@ -1245,6 +1245,11 @@ void W3DTreeBuffer::allocateTreeBuffers()
 	hr = W3DShaderManager::LoadAndCreateD3DShader("shaders\\Trees.vso", &Declaration[0], 0, true, &m_dwTreeVertexShader);
 	if (FAILED(hr))
 		return;
+#ifdef RTS_RENDERER_D3D9
+	// Tiberium Project @feature the same shader as vs_3_0, so the fixed-function shaders can draw the trees'
+	// texture stages after it (they cannot follow a vs_1_1 shader); without it they stay fixed-function
+	DX8Wrapper::_Get_D3D_Device8()->Set_Vertex_Shader_Substitute(m_dwTreeVertexShader, IDirect3DDevice8::SUBSTITUTE_TREES);
+#endif
 
 	hr = W3DShaderManager::LoadAndCreateD3DShader("shaders\\Trees.pso", &Declaration[0], 0, false, &m_dwTreePixelShader);
 	if (FAILED(hr))
