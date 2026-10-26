@@ -48,6 +48,7 @@
 #include "W3DDevice/GameClient/Module/W3DTracerDraw.h"
 #include "W3DDevice/GameClient/Module/W3DTreeDraw.h"
 #include "W3DDevice/GameClient/Module/W3DPropDraw.h"
+#include "W3DDevice/GameClient/Module/W3DDynamicsDraw.h"
 
 //-------------------------------------------------------------------------------------------------
 /** Initialize method */
@@ -82,5 +83,7 @@ void W3DModuleFactory::init()
 	addModule( W3DTreeDraw );
 	addModule( W3DPropDraw );
 #endif
+	// Tiberium Project @feature pieces that fly apart (C&C4 / Red Alert 3 wrecks), client side only
+	addModule( W3DDynamicsDraw );
 
 }

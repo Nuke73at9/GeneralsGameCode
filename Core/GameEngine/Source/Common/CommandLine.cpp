@@ -932,6 +932,14 @@ Int parseTestUnits(char *args[], int num)
 	return 2;
 }
 
+// Tiberium Project @feature -testSpawn "frame;Object,Object...;modes": objects to look at (move, fight, damage)
+Int parseTestSpawn(char *args[], int num)
+{
+	if (num > 1)
+		TiberiumTest::setSpawn(args[1]);
+	return 2;
+}
+
 // Tiberium Project @feature -testBase <frame>: America's core base, in the states its art has
 Int parseTestBase(char *args[], int num)
 {
@@ -1363,6 +1371,7 @@ static CommandLineParam paramsForEngineInit[] =
 	{ "-testFX", parseTestFX },
 	{ "-testFXLists", parseTestFXLists },
 	{ "-testUnits", parseTestUnits },
+	{ "-testSpawn", parseTestSpawn },
 	{ "-testBase", parseTestBase },
 	{ "-testReveal", parseTestReveal },
 	{ "-testCRC", parseTestCRC },

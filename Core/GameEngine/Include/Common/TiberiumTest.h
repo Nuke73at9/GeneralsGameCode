@@ -65,6 +65,7 @@ public:
 	static void setFXFrame( Int frame, Int every );	///< six of Zero Hour's explosion and hit effects (FX lists) around the view at that frame and every so many frames after (client side)
 	static void setUnitsFrame( Int frame );	///< a few of the local player's vehicles and buildings around the view at that frame (changes the game: not with -testCRC)
 	static void setBaseFrame( Int frame );	///< America's core base around the view at that frame, whole, damaged, being built and destroyed (changes the game: not with -testCRC)
+	static void setSpawn( const char *spec );	///< "frame;Object,Object...;modes": objects of the local player's in a row before the view; modes move, fight (Zero Hour targets to shoot at), damage (through the damage states to death) (changes the game: not with -testCRC)
 	static void setReveal( Bool reveal );	///< reveal the map to the local player at the start (changes the logic's state: not with -testCRC)
 	static void setCRCFrame( Int frame );
 	static void setQuitFrame( Int frame );

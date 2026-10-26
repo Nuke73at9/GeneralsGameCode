@@ -3761,7 +3761,8 @@ Bool W3DModelDraw::handleWeaponFireFX(WeaponSlotType wslot, Int specificBarrelTo
 
 	Bool handled = false;
 
-	if (specificBarrelToUse < 0 || specificBarrelToUse > wbvec.size())
+	// Tiberium Project @bugfix a barrel index equal to the count read past the end
+	if (specificBarrelToUse < 0 || specificBarrelToUse >= (Int)wbvec.size())
 		specificBarrelToUse = 0;
 
 	const ModelConditionInfo::WeaponBarrelInfo& info = wbvec[specificBarrelToUse];
@@ -3807,6 +3808,11 @@ Bool W3DModelDraw::handleWeaponFireFX(WeaponSlotType wslot, Int specificBarrelTo
 
 	if (info.m_recoilBone || info.m_muzzleFlashBone)
 	{
+		// Tiberium Project @bugfix the recoil table is sized when the state is set, from the barrels
+		// known then; a state whose barrels were found later (the first shot validates them, as for
+		// the converted C&C4 units) had an empty table here and the first shot wrote through it
+		if ((Int)m_weaponRecoilInfoVec[wslot].size() != (Int)wbvec.size())
+			rebuildWeaponRecoilInfo(m_curState);
 		//DEBUG_LOG(("START muzzleflash %08lx for Draw %08lx state %s at frame %d",info.m_muzzleFlashBone,this,m_curState->m_description.str(),TheGameLogic->getFrame()));
 		WeaponRecoilInfo& recoil = m_weaponRecoilInfoVec[wslot][specificBarrelToUse];
 		recoil.m_state = WeaponRecoilInfo::RECOIL_START;

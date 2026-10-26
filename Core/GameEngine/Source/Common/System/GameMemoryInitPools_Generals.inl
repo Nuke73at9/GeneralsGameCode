@@ -314,6 +314,7 @@ static PoolSizeRec PoolSizes[] =
 	{ "W3DPropDraw", 16, 16 },
 	{ "W3DTracerDraw", 64, 32 },
 	{ "W3DTruckDraw", 128, 32 },
+	{ "W3DDynamicsDraw", 32, 32 },	// Tiberium Project @feature wrecks that fall apart
 	{ "W3DTankTruckDraw", 32, 16 },
 	{ "W3DTreeTextureClass", 4, 4 },
 	{ "DefaultSpecialPower", 32, 32 },

@@ -482,9 +482,19 @@ UnsignedInt INI::load( AsciiString filename, INILoadType loadType, Xfer *pXfer )
 		fprintf(stderr, "[INI] load - processed total %d lines\n", lineCount);
 		fflush(stderr);
 	}
+	catch (const INIException& e)
+	{
+		// Tiberium Project @tweak say where: the line the parser stopped at and the message, for
+		// converted data (c4port) that a field or value does not fit
+		fprintf(stderr, "[INI] ERROR in load('%s') at line %d ('%s'): %s\n", filename.str(), (int)getLineNum(),
+			m_buffer, e.mFailureMessage ? e.mFailureMessage : "no message");
+		fflush(stderr);
+		unPrepFile();
+		throw;
+	}
 	catch (...)
 	{
-		fprintf(stderr, "[INI] ERROR in load('%s') - exception caught\n", filename.str());
+		fprintf(stderr, "[INI] ERROR in load('%s') at line %d ('%s') - exception caught\n", filename.str(), (int)getLineNum(), m_buffer);
 		fflush(stderr);
 		unPrepFile();
 

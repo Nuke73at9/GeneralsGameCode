@@ -51,6 +51,9 @@
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "Common/BuildAssistant.h"
+#include "GameLogic/Damage.h"
+#include "GameLogic/Module/AIUpdate.h"
+#include "GameLogic/Weapon.h"
 
 namespace
 {
@@ -78,6 +81,11 @@ namespace
 	// -testBase: the structure being built (its construction runs over BASE_BUILD_FRAMES) and the one
 	// destroyed BASE_KILL_FRAMES in
 	std::vector<ObjectID> s_baseBuilding;
+	// -testSpawn: the objects to place, what to do with them, and what was made
+	Int s_spawnFrame = -1;
+	std::vector<std::string> s_spawnNames;
+	Bool s_spawnMove = FALSE, s_spawnFight = FALSE, s_spawnDamage = FALSE;
+	std::vector<ObjectID> s_spawned, s_spawnTargets;
 	ObjectID s_baseVictim = INVALID_ID;
 	Coord3D s_baseVictimPos;
 	const Int BASE_BUILD_FRAMES = 600;
@@ -343,6 +351,24 @@ void TiberiumTest::setFXFrame( Int frame, Int every ) { if ( frame >= 0 ) { s_fx
 void TiberiumTest::setFXLists( const char *lists ) { if ( lists != nullptr ) s_fxLists = split( lists, ';' ); }
 void TiberiumTest::setUnitsFrame( Int frame ) { if ( frame >= 0 ) { s_unitsFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setBaseFrame( Int frame ) { if ( frame >= 0 ) { s_baseFrame = frame; s_active = TRUE; } }
+void TiberiumTest::setSpawn( const char *spec )
+{
+	if ( spec == nullptr )
+		return;
+	std::vector<std::string> parts = split( spec, ';' );
+	if ( parts.size() < 2 )
+		return;
+	s_spawnFrame = atoi( parts[0].c_str() );
+	s_spawnNames = split( parts[1].c_str(), ',' );
+	if ( parts.size() > 2 )
+	{
+		s_spawnMove = parts[2].find( "move" ) != std::string::npos;
+		s_spawnFight = parts[2].find( "fight" ) != std::string::npos;
+		s_spawnDamage = parts[2].find( "damage" ) != std::string::npos;
+	}
+	if ( s_spawnFrame >= 0 && !s_spawnNames.empty() )
+		s_active = TRUE;
+}
 void TiberiumTest::setReveal( Bool reveal ) { s_reveal = reveal; if ( reveal ) s_active = TRUE; }
 void TiberiumTest::setCRCFrame( Int frame ) { if ( frame >= 0 ) { s_crcFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setQuitFrame( Int frame ) { if ( frame > 0 ) { s_quitFrame = frame; s_active = TRUE; } }
@@ -633,6 +659,101 @@ void TiberiumTest::update()
 			++made;
 		}
 		log( "frame %d: %d vehicles and buildings around %.0f %.0f", (int)s_frame, (int)made, center.x, center.y );
+	}
+
+	// Tiberium Project @feature -testSpawn: any objects (converted C&C4 units and structures) in a row
+	// before the view, for their art, animations and effects: optionally driving forward, shooting at
+	// a row of Zero Hour vehicles (neutral, attacked by order), and taken through their damage states to
+	// their death; this adds to the game
+	if ( s_spawnFrame >= 0 && s_frame == s_spawnFrame && TheThingFactory != nullptr && ThePlayerList != nullptr
+		&& ThePlayerList->getLocalPlayer() != nullptr && TheTacticalView != nullptr )
+	{
+		Team *team = ThePlayerList->getLocalPlayer()->getDefaultTeam();
+		const Coord3D center = TheTacticalView->getPosition();
+		const Int count = (Int)s_spawnNames.size();
+		const Real spacing = 70.0f;
+		for ( Int k = 0; k < count; ++k )
+		{
+			const ThingTemplate *tmpl = TheThingFactory->findTemplate( s_spawnNames[k].c_str() );
+			Object *obj = tmpl != nullptr && team != nullptr ? TheThingFactory->newObject( tmpl, team ) : nullptr;
+			if ( obj == nullptr )
+			{
+				log( "frame %d: no object %s", (int)s_frame, s_spawnNames[k].c_str() );
+				continue;
+			}
+			Coord3D p = center;
+			p.x += ( k - ( count - 1 ) * 0.5f ) * spacing;
+			p.y -= 25.0f;
+			p.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( p.x, p.y ) : 0.0f;
+			obj->setPosition( &p );
+			obj->setOrientation( PI * 0.5f );
+			s_spawned.push_back( obj->getID() );
+			if ( s_spawnFight )
+			{
+				// a target for each: one of Zero Hour's tanks, neutral, ahead
+				const ThingTemplate *tt = TheThingFactory->findTemplate( "ChinaTankBattleMaster" );
+				Player *neutral = ThePlayerList->getNeutralPlayer();
+				Object *target = tt != nullptr && neutral != nullptr ? TheThingFactory->newObject( tt, neutral->getDefaultTeam() ) : nullptr;
+				if ( target != nullptr )
+				{
+					Coord3D q = p;
+					q.y += 160.0f;
+					q.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( q.x, q.y ) : 0.0f;
+					target->setPosition( &q );
+					target->setOrientation( -PI * 0.5f );
+					s_spawnTargets.push_back( target->getID() );
+				}
+			}
+		}
+		log( "frame %d: %d objects spawned around %.0f %.0f", (int)s_frame, (int)s_spawned.size(), center.x, center.y );
+	}
+	if ( s_spawnFrame >= 0 && s_frame > s_spawnFrame && TheGameLogic != nullptr && !s_spawned.empty() )
+	{
+		const Int since = (Int)( s_frame - s_spawnFrame );
+		for ( size_t k = 0; k < s_spawned.size(); ++k )
+		{
+			Object *obj = TheGameLogic->findObjectByID( s_spawned[k] );
+			if ( obj == nullptr )
+				continue;
+			AIUpdateInterface *ai = obj->getAIUpdateInterface();
+			if ( since == 10 && ai != nullptr )
+			{
+				if ( s_spawnFight && k < s_spawnTargets.size() )
+				{
+					Object *target = TheGameLogic->findObjectByID( s_spawnTargets[k] );
+					if ( target != nullptr )
+						ai->aiForceAttackObject( target, NO_MAX_SHOTS_LIMIT, CMD_FROM_SCRIPT );
+				}
+				else if ( s_spawnMove )
+				{
+					Coord3D dest = *obj->getPosition();
+					dest.y += 200.0f;
+					ai->aiMoveToPosition( &dest, CMD_FROM_SCRIPT );
+				}
+			}
+			// down through the damage states: damaged, really damaged, then destroyed
+			BodyModuleInterface *body = obj->getBodyModule();
+			if ( since % 30 == 0 && body != nullptr )
+			{
+				// how each is doing, for runs nobody watches: where it is, its health, and its target's
+				const Coord3D *pos = obj->getPosition();
+				const Object *target = k < s_spawnTargets.size() ? TheGameLogic->findObjectByID( s_spawnTargets[k] ) : nullptr;
+				const BodyModuleInterface *tb = target != nullptr ? target->getBodyModule() : nullptr;
+				const Weapon *w = obj->getCurrentWeapon();
+				log( "frame %d: %s #%d at %.0f %.0f, health %.0f/%.0f, target health %.0f, shots fired %d", (int)s_frame,
+					obj->getTemplate()->getName().str(), (int)k, pos->x, pos->y, body->getHealth(), body->getMaxHealth(),
+					tb != nullptr ? tb->getHealth() : -1.0f, w != nullptr ? (int)w->getLastShotFrame() : -1 );
+			}
+			if ( s_spawnDamage && body != nullptr && ( since == 90 || since == 180 || since == 270 ) )
+			{
+				DamageInfo damage;
+				damage.in.m_damageType = DAMAGE_UNRESISTABLE;
+				damage.in.m_deathType = DEATH_NORMAL;
+				damage.in.m_sourceID = INVALID_ID;
+				damage.in.m_amount = since == 270 ? body->getMaxHealth() * 2.0f : body->getMaxHealth() * 0.3f;
+				obj->attemptDamage( &damage );
+			}
+		}
 	}
 
 	// Tiberium Project @feature America's core base around the view, in the states its art has: whole,
