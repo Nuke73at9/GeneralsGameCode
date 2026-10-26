@@ -2915,6 +2915,16 @@ static const char *const ParticleLightingNames[] =
 	"AUTO", "LIT", "UNLIT", nullptr
 };
 
+// Tiberium Project @feature geometry particles: ParticleGeometry, ParticleGeometryRotation
+static const char *const ParticleGeometryNames[] =
+{
+	"NONE", "BOTTOM", "CENTER", nullptr
+};
+static const char *const ParticleGeometryRotationNames[] =
+{
+	"OFF", "AROUND_VELOCITY", "IN_WORLD", nullptr
+};
+
 const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 {
 	{ "Priority",								INI::parseIndexList, ParticlePriorityNames, offsetof( ParticleSystemTemplate, m_priority ) },
@@ -3032,6 +3042,12 @@ const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 	{ "ExactKeyFrames",					INI::parseBool,					nullptr,	offsetof( ParticleSystemTemplate, m_exactKeyFrames ) },
 	// Tiberium Project @feature colours drawn twice as bright
 	{ "BrightColors",						INI::parseBool,					nullptr,	offsetof( ParticleSystemTemplate, m_brightColors ) },
+	// Tiberium Project @feature geometry particles: crossed quads along the velocity
+	{ "GeometryType",						INI::parseIndexList,		ParticleGeometryNames,	offsetof( ParticleSystemTemplate, m_geometry ) },
+	{ "GeometryRotation",				INI::parseIndexList,		ParticleGeometryRotationNames,	offsetof( ParticleSystemTemplate, m_geometryRotation ) },
+	{ "GeometryLength",					INI::parseGameClientRandomVariable,	nullptr,	offsetof( ParticleSystemTemplate, m_geometryLength ) },
+	{ "GeometryLengthRate",			INI::parseGameClientRandomVariable,	nullptr,	offsetof( ParticleSystemTemplate, m_geometryLengthRate ) },
+	{ "GeometryLengthDamping",	INI::parseGameClientRandomVariable,	nullptr,	offsetof( ParticleSystemTemplate, m_geometryLengthDamping ) },
 
 
 	{ nullptr,											nullptr,																					nullptr,		0 },
@@ -3133,6 +3149,30 @@ ParticleSystemTemplate::ParticleSystemTemplate( const AsciiString &name ) :
 	m_lighting = PARTICLE_LIGHTING_AUTO;
 	m_exactKeyFrames = FALSE;
 	m_brightColors = FALSE;
+	m_geometry = PARTICLE_GEOMETRY_NONE;
+	m_geometryRotation = PARTICLE_GEOMETRY_AROUND_VELOCITY;
+	m_geometryLength.setRange( 1.0f, 1.0f );
+	m_geometryLengthRate.setRange( 0.0f, 0.0f );
+	m_geometryLengthDamping.setRange( 1.0f, 1.0f );
+}
+
+// ------------------------------------------------------------------------------------------------
+// Tiberium Project @feature geometry particles: the length after ageFrames frames of adding the rate
+// and damping it (the size's own course, summed: start + rate * (1 - damping^age) / (1 - damping)),
+// each value picked within its range by the particle's personality (no state kept per particle)
+Real ParticleSystemTemplate::getGeometryLength( UnsignedInt personality, UnsignedInt ageFrames ) const
+{
+	UnsignedInt seed = personality * 2654435761u;
+	seed ^= seed >> 13;
+	const Real pick[3] = { (seed & 0x3FF) / 1023.0f, ((seed >> 10) & 0x3FF) / 1023.0f, ((seed >> 20) & 0x3FF) / 1023.0f };
+	const Real start = m_geometryLength.getMinimumValue() + (m_geometryLength.getMaximumValue() - m_geometryLength.getMinimumValue()) * pick[0];
+	const Real rate = m_geometryLengthRate.getMinimumValue() + (m_geometryLengthRate.getMaximumValue() - m_geometryLengthRate.getMinimumValue()) * pick[1];
+	const Real damping = m_geometryLengthDamping.getMinimumValue() + (m_geometryLengthDamping.getMaximumValue() - m_geometryLengthDamping.getMinimumValue()) * pick[2];
+	Real sum = (Real)ageFrames;
+	if (fabs(damping - 1.0f) > 0.0001f)
+		sum = (1.0f - (Real)pow(damping, (Real)ageFrames)) / (1.0f - damping);
+	const Real length = start + rate * sum;
+	return length > 0.0f ? length : 0.0f;
 }
 
 // ------------------------------------------------------------------------------------------------

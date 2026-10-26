@@ -136,6 +136,54 @@ VectorClass<Vector2>			VertexUV;		// vertex texture coords
 DX8IndexBufferClass			*Tris, *Quads;						// Index buffers.
 SortingIndexBufferClass		*SortingTris, *SortingQuads;	// Sorting index buffers.
 
+// Tiberium Project @feature quads already placed in the world (see the header), drawn with the
+// particles' index buffers: the world transform is the identity and the camera's view stays
+void PointGroupClass::Render_World_Quads(const Vector3* loc, const Vector4* diffuse, const Vector2* uv, int vertexCount,
+	const ShaderClass& shader, TextureClass* texture)
+{
+	vertexCount -= vertexCount % 4;
+	if (vertexCount <= 0 || Quads == nullptr)
+		return;
+
+	ShaderClass drawShader = shader;
+	drawShader.Set_Cull_Mode(ShaderClass::CULL_MODE_DISABLE);	// both faces of each quad
+	Matrix4x4 identity(true);
+	DX8Wrapper::Set_Transform(D3DTS_WORLD, identity);
+	DX8Wrapper::Set_Material(PointMaterial);
+	DX8Wrapper::Set_Shader(drawShader);
+	DX8Wrapper::Set_Texture(0, texture);
+
+	const bool sort = drawShader.Get_Dst_Blend_Func() != ShaderClass::DSTBLEND_ZERO &&
+		drawShader.Get_Alpha_Test() == ShaderClass::ALPHATEST_DISABLE && WW3D::Is_Sorting_Enabled();
+	IndexBufferClass* indexbuffer = sort ? static_cast<IndexBufferClass*>(SortingQuads) : static_cast<IndexBufferClass*>(Quads);
+
+	int current = 0;
+	while (current < vertexCount)
+	{
+		const int delta = MIN(vertexCount - current, MAX_VB_SIZE - MAX_VB_SIZE % 4);
+		DynamicVBAccessClass verts(sort ? BUFFER_TYPE_DYNAMIC_SORTING : BUFFER_TYPE_DYNAMIC_DX8, dynamic_fvf_type, delta);
+		{
+			DynamicVBAccessClass::WriteLockClass lock(&verts);
+			unsigned char* vb = (unsigned char*)lock.Get_Formatted_Vertex_Array();
+			const FVFInfoClass& fvf = verts.FVF_Info();
+			for (int i = current; i < current + delta; ++i)
+			{
+				*(Vector3*)(vb + fvf.Get_Location_Offset()) = loc[i];
+				*(unsigned int*)(vb + fvf.Get_Diffuse_Offset()) = DX8Wrapper::Convert_Color_Clamp(diffuse[i]);
+				*(Vector2*)(vb + fvf.Get_Tex_Offset(0)) = uv[i];
+				vb += fvf.Get_FVF_Size();
+			}
+		}
+		DX8Wrapper::Set_Index_Buffer(indexbuffer, 0);
+		DX8Wrapper::Set_Vertex_Buffer(verts);
+		if (sort)
+			SortingRendererClass::Insert_Triangles(0, delta / 2, 0, delta);
+		else
+			DX8Wrapper::Draw_Triangles(0, delta / 2, 0, delta);
+		current += delta;
+	}
+}
+
 /**************************************************************************
  * PointGroupClass::PointGroupClass -- PointGroupClass CTor.              *
  *                                                                        *

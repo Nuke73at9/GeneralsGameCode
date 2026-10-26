@@ -206,6 +206,12 @@ public:
 	static void				_Init();
 	static void				_Shutdown();
 
+	// Tiberium Project @feature quads already placed in the world (four corners each, in order around
+	// the quad), drawn as particles are: the point groups' quad index buffers, the given shader and
+	// texture, sorted with the other particles when they blend; geometry particles use it
+	static void				Render_World_Quads(const Vector3* loc, const Vector4* diffuse, const Vector2* uv, int vertexCount,
+								const ShaderClass& shader, TextureClass* texture);
+
 private:
 	static Vector3 _TriVertexLocationOrientationTable[256][3];
 	static Vector3 _QuadVertexLocationOrientationTable[256][4];

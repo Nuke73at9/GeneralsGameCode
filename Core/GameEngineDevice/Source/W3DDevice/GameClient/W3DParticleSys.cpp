@@ -35,8 +35,10 @@
 #include "W3DDevice/GameClient/W3DSmudge.h"
 #include "W3DDevice/GameClient/W3DSnow.h"
 #include "WW3D2/camera.h"
+#include "WW3D2/pointgr.h"
 #ifdef RTS_RENDERER_D3D9
 #include <math.h>
+#include <vector>
 #include "WW3D2/dx8wrapper.h"
 #include "WW3D2/sage2/sage2globals.h"	// Tiberium Project @feature lit smoke
 #include "WW3D2/sage2/sage2lighting.h"
@@ -319,6 +321,26 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 			continue;
 		}
 
+		// Tiberium Project @feature geometry particles (C&C4's muzzle flashes, sparks and flame blades):
+		// crossed quads along each particle's velocity instead of camera-facing sprites
+		if (sys->isUsingParticles() && sys->getTemplate() != nullptr
+			&& sys->getTemplate()->getGeometry() != ParticleSystemTemplate::PARTICLE_GEOMETRY_NONE)
+		{
+			flushParticleBatch(rinfo, pointCount);
+			Bool lit = FALSE;
+			Real factor[3] = { 1.0f, 1.0f, 1.0f };
+#ifdef RTS_RENDERER_D3D9
+			const Int geometryLighting = sys->getTemplate()->getLighting();
+			lit = litParticles && geometryLighting != ParticleSystemTemplate::PARTICLE_LIGHTING_UNLIT
+				&& (geometryLighting == ParticleSystemTemplate::PARTICLE_LIGHTING_LIT
+					|| sys->getShaderType() == ParticleSystemInfo::ALPHA || sys->getShaderType() == ParticleSystemInfo::ALPHA_TEST);
+			for (Int c = 0; c < 3; ++c)
+				factor[c] = sceneFactor[c];
+#endif
+			m_onScreenParticleCount += renderGeometryParticles(*sys, *sys->getTemplate(), lit, factor);
+			continue;
+		}
+
 		// TheSuperHackers @performance Ronin/Mauller 09/08/2026 Implement batched rendering for similar particles.
 		// Particles with the same properties will now be batched onto a single texture surface before being drawn.
 		// If a different particle type appears before the batch is filled, the previous batch will be drawn first.
@@ -565,6 +587,132 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 	{
 		((W3DSmudgeManager *)TheSmudgeManager)->render(rinfo);
 	}
+}
+
+// Tiberium Project @feature geometry particles. Each particle: two quads crossing along its axis
+// (its velocity, or turned in the world), one in the plane of the axis and its side, one in the plane
+// of the axis and its up; as long as the template's length course, as wide as the particle's size.
+// The texture's u runs along the axis (1 at the pivot, 0 at the far end), its v across, as C&C4's
+// GpuParticlePerpendicularBottom/Center.fx lay it out.
+UnsignedInt W3DParticleSystemManager::renderGeometryParticles(ParticleSystem& sys, const ParticleSystemTemplate& t, Bool lit, const Real sceneFactor[3])
+{
+	static std::vector<Vector3> s_loc;
+	static std::vector<Vector4> s_color;
+	static std::vector<Vector2> s_uv;
+	s_loc.clear();
+	s_color.clear();
+	s_uv.clear();
+
+	const UnsignedInt grid = textureGrid(sys);
+	const Bool bottom = t.getGeometry() == ParticleSystemTemplate::PARTICLE_GEOMETRY_BOTTOM;
+	const Int rotation = t.getGeometryRotation();
+	Real radiusSum = 0.0f;
+	UnsignedInt drawn = 0;
+	for (Particle* p = sys.getFirstParticle(); p; p = p->m_systemNext)
+	{
+		if (p->isCulled())
+			continue;
+		const Coord3D* pos = p->getPosition();
+		const Real width = p->getSize();
+		const Real length = t.getGeometryLength(p->getPersonality(), p->getElapsedFrames());
+		if (width <= 0.0f && length <= 0.0f)
+			continue;
+
+		// the particle's axis and the two directions across it
+		Vector3 axis(1.0f, 0.0f, 0.0f), side(0.0f, 1.0f, 0.0f), up(0.0f, 0.0f, 1.0f);
+		const Real angle = p->getAngle();
+		if (rotation == ParticleSystemTemplate::PARTICLE_GEOMETRY_AROUND_VELOCITY)
+		{
+			Vector3 v(p->m_vel.x, p->m_vel.y, p->m_vel.z);
+			if (v.Length2() > 1.0e-8f)
+			{
+				v.Normalize();
+				axis = v;
+				const Real flat = WWMath::Sqrt(v.X * v.X + v.Y * v.Y);
+				side = flat > 1.0e-4f ? Vector3(-v.Y / flat, v.X / flat, 0.0f) : Vector3(0.0f, 1.0f, 0.0f);
+				Vector3::Cross_Product(axis, side, &up);
+			}
+			const Real c = WWMath::Cos(angle), s = WWMath::Sin(angle);
+			const Vector3 turnedSide = side * c + up * s;
+			up = up * c - side * s;
+			side = turnedSide;
+		}
+		else if (rotation == ParticleSystemTemplate::PARTICLE_GEOMETRY_IN_WORLD)
+		{
+			const Real c = WWMath::Cos(angle), s = WWMath::Sin(angle);
+			axis.Set(c, s, 0.0f);
+			side.Set(-s, c, 0.0f);
+		}
+
+		const Vector3 at(pos->x, pos->y, pos->z);
+		const Vector3 nearEnd = bottom ? at : at - axis * (length * 0.5f);
+		const Vector3 farEnd = nearEnd + axis * length;
+		const Vector3 across[2] = { side * (width * 0.5f), up * (width * 0.5f) };
+
+		// the texture: the whole of it, or the particle's frame of the sheet
+		Real u0 = 0.0f, v0 = 0.0f, cell = 1.0f;
+		if (grid > 1)
+		{
+			const UnsignedInt frame = particleFrame(t, *p, grid);
+			cell = 1.0f / (Real)grid;
+			u0 = (Real)(frame % grid) * cell;
+			v0 = (Real)(frame / grid) * cell;
+		}
+
+		const RGBColor* color = p->getColor();
+		Vector4 rgba(color->red, color->green, color->blue, p->getAlpha());
+		if (lit)
+		{
+			rgba.X *= sceneFactor[0];
+			rgba.Y *= sceneFactor[1];
+			rgba.Z *= sceneFactor[2];
+		}
+		for (Int q = 0; q < 2; ++q)
+		{
+			s_loc.push_back(farEnd + across[q]);
+			s_loc.push_back(farEnd - across[q]);
+			s_loc.push_back(nearEnd - across[q]);
+			s_loc.push_back(nearEnd + across[q]);
+			s_uv.push_back(Vector2(u0, v0));
+			s_uv.push_back(Vector2(u0, v0 + cell));
+			s_uv.push_back(Vector2(u0 + cell, v0 + cell));
+			s_uv.push_back(Vector2(u0 + cell, v0));
+			for (Int k = 0; k < 4; ++k)
+				s_color.push_back(rgba);
+		}
+		radiusSum += 0.5f * (width > length ? width : length);
+		++drawn;
+	}
+	if (drawn == 0)
+		return 0;
+
+	RefCountPtr<TextureClass> texture;
+	texture.Assign_No_Add_Ref(W3DDisplay::m_assetManager->Get_Texture(sys.getParticleTypeName().str()));
+	const Bool bright = isBright(sys);
+	ShaderClass shader = ShaderClass::_PresetAdditiveSpriteShader;
+	switch (sys.getShaderType())
+	{
+		case ParticleSystemInfo::ALPHA:
+			shader = bright ? brightShader(ShaderClass::_PresetAlphaSpriteShader) : ShaderClass::_PresetAlphaSpriteShader;
+			break;
+		case ParticleSystemInfo::ALPHA_TEST:
+			shader = bright ? brightShader(ShaderClass::_PresetATestSpriteShader) : ShaderClass::_PresetATestSpriteShader;
+			break;
+		case ParticleSystemInfo::MULTIPLY:
+			shader = ShaderClass::_PresetMultiplicativeSpriteShader;
+			break;
+		default:
+			shader = bright ? brightShader(ShaderClass::_PresetAdditiveSpriteShader) : ShaderClass::_PresetAdditiveSpriteShader;
+			break;
+	}
+#ifdef RTS_RENDERER_D3D9
+	DX8Wrapper::Set_Soft_Particle(true, radiusSum / (Real)drawn);
+#endif
+	PointGroupClass::Render_World_Quads(&s_loc[0], &s_color[0], &s_uv[0], (int)s_loc.size(), shader, texture.Peek());
+#ifdef RTS_RENDERER_D3D9
+	DX8Wrapper::Set_Soft_Particle(false);
+#endif
+	return drawn;
 }
 
 Bool W3DParticleSystemManager::finishedBatch(const ParticleSystem& system, const RefCountPtr<TextureClass>& texture)

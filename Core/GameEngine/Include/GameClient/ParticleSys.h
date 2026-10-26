@@ -627,6 +627,29 @@ public:
 	/// sheets; a colour stays within white otherwise). Drawing only.
 	Bool isBrightColors() const { return m_brightColors; }
 
+	/// Tiberium Project @feature geometry particles (C&C4 and Red Alert 3's perpendicular GPU particles:
+	/// muzzle flashes, sparks, blade-like flames): each particle is two crossed quads, along its
+	/// velocity (or turned in the world, or as they lie), its pivot at the bottom (the quads grow
+	/// forward from it) or in the middle. The particle's size is the quads' width; their length runs
+	/// its own course (GeometryLength, GeometryLengthRate, GeometryLengthDamping, per frame as the
+	/// size's). The texture runs along the length, its right edge at the pivot. Drawing only.
+	enum ParticleGeometry
+	{
+		PARTICLE_GEOMETRY_NONE = 0,		///< camera-facing or ground-aligned as usual
+		PARTICLE_GEOMETRY_BOTTOM,		///< two crossed quads from the particle forward
+		PARTICLE_GEOMETRY_CENTER		///< two crossed quads around the particle
+	};
+	enum ParticleGeometryRotation
+	{
+		PARTICLE_GEOMETRY_ROTATION_OFF = 0,	///< along the world's X
+		PARTICLE_GEOMETRY_AROUND_VELOCITY,	///< along the velocity, turned about it by the particle's angle
+		PARTICLE_GEOMETRY_IN_WORLD			///< turned about the world's Z by the particle's angle
+	};
+	Int getGeometry() const { return m_geometry; }
+	Int getGeometryRotation() const { return m_geometryRotation; }
+	/// the quads' length for a particle (its personality picks within the ranges) at an age in frames
+	Real getGeometryLength(UnsignedInt personality, UnsignedInt ageFrames) const;
+
 protected:
 	friend class ParticleSystemManager;					///< @todo remove this friendship
 	friend class ParticleSystem;								///< @todo remove this friendship
@@ -656,6 +679,11 @@ protected:
 	Int m_lighting;						///< ParticleLighting (Lighting; on the template only)
 	Bool m_exactKeyFrames;				///< ExactKeyFrames (on the template only)
 	Bool m_brightColors;				///< BrightColors (on the template only)
+	Int m_geometry;						///< ParticleGeometry (GeometryType; on the template only)
+	Int m_geometryRotation;				///< ParticleGeometryRotation (GeometryRotation)
+	GameClientRandomVariable m_geometryLength;			///< GeometryLength: the quads' length at the start
+	GameClientRandomVariable m_geometryLengthRate;		///< GeometryLengthRate: added to it each frame
+	GameClientRandomVariable m_geometryLengthDamping;	///< GeometryLengthDamping: the rate's factor each frame
 
 	// template attribute data inherited from ParticleSystemInfo class
 };

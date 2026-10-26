@@ -53,6 +53,9 @@ private:
 	Bool finishedBatch(const ParticleSystem& system, const RefCountPtr<TextureClass>& texture);
 	void initializeBatch(const ParticleSystem& system, const RefCountPtr<TextureClass>& texture);
 	void flushParticleBatch(RenderInfoClass& rinfo, UnsignedInt& pointCount);
+	/// Tiberium Project @feature geometry particles: the system's particles as crossed quads (see
+	/// ParticleSystemTemplate::ParticleGeometry), each colour times its light factor; returns how many
+	UnsignedInt renderGeometryParticles(ParticleSystem& sys, const ParticleSystemTemplate& t, Bool lit, const Real sceneFactor[3]);
 
 	enum { MAX_POINTS_PER_GROUP = 512 };
 
