@@ -469,13 +469,47 @@ bool Sage2EffectClass::Load(IDirect3DDevice9* device, const void* dataIn, size_t
 	}
 
 	// shaders
+	std::vector<size_t> references;
 	for (size_t i = 0; i < m_objects.size(); ++i)
 	{
 		Object& o = m_objects[i];
 		if ((o.type == TYPE_VERTEXSHADER || o.type == TYPE_PIXELSHADER) && o.bytes.size() >= 8 && o.selector == nullptr)
 		{
+			// Tiberium Project @bugfix a pass may name an element of a shader array instead of holding the
+			// bytecode ("PixelShader = (PS_Array[0]);" is stored as the text "PS_Array[0]"); it is resolved
+			// once the shaders it names are made
+			const unsigned version = U32(&o.bytes[0]) & 0xFFFF0000u;
+			if (version != 0xFFFE0000u && version != 0xFFFF0000u)
+			{
+				references.push_back(i);
+				continue;
+			}
 			if (!Parse_Shader(device, o, (unsigned)i))
 				return false;
+		}
+	}
+	for (size_t r = 0; r < references.size(); ++r)
+	{
+		Object& o = m_objects[references[r]];
+		const std::string text((const char*)&o.bytes[0], strnlen((const char*)&o.bytes[0], o.bytes.size()));
+		std::string name = text;
+		int element = 0;
+		const size_t bracket = text.find('[');
+		if (bracket != std::string::npos)
+		{
+			name = text.substr(0, bracket);
+			element = atoi(text.c_str() + bracket + 1);
+		}
+		const int param = Find_Param(name.c_str());
+		if (param >= 0 && element >= 0 && (size_t)element < m_params[param].objects.size()
+			&& m_params[param].objects[element] < m_objects.size())
+			o.shader = m_objects[m_params[param].objects[element]].shader;
+		if (o.shader < 0)
+		{
+			char buf[160];
+			snprintf(buf, sizeof(buf), "%s: shader object %u names '%s', which is not a shader", m_name.c_str(), (unsigned)references[r], text.c_str());
+			m_error = buf;
+			return false;
 		}
 	}
 	return true;

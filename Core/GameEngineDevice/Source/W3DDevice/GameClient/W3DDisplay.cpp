@@ -1244,6 +1244,35 @@ void W3DDisplay::init()
 		init2DScene();
 		init3DScene();
 		W3DShaderManager::init();
+#ifdef RTS_RENDERER_D3D9
+		{
+			// Tiberium Project @feature Options.ini Sage2EffectCheck = yes: every compiled effect the game and
+			// its mods carry (Art\Shaders\*.fxo) loaded at start, each result in Sage2.log, a count at the
+			// end; a check of the effect reader against the whole of C&C4's library, not only the effects a
+			// game happens to draw with
+			OptionPreferences prefs;
+			if (prefs.getBool("Sage2EffectCheck", FALSE) && TheFileSystem != nullptr)
+			{
+				FilenameList files;
+				TheFileSystem->getFileListInDirectory("Art\\Shaders\\", "*.fxo", files, FALSE);
+				Int loaded = 0, failed = 0;
+				for (FilenameList::const_iterator it = files.begin(); it != files.end(); ++it)
+				{
+					AsciiString name = *it;
+					const char *base = name.reverseFind('\\');
+					base = base != nullptr ? base + 1 : name.str();
+					AsciiString stem = base;
+					if (stem.getLength() > 4)
+						stem.truncateBy(4);	// .fxo
+					if (Sage2MaterialClass::Get_Effect(stem.str()) != nullptr)
+						++loaded;
+					else
+						++failed;
+				}
+				Sage2_Log("effect check: %d of %d effects loaded, %d failed (see above)", loaded, loaded + failed, failed);
+			}
+		}
+#endif
 
 		// Create and initialize the debug display
 		m_nativeDebugDisplay = NEW W3DDebugDisplay();
