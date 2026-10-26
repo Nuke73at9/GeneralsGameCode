@@ -225,6 +225,8 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "HistoricBonusWeapon",			INI::parseWeaponTemplate,								nullptr,							offsetof(WeaponTemplate, m_historicBonusWeapon) },
 	{ "LeechRangeWeapon",					INI::parseBool,													nullptr,							offsetof(WeaponTemplate, m_leechRangeWeapon) },
 	{ "ScatterTarget",						WeaponTemplate::parseScatterTarget,			nullptr,							0 },
+	{ "ScatterTargetOrdered",				INI::parseBool,													nullptr,							offsetof(WeaponTemplate, m_scatterTargetsOrdered) },	// Tiberium Project
+	{ "ScatterTargetAligned",				INI::parseBool,													nullptr,							offsetof(WeaponTemplate, m_scatterTargetsAligned) },	// Tiberium Project
 	{ "CapableOfFollowingWaypoints", INI::parseBool,											nullptr,							offsetof(WeaponTemplate, m_capableOfFollowingWaypoint) },
 	{ "ShowsAmmoPips",						INI::parseBool,													nullptr,							offsetof(WeaponTemplate, m_isShowsAmmoPips) },
 	{ "AllowAttackGarrisonedBldgs", INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_allowAttackGarrisonedBldgs) },
@@ -257,6 +259,8 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_aimDelta											= 0.0f;
 	m_scatterRadius									= 0.0f;
 	m_scatterTargetScalar						= 0.0f;
+	m_scatterTargetsOrdered					= FALSE;
+	m_scatterTargetsAligned					= FALSE;
 	m_damageType										= DAMAGE_EXPLOSION;
 	m_deathType											= DEATH_NORMAL;
 	m_weaponSpeed										= 999999.0f;	// effectively instant
@@ -2527,7 +2531,10 @@ Bool Weapon::privateFireWeapon(
 				victimObj = nullptr;
 			}
 			Coord3D targetPos = *victimPos; // need to copy, as this pointer is actually inside somebody potentially
-			Int randomPick = GameLogicRandomValue( 0, m_scatterTargetsUnused.size() - 1 );
+			// Tiberium Project @feature ScatterTargetOrdered: the targets in the order listed (C&C4's weapon
+			// sweeps, a barrage walked across the target), else one at random as before
+			const Bool ordered = m_template->isScatterTargetsOrdered();
+			Int randomPick = ordered ? 0 : GameLogicRandomValue( 0, m_scatterTargetsUnused.size() - 1 );
 			Int targetIndex = m_scatterTargetsUnused[randomPick];
 
 			Real scatterTargetScalar = getScatterTargetScalar();// essentially a radius, but operates only on this scatterTarget table
@@ -2536,14 +2543,44 @@ Bool Weapon::privateFireWeapon(
 			scatterOffset.x *= scatterTargetScalar;
 			scatterOffset.y *= scatterTargetScalar;
 
+			if (m_template->isScatterTargetsAligned())
+			{
+				// Tiberium Project @feature ScatterTargetAligned: x along the line from the shooter to the
+				// target, y across it (to the left), so the pattern turns with the shot
+				const Coord3D* sourcePos = sourceObj->getPosition();
+				Real dx = targetPos.x - sourcePos->x;
+				Real dy = targetPos.y - sourcePos->y;
+				const Real length = WWMath::Sqrt(dx * dx + dy * dy);
+				if (length > 0.01f)
+				{
+					dx /= length;
+					dy /= length;
+				}
+				else
+				{
+					dx = 1.0f;
+					dy = 0.0f;
+				}
+				const Coord2D along = scatterOffset;
+				scatterOffset.x = along.x * dx - along.y * dy;
+				scatterOffset.y = along.x * dy + along.y * dx;
+			}
+
 			targetPos.x += scatterOffset.x;
 			targetPos.y += scatterOffset.y;
 
 			targetPos.z = TheTerrainLogic->getGroundHeight(targetPos.x, targetPos.y);
 
-			// To erase from a vector, put the last on the one you used and pop the back.
-			m_scatterTargetsUnused[randomPick] = m_scatterTargetsUnused.back();
-			m_scatterTargetsUnused.pop_back();
+			if (ordered)
+			{
+				m_scatterTargetsUnused.erase( m_scatterTargetsUnused.begin() );
+			}
+			else
+			{
+				// To erase from a vector, put the last on the one you used and pop the back.
+				m_scatterTargetsUnused[randomPick] = m_scatterTargetsUnused.back();
+				m_scatterTargetsUnused.pop_back();
+			}
 			m_template->fireWeaponTemplate(sourceObj, m_wslot, m_curBarrel, victimObj, &targetPos, bonus, isProjectileDetonation, ignoreRanges, this, projectileID);
 		}
 		else

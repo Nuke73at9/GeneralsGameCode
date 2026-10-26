@@ -424,6 +424,8 @@ public:
 	Real getAimDelta() const { return m_aimDelta; }
 	Real getScatterRadius() const { return m_scatterRadius; }
 	Real getScatterTargetScalar() const { return m_scatterTargetScalar; }
+	Bool isScatterTargetsOrdered() const { return m_scatterTargetsOrdered; }	///< Tiberium Project
+	Bool isScatterTargetsAligned() const { return m_scatterTargetsAligned; }	///< Tiberium Project
 	const ThingTemplate* getProjectileTemplate() const { return m_projectileTmpl; }
 	Bool getDamageDealtAtSelfPosition() const { return m_damageDealtAtSelfPosition; }
 	Int getAffectsMask() const { return m_affectsMask; }
@@ -499,6 +501,8 @@ private:
 	Real m_scatterRadius;										///< Radius of area actual fire point will be in, default is zero for no deviation
 	Real m_scatterTargetScalar;							///< Radius of area covered by the coordinates in the scatterTarget table
 	std::vector<Coord2D> m_scatterTargets;	///< instead of pure randomness, this is the list of places I will randomly choose from to attack
+	Bool m_scatterTargetsOrdered;					///< Tiberium Project @feature the scatter targets in the order listed (a sweep), not at random
+	Bool m_scatterTargetsAligned;					///< Tiberium Project @feature a scatter target's x runs along the line of fire, its y across it
 	DamageType m_damageType;								///< damage type enum
 	DeathType m_deathType;									///< death type enum
 	Real m_weaponSpeed;											///< speed of damage travel, in dist/frame
