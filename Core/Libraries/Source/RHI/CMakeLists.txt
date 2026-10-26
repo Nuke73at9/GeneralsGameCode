@@ -40,10 +40,18 @@ target_link_libraries(core_rhi PRIVATE ${CMAKE_DL_LIBS})
 # The headless self-test: raster, compute, ray queries and frames in flight on any Vulkan 1.3
 # device, lavapipe included. Exit code 77: no device (skipped). The shaders are precompiled SPIR-V
 # (tests/spirv, rebuilt by scripts/tooling/rhi/build_spirv.py from tests/shaders).
+# Built on its own (ninja rhi_selftest), not with the game, unless the tests are: the game's build
+# needs none of it.
 add_executable(rhi_selftest tests/rhi_selftest.cpp)
-target_include_directories(rhi_selftest PRIVATE tests)
+# (it includes the device's loader header, which needs the Vulkan headers too)
+target_include_directories(rhi_selftest PRIVATE tests "${RHI_VULKAN_INCLUDE_DIR}")
 target_link_libraries(rhi_selftest PRIVATE core_rhi)
+if(WIN32)
+    target_compile_definitions(rhi_selftest PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+endif()
 if(BUILD_TESTING)
     add_test(NAME rhi_selftest COMMAND rhi_selftest)
     set_tests_properties(rhi_selftest PROPERTIES SKIP_RETURN_CODE 77)
+else()
+    set_target_properties(rhi_selftest PROPERTIES EXCLUDE_FROM_ALL TRUE)
 endif()
