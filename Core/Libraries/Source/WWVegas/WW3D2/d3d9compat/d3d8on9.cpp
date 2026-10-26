@@ -1400,6 +1400,7 @@ HRESULT D3D8On9Device::CreateVertexShader(const DWORD* declaration, const DWORD*
 
 	// Direct3D 8 declaration tokens -> Direct3D 9 vertex elements
 	std::vector<D3DVERTEXELEMENT9> elements;
+	std::vector<DWORD> inputs;	// Tiberium Project @bugfix the shader's input registers, for its dcl instructions
 	WORD stream = 0, offset = 0;
 	for (const DWORD* t = declaration; *t != D3DVSD_END(); ++t)
 	{
@@ -1425,6 +1426,7 @@ HRESULT D3D8On9Device::CreateVertexShader(const DWORD* declaration, const DWORD*
 			e.Method = D3DDECLMETHOD_DEFAULT;
 			registerUsage(token & 0x1F, &e.Usage, &e.UsageIndex);
 			elements.push_back(e);
+			inputs.push_back(token & 0x1F);
 			offset += (WORD)declSize(type8);
 		}
 		else if (kind == D3DVSD_TOKEN_CONSTMEM)
@@ -1438,10 +1440,40 @@ HRESULT D3D8On9Device::CreateVertexShader(const DWORD* declaration, const DWORD*
 	D3DVERTEXELEMENT9 end = D3DDECL_END();
 	elements.push_back(end);
 
+	// Tiberium Project @bugfix Direct3D 8's vertex shaders name their inputs by register alone; Direct3D 9
+	// wants each declared (dcl_usage vN) before the first instruction. Without them DXVK reads the
+	// inputs as zero (the trees drew nothing on the Linux rig) and Windows' runtime may refuse the
+	// shader. The usages are the ones the declaration above gives each register.
+	std::vector<DWORD> code;
+	if (function != nullptr && (function[0] & 0xFFFF0000) == 0xFFFE0000 && ((function[0] >> 8) & 0xFF) == 1)
+	{
+		size_t first = 1;
+		while ((function[first] & 0xFFFF) == 0xFFFE)	// comments
+			first += 1 + (function[first] >> 16);
+		if ((function[first] & 0xFFFF) != D3DSIO_DCL)
+		{
+			code.push_back(function[0]);
+			for (size_t i = 0; i < inputs.size(); ++i)
+			{
+				BYTE usage = 0, index = 0;
+				registerUsage(inputs[i], &usage, &index);
+				code.push_back(D3DSIO_DCL);
+				code.push_back(0x80000000u | usage | ((DWORD)index << 16));
+				code.push_back(0x80000000u | (D3DSPR_INPUT << D3DSP_REGTYPE_SHIFT) | D3DSP_WRITEMASK_ALL | inputs[i]);
+			}
+			for (const DWORD* t = function + 1; ; ++t)
+			{
+				code.push_back(*t);
+				if (*t == D3DVS_END())
+					break;
+			}
+		}
+	}
+
 	VertexShader vs = { nullptr, nullptr };
 	HRESULT hr = m_device->CreateVertexDeclaration(&elements[0], &vs.decl);
 	if (SUCCEEDED(hr) && function != nullptr)
-		hr = m_device->CreateVertexShader(function, &vs.shader);	// vs_1_1 bytecode is valid in Direct3D 9
+		hr = m_device->CreateVertexShader(code.empty() ? function : &code[0], &vs.shader);	// vs_1_1 bytecode is valid in Direct3D 9
 	if (FAILED(hr))
 	{
 		if (vs.decl) vs.decl->Release();
