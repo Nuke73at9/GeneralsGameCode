@@ -171,6 +171,11 @@ const char* const ModelConditionFlags::s_bitNameList[] =
 	"USER_2",
 
 	"DISGUISED",
+	"DEATH_1",	// Tiberium Project
+	"DEATH_2",
+	"DEATH_3",
+	"DEATH_4",
+
 
 	nullptr
 };

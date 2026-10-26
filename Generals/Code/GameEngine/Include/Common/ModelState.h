@@ -203,6 +203,13 @@ enum ModelConditionFlagType CPP_11(: Int)
 
 	MODELCONDITION_PREORDER,
 
+
+	// Tiberium Project @feature SAGE 2's death variants: which death a slow death plays (C&C4 and
+	// Red Alert 3 pick their death animations by these, set by the death that was chosen)
+	MODELCONDITION_DEATH_1,
+	MODELCONDITION_DEATH_2,
+	MODELCONDITION_DEATH_3,
+	MODELCONDITION_DEATH_4,
 //
 // Note: these values are saved in save files, so you MUST NOT REMOVE OR CHANGE
 // existing values!

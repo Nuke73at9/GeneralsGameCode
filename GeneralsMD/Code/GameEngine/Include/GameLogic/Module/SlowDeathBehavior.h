@@ -33,6 +33,7 @@
 #include "GameLogic/Module/BehaviorModule.h"
 #include "GameLogic/Module/DieModule.h"
 #include "GameLogic/Module/UpdateModule.h"
+#include "Common/ModelState.h"	// Tiberium Project: DeathFlags
 
 class FXList;
 class ObjectCreationList;
@@ -87,6 +88,7 @@ public:
 	Real							m_flingForceVariance;
 	Real							m_flingPitch;
 	Real							m_flingPitchVariance;
+	ModelConditionFlags	m_deathFlags;			///< Tiberium Project: model conditions set when this death is chosen (DEATH_1 ...)
 
 	enum
 	{

@@ -193,6 +193,7 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "FireFX",											parseAllVetLevelsFXList,							nullptr,							offsetof(WeaponTemplate, m_fireFXs) },
 	{ "ProjectileDetonationFX",			parseAllVetLevelsFXList,							nullptr,							offsetof(WeaponTemplate, m_projectileDetonateFXs) },
 	{ "FireOCL",										parseAllVetLevelsAsciiString,					nullptr,							offsetof(WeaponTemplate, m_fireOCLNames) },
+	{ "TargetOCL",									INI::parseAsciiString,								nullptr,							offsetof(WeaponTemplate, m_targetOCLName) },	// Tiberium Project
 	{ "ProjectileDetonationOCL",		parseAllVetLevelsAsciiString,					nullptr,							offsetof(WeaponTemplate, m_projectileDetonationOCLNames) },
 	{ "ProjectileExhaust",					parseAllVetLevelsPSys,								nullptr,							offsetof(WeaponTemplate, m_projectileExhausts) },
 	{ "VeterancyFireFX",										parsePerVetLevelFXList,				nullptr,							offsetof(WeaponTemplate, m_fireFXs) },
@@ -277,6 +278,7 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_radiusDamageAngle							= PI;	// PI each way, so full circle
 	m_projectileName.clear();					// no projectile
 	m_projectileTmpl								= nullptr;
+	m_targetOCL										= nullptr;	// Tiberium Project
 	for (Int i = LEVEL_FIRST; i <= LEVEL_LAST; ++i)
 	{
 		m_fireOCLNames[i].clear();
@@ -457,6 +459,11 @@ void WeaponTemplate::postProcessLoad()
 		}
 		m_projectileDetonationOCLNames[i].clear();
 	}
+
+	// Tiberium Project @feature TargetOCL: an OCL made where the weapon's damage lands (C&C4's weapon
+	// OCL nugget: the fire a flamethrower leaves, an ion cannon called down on its target)
+	m_targetOCL = m_targetOCLName.isEmpty() ? nullptr : TheObjectCreationListStore->findObjectCreationList(m_targetOCLName.str());
+	DEBUG_ASSERTCRASH(m_targetOCLName.isEmpty() || m_targetOCL, ("OCL %s not found in a weapon!", m_targetOCLName.str()));
 
 }
 
@@ -1362,6 +1369,19 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 	if (primaryVictim)
 	{
 		pos = primaryVictim->getPosition();
+	}
+
+	// Tiberium Project @feature TargetOCL: made where the damage lands, by the weapon's owner
+	if (m_targetOCL != nullptr && source != nullptr && pos != nullptr)
+	{
+		const Object* owner = source;
+		if (source->isKindOf(KINDOF_PROJECTILE) && source->getProducerID() != INVALID_ID)
+		{
+			const Object* launcher = TheGameLogic->findObjectByID(source->getProducerID());
+			if (launcher != nullptr)
+				owner = launcher;
+		}
+		ObjectCreationList::create(m_targetOCL, owner, pos, pos, owner->getOrientation());
 	}
 
 	DamageType damageType = getDamageType();

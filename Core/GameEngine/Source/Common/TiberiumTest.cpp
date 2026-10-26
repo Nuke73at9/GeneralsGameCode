@@ -84,7 +84,7 @@ namespace
 	// -testSpawn: the objects to place (a row, or rows of six), what to do with them, and what was made
 	Int s_spawnFrame = -1;
 	std::vector<std::string> s_spawnNames;
-	Bool s_spawnMove = FALSE, s_spawnFight = FALSE, s_spawnDamage = FALSE;
+	Bool s_spawnMove = FALSE, s_spawnFight = FALSE, s_spawnDamage = FALSE, s_spawnExplode = FALSE;
 	std::vector<ObjectID> s_spawned, s_spawnTargets;
 	ObjectID s_baseVictim = INVALID_ID;
 	Coord3D s_baseVictimPos;
@@ -365,6 +365,7 @@ void TiberiumTest::setSpawn( const char *spec )
 		s_spawnMove = parts[2].find( "move" ) != std::string::npos;
 		s_spawnFight = parts[2].find( "fight" ) != std::string::npos;
 		s_spawnDamage = parts[2].find( "damage" ) != std::string::npos;
+		s_spawnExplode = parts[2].find( "explode" ) != std::string::npos;	// the killing blow blows them up (their exploded death)
 	}
 	if ( s_spawnFrame >= 0 && !s_spawnNames.empty() )
 		s_active = TRUE;
@@ -784,7 +785,7 @@ void TiberiumTest::update()
 			{
 				DamageInfo damage;
 				damage.in.m_damageType = DAMAGE_UNRESISTABLE;
-				damage.in.m_deathType = DEATH_NORMAL;
+				damage.in.m_deathType = ( since == 270 && s_spawnExplode ) ? DEATH_EXPLODED : DEATH_NORMAL;
 				damage.in.m_sourceID = INVALID_ID;
 				damage.in.m_amount = since == 270 ? body->getMaxHealth() * 2.0f : body->getMaxHealth() * 0.3f;
 				obj->attemptDamage( &damage );

@@ -137,6 +137,7 @@ static void parseWeapon( INI* ini, void *instance, void * /*store*/, const void*
 		{ "OCL",															parseOCL,													nullptr, 0 },
 		{ "Weapon",														parseWeapon,											nullptr, 0 },
 		{ "FlingForce",												INI::parseReal,										nullptr, offsetof( SlowDeathBehaviorModuleData, m_flingForce) },
+		{ "DeathFlags",												ModelConditionFlags::parseFromINI,	nullptr, offsetof( SlowDeathBehaviorModuleData, m_deathFlags ) },	// Tiberium Project
 		{ "FlingForceVariance",								INI::parseReal,										nullptr, offsetof( SlowDeathBehaviorModuleData, m_flingForceVariance) },
 		{ "FlingPitch",												INI::parseAngleReal,							nullptr, offsetof( SlowDeathBehaviorModuleData, m_flingPitch) },
 		{ "FlingPitchVariance",								INI::parseAngleReal,							nullptr, offsetof( SlowDeathBehaviorModuleData, m_flingPitchVariance) },
@@ -262,6 +263,10 @@ void SlowDeathBehavior::beginSlowDeath(const DamageInfo *damageInfo)
 		}
 
 		UnsignedInt now = TheGameLogic->getFrame();
+
+		// Tiberium Project @feature the chosen death's own animation (SAGE 2's DEATH_1 ... conditions)
+		if (d->m_deathFlags.any())
+			obj->setModelConditionFlags(d->m_deathFlags);
 
 		if (d->m_flingForce > 0)
 		{

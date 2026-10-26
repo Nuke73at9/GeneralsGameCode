@@ -145,6 +145,11 @@ const char* const ModelConditionFlags::s_bitNameList[] =
 	"USING_WEAPON_C",
 
 	"PREORDER",
+	"DEATH_1",	// Tiberium Project
+	"DEATH_2",
+	"DEATH_3",
+	"DEATH_4",
+
 
 	nullptr
 };

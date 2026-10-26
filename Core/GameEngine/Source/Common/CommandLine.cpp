@@ -932,7 +932,7 @@ Int parseTestUnits(char *args[], int num)
 	return 2;
 }
 
-// Tiberium Project @feature -testSpawn "frame;Object,Object...;modes": objects to look at (move, fight, damage)
+// Tiberium Project @feature -testSpawn "frame;Object,Object...;modes": objects to look at (move, fight, damage, explode)
 Int parseTestSpawn(char *args[], int num)
 {
 	if (num > 1)
