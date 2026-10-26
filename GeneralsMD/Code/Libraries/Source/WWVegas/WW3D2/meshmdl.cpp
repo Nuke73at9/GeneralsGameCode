@@ -48,6 +48,9 @@
 #include "camera.h"
 #include "dx8renderer.h"
 #include "WWLib/hashtemplate.h"
+#ifdef RTS_RENDERER_D3D9
+#include "sage2/sage2raytracing.h"	// Tiberium Project @feature ray-traced scene
+#endif
 
 
 /*
@@ -103,6 +106,9 @@ MeshModelClass::MeshModelClass(const MeshModelClass & that) :
 
 MeshModelClass::~MeshModelClass()
 {
+#ifdef RTS_RENDERER_D3D9
+	Sage2RayTracingClass::Forget_Model(this);	// Tiberium Project @feature its ray-traced structure goes with it
+#endif
 
 	Reset(0,0,0);
 	REF_PTR_RELEASE(MatInfo);

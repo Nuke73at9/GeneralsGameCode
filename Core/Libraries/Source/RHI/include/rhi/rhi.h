@@ -287,11 +287,26 @@ struct RenderPassDesc
 	uint8_t clearStencil = 0;
 };
 
+/// An image of a Vulkan device shared with another renderer (DXVK's, through its Direct3D 9
+/// interop), to read or write with this device's commands. It stays the other renderer's: this
+/// device makes only views of it, and puts it back in its layout at the end of each frame.
+struct ExternalTexture
+{
+	uint64_t image = 0;			///< VkImage
+	uint32_t vkFormat = 0;		///< the VkFormat it was made with
+	uint32_t width = 0;
+	uint32_t height = 0;
+	uint32_t usage = 0;			///< TextureUsage bits it was made with (TEXTURE_SAMPLED, TEXTURE_STORAGE ...)
+	uint32_t layout = 0;		///< the VkImageLayout it is in, and is returned to
+	const char* name = nullptr;
+};
+
 struct Capabilities
 {
 	char deviceName[256] = {};
 	bool rayQuery = false;			///< acceleration structures and ray queries from any shader
 	bool software = false;			///< a CPU implementation (lavapipe, WARP): correct, slow
+	bool external = false;			///< on another renderer's device (Create_Vulkan_Device_External)
 	uint32_t maxTextureSize = 0;
 	uint64_t uniformAlignment = 256;
 };
@@ -353,6 +368,11 @@ public:
 	/// Sized for the geometry (bottom level) or the instance count (top level); built by a command list
 	virtual AccelStruct* Create_Bottom_Level(const TriangleGeometry* geometry, uint32_t count) = 0;
 	virtual AccelStruct* Create_Top_Level(uint32_t maxInstances) = 0;
+	/// Another renderer's image, on a device made with Create_Vulkan_Device_External
+	virtual Texture* Import_Texture(const ExternalTexture& texture) = 0;
+	/// The layout (VkImageLayout) the other renderer has the image in now, if it changed: set
+	/// between frames, before the image is used
+	virtual void Set_External_Layout(Texture* texture, uint32_t layout) = 0;
 
 	/// Released when the GPU is done with the frames that used them
 	virtual void Destroy(Buffer* buffer) = 0;
@@ -386,5 +406,30 @@ struct VulkanOptions
 /// A Vulkan 1.3 device, headless (presentation comes with the window work); nullptr when Vulkan
 /// (the loader, a 1.3 device, the features the device layer needs) is not there
 Device* Create_Vulkan_Device(const VulkanOptions& options);
+
+/// Another renderer's Vulkan device and queue, shared (DXVK's: ID3D9VkInteropDevice). It must be
+/// Vulkan 1.3 with dynamic rendering, synchronization2 and timeline semaphores (DXVK 2 makes it
+/// so); acceleration structures and ray queries are used when it was made with them (and buffer
+/// device addresses). Each frame this device's commands wait for everything submitted to the
+/// queue before them, and what comes after waits for them.
+struct VulkanExternal
+{
+	void* instance = nullptr;		///< VkInstance
+	void* physicalDevice = nullptr;	///< VkPhysicalDevice
+	void* device = nullptr;			///< VkDevice
+	void* queue = nullptr;			///< VkQueue
+	uint32_t queueFamily = 0;
+	bool rayQuery = false;			///< it was made with acceleration structures, ray queries and device addresses
+	/// Around each submission to the shared queue: the other renderer's work submitted first, and
+	/// its queue kept from it meanwhile (DXVK: FlushRenderingCommands, LockSubmissionQueue / ReleaseSubmissionQueue)
+	void (*lockQueue)(void* user) = nullptr;
+	void (*unlockQueue)(void* user) = nullptr;
+	void* user = nullptr;
+	void (*log)(const char* line) = nullptr;
+};
+
+/// A device on another renderer's Vulkan device; nullptr when it lacks what this one needs.
+/// Destroying it leaves the other device as it was.
+Device* Create_Vulkan_Device_External(const VulkanExternal& external);
 
 }	// namespace rhi

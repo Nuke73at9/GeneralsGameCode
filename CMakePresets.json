@@ -354,6 +354,7 @@
             "binaryDir": "${sourceDir}/build/abram-win64-d3d9",
             "cacheVariables": {
                 "SAGE_USE_D3D9": "ON",
+                "SAGE_USE_VULKAN_RHI": "ON",
                 "RTS_BUILD_GENERALS": "OFF"
             }
         }

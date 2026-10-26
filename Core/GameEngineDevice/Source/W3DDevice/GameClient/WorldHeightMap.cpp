@@ -55,6 +55,7 @@
 #include "WW3D2/sage2/sage2terrainatlas.h"	// Tiberium Project @feature C&C4 terrain textures
 #include "WW3D2/sage2/sage2post.h"	// Tiberium Project @feature exposure for the map's ground
 #include "WW3D2/sage2/sage2terrain.h"	// Tiberium Project @feature terrains blended across cell borders
+#include "WW3D2/sage2/sage2raytracing.h"	// Tiberium Project @feature the ground for the ray-traced passes
 #endif
 
 #include "Common/file.h"
@@ -2411,6 +2412,8 @@ TextureClass *WorldHeightMap::getTerrainTexture()
 				Sage2PostClass::Set_Scene_Albedo(cells > 0 ? (float)(sum / cells) : -1.0f);
 			}
 			buildCNC4CellMap();
+			// Tiberium Project @feature the ground the ray-traced passes trace against
+			Sage2RayTracingClass::Set_Height_Map(m_data, m_width, m_height, m_borderSize, MAP_XY_FACTOR, MAP_HEIGHT_SCALE);
 		}
 #endif
 

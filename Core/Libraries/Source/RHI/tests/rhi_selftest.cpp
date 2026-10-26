@@ -24,17 +24,24 @@
 //   rays     acceleration structures built on the GPU and inline ray queries from a compute
 //            shader, against the answer worked out on the CPU (closest hit and instance IDs)
 //   frames   objects created and destroyed over frames in flight
+//   shared   all of the above again on a device made by someone else (as DXVK's is shared
+//            through its Direct3D 9 interop), and that device's image written by a dispatch,
+//            given back in its layout and read by its owner
 // Exit code: 0 passed, 1 failed, 77 no Vulkan 1.3 device (skipped).
 //
-//   rhi_selftest [--validation] [--require-ray-query] [--ppm <file>]
+//   rhi_selftest [--validation] [--require-ray-query] [--ppm <file>] [--no-shared]
 
 #include "rhi/rhi.h"
 
+#include "../src/vk_loader.h"
+
 #include "spirv/spv_selftest_compute.h"
+#include "spirv/spv_selftest_image.h"
 #include "spirv/spv_selftest_raster_ps.h"
 #include "spirv/spv_selftest_raster_vs.h"
 #include "spirv/spv_selftest_rayquery.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
@@ -459,6 +466,347 @@ namespace
 		Check(good == 1, "%u frames of buffers and textures made, used and dropped (last copy: %u %u)", FRAMES, out[0], out[1]);
 		dev->Destroy(readback);
 	}
+
+	//------------------------------------------------------------------------- a shared device
+	// The other renderer: its own instance, device and an image of its own (as DXVK would have)
+	struct Host
+	{
+		VkInstance instance = VK_NULL_HANDLE;
+		VkDebugUtilsMessengerEXT messenger = VK_NULL_HANDLE;
+		VkPhysicalDevice phys = VK_NULL_HANDLE;
+		VkDevice device = VK_NULL_HANDLE;
+		VkQueue queue = VK_NULL_HANDLE;
+		uint32_t family = 0;
+		bool rayQuery = false;
+		VkImage image = VK_NULL_HANDLE;
+		VkDeviceMemory imageMemory = VK_NULL_HANDLE;
+		VkBuffer buffer = VK_NULL_HANDLE;
+		VkDeviceMemory bufferMemory = VK_NULL_HANDLE;
+		VkCommandPool pool = VK_NULL_HANDLE;
+		int locks = 0, unlocks = 0;
+	};
+
+	VKAPI_ATTR VkBool32 VKAPI_CALL Host_Debug(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT,
+		const VkDebugUtilsMessengerCallbackDataEXT* data, void*)
+	{
+		if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+		{
+			char line[2048];
+			snprintf(line, sizeof(line), "validation: %s", data->pMessage);
+			Log(line);
+		}
+		return VK_FALSE;
+	}
+
+	uint32_t Host_Memory(const Host& h, uint32_t bits, VkMemoryPropertyFlags want)
+	{
+		VkPhysicalDeviceMemoryProperties mp;
+		rhi::vk::vkGetPhysicalDeviceMemoryProperties(h.phys, &mp);
+		for (uint32_t i = 0; i < mp.memoryTypeCount; ++i)
+			if ((bits & (1u << i)) && (mp.memoryTypes[i].propertyFlags & want) == want)
+				return i;
+		return 0;
+	}
+
+	// One command buffer of the host's, run to the end
+	template <typename F> void Host_Run(Host& h, F record)
+	{
+		using namespace rhi::vk;
+		VkCommandBufferAllocateInfo ai = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+		ai.commandPool = h.pool;
+		ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		ai.commandBufferCount = 1;
+		VkCommandBuffer cmd = VK_NULL_HANDLE;
+		vkAllocateCommandBuffers(h.device, &ai, &cmd);
+		VkCommandBufferBeginInfo bi = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+		bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+		vkBeginCommandBuffer(cmd, &bi);
+		record(cmd);
+		vkEndCommandBuffer(cmd);
+		VkCommandBufferSubmitInfo cbi = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO };
+		cbi.commandBuffer = cmd;
+		VkSubmitInfo2 si = { VK_STRUCTURE_TYPE_SUBMIT_INFO_2 };
+		si.commandBufferInfoCount = 1;
+		si.pCommandBufferInfos = &cbi;
+		vkQueueSubmit2(h.queue, 1, &si, VK_NULL_HANDLE);
+		vkQueueWaitIdle(h.queue);
+		vkResetCommandPool(h.device, h.pool, 0);
+	}
+
+	void Host_Image_Barrier(VkCommandBuffer cmd, VkImage image, VkImageLayout from, VkImageLayout to)
+	{
+		VkImageMemoryBarrier2 b = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
+		b.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+		b.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
+		b.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+		b.dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
+		b.oldLayout = from;
+		b.newLayout = to;
+		b.srcQueueFamilyIndex = b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		b.image = image;
+		b.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+		VkDependencyInfo di = { VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+		di.imageMemoryBarrierCount = 1;
+		di.pImageMemoryBarriers = &b;
+		rhi::vk::vkCmdPipelineBarrier2(cmd, &di);
+	}
+
+	bool Host_Create(Host& h, bool validation)
+	{
+		using namespace rhi::vk;
+		if (!Load_Library())
+			return false;
+		uint32_t version = VK_API_VERSION_1_0;
+		if (vkEnumerateInstanceVersion)
+			vkEnumerateInstanceVersion(&version);
+		if (version < VK_API_VERSION_1_3)
+			return false;
+		std::vector<const char*> layers, extensions;
+		uint32_t n = 0;
+		vkEnumerateInstanceLayerProperties(&n, nullptr);
+		std::vector<VkLayerProperties> layerList(n);
+		vkEnumerateInstanceLayerProperties(&n, layerList.data());
+		for (const VkLayerProperties& l : layerList)
+			if (validation && strcmp(l.layerName, "VK_LAYER_KHRONOS_validation") == 0)
+				layers.push_back("VK_LAYER_KHRONOS_validation");
+		vkEnumerateInstanceExtensionProperties(nullptr, &n, nullptr);
+		std::vector<VkExtensionProperties> extList(n);
+		vkEnumerateInstanceExtensionProperties(nullptr, &n, extList.data());
+		bool debugUtils = false;
+		for (const VkExtensionProperties& e : extList)
+			if (strcmp(e.extensionName, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0)
+				debugUtils = true;
+		if (debugUtils && !layers.empty())
+			extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+		VkApplicationInfo app = { VK_STRUCTURE_TYPE_APPLICATION_INFO };
+		app.apiVersion = VK_API_VERSION_1_3;
+		VkInstanceCreateInfo ici = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
+		ici.pApplicationInfo = &app;
+		ici.enabledLayerCount = (uint32_t)layers.size();
+		ici.ppEnabledLayerNames = layers.data();
+		ici.enabledExtensionCount = (uint32_t)extensions.size();
+		ici.ppEnabledExtensionNames = extensions.data();
+		if (vkCreateInstance(&ici, nullptr, &h.instance) != VK_SUCCESS)
+			return false;
+		Load_Instance(h.instance);
+		if (!extensions.empty() && vkCreateDebugUtilsMessengerEXT)
+		{
+			VkDebugUtilsMessengerCreateInfoEXT dbg = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
+			dbg.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+			dbg.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+			dbg.pfnUserCallback = Host_Debug;
+			vkCreateDebugUtilsMessengerEXT(h.instance, &dbg, nullptr, &h.messenger);
+		}
+		vkEnumeratePhysicalDevices(h.instance, &n, nullptr);
+		if (n == 0)
+			return false;
+		std::vector<VkPhysicalDevice> devices(n);
+		vkEnumeratePhysicalDevices(h.instance, &n, devices.data());
+		h.phys = devices[0];
+		vkEnumerateDeviceExtensionProperties(h.phys, nullptr, &n, nullptr);
+		std::vector<VkExtensionProperties> devExt(n);
+		vkEnumerateDeviceExtensionProperties(h.phys, nullptr, &n, devExt.data());
+		auto has = [&](const char* name) { for (const VkExtensionProperties& e : devExt) if (strcmp(e.extensionName, name) == 0) return true; return false; };
+		h.rayQuery = has(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) && has(VK_KHR_RAY_QUERY_EXTENSION_NAME) && has(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+		vkGetPhysicalDeviceQueueFamilyProperties(h.phys, &n, nullptr);
+		std::vector<VkQueueFamilyProperties> families(n);
+		vkGetPhysicalDeviceQueueFamilyProperties(h.phys, &n, families.data());
+		for (uint32_t i = 0; i < n; ++i)
+			if (families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+			{
+				h.family = i;
+				break;
+			}
+		// the features DXVK 2 makes its device with, and what the ray queries add
+		VkPhysicalDeviceRayQueryFeaturesKHR rq = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR };
+		rq.rayQuery = VK_TRUE;
+		VkPhysicalDeviceAccelerationStructureFeaturesKHR as = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
+		as.accelerationStructure = VK_TRUE;
+		as.pNext = &rq;
+		VkPhysicalDeviceVulkan13Features v13 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES };
+		v13.dynamicRendering = VK_TRUE;
+		v13.synchronization2 = VK_TRUE;
+		v13.pNext = h.rayQuery ? &as : nullptr;
+		VkPhysicalDeviceVulkan12Features v12 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
+		v12.timelineSemaphore = VK_TRUE;
+		v12.bufferDeviceAddress = h.rayQuery ? VK_TRUE : VK_FALSE;
+		v12.pNext = &v13;
+		VkPhysicalDeviceFeatures2 f2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+		f2.pNext = &v12;
+		float priority = 1.0f;
+		VkDeviceQueueCreateInfo qci = { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO };
+		qci.queueFamilyIndex = h.family;
+		qci.queueCount = 1;
+		qci.pQueuePriorities = &priority;
+		const char* rtExtensions[] = { VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME, VK_KHR_RAY_QUERY_EXTENSION_NAME, VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME };
+		VkDeviceCreateInfo dci = { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
+		dci.pNext = &f2;
+		dci.queueCreateInfoCount = 1;
+		dci.pQueueCreateInfos = &qci;
+		dci.enabledExtensionCount = h.rayQuery ? 3 : 0;
+		dci.ppEnabledExtensionNames = rtExtensions;
+		if (vkCreateDevice(h.phys, &dci, nullptr, &h.device) != VK_SUCCESS)
+			return false;
+		if (!Load_Device(h.device))
+			return false;
+		vkGetDeviceQueue(h.device, h.family, 0, &h.queue);
+		VkCommandPoolCreateInfo pci = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
+		pci.queueFamilyIndex = h.family;
+		vkCreateCommandPool(h.device, &pci, nullptr, &h.pool);
+
+		// its image, which the shared device writes, and a buffer it reads the image back into
+		VkImageCreateInfo ii = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+		ii.imageType = VK_IMAGE_TYPE_2D;
+		ii.format = VK_FORMAT_R8G8B8A8_UNORM;
+		ii.extent = { 32, 32, 1 };
+		ii.mipLevels = 1;
+		ii.arrayLayers = 1;
+		ii.samples = VK_SAMPLE_COUNT_1_BIT;
+		ii.tiling = VK_IMAGE_TILING_OPTIMAL;
+		ii.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		vkCreateImage(h.device, &ii, nullptr, &h.image);
+		VkMemoryRequirements req;
+		vkGetImageMemoryRequirements(h.device, h.image, &req);
+		VkMemoryAllocateInfo mai = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+		mai.allocationSize = req.size;
+		mai.memoryTypeIndex = Host_Memory(h, req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkAllocateMemory(h.device, &mai, nullptr, &h.imageMemory);
+		vkBindImageMemory(h.device, h.image, h.imageMemory, 0);
+		VkBufferCreateInfo bci = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+		bci.size = 32 * 32 * 4;
+		bci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+		vkCreateBuffer(h.device, &bci, nullptr, &h.buffer);
+		vkGetBufferMemoryRequirements(h.device, h.buffer, &req);
+		mai.allocationSize = req.size;
+		mai.memoryTypeIndex = Host_Memory(h, req.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		vkAllocateMemory(h.device, &mai, nullptr, &h.bufferMemory);
+		vkBindBufferMemory(h.device, h.buffer, h.bufferMemory, 0);
+		// the host keeps it ready for sampling, as DXVK keeps a texture
+		Host_Run(h, [&](VkCommandBuffer cmd) { Host_Image_Barrier(cmd, h.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL); });
+		return true;
+	}
+
+	void Host_Destroy(Host& h)
+	{
+		using namespace rhi::vk;
+		if (h.device)
+		{
+			vkDeviceWaitIdle(h.device);
+			vkDestroyCommandPool(h.device, h.pool, nullptr);
+			vkDestroyBuffer(h.device, h.buffer, nullptr);
+			vkFreeMemory(h.device, h.bufferMemory, nullptr);
+			vkDestroyImage(h.device, h.image, nullptr);
+			vkFreeMemory(h.device, h.imageMemory, nullptr);
+			vkDestroyDevice(h.device, nullptr);
+		}
+		if (h.instance)
+		{
+			if (h.messenger)
+				vkDestroyDebugUtilsMessengerEXT(h.instance, h.messenger, nullptr);
+			vkDestroyInstance(h.instance, nullptr);
+		}
+	}
+
+	void Test_Shared_Image(Device* dev, Host& h)
+	{
+		printf("shared image\n");
+		ExternalTexture e;
+		e.image = (uint64_t)h.image;
+		e.vkFormat = VK_FORMAT_R8G8B8A8_UNORM;
+		e.width = e.height = 32;
+		e.usage = TEXTURE_SAMPLED | TEXTURE_STORAGE | TEXTURE_COPY_SRC;
+		e.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		e.name = "the host's image";
+		Texture* image = dev->Import_Texture(e);
+		Shader* cs = Make_Shader(dev, Stage::COMPUTE, spv_selftest_image, sizeof(spv_selftest_image), "main", "selftest image");
+		ComputePipelineDesc cd;
+		cd.cs = cs;
+		Pipeline* pipeline = dev->Create_Compute_Pipeline(cd);
+		Check(image && cs && pipeline, "the host's image imported");
+		if (!image || !pipeline)
+			return;
+		const int locksBefore = h.locks;
+		CommandList* cl = dev->Begin_Frame();
+		cl->Set_Pipeline(pipeline);
+		cl->Set_Storage_Image(0, image);
+		const uint32_t push[4] = { 32, 32, 200, 0 };
+		cl->Set_Push_Constants(push, sizeof(push));
+		cl->Dispatch(4, 4);
+		dev->Submit_Frame();
+		dev->Wait_Idle();
+		Check(h.locks == locksBefore + 1 && h.unlocks == h.locks, "the shared queue was locked around the submission (%d locks, %d unlocks)", h.locks, h.unlocks);
+		// the host takes it back, in the layout it left it in, and reads it
+		using namespace rhi::vk;
+		Host_Run(h, [&](VkCommandBuffer cmd)
+		{
+			Host_Image_Barrier(cmd, h.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+			VkBufferImageCopy region = {};
+			region.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+			region.imageExtent = { 32, 32, 1 };
+			vkCmdCopyImageToBuffer(cmd, h.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, h.buffer, 1, &region);
+			Host_Image_Barrier(cmd, h.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		});
+		void* mapped = nullptr;
+		vkMapMemory(h.device, h.bufferMemory, 0, VK_WHOLE_SIZE, 0, &mapped);
+		const Pixel* px = (const Pixel*)mapped;
+		uint32_t wrong = 0;
+		for (uint32_t y = 0; y < 32; ++y)
+			for (uint32_t x = 0; x < 32; ++x)
+				if (!Near(px[y * 32 + x], (int)(x * 4), (int)(y * 4), 200))
+					++wrong;
+		vkUnmapMemory(h.device, h.bufferMemory);
+		Check(wrong == 0, "the host reads what the dispatch wrote, in its own layout (%u of 1024 pixels wrong)", wrong);
+		dev->Destroy(pipeline);
+		dev->Destroy(cs);
+		dev->Destroy(image);
+	}
+
+	void Run_All(Device* dev, const char* ppm)
+	{
+		const Capabilities& caps = dev->Get_Capabilities();
+		printf("device: %s%s%s%s\n", caps.deviceName, caps.software ? " (software)" : "", caps.rayQuery ? ", ray queries" : ", no ray queries",
+			caps.external ? ", shared" : "");
+		Test_Raster(dev, ppm);
+		Test_Compute(dev);
+		if (caps.rayQuery)
+			Test_Ray_Query(dev);
+		else
+			printf("ray queries: not on this device, skipped\n");
+		Test_Frames(dev);
+	}
+
+	void Test_Shared(bool validation)
+	{
+		printf("--- a shared device\n");
+		Host h;
+		if (!Host_Create(h, validation))
+		{
+			Check(false, "the host device could not be made");
+			Host_Destroy(h);
+			return;
+		}
+		VulkanExternal e;
+		e.instance = h.instance;
+		e.physicalDevice = h.phys;
+		e.device = h.device;
+		e.queue = h.queue;
+		e.queueFamily = h.family;
+		e.rayQuery = h.rayQuery;
+		e.lockQueue = [](void* user) { ++((Host*)user)->locks; };
+		e.unlockQueue = [](void* user) { ++((Host*)user)->unlocks; };
+		e.user = &h;
+		e.log = Log;
+		Device* dev = Create_Vulkan_Device_External(e);
+		Check(dev != nullptr, "a device on the host's");
+		if (dev)
+		{
+			Run_All(dev, nullptr);
+			Test_Shared_Image(dev, h);
+			dev->Wait_Idle();
+			delete dev;
+		}
+		Host_Destroy(h);
+	}
 }
 
 int main(int argc, char** argv)
@@ -466,6 +814,7 @@ int main(int argc, char** argv)
 	VulkanOptions options;
 	options.log = Log;
 	bool requireRayQuery = false;
+	bool shared = true;
 	const char* ppm = nullptr;
 	for (int i = 1; i < argc; ++i)
 	{
@@ -475,6 +824,8 @@ int main(int argc, char** argv)
 			requireRayQuery = true;
 		else if (strcmp(argv[i], "--ppm") == 0 && i + 1 < argc)
 			ppm = argv[++i];
+		else if (strcmp(argv[i], "--no-shared") == 0)
+			shared = false;
 	}
 	options.requireRayQuery = requireRayQuery;
 	Device* dev = Create_Vulkan_Device(options);
@@ -483,19 +834,11 @@ int main(int argc, char** argv)
 		printf("SKIP: no Vulkan 1.3 device%s\n", requireRayQuery ? " with ray queries" : "");
 		return 77;
 	}
-	const Capabilities& caps = dev->Get_Capabilities();
-	printf("device: %s%s%s\n", caps.deviceName, caps.software ? " (software)" : "", caps.rayQuery ? ", ray queries" : ", no ray queries");
-
-	Test_Raster(dev, ppm);
-	Test_Compute(dev);
-	if (caps.rayQuery)
-		Test_Ray_Query(dev);
-	else
-		printf("ray queries: not on this device, skipped\n");
-	Test_Frames(dev);
-
+	Run_All(dev, ppm);
 	dev->Wait_Idle();
 	delete dev;
+	if (shared)
+		Test_Shared(options.validation);
 	if (options.validation)
 		Check(g_validationMessages == 0, "%d validation messages", g_validationMessages);
 	printf("%s: %d failed\n", g_failures == 0 ? "PASS" : "FAIL", g_failures);

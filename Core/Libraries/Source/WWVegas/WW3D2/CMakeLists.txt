@@ -271,6 +271,9 @@ if(SAGE_USE_D3D9)
         sage2/sage2softparticle.h
         sage2/sage2ssao.cpp
         sage2/sage2ssao.h
+        sage2/sage2raytracing.cpp
+        sage2/sage2raytracing.h
+        shaders/rt/spv_rtao.h
         sage2/sage2topview.cpp
         sage2/sage2topview.h
         sage2/sage2road.cpp
@@ -325,6 +328,13 @@ if(UNIX)
     find_package(Fontconfig REQUIRED)
     # GeneralsX @build felipebraz 24/02/2026 fontconfig static lib (vcpkg) links iconv; must be explicit on macOS
     find_package(Iconv REQUIRED)
+endif()
+
+# Tiberium Project @feature ray-traced passes on DXVK's Vulkan device, through the render-device
+# interface (Core/Libraries/Source/RHI); without it the passes are left out and nothing changes
+if(SAGE_USE_D3D9 AND SAGE_USE_VULKAN_RHI)
+    target_link_libraries(corei_ww3d2 INTERFACE core_rhi)
+    target_compile_definitions(corei_ww3d2 INTERFACE RTS_RHI_VULKAN=1)
 endif()
 
 target_link_libraries(corei_ww3d2 INTERFACE

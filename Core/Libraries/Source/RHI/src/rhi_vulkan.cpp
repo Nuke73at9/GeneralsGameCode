@@ -87,6 +87,14 @@ namespace
 
 	VkFormat To_Vk(Format f) { return Info(f).vk; }
 
+	Format From_Vk(VkFormat f)
+	{
+		for (const FormatInfo& i : FORMATS)
+			if (i.vk == f)
+				return i.format;
+		return Format::Unknown;
+	}
+
 	bool Has_Stencil(Format f) { return f == Format::D24_UNORM_S8_UINT || f == Format::D32_FLOAT_S8_UINT; }
 
 	VkCompareOp To_Vk(Compare c)
@@ -177,6 +185,7 @@ namespace
 	public:
 		VkDevice device = VK_NULL_HANDLE;
 		VkPhysicalDeviceMemoryProperties props = {};
+		bool deviceAddresses = true;	// the device has buffer device addresses on
 		std::vector<Block*> blocks;
 
 		int Find_Type(uint32_t bits, VkMemoryPropertyFlags want, VkMemoryPropertyFlags avoid = 0) const
@@ -270,7 +279,7 @@ namespace
 			VkMemoryAllocateFlagsInfo flags = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO };
 			flags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
 			VkMemoryAllocateInfo info = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
-			info.pNext = (linear && deviceAddress) ? &flags : nullptr;
+			info.pNext = (linear && deviceAddress && deviceAddresses) ? &flags : nullptr;
 			info.allocationSize = size;
 			info.memoryTypeIndex = type;
 			VkDeviceMemory memory = VK_NULL_HANDLE;
@@ -346,6 +355,10 @@ struct Texture
 	VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkPipelineStageFlags2 stage = VK_PIPELINE_STAGE_2_NONE;
 	VkAccessFlags2 access = VK_ACCESS_2_NONE;
+	// another renderer's image (Import_Texture): the layout it goes back to after each frame
+	bool imported = false;
+	VkImageLayout homeLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	uint64_t usedInFrame = 0;
 };
 
 struct Sampler { VkSampler sampler = VK_NULL_HANDLE; };
@@ -440,6 +453,9 @@ public:
 	VkPipelineStageFlags2 pendingStage = VK_PIPELINE_STAGE_2_NONE;
 	VkAccessFlags2 pendingAccess = VK_ACCESS_2_NONE;
 	bool workSinceBarrier = false;
+	// another renderer's images used this frame (put back in their layouts when it is submitted)
+	std::vector<Texture*> importedUsed;
+	uint64_t serial = 0;
 
 	void Reset(VkCommandBuffer c, FrameData* f);
 
@@ -472,6 +488,7 @@ public:
 	void Transition(Texture* t, VkImageLayout layout, VkPipelineStageFlags2 stage, VkAccessFlags2 access);
 	void Flush_Buffer_Barrier();
 	void Before_Transfer_Write();
+	void Global_Barrier();
 	void Suspend_Pass();
 	void Begin_Rendering(const RenderPassDesc& desc);
 	void Prepare_Draw(VkPipelineBindPoint bindPoint);
@@ -501,6 +518,10 @@ public:
 	uint32_t queueFamily = 0;
 	bool rayQuery = false;
 	bool debugUtils = false;
+	bool external = false;				// on another renderer's device (Create_Vulkan_Device_External)
+	bool bufferDeviceAddress = true;	// buffers have device addresses (needed by acceleration structures)
+	VulkanExternal shared;
+	uint64_t frameSerial = 0;
 	Allocator allocator;
 	VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
 	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
@@ -538,6 +559,9 @@ public:
 	}
 
 	bool Init();
+	bool Init_External(const VulkanExternal& e);
+	bool Init_Common();
+	void Wait_Timeline(uint64_t value);
 	void Shutdown();
 	~VulkanDevice() { Shutdown(); }
 
@@ -561,6 +585,15 @@ public:
 	virtual Pipeline* Create_Compute_Pipeline(const ComputePipelineDesc& desc) override;
 	virtual AccelStruct* Create_Bottom_Level(const TriangleGeometry* geometry, uint32_t count) override;
 	virtual AccelStruct* Create_Top_Level(uint32_t maxInstances) override;
+	virtual Texture* Import_Texture(const ExternalTexture& texture) override;
+	virtual void Set_External_Layout(Texture* texture, uint32_t layout) override
+	{
+		if (texture == nullptr || !texture->imported || layout == 0)
+			return;
+		texture->layout = texture->homeLayout = (VkImageLayout)layout;
+		texture->stage = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+		texture->access = VK_ACCESS_2_MEMORY_WRITE_BIT;
+	}
 	virtual void Destroy(Buffer* buffer) override { Defer(Garbage::BUFFER, buffer); }
 	virtual void Destroy(Texture* texture) override { Defer(Garbage::TEXTURE, texture); }
 	virtual void Destroy(Sampler* sampler) override { Defer(Garbage::SAMPLER, sampler); }
@@ -815,13 +848,20 @@ bool VulkanDevice::Init()
 	vkGetDeviceQueue(device, queueFamily, 0, &queue);
 	allocator.device = device;
 
+	return Init_Common();
+}
+
+bool VulkanDevice::Init_Common()
+{
 	// capabilities
 	snprintf(caps.deviceName, sizeof(caps.deviceName), "%s", props.deviceName);
 	caps.rayQuery = rayQuery;
 	caps.software = props.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU;
+	caps.external = external;
+	allocator.deviceAddresses = bufferDeviceAddress;
 	caps.maxTextureSize = props.limits.maxImageDimension2D;
 	caps.uniformAlignment = props.limits.minUniformBufferOffsetAlignment;
-	Log("using %s, Vulkan %u.%u, %s", props.deviceName, VK_API_VERSION_MAJOR(props.apiVersion), VK_API_VERSION_MINOR(props.apiVersion),
+	Log("%s %s, Vulkan %u.%u, %s", external ? "sharing" : "using", props.deviceName, VK_API_VERSION_MAJOR(props.apiVersion), VK_API_VERSION_MINOR(props.apiVersion),
 		rayQuery ? "ray queries on" : "no ray queries");
 
 	// the binding table
@@ -899,6 +939,57 @@ bool VulkanDevice::Init()
 	return true;
 }
 
+bool VulkanDevice::Init_External(const VulkanExternal& e)
+{
+	external = true;
+	shared = e;
+	if (e.instance == nullptr || e.physicalDevice == nullptr || e.device == nullptr || e.queue == nullptr)
+		return false;
+	if (!Load_Library())
+	{
+		Log("no Vulkan loader on this system");
+		return false;
+	}
+	instance = (VkInstance)e.instance;
+	phys = (VkPhysicalDevice)e.physicalDevice;
+	device = (VkDevice)e.device;
+	queue = (VkQueue)e.queue;
+	queueFamily = e.queueFamily;
+	Load_Instance(instance);
+	vkGetPhysicalDeviceProperties(phys, &props);
+	if (props.apiVersion < VK_API_VERSION_1_3)
+	{
+		Log("the shared device is Vulkan %u.%u, 1.3 is needed", VK_API_VERSION_MAJOR(props.apiVersion), VK_API_VERSION_MINOR(props.apiVersion));
+		return false;
+	}
+	vkGetPhysicalDeviceMemoryProperties(phys, &allocator.props);
+	if (!Load_Device(device))
+	{
+		Log("the shared device lacks a Vulkan 1.3 entry point");
+		return false;
+	}
+	// the extension's entry points are there only when the device was made with it
+	rayQuery = e.rayQuery && vkCreateAccelerationStructureKHR && vkDestroyAccelerationStructureKHR && vkCmdBuildAccelerationStructuresKHR
+		&& vkGetAccelerationStructureBuildSizesKHR && vkGetAccelerationStructureDeviceAddressKHR;
+	if (e.rayQuery && !rayQuery)
+		Log("the shared device was made without acceleration structures: no ray queries");
+	bufferDeviceAddress = rayQuery;
+	debugUtils = false;
+	allocator.device = device;
+	return Init_Common();
+}
+
+void VulkanDevice::Wait_Timeline(uint64_t value)
+{
+	if (timeline == VK_NULL_HANDLE || value == 0)
+		return;
+	VkSemaphoreWaitInfo wi = { VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO };
+	wi.semaphoreCount = 1;
+	wi.pSemaphores = &timeline;
+	wi.pValues = &value;
+	vkWaitSemaphores(device, &wi, UINT64_MAX);
+}
+
 VkDescriptorPool VulkanDevice::Create_Descriptor_Pool()
 {
 	const uint32_t n = DESCRIPTOR_SETS_PER_POOL;
@@ -925,7 +1016,11 @@ void VulkanDevice::Shutdown()
 {
 	if (device != VK_NULL_HANDLE)
 	{
-		vkDeviceWaitIdle(device);
+		// a shared device's queue is the other renderer's: wait for this device's own work only
+		if (external)
+			Wait_Timeline(timelineValue);
+		else
+			vkDeviceWaitIdle(device);
 		Collect(UINT64_MAX);
 		for (FrameData& f : frames)
 		{
@@ -942,14 +1037,18 @@ void VulkanDevice::Shutdown()
 		if (pipelineLayout) vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 		if (setLayout) vkDestroyDescriptorSetLayout(device, setLayout, nullptr);
 		allocator.Shutdown();
-		vkDestroyDevice(device, nullptr);
+		if (!external)
+			vkDestroyDevice(device, nullptr);
 		device = VK_NULL_HANDLE;
 	}
 	if (instance != VK_NULL_HANDLE)
 	{
-		if (messenger && vkDestroyDebugUtilsMessengerEXT)
-			vkDestroyDebugUtilsMessengerEXT(instance, messenger, nullptr);
-		vkDestroyInstance(instance, nullptr);
+		if (!external)
+		{
+			if (messenger && vkDestroyDebugUtilsMessengerEXT)
+				vkDestroyDebugUtilsMessengerEXT(instance, messenger, nullptr);
+			vkDestroyInstance(instance, nullptr);
+		}
 		instance = VK_NULL_HANDLE;
 	}
 }
@@ -959,7 +1058,9 @@ Buffer* VulkanDevice::Create_Buffer_Internal(const BufferDesc& desc)
 {
 	VkBufferCreateInfo bci = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
 	bci.size = std::max<uint64_t>(desc.size, 4);
-	bci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+	bci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	if (bufferDeviceAddress)
+		bci.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 	if (desc.usage & BUFFER_VERTEX) bci.usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 	if (desc.usage & BUFFER_INDEX) bci.usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 	if (desc.usage & BUFFER_UNIFORM) bci.usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
@@ -988,9 +1089,12 @@ Buffer* VulkanDevice::Create_Buffer_Internal(const BufferDesc& desc)
 		return nullptr;
 	}
 	b->mapped = b->alloc.mapped;
-	VkBufferDeviceAddressInfo ai = { VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO };
-	ai.buffer = b->buffer;
-	b->address = vkGetBufferDeviceAddress(device, &ai);
+	if (bufferDeviceAddress)
+	{
+		VkBufferDeviceAddressInfo ai = { VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO };
+		ai.buffer = b->buffer;
+		b->address = vkGetBufferDeviceAddress(device, &ai);
+	}
 	Name(VK_OBJECT_TYPE_BUFFER, (uint64_t)b->buffer, desc.name);
 	return b;
 }
@@ -1092,10 +1196,56 @@ void VulkanDevice::Free_Texture(Texture* t)
 {
 	for (VkImageView v : t->targetViews)
 		vkDestroyImageView(device, v, nullptr);
-	vkDestroyImageView(device, t->view, nullptr);
-	vkDestroyImage(device, t->image, nullptr);
-	allocator.Free(t->alloc);
+	if (t->view)
+		vkDestroyImageView(device, t->view, nullptr);
+	if (!t->imported)
+	{
+		vkDestroyImage(device, t->image, nullptr);
+		allocator.Free(t->alloc);
+	}
 	delete t;
+}
+
+Texture* VulkanDevice::Import_Texture(const ExternalTexture& e)
+{
+	if (!external || e.image == 0)
+		return nullptr;
+	Texture* t = new Texture;
+	t->imported = true;
+	t->image = (VkImage)e.image;
+	t->desc.width = e.width;
+	t->desc.height = e.height;
+	t->desc.mips = 1;
+	t->desc.format = From_Vk((VkFormat)e.vkFormat);
+	t->desc.usage = e.usage;
+	t->desc.name = e.name;
+	const VkFormat format = (VkFormat)e.vkFormat;
+	const bool depth = format == VK_FORMAT_D16_UNORM || format == VK_FORMAT_D32_SFLOAT || format == VK_FORMAT_D24_UNORM_S8_UINT
+		|| format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_X8_D24_UNORM_PACK32 || format == VK_FORMAT_D16_UNORM_S8_UINT;
+	const bool stencil = format == VK_FORMAT_D24_UNORM_S8_UINT || format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D16_UNORM_S8_UINT;
+	t->aspect = depth ? (VK_IMAGE_ASPECT_DEPTH_BIT | (stencil ? VK_IMAGE_ASPECT_STENCIL_BIT : 0)) : VK_IMAGE_ASPECT_COLOR_BIT;
+	t->layout = t->homeLayout = (VkImageLayout)e.layout;
+	// the other renderer may have written it: the first use waits for everything before it
+	t->stage = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+	t->access = VK_ACCESS_2_MEMORY_WRITE_BIT;
+	if (e.usage & (TEXTURE_SAMPLED | TEXTURE_STORAGE))
+	{
+		VkImageViewCreateInfo vci = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+		vci.image = t->image;
+		vci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		vci.format = format;
+		vci.subresourceRange = { depth ? (VkImageAspectFlags)VK_IMAGE_ASPECT_DEPTH_BIT : t->aspect, 0, 1, 0, 1 };
+		VkImageViewUsageCreateInfo usage = { VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO };
+		usage.usage = ((e.usage & TEXTURE_SAMPLED) ? VK_IMAGE_USAGE_SAMPLED_BIT : 0) | ((e.usage & TEXTURE_STORAGE) ? VK_IMAGE_USAGE_STORAGE_BIT : 0);
+		vci.pNext = &usage;
+		if (vkCreateImageView(device, &vci, nullptr, &t->view) != VK_SUCCESS)
+		{
+			Log("imported texture %s: no view", e.name ? e.name : "");
+			delete t;
+			return nullptr;
+		}
+	}
+	return t;
 }
 
 Sampler* VulkanDevice::Create_Sampler(const SamplerDesc& d)
@@ -1440,6 +1590,9 @@ CommandList* VulkanDevice::Begin_Frame()
 	bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 	vkBeginCommandBuffer(f.cmd, &bi);
 	cmdList.Reset(f.cmd, &f);
+	cmdList.serial = ++frameSerial;
+	if (external)
+		cmdList.Global_Barrier();	// after everything the other renderer submitted before
 	frameOpen = true;
 	return &cmdList;
 }
@@ -1450,6 +1603,19 @@ void VulkanDevice::Submit_Frame()
 		return;
 	cmdList.End_Render_Pass();
 	cmdList.Flush_Buffer_Barrier();
+	if (external)
+	{
+		// the other renderer's images back in their layouts, and what comes after waits for this
+		for (Texture* t : cmdList.importedUsed)
+			cmdList.Transition(t, t->homeLayout, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_MEMORY_READ_BIT);
+		cmdList.Global_Barrier();
+		for (Texture* t : cmdList.importedUsed)
+		{
+			t->stage = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+			t->access = VK_ACCESS_2_MEMORY_WRITE_BIT;
+		}
+		cmdList.importedUsed.clear();
+	}
 	FrameData& f = Current();
 	vkEndCommandBuffer(f.cmd);
 	f.completion = ++timelineValue;
@@ -1464,8 +1630,13 @@ void VulkanDevice::Submit_Frame()
 	si.pCommandBufferInfos = &cbi;
 	si.signalSemaphoreInfoCount = 1;
 	si.pSignalSemaphoreInfos = &signal;
-	if (vkQueueSubmit2(queue, 1, &si, VK_NULL_HANDLE) != VK_SUCCESS)
-		Log("vkQueueSubmit2 failed");
+	if (external && shared.lockQueue)
+		shared.lockQueue(shared.user);
+	const VkResult submitted = vkQueueSubmit2(queue, 1, &si, VK_NULL_HANDLE);
+	if (external && shared.unlockQueue)
+		shared.unlockQueue(shared.user);
+	if (submitted != VK_SUCCESS)
+		Log("vkQueueSubmit2 failed (%d)", (int)submitted);
 	frameOpen = false;
 	frameIndex = (frameIndex + 1) % FRAMES;
 }
@@ -1474,7 +1645,10 @@ void VulkanDevice::Wait_Idle()
 {
 	if (frameOpen)
 		Submit_Frame();
-	vkDeviceWaitIdle(device);
+	if (external)
+		Wait_Timeline(timelineValue);
+	else
+		vkDeviceWaitIdle(device);
 	for (FrameData& f : frames)
 		Retire(f);
 	Collect(UINT64_MAX);
@@ -1501,6 +1675,11 @@ void VulkanCommandList::Reset(VkCommandBuffer c, FrameData* f)
 
 void VulkanCommandList::Transition(Texture* t, VkImageLayout layout, VkPipelineStageFlags2 stage, VkAccessFlags2 access)
 {
+	if (t->imported && t->usedInFrame != serial)
+	{
+		t->usedInFrame = serial;
+		importedUsed.push_back(t);
+	}
 	// reads after reads in the same layout need nothing
 	if (t->layout == layout && !(t->access & WRITE_ACCESS) && !(access & WRITE_ACCESS))
 	{
@@ -1539,6 +1718,23 @@ void VulkanCommandList::Flush_Buffer_Barrier()
 	VkMemoryBarrier2 b = { VK_STRUCTURE_TYPE_MEMORY_BARRIER_2 };
 	b.srcStageMask = pendingStage;
 	b.srcAccessMask = pendingAccess;
+	b.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+	b.dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
+	VkDependencyInfo di = { VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+	di.memoryBarrierCount = 1;
+	di.pMemoryBarriers = &b;
+	vkCmdPipelineBarrier2(cmd, &di);
+	pendingStage = VK_PIPELINE_STAGE_2_NONE;
+	pendingAccess = VK_ACCESS_2_NONE;
+	workSinceBarrier = false;
+}
+
+void VulkanCommandList::Global_Barrier()
+{
+	Suspend_Pass();
+	VkMemoryBarrier2 b = { VK_STRUCTURE_TYPE_MEMORY_BARRIER_2 };
+	b.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+	b.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
 	b.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 	b.dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
 	VkDependencyInfo di = { VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
@@ -2130,6 +2326,18 @@ Device* Create_Vulkan_Device(const VulkanOptions& options)
 	VulkanDevice* d = new VulkanDevice;
 	d->options = options;
 	if (!d->Init())
+	{
+		delete d;
+		return nullptr;
+	}
+	return d;
+}
+
+Device* Create_Vulkan_Device_External(const VulkanExternal& external)
+{
+	VulkanDevice* d = new VulkanDevice;
+	d->options.log = external.log;
+	if (!d->Init_External(external))
 	{
 		delete d;
 		return nullptr;

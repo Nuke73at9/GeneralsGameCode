@@ -115,6 +115,7 @@ static void drawFramerateBar();
 #include "WW3D2/sage2/sage2water.h"
 #include "WW3D2/sage2/sage2globals.h"
 #include "WW3D2/sage2/sage2ssao.h"
+#include "WW3D2/sage2/sage2raytracing.h"
 #include "WW3D2/sage2/sage2material.h"
 static void feedSceneLights();
 #endif
@@ -1006,6 +1007,12 @@ void W3DDisplay::init()
 			Sage2SSAOClass::Set_Params(prefs.getReal("Sage2SSAORadius", 12.0f), prefs.getReal("Sage2SSAOIntensity", 1.0f),
 				prefs.getReal("Sage2SSAOStrength", 0.8f));
 			Sage2SSAOClass::Set_Debug(prefs.getBool("Sage2SSAODebug", FALSE));
+			// Tiberium Project @feature the occlusion ray-traced against the terrain and the meshes where
+			// DXVK's Vulkan device traces rays (the GPU and our DXVK): on, how far the rays reach (world
+			// units), how many a pixel, how dark a closed-off point gets
+			Sage2RayTracingClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2RayTracing", TRUE));
+			Sage2RayTracingClass::Set_AO_Params(prefs.getReal("Sage2RayTracingAORadius", 40.0f), prefs.getInt("Sage2RayTracingAORays", 6),
+				prefs.getReal("Sage2RayTracingAOIntensity", 1.0f));
 			// Tiberium Project @feature what W3D still draws without shaders goes through shaders that do
 			// the same (groundwork for a backend without a fixed-function pipeline). On by default on
 			// Windows' own Direct3D 9, where it costs about what the driver's fixed-function does (3.2 to

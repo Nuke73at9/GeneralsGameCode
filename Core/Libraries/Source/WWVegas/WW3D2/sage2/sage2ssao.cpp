@@ -23,6 +23,7 @@
 #include "dx8caps.h"
 #include "dx8wrapper.h"
 #include "sage2globals.h"
+#include "sage2raytracing.h"
 
 #include "../shaders/ssao_vs.h"	// from shaders/ssao.hlsl (shaders/build_shaders.py)
 #include "../shaders/ssao_ao_ps.h"
@@ -271,16 +272,29 @@ void Sage2SSAOClass::Apply()
 	device->SetPixelShaderConstantF(6, applyParams, 1);
 	device->SetTexture(0, depthTexture);
 
-	// 1. the occlusion, at half size over the whole frame
-	Set_Target(device, s_aoA, hw, hh);
-	device->SetTexture(1, nullptr);
-	device->SetPixelShader(s_aoShader);
-	Draw_Quad(device, hw, hh, 0.0f, 0.0f, 1.0f, 1.0f);
+	// 1. the occlusion, at half size over the whole frame: Tiberium Project @feature traced against
+	// the scene's geometry where the GPU traces rays (Sage2RayTracingClass), else estimated here
+	// from the depth buffer
+	IDirect3DTexture9* traced = nullptr;
+	if (Sage2RayTracingClass::Is_Enabled())
+	{
+		Matrix4x4 viewMatrix;
+		DX8Wrapper::_Get_DX8_Transform(D3DTS_VIEW, viewMatrix);
+		traced = Sage2RayTracingClass::Trace_Ambient_Occlusion(device, depthTexture, hw, hh, viewport, view.MinZ, view.MaxZ,
+			(const float*)&viewMatrix, p);
+	}
+	if (traced == nullptr)
+	{
+		Set_Target(device, s_aoA, hw, hh);
+		device->SetTexture(1, nullptr);
+		device->SetPixelShader(s_aoShader);
+		Draw_Quad(device, hw, hh, 0.0f, 0.0f, 1.0f, 1.0f);
+	}
 	// 2., 3. blurred across, then down, keeping to surfaces of about the same depth
 	device->SetPixelShader(s_blurShader);
 	const float blurAcross[4] = { 1.0f / (float)hw, 0.0f, BLUR_DEPTH_TOLERANCE, 0.0f };
 	Set_Target(device, s_aoB, hw, hh);
-	device->SetTexture(1, s_aoA);
+	device->SetTexture(1, traced != nullptr ? traced : s_aoA);
 	device->SetPixelShaderConstantF(5, blurAcross, 1);
 	Draw_Quad(device, hw, hh, 0.0f, 0.0f, 1.0f, 1.0f);
 	const float blurDown[4] = { 0.0f, 1.0f / (float)hh, BLUR_DEPTH_TOLERANCE, 0.0f };

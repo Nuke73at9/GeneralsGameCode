@@ -8,11 +8,14 @@ set(RHI_VULKAN_HEADERS_TAG "v1.3.275" CACHE STRING "Vulkan-Headers tag fetched w
 find_path(RHI_VULKAN_INCLUDE_DIR vulkan/vulkan.h HINTS "$ENV{VULKAN_SDK}/Include" "$ENV{VULKAN_SDK}/include")
 if(NOT RHI_VULKAN_INCLUDE_DIR)
     include(FetchContent)
+    # the headers only: SOURCE_SUBDIR names a folder without a CMakeLists.txt, so Vulkan-Headers'
+    # own targets and install rules stay out of the build (nothing of it goes into the game folder)
     FetchContent_Declare(
         vulkan_headers
         GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers.git
         GIT_TAG ${RHI_VULKAN_HEADERS_TAG}
         GIT_SHALLOW TRUE
+        SOURCE_SUBDIR headers-only
     )
     FetchContent_MakeAvailable(vulkan_headers)
     set(RHI_VULKAN_INCLUDE_DIR "${vulkan_headers_SOURCE_DIR}/include" CACHE PATH "Vulkan headers" FORCE)

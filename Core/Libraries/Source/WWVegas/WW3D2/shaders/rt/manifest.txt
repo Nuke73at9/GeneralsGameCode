@@ -1,0 +1,3 @@
+# Ray-traced passes on the RHI's Vulkan device: <source> <profile> <entry> <symbol>
+# Rebuild the headers here with scripts/tooling/rhi/build_spirv.py --dxc <dxc> manifest.txt .
+rtao.hlsl cs_6_5 main spv_rtao

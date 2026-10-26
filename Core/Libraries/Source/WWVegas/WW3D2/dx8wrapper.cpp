@@ -63,6 +63,7 @@
 #include "sage2/sage2topview.h"
 #include "sage2/sage2water.h"
 #include "sage2/sage2softparticle.h"
+#include "sage2/sage2raytracing.h"
 #include "sage2/sage2ssao.h"
 #include "sage2/sage2terrainatlas.h"
 #include "sage2/sage2globals.h"	// Sage2_Log
@@ -615,6 +616,10 @@ static IDirect3D8* Create_D3D9_Interface()
 	{
 		// TheSuperHackers @bugfix xezon 13/06/2025 Front load the system dbghelp.dll (see the Direct3D 8 path)
 		DbgHelpGuard dbgHelpGuard;
+#if defined(_WIN32)
+		if (loadedDxvk)
+#endif
+			Sage2RayTracingClass::Before_Device_Creation();	// Tiberium Project @feature DXVK's device with ray queries
 		d3d9 = create(D3D_SDK_VERSION);
 	}
 	if (d3d9 == nullptr)
@@ -1213,6 +1218,7 @@ bool DX8Wrapper::Reset_Device(bool reload_assets)
 		Sage2TopViewClass::Release_Resources();	// Tiberium Project @feature the terrain top view
 		Sage2WaterClass::Release_Resources();	// Tiberium Project @feature C&C4-style water
 		Sage2SSAOClass::Release_Resources();	// Tiberium Project @feature SSAO targets
+		Sage2RayTracingClass::Release_Resources();	// Tiberium Project @feature ray-traced passes' targets
 #endif
 
 		for (unsigned i=0;i<MAX_VERTEX_STREAMS;++i)
@@ -1279,6 +1285,7 @@ void DX8Wrapper::Release_Device()
 		Sage2WaterClass::Shutdown();	// Tiberium Project @feature C&C4-style water
 		Sage2SoftParticleClass::Shutdown();	// Tiberium Project @feature soft particles
 		Sage2SSAOClass::Shutdown();	// Tiberium Project @feature SSAO
+		Sage2RayTracingClass::Shutdown();	// Tiberium Project @feature ray-traced passes (before the device goes)
 		Sage2TerrainAtlasClass::Release();	// Tiberium Project @feature C&C4 terrain texture atlases
 #endif
 
