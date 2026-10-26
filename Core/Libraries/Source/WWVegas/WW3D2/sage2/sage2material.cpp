@@ -44,6 +44,7 @@
 #include "texture.h"
 #include "textureloader.h"
 #include "vertmaterial.h"
+#include "ww3d.h"
 #include "WWLib/ffactory.h"
 #include "WWLib/WWFILE.h"
 
@@ -120,9 +121,10 @@ namespace
 		int forwardTechnique;	// its "_M" variant (per-pixel lighting without the deferred light buffers), or the same
 		int prepassTechnique;	// _CreateDepthNormalMap, or -1
 		int shadowTechnique;	// _CreateShadowMap (the mesh as a shadow caster), or -1
+		bool treadScroll;		// a tread effect: the vertex colour's alpha scrolls the texture's U
 		std::vector<MaterialTexture> textures;
 		std::vector<MaterialValue> values;
-		MeshMaterial() : effect(nullptr), technique(-1), forwardTechnique(-1), prepassTechnique(-1), shadowTechnique(-1) {}
+		MeshMaterial() : effect(nullptr), technique(-1), forwardTechnique(-1), prepassTechnique(-1), shadowTechnique(-1), treadScroll(false) {}
 	};
 	// mesh model (held) -> its material; a model without one is entered with effect == nullptr
 	std::map<MeshModelClass*, MeshMaterial> s_materials;
@@ -228,6 +230,7 @@ namespace
 		}
 		mat.effect = effect;
 		mat.technique = technique;
+		mat.treadScroll = effectName.find("tread") != std::string::npos;	// CNC4_Object_Tread*: SUPPORT_TREAD_SCROLLING
 		// the High techniques light from the deferred light buffers; until the scene renders those,
 		// the Medium ones (forward per-pixel lighting) give the look
 		std::string forward = std::string(effect->Get_Technique_Name(technique)) + "_M";
@@ -447,9 +450,66 @@ namespace
 		}
 	}
 
+	// Tiberium Project @feature the treads' scroll per model (render object), by bone, as its draw
+	// module last set it (see Sage2MaterialClass::Set_Bone_Scroll)
+	struct BoneScroll
+	{
+		unsigned frame;		// WW3D's frame count when set
+		std::vector<std::pair<int, float> > bones;
+	};
+	std::map<const RenderObjClass*, BoneScroll> s_boneScrolls;
+
+	const BoneScroll* Find_Bone_Scroll(const RenderObjClass* model)
+	{
+		std::map<const RenderObjClass*, BoneScroll>::const_iterator it = s_boneScrolls.find(model);
+		if (it == s_boneScrolls.end() || WW3D::Get_Frame_Count() - it->second.frame > 2)
+			return nullptr;	// not set lately: a model whose draw module stopped updating it
+		return &it->second;
+	}
+
+	/// The skin's vertices bound to a scrolled bone carry its offset in their colour's alpha
+	void Apply_Bone_Scroll(MeshModelClass* model, const BoneScroll& scroll, std::vector<SideVertex>& frame)
+	{
+		const uint16* links = model->Get_Vertex_Bone_Links();
+		if (links == nullptr)
+			return;
+		static std::map<MeshModelClass*, bool> s_logged;
+		if (!s_logged[model])
+		{
+			s_logged[model] = true;
+			unsigned bound = 0;
+			for (size_t i = 0; i < frame.size(); ++i)
+				for (size_t b = 0; b < scroll.bones.size(); ++b)
+					if (scroll.bones[b].first == (int)links[i])
+					{
+						++bound;
+						break;
+					}
+			Sage2_Log("mesh %s: treads scrolled, %u of %u vertices on %u bones", model->Get_Name(), bound, (unsigned)frame.size(),
+				(unsigned)scroll.bones.size());
+		}
+		for (size_t i = 0; i < frame.size(); ++i)
+		{
+			for (size_t b = 0; b < scroll.bones.size(); ++b)
+			{
+				if (scroll.bones[b].first == (int)links[i])
+				{
+					float offset = scroll.bones[b].second;
+					offset -= (float)(int)offset;
+					if (offset < 0.0f)
+						offset += 1.0f;
+					DWORD alpha = (DWORD)(offset * 255.0f + 0.5f);
+					frame[i].color = (frame[i].color & 0x00FFFFFF) | ((alpha > 255 ? 255 : alpha) << 24);
+					break;
+				}
+			}
+		}
+	}
+
 	/// The side stream for the shared vertex buffer the mesh sits in, with the mesh's vertices
 	/// written at its offset (a skin's every frame, with its current pose; a rigid mesh's once).
-	IDirect3DVertexBuffer9* Side_Stream_For(VertexBufferClass* vb, MeshModelClass* model, unsigned baseVertex, const HTreeClass* skinTree, bool dynamic)
+	IDirect3DVertexBuffer9* Side_Stream_For(VertexBufferClass* vb, MeshModelClass* model, unsigned baseVertex, const HTreeClass* skinTree, bool dynamic,
+		const BoneScroll* scroll = nullptr)
 	{
 		if (vb == nullptr)
 			return nullptr;
@@ -485,6 +545,8 @@ namespace
 				Deformed_Frame(model, skinTree, frame);
 			else
 				frame = Bind_Frame(model);
+			if (scroll != nullptr)
+				Apply_Bone_Scroll(model, *scroll, frame);
 			void* p = nullptr;
 			if (FAILED(side.buffer->Lock(baseVertex * SIDE_STRIDE, nv * SIDE_STRIDE, &p, 0)))
 				return nullptr;
@@ -704,7 +766,11 @@ bool Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const
 	// another model's tangents, or zeros: a vertex colour of 0, drawn black.
 	else
 		baseVertex += renderer->Get_Vertex_Offset();
-	IDirect3DVertexBuffer9* side = direct ? Side_Stream_For(state.vertex_buffers[0], model, baseVertex, skin ? skinTree : nullptr, dynamic) : nullptr;
+	// Tiberium Project @feature a skin drawn with a tread effect: its treads' scroll (rewritten with
+	// its pose every frame, as its vertex buffer is dynamic)
+	const BoneScroll* scroll = (mat.treadScroll && skin && dynamic && mesh->Get_Container() != nullptr)
+		? Find_Bone_Scroll(mesh->Get_Container()) : nullptr;
+	IDirect3DVertexBuffer9* side = direct ? Side_Stream_For(state.vertex_buffers[0], model, baseVertex, skin ? skinTree : nullptr, dynamic, scroll) : nullptr;
 	DWORD fvf = device8->Get_Current_FVF();
 	IDirect3DVertexDeclaration9* decl = fvf ? Declaration_For(fvf) : nullptr;
 	if (side == nullptr || decl == nullptr)
@@ -833,8 +899,38 @@ Sage2MaterialClass::LegacyMode Sage2MaterialClass::Get_Legacy_Mode()
 }
 
 //-------------------------------------------------------------------------------------------------
+void Sage2MaterialClass::Set_Bone_Scroll(const RenderObjClass* model, const int* bones, const float* offsets, int count)
+{
+	if (model == nullptr)
+		return;
+	const unsigned frame = WW3D::Get_Frame_Count();
+	// models whose draw modules stopped setting theirs (gone without clearing): dropped now and then
+	if (s_boneScrolls.size() > 256)
+	{
+		for (std::map<const RenderObjClass*, BoneScroll>::iterator it = s_boneScrolls.begin(); it != s_boneScrolls.end();)
+		{
+			if (frame - it->second.frame > 30)
+				s_boneScrolls.erase(it++);
+			else
+				++it;
+		}
+	}
+	BoneScroll& scroll = s_boneScrolls[model];
+	scroll.frame = frame;
+	scroll.bones.clear();
+	for (int i = 0; i < count; ++i)
+		if (bones[i] > 0)
+			scroll.bones.push_back(std::make_pair(bones[i], offsets[i]));
+}
+
+void Sage2MaterialClass::Clear_Bone_Scroll(const RenderObjClass* model)
+{
+	s_boneScrolls.erase(model);
+}
+
 void Sage2MaterialClass::Shutdown()
 {
+	s_boneScrolls.clear();
 	Sage2BuiltinMaterialClass::Shutdown();
 	Sage2SceneClass::Shutdown();
 	Sage2GlobalsClass::Shutdown();

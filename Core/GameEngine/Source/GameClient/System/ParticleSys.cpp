@@ -1958,6 +1958,15 @@ const ParticleInfo *ParticleSystem::generateParticleInfo( Int particleNum, Int p
 	// specified, which must know where the particle is in space.
 	info.m_pos = *computeParticlePosition();
 	info.m_vel = *computeParticleVelocity( &info.m_pos );
+	// Tiberium Project @feature the template's volume offset, after the velocity (outward from the
+	// volume's own centre)
+	if ( m_template != nullptr )
+	{
+		const Coord3D &volumeOffset = m_template->getVolumeOffset();
+		info.m_pos.x += volumeOffset.x;
+		info.m_pos.y += volumeOffset.y;
+		info.m_pos.z += volumeOffset.z;
+	}
 
 	// transform the position and velocity, if necessary
 	/// @todo Avoid conversion from Coord3D to Vector3 somehow
@@ -3048,6 +3057,8 @@ const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 	{ "GeometryLength",					INI::parseGameClientRandomVariable,	nullptr,	offsetof( ParticleSystemTemplate, m_geometryLength ) },
 	{ "GeometryLengthRate",			INI::parseGameClientRandomVariable,	nullptr,	offsetof( ParticleSystemTemplate, m_geometryLengthRate ) },
 	{ "GeometryLengthDamping",	INI::parseGameClientRandomVariable,	nullptr,	offsetof( ParticleSystemTemplate, m_geometryLengthDamping ) },
+	// Tiberium Project @feature the emission volume moved off the origin
+	{ "VolumeOffset",						INI::parseCoord3D,			nullptr,	offsetof( ParticleSystemTemplate, m_volumeOffset ) },
 
 
 	{ nullptr,											nullptr,																					nullptr,		0 },
@@ -3154,6 +3165,7 @@ ParticleSystemTemplate::ParticleSystemTemplate( const AsciiString &name ) :
 	m_geometryLength.setRange( 1.0f, 1.0f );
 	m_geometryLengthRate.setRange( 0.0f, 0.0f );
 	m_geometryLengthDamping.setRange( 1.0f, 1.0f );
+	m_volumeOffset.x = m_volumeOffset.y = m_volumeOffset.z = 0.0f;
 }
 
 // ------------------------------------------------------------------------------------------------

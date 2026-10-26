@@ -45,6 +45,7 @@
 
 class DX8PolygonRendererClass;
 class MeshClass;
+class RenderObjClass;
 class Sage2EffectClass;
 class TextureClass;
 class VertexMaterialClass;
@@ -70,6 +71,14 @@ public:
 
 	/// The effect Art\Shaders\<name>.fxo, loaded once; nullptr when missing or broken.
 	static Sage2EffectClass* Get_Effect(const char* name);
+
+	/// Tiberium Project @feature C&C4's scrolling treads. C&C4's tread effects add the vertex colour's
+	/// alpha to the texture's U: its tread draw sets, per bone, how far the treads bound to that bone
+	/// have scrolled. Here the draw module hands this frame's offsets (0..1) for bones of its render
+	/// object (the model, by bone index); the skins drawn with a tread effect carry them in the alpha
+	/// of their vertices bound to those bones. Clear_Bone_Scroll when the render object goes.
+	static void Set_Bone_Scroll(const RenderObjClass* model, const int* bones, const float* offsets, int count);
+	static void Clear_Bone_Scroll(const RenderObjClass* model);
 
 	/// Frees the effects, side streams and caches (before the device goes away).
 	static void Shutdown();

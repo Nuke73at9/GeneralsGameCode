@@ -261,6 +261,8 @@ struct ModelConditionInfo
 
 private:
 	void validateWeaponBarrelInfo() const;
+	void validateMultiBoneBarrels(Int wslot) const;	///< Tiberium Project @feature a slot named with several bones
+	void expandWeaponBoneNames(const AsciiString& names, std::vector<Int>& bones, std::vector<const Matrix3D*>* matrices) const;
 	void validateTurretInfo() const;
 	void validateCachedBones(RenderObjClass* robj, Real scale) const;
 };
@@ -301,6 +303,17 @@ public:
 	ModelConditionFlags								m_ignoreConditionStates;
 	Bool															m_okToChangeModelColor;
 	Bool															m_proceduralDamage;		///< Tiberium Project: draw C&C4-style procedural damage (Direct3D 9 renderer)
+	/// Tiberium Project @feature C&C4's scrolling treads (its TreadScrollDraw): the treads bound to a left
+	/// and a right bone scroll by the distance driven times the multiplier (texture widths per world
+	/// unit), turning in place the two sides opposite; not below the fraction of the locomotor's speed
+	struct TreadScrollInfo
+	{
+		AsciiString m_leftBone;
+		AsciiString m_rightBone;
+		Real m_multiplier;
+		Real m_driveSpeedFraction;
+	};
+	std::vector<TreadScrollInfo>			m_treadScrolls;
 	Bool															m_animationsRequirePower;///< Should UnderPowered disable type pause animations in this draw module?
 #ifdef CACHE_ATTACH_BONE
 	mutable Bool											m_attachToDrawableBoneOffsetValid;
@@ -329,6 +342,7 @@ public:
 
 private:
 	static void parseConditionState( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ );
+	static void parseTreadScroll( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ );	///< Tiberium Project
 
 public:
  	virtual void crc( Xfer *xfer ) override;
@@ -509,6 +523,11 @@ private:
 	Bool													m_pauseAnimation;
 	Int														m_animationMode;
 	Real													m_damageLook;	///< Tiberium Project: shown damage 0..1, easing toward the real damage
+	std::vector<Int>										m_treadScrollBones;		///< Tiberium Project: left, right bone of each TreadScroll, in m_treadScrollRobj
+	std::vector<Real>										m_treadScrollOffsets;	///< Tiberium Project: their offsets so far
+	const RenderObjClass*									m_treadScrollRobj;		///< Tiberium Project: the render object the bones were found in
+	Real													m_treadScrollLastAngle;	///< Tiberium Project: the facing at the last draw
+	void updateTreadScroll();	///< Tiberium Project @feature C&C4's scrolling treads
 
 	void adjustAnimation(const ModelConditionInfo* prevState, Real prevAnimFraction);
 	Real getCurrentAnimFraction() const;

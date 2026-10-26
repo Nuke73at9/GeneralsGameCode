@@ -650,6 +650,11 @@ public:
 	/// the quads' length for a particle (its personality picks within the ranges) at an age in frames
 	Real getGeometryLength(UnsignedInt personality, UnsignedInt ageFrames) const;
 
+	/// Tiberium Project @feature the emission volume moved off the system's origin (C&C4's volume
+	/// Offset: smoke rising from a vehicle's back, sparks off to one side), in the system's own
+	/// axes; outward velocities still point away from the volume's centre. Drawing only.
+	const Coord3D& getVolumeOffset() const { return m_volumeOffset; }
+
 protected:
 	friend class ParticleSystemManager;					///< @todo remove this friendship
 	friend class ParticleSystem;								///< @todo remove this friendship
@@ -684,6 +689,7 @@ protected:
 	GameClientRandomVariable m_geometryLength;			///< GeometryLength: the quads' length at the start
 	GameClientRandomVariable m_geometryLengthRate;		///< GeometryLengthRate: added to it each frame
 	GameClientRandomVariable m_geometryLengthDamping;	///< GeometryLengthDamping: the rate's factor each frame
+	Coord3D m_volumeOffset;				///< VolumeOffset (on the template only)
 
 	// template attribute data inherited from ParticleSystemInfo class
 };

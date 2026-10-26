@@ -81,7 +81,7 @@ namespace
 	// -testBase: the structure being built (its construction runs over BASE_BUILD_FRAMES) and the one
 	// destroyed BASE_KILL_FRAMES in
 	std::vector<ObjectID> s_baseBuilding;
-	// -testSpawn: the objects to place, what to do with them, and what was made
+	// -testSpawn: the objects to place (a row, or rows of six), what to do with them, and what was made
 	Int s_spawnFrame = -1;
 	std::vector<std::string> s_spawnNames;
 	Bool s_spawnMove = FALSE, s_spawnFight = FALSE, s_spawnDamage = FALSE;
@@ -681,22 +681,53 @@ void TiberiumTest::update()
 				log( "frame %d: no object %s", (int)s_frame, s_spawnNames[k].c_str() );
 				continue;
 			}
+			// one row (fighting: their targets stand ahead), or rows of six going away from the view
+			const Int perRow = s_spawnFight ? count : 6;
+			const Int col = k % perRow, row = k / perRow;
+			const Int inRow = ( count - row * perRow ) < perRow ? ( count - row * perRow ) : perRow;
 			Coord3D p = center;
-			p.x += ( k - ( count - 1 ) * 0.5f ) * spacing;
-			p.y -= 25.0f;
+			p.x += ( col - ( inRow - 1 ) * 0.5f ) * spacing;
+			p.y += row * 90.0f - 25.0f;
 			p.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( p.x, p.y ) : 0.0f;
 			obj->setPosition( &p );
 			obj->setOrientation( PI * 0.5f );
 			s_spawned.push_back( obj->getID() );
-			if ( s_spawnFight )
+		}
+		// the targets: one of Zero Hour's tanks ahead of each, for another player, enemies both ways
+		// (a test map's spawned units can fall to the neutral side, which counts its own as allies,
+		// and splash damage, a shell bursting by its target, skips allies)
+		if ( s_spawnFight && !s_spawned.empty() )
+		{
+			const Object *first = TheGameLogic->findObjectByID( s_spawned[0] );
+			Player *ours = first != nullptr ? first->getControllingPlayer() : nullptr;
+			const ThingTemplate *tt = TheThingFactory->findTemplate( "ChinaTankBattleMaster" );
+			Player *foe = nullptr;
+			for ( Int n = 0; n < ThePlayerList->getPlayerCount() && foe == nullptr && tt != nullptr; ++n )
 			{
-				// a target for each: one of Zero Hour's tanks, neutral, ahead
-				const ThingTemplate *tt = TheThingFactory->findTemplate( "ChinaTankBattleMaster" );
-				Player *neutral = ThePlayerList->getNeutralPlayer();
-				Object *target = tt != nullptr && neutral != nullptr ? TheThingFactory->newObject( tt, neutral->getDefaultTeam() ) : nullptr;
+				Player *candidate = ThePlayerList->getNthPlayer( n );
+				if ( candidate == nullptr || candidate == ours || candidate->getDefaultTeam() == nullptr )
+					continue;
+				Object *probe = TheThingFactory->newObject( tt, candidate->getDefaultTeam() );
+				if ( probe != nullptr && probe->getControllingPlayer() != ours )
+					foe = probe->getControllingPlayer();
+				if ( probe != nullptr )
+					TheGameLogic->destroyObject( probe );
+			}
+			if ( foe != nullptr && ours != nullptr )
+			{
+				foe->setPlayerRelationship( ours, ENEMIES );
+				ours->setPlayerRelationship( foe, ENEMIES );
+			}
+			log( "fight targets: player %d against player %d", foe != nullptr ? (int)foe->getPlayerIndex() : -1,
+				ours != nullptr ? (int)ours->getPlayerIndex() : -1 );
+			for ( size_t k = 0; k < s_spawned.size() && tt != nullptr; ++k )
+			{
+				const Object *obj = TheGameLogic->findObjectByID( s_spawned[k] );
+				Player *owner = foe != nullptr ? foe : ThePlayerList->getNeutralPlayer();
+				Object *target = obj != nullptr && owner != nullptr ? TheThingFactory->newObject( tt, owner->getDefaultTeam() ) : nullptr;
 				if ( target != nullptr )
 				{
-					Coord3D q = p;
+					Coord3D q = *obj->getPosition();
 					q.y += 160.0f;
 					q.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( q.x, q.y ) : 0.0f;
 					target->setPosition( &q );
@@ -740,9 +771,14 @@ void TiberiumTest::update()
 				const Object *target = k < s_spawnTargets.size() ? TheGameLogic->findObjectByID( s_spawnTargets[k] ) : nullptr;
 				const BodyModuleInterface *tb = target != nullptr ? target->getBodyModule() : nullptr;
 				const Weapon *w = obj->getCurrentWeapon();
-				log( "frame %d: %s #%d at %.0f %.0f, health %.0f/%.0f, target health %.0f, shots fired %d", (int)s_frame,
+				const DamageInfo* last = tb != nullptr ? tb->getLastDamageInfo() : nullptr;
+				log( "frame %d: %s #%d at %.0f %.0f, health %.0f/%.0f, target health %.0f (last hit %.1f, type %d, from %d), "
+					"shots fired %d, weapon %s, status %d, range %.0f", (int)s_frame,
 					obj->getTemplate()->getName().str(), (int)k, pos->x, pos->y, body->getHealth(), body->getMaxHealth(),
-					tb != nullptr ? tb->getHealth() : -1.0f, w != nullptr ? (int)w->getLastShotFrame() : -1 );
+					tb != nullptr ? tb->getHealth() : -1.0f, last != nullptr ? last->out.m_actualDamageDealt : -1.0f,
+					last != nullptr ? (int)last->in.m_damageType : -1, last != nullptr ? (int)last->in.m_sourceID : -1,
+					w != nullptr ? (int)w->getLastShotFrame() : -1, w != nullptr ? w->getName().str() : "none",
+					w != nullptr ? (int)w->getStatus() : -1, w != nullptr ? w->getAttackRange( obj ) : 0.0f );
 			}
 			if ( s_spawnDamage && body != nullptr && ( since == 90 || since == 180 || since == 270 ) )
 			{

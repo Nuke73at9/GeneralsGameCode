@@ -28,6 +28,7 @@
 #include "sage2material.h"
 #include "sage2scene.h"
 #include "sage2shadow.h"
+#include "sage2ssao.h"
 #include "sage2terrain.h"
 #include "sage2texture.h"
 #include "texture.h"
@@ -52,6 +53,8 @@ namespace
 	float s_tint = -1.0f;
 	float s_caustics = 0.6f;
 	float s_skyStrength = 0.6f;
+	float s_reflectionStrength = 1.5f;	// Tiberium Project @feature screen-space reflections
+	bool s_loggedReflections = false;
 	float s_shallow = 20.0f;	// RA3's table twenty units down: teal
 	TextureClass* s_sky = nullptr;	// the water renderer's, for this frame
 	float s_skyParams[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
@@ -134,6 +137,11 @@ void Sage2WaterClass::Set_Shallow(float tableDepth)
 void Sage2WaterClass::Set_Sky_Strength(float strength)
 {
 	s_skyStrength = strength < 0.0f ? 0.0f : (strength > 2.0f ? 2.0f : strength);
+}
+
+void Sage2WaterClass::Set_Reflection_Strength(float strength)
+{
+	s_reflectionStrength = strength < 0.0f ? 0.0f : (strength > 4.0f ? 4.0f : strength);
 }
 
 void Sage2WaterClass::Set_Sky(TextureClass* sky, float texelsPerUnit, float uScrollPerSecond, float vScrollPerSecond, const float color[3])
@@ -231,6 +239,28 @@ bool Sage2WaterClass::Draw(unsigned vertexCount, unsigned triangleCount, Texture
 	float skyParams[4] = { sky != nullptr ? s_skyStrength : 0.0f, s_skyParams[1], s_skyParams[2], s_skyParams[3] };
 	s_effect->Set_Float("WaterSky", skyParams, 4);
 	s_effect->Set_Float("WaterSkyColor", s_skyColor, 4);
+	// Tiberium Project @feature screen-space reflections: the rays march through the whole scene's
+	// depth when the ambient occlusion pass made it this frame (else the ground's), and map clip
+	// space to the frame through the scene's viewport (which stops above the control bar)
+	IDirect3DTexture9* sceneDepth = Sage2SSAOClass::Get_Scene_Depth_Texture();
+	if (sceneDepth != nullptr)
+		s_effect->Set_Texture("SceneDepthTexture", sceneDepth);
+	D3DVIEWPORT9 view;
+	device->GetViewport(&view);
+	const float targetW = s_width > 0 ? (float)s_width : (float)view.Width;
+	const float targetH = s_height > 0 ? (float)s_height : (float)view.Height;
+	const float viewportToTarget[4] = { 0.5f * view.Width / targetW, -0.5f * view.Height / targetH,
+		(view.X + 0.5f * view.Width) / targetW, (view.Y + 0.5f * view.Height) / targetH };
+	s_effect->Set_Float("ViewportToTarget", viewportToTarget, 4);
+	const float ssrParams[4] = { s_reflectionStrength, 4.0f, 700.0f, sceneDepth != nullptr ? 1.0f : 0.0f };
+	s_effect->Set_Float("WaterSSR", ssrParams, 4);
+	if (!s_loggedReflections)
+	{
+		s_loggedReflections = true;
+		Sage2_Log("water: screen-space reflections at %.2f, through %s; viewport %u,%u %ux%u of %.0fx%.0f", s_reflectionStrength,
+			sceneDepth != nullptr ? "the whole scene's depth" : "the ground's depth (no ambient occlusion pass)",
+			(unsigned)view.X, (unsigned)view.Y, (unsigned)view.Width, (unsigned)view.Height, targetW, targetH);
+	}
 	IDirect3DBaseTexture9* edge = river != nullptr ? D3D_Texture(river->edgeTexture) : nullptr;
 	if (edge != nullptr)
 		s_effect->Set_Texture("EdgeTexture", edge);

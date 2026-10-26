@@ -51,6 +51,9 @@ public:
 	static void Set_Shallow(float tableDepth);
 	/// Options.ini: Sage2WaterSky, how much of the sky the water reflects (by the Fresnel term)
 	static void Set_Sky_Strength(float strength);
+	/// Options.ini: Sage2WaterReflections, how strongly what stands over the water (cliffs,
+	/// buildings, units, trees) is reflected in screen space (by the Fresnel term; 0: not at all)
+	static void Set_Reflection_Strength(float strength);
 	/// The sky the water reflects this frame: Zero Hour's sky texture for the time of day, its
 	/// repeats per world unit, scroll per second (u, v) and colour (its four corners' average)
 	static void Set_Sky(TextureClass* sky, float texelsPerUnit, float uScrollPerSecond, float vScrollPerSecond, const float color[3]);

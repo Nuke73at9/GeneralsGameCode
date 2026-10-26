@@ -22,7 +22,10 @@
 // and foam run along the river's own texture coordinates, which Zero Hour scrolls as the river
 // flows (as RiverWater.fx does), and their banks fade by Zero Hour's river edge texture
 // (TWAlphaEdge). No reflection texture: C&C4 adds at most a tenth of a dim one, the cube
-// carries the sky.
+// carries the sky. Tiberium Project @feature what stands over the water (cliffs, buildings, units,
+// trees) is reflected in screen space: the reflected ray marched through the scene's depth (the
+// whole scene's with the ambient occlusion on, else the ground's), the frame copy read where it
+// meets something, in place of the sky there.
 //
 // Compiled with shaders/sage2/build_effects.py to tiberium_water.fxo, packed into the mod as
 // Art\Shaders\tiberium_water.fxo.
@@ -89,6 +92,18 @@ SAMPLER_2D_END
 SAMPLER_2D_BEGIN( DepthTexture,
 	string UIWidget = "None";
 	string SasBindAddress = "WW3D.DepthTexture";
+	)
+	MinFilter = Point;
+	MagFilter = Point;
+	MipFilter = None;
+	AddressU = Clamp;
+	AddressV = Clamp;
+SAMPLER_2D_END
+
+// the whole scene's view distance (the ground, the objects, the trees), when the ambient
+// occlusion pass made it this frame, for the reflections
+SAMPLER_2D_BEGIN( SceneDepthTexture,
+	string UIWidget = "None";
 	)
 	MinFilter = Point;
 	MagFilter = Point;
@@ -243,6 +258,20 @@ float4 WaterRiver
 	string UIWidget = "None";
 > = float4(0, 0, 0, 0);
 
+// screen-space reflections: x strength (0: none), y the ray's first step in world units, z how far
+// a ray goes (world units), w 1 with the whole scene's depth bound (else the ground's, the pre-pass)
+float4 WaterSSR
+<
+	string UIWidget = "None";
+> = float4(0, 4, 700, 0);
+
+// clip space to the render target's texture coordinates (xy scale, zw offset): the scene's
+// viewport stops above the control bar, so clip space does not span the target
+float4 ViewportToTarget
+<
+	string UIWidget = "None";
+> = float4(0.5, -0.5, 0.5, 0.5);
+
 float4 OneOverFrameBufferSizeW
 <
 	string UIWidget = "None";
@@ -332,6 +361,75 @@ float3 Caustics(float3 floorPosition, float3 floorNormal, float lutAlpha)
 	float sunFalloff = max(0, dot(floorNormal, toSun));
 	float3 caustics = samp * lutAlpha * lerp(DirectionalLight_0_Color.xyz, float3(1, 1, 1), 0.75) * sunFalloff;
 	return GammaToLinear(caustics * 5);
+}
+
+// the scene's view distance at a place in the frame: the whole scene's, else the ground's
+float SceneViewZ(float2 texCoord)
+{
+	float z;
+	if (WaterSSR.w > 0.5)
+		z = tex2Dlod(SAMPLER(SceneDepthTexture), float4(texCoord, 0, 0)).x;
+	else
+		z = tex2Dlod(SAMPLER(DepthTexture), float4(texCoord, 0, 0)).x;
+	return abs(z);
+}
+
+// Tiberium Project @feature screen-space reflections: the reflected ray from the surface, marched
+// in steps that grow with the distance, each point projected into the frame and set against the
+// scene's depth there; the first point that falls behind the scene, within a thickness, is refined
+// by halving and read from the frame copy. rgb: the colour met, a: how much to trust it (nothing
+// met, the frame's edge, the ray's end)
+float4 ScreenSpaceReflection(float3 origin, float3 dir)
+{
+	// no break: this compiler (fxc 10.1) encodes the loop's breaks here as "break if -1 != -1", so
+	// they never fire; the march runs to the end, skipping its work once done
+	float stepLength = WaterSSR.y;
+	float travelled = 0;
+	float done = 0;
+	float4 result = 0;
+	[loop]
+	for (int i = 0; i < 28; ++i)
+	{
+		if (done == 0)
+		{
+			float next = travelled + stepLength;
+			float4 clip = mul(float4(origin + dir * next, 1), ViewProjection);
+			float2 ndc = clip.xy / max(clip.w, 1.0);
+			if (next > WaterSSR.z || clip.w < 1.0 || max(abs(ndc.x), abs(ndc.y)) > 1.0)
+			{
+				done = 1;
+			}
+			else if (clip.w > SceneViewZ(ndc * ViewportToTarget.xy + ViewportToTarget.zw))
+			{
+				// between the last point in front and this one behind: halve towards the surface
+				float lo = travelled, hi = next;
+				[unroll]
+				for (int j = 0; j < 5; ++j)
+				{
+					float mid = (lo + hi) * 0.5;
+					float4 c = mul(float4(origin + dir * mid, 1), ViewProjection);
+					if (c.w > SceneViewZ(c.xy / c.w * ViewportToTarget.xy + ViewportToTarget.zw))
+						hi = mid;
+					else
+						lo = mid;
+				}
+				float4 hitClip = mul(float4(origin + dir * hi, 1), ViewProjection);
+				float2 hitNdc = hitClip.xy / hitClip.w;
+				float2 hitTexCoord = hitNdc * ViewportToTarget.xy + ViewportToTarget.zw;
+				// a surface met, not the ray passing behind something nearer the camera
+				if (hitClip.w - SceneViewZ(hitTexCoord) < 6.0 + hi * 0.03)
+				{
+					float edge = saturate((1.0 - max(abs(hitNdc.x), abs(hitNdc.y))) * 8.0);
+					float fade = saturate((1.0 - hi / WaterSSR.z) * 4.0);
+					result = float4(GammaToLinear(tex2Dlod(SAMPLER(RefractionTexture), float4(hitTexCoord, 0, 0)).xyz), edge * fade);
+					done = 1;
+				}
+			}
+			travelled = next;
+			stepLength *= 1.16;
+		}
+	}
+	return result;
 }
 
 float4 PS_Water(VSOutput In, uniform bool hasShadow, float2 vPos : PIXELLOC) : COLOR
@@ -431,6 +529,21 @@ float4 PS_Water(VSOutput In, uniform bool hasShadow, float2 vPos : PIXELLOC) : C
 		float2 skyPoint = worldPosition.xy + up.xy * (WaterSkyColor.w / up.z);
 		float2 skyTexCoord = skyPoint * WaterSky.y + Time * WaterSky.zw;
 		skyColor = GammaToLinear(tex2D(SAMPLER(SkyTexture), skyTexCoord).xyz * WaterSkyColor.xyz) * WaterSky.x * fresnel * fresnel;
+	}
+
+	// what stands over the water, reflected, in place of the sky there; the ray off a calmer
+	// surface than the ripples' (their full tilt shatters it)
+	if (WaterSSR.x > 0)
+	{
+		float3 calm = normalize(float3(nDisp * WaterParams.x * 0.3, 50.0));
+		float3 rayDir = -reflect(worldEyeDir, calm);
+		if (rayDir.z > 0.02)
+		{
+			float4 ssr = ScreenSpaceReflection(worldPosition + float3(0, 0, 0.5), rayDir);
+			float weight = ssr.a * saturate(WaterSSR.x * fresnel);
+			waterColor = lerp(waterColor, ssr.rgb * shroud, weight);
+			skyColor *= 1.0 - ssr.a;
+		}
 	}
 
 	float3 color = waterColor + shroud * (foamSamp + envcolor + skyColor);

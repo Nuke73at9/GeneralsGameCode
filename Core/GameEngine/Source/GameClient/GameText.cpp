@@ -450,9 +450,10 @@ void GameTextManager::init()
 	// string overlay (e.g. Custom Missions, v1.05) that never got folded into generals.csf. Missing on
 	// unpatched installs, and expected to be absent then.
 	// Tiberium Project @feature data/tiberium.str, the Tiberium mod's strings (shipped in its .big),
-	// is merged the same way, after the patch overlay.
+	// is merged the same way, after the patch overlay, and data/c4units.str, the names of the units
+	// converted from the user's C&C4 install (written by the converter into its archive).
 	{
-		const Char *OVERLAY_FILES[] = { "data/patch.str", "data/tiberium.str" };
+		const Char *OVERLAY_FILES[] = { "data/patch.str", "data/tiberium.str", "data/c4units.str" };
 		const Int OVERLAY_COUNT = ARRAY_SIZE(OVERLAY_FILES);
 
 		// GeneralsX @bugfix UnicodeApocalypse 10/09/2026 getStringCount() pads by 500; the parsed count below is the real check.

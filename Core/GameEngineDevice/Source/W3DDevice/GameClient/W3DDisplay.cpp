@@ -1029,6 +1029,7 @@ void W3DDisplay::init()
 			Sage2WaterClass::Set_Look(prefs.getReal("Sage2WaterDepthScale", 2.5f), prefs.getReal("Sage2WaterTint", -1.0f),
 				prefs.getReal("Sage2WaterCaustics", 0.6f));	// RA3's depth table and caustics under it
 			Sage2WaterClass::Set_Sky_Strength(prefs.getReal("Sage2WaterSky", 0.6f));	// the sky reflected (by the Fresnel term; RA3's ocean adds half flat)
+			Sage2WaterClass::Set_Reflection_Strength(prefs.getReal("Sage2WaterReflections", 1.5f));	// Tiberium Project @feature what stands over the water, reflected in screen space
 			Sage2WaterClass::Set_Shallow(prefs.getReal("Sage2WaterShallow", 20.0f));	// shallow water tinted as RA3's table is twenty units down
 			WW3D::Enable_Night_Lights_On_Load(cnc4Style && prefs.getBool("Sage2NightLights", TRUE));	// buildings' lit windows glow at night
 			Sage2SceneClass::Set_Point_Light_Strength(prefs.getReal("Sage2PointLights", 2.0f));	// explosions and fires light the ground, as Zero Hour's vertex lighting did (ambient plus diffuse; 0: off)

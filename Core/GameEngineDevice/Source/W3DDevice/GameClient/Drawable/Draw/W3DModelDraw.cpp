@@ -67,7 +67,11 @@
 #include "WW3D2/rendobj.h"
 #include "WW3D2/mesh.h"
 #include "WW3D2/meshmdl.h"
+#include "WW3D2/ww3d.h"
 #include "Common/BitFlagsIO.h"
+#ifdef RTS_RENDERER_D3D9
+#include "WW3D2/sage2/sage2material.h"	// Tiberium Project @feature scrolling treads
+#endif
 
 
 //-------------------------------------------------------------------------------------------------
@@ -755,6 +759,14 @@ void ModelConditionInfo::validateWeaponBarrelInfo() const
 //    DEBUG_ASSERTCRASH( plbName.isNotEmpty(), ("You appear to have a missing projectilelaunchbonename. \n Promptly ignore this assert if this model is used by a non-projectile-weapon-bearing unit\nModel name = %s.", m_modelName.str()) );
 //#endif
 
+		// Tiberium Project @feature a slot named with several bones (see parseWeaponBoneName)
+		if (fxBoneName.find(' ') != nullptr || recoilBoneName.find(' ') != nullptr || mfName.find(' ') != nullptr
+			|| plbName.find(' ') != nullptr)
+		{
+			validateMultiBoneBarrels(wslot);
+			continue;
+		}
+
 		if (fxBoneName.isNotEmpty() || recoilBoneName.isNotEmpty() || mfName.isNotEmpty() || plbName.isNotEmpty())
 		{
 			Int prevFxBone = 0;
@@ -856,6 +868,93 @@ void ModelConditionInfo::validateWeaponBarrelInfo() const
 		}
 	}
 	m_validStuff |= BARRELS_VALID;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the bones a weapon bone entry names, in order: for each name its numbered
+// bones (name01, name02 ...), or the bone itself when it has none
+void ModelConditionInfo::expandWeaponBoneNames(const AsciiString& names, std::vector<Int>& bones, std::vector<const Matrix3D*>* matrices) const
+{
+	bones.clear();
+	if (matrices != nullptr)
+		matrices->clear();
+	char token[256];
+	const char* p = names.str();
+	while (*p != '\0')
+	{
+		while (*p == ' ')
+			++p;
+		Int len = 0;
+		while (p[len] != '\0' && p[len] != ' ')
+			++len;
+		if (len == 0)
+			break;
+		if (len >= (Int)sizeof(token) - 3)
+			len = (Int)sizeof(token) - 4;
+		memcpy(token, p, len);
+		token[len] = '\0';
+		p += len;
+
+		Bool numbered = false;
+		char buffer[256];
+		for (Int i = 1; i <= 99; ++i)
+		{
+			snprintf(buffer, ARRAY_SIZE(buffer), "%s%02d", token, i);
+			Int index = 0;
+			const Matrix3D* mtx = findPristineBone(NAMEKEY(buffer), &index);
+			if (mtx == nullptr && index == 0)
+				break;
+			numbered = true;
+			bones.push_back(index);
+			if (matrices != nullptr)
+				matrices->push_back(mtx);
+		}
+		if (!numbered)
+		{
+			Int index = 0;
+			const Matrix3D* mtx = findPristineBone(NAMEKEY(token), &index);
+			if (mtx != nullptr || index != 0)
+			{
+				bones.push_back(index);
+				if (matrices != nullptr)
+					matrices->push_back(mtx);
+			}
+		}
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the barrels of a slot named with several bones: barrel k takes the k-th
+// bone of each kind; fewer effect or launch bones than barrels repeat in turn, as one effect bone
+// serves every muzzle flash in Zero Hour's own case
+void ModelConditionInfo::validateMultiBoneBarrels(Int wslot) const
+{
+	std::vector<Int> fx, recoil, flash, launch;
+	std::vector<const Matrix3D*> launchMatrices;
+	expandWeaponBoneNames(m_weaponFireFXBoneName[wslot], fx, nullptr);
+	expandWeaponBoneNames(m_weaponRecoilBoneName[wslot], recoil, nullptr);
+	expandWeaponBoneNames(m_weaponMuzzleFlashName[wslot], flash, nullptr);
+	expandWeaponBoneNames(m_weaponProjectileLaunchBoneName[wslot], launch, &launchMatrices);
+	size_t count = fx.size();
+	if (recoil.size() > count) count = recoil.size();
+	if (flash.size() > count) count = flash.size();
+	if (launch.size() > count) count = launch.size();
+	for (size_t k = 0; k < count; ++k)
+	{
+		WeaponBarrelInfo info;
+		info.m_projectileOffsetMtx.Make_Identity();
+		if (!fx.empty())
+			info.m_fxBone = fx[k % fx.size()];
+		if (k < recoil.size())
+			info.m_recoilBone = recoil[k];
+		if (k < flash.size())
+			info.m_muzzleFlashBone = flash[k];
+		if (!launch.empty() && launchMatrices[k % launch.size()] != nullptr)
+			info.m_projectileOffsetMtx = *launchMatrices[k % launch.size()];
+		m_weaponBarrelInfoVec[wslot].push_back(info);
+		if (info.m_recoilBone != 0 || info.m_muzzleFlashBone != 0)
+			m_hasRecoilBonesOrMuzzleFlashes[wslot] = true;
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1197,6 +1296,20 @@ static void parseAsciiStringLC( INI* ini, void * /*instance*/, void *store, cons
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature TreadScroll = LeftBone RightBone Multiplier [DriveSpeedFraction]
+void W3DModelDrawModuleData::parseTreadScroll(INI* ini, void* instance, void* /*store*/, const void* /*userData*/)
+{
+	W3DModelDrawModuleData* self = (W3DModelDrawModuleData*)instance;
+	TreadScrollInfo info;
+	info.m_leftBone = ini->getNextAsciiString();
+	info.m_rightBone = ini->getNextAsciiString();
+	info.m_multiplier = INI::scanReal(ini->getNextToken());
+	const char* fraction = ini->getNextTokenOrNull();
+	info.m_driveSpeedFraction = fraction != nullptr ? INI::scanPercentToReal(fraction) : 0.05f;
+	self->m_treadScrolls.push_back(info);
+}
+
+//-------------------------------------------------------------------------------------------------
 void W3DModelDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 {
   ModuleData::buildFieldParse(p);
@@ -1209,6 +1322,7 @@ void W3DModelDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "RecoilSettleSpeed",	INI::parseVelocityReal, nullptr, offsetof(W3DModelDrawModuleData, m_recoilSettle) },
 		{ "OkToChangeModelColor",	INI::parseBool, nullptr, offsetof(W3DModelDrawModuleData, m_okToChangeModelColor) },
 		{ "ProceduralDamage",	INI::parseBool, nullptr, offsetof(W3DModelDrawModuleData, m_proceduralDamage) },	// Tiberium Project
+		{ "TreadScroll",	W3DModelDrawModuleData::parseTreadScroll, nullptr, 0 },	// Tiberium Project
 		{ "AnimationsRequirePower",	INI::parseBool, nullptr, offsetof(W3DModelDrawModuleData, m_animationsRequirePower) },
 		{ "ParticlesAttachedToAnimatedBones",	INI::parseBool, nullptr, offsetof(W3DModelDrawModuleData, m_particlesAttachedToAnimatedBones) },
 		{ "MinLODRequired",		INI::parseStaticGameLODLevel,	nullptr,	offsetof(W3DModelDrawModuleData, m_minLODRequired) },
@@ -1352,6 +1466,22 @@ static void parseWeaponBoneName(INI* ini, void *instance, void * store, const vo
 
 	if (self)
 		self->addPublicBone(arr[wslot]);
+
+	// Tiberium Project @feature more bone names for the slot: its barrels are each name's numbered bones
+	// (or the bone itself) in turn, as C&C4's weapons fire from several differently named bones (left and
+	// right missile pods, a cannon and a machine gun). Kept as one string, the names apart by spaces
+	if (arr[wslot].isNotEmpty())
+	{
+		for (const char* token = ini->getNextTokenOrNull(); token != nullptr; token = ini->getNextTokenOrNull())
+		{
+			AsciiString extra = token;
+			extra.toLower();
+			arr[wslot].concat(' ');
+			arr[wslot].concat(extra);
+			if (self)
+				self->addPublicBone(extra);
+		}
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1737,6 +1867,8 @@ W3DModelDraw::W3DModelDraw(Thing *thing, const ModuleData* moduleData) : DrawMod
 	m_hexColor = 0;
 	m_renderObject = nullptr;
 	m_damageLook = 0.0f;
+	m_treadScrollRobj = nullptr;
+	m_treadScrollLastAngle = 0.0f;
 	m_shadow = nullptr;
 	m_shadowEnabled = TRUE;
 	m_terrainDecal = nullptr;
@@ -2162,6 +2294,82 @@ void W3DModelDraw::doDrawModule(const Matrix3D* transformMtx)
 		m_damageLook += (target - m_damageLook) * EASE;
 		m_renderObject->Set_Damage_Look(m_damageLook);
 	}
+
+	if (!modData->m_treadScrolls.empty())
+		updateTreadScroll();
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature C&C4's scrolling treads (its TreadScrollDraw): each TreadScroll's left and
+// right treads scroll by the distance driven this draw (forward or back along the facing) times its
+// multiplier; turning in place, the two sides scroll opposite, by the turn times half the unit's
+// width. Below the drive fraction of the locomotor's speed the treads rest. The renderer carries
+// the offsets to the tread effects (Sage2MaterialClass::Set_Bone_Scroll). Visual only.
+void W3DModelDraw::updateTreadScroll()
+{
+	const W3DModelDrawModuleData* d = getW3DModelDrawModuleData();
+	if (m_renderObject == nullptr)
+		return;
+	const size_t count = d->m_treadScrolls.size() * 2;
+	if (m_treadScrollRobj != m_renderObject || m_treadScrollBones.size() != count)
+	{
+#ifdef RTS_RENDERER_D3D9
+		if (m_treadScrollRobj != nullptr)
+			Sage2MaterialClass::Clear_Bone_Scroll(m_treadScrollRobj);
+#endif
+		m_treadScrollRobj = m_renderObject;
+		m_treadScrollBones.assign(count, 0);
+		m_treadScrollOffsets.assign(count, 0.0f);
+		for (size_t i = 0; i < d->m_treadScrolls.size(); ++i)
+		{
+			m_treadScrollBones[i * 2] = m_renderObject->Get_Bone_Index(d->m_treadScrolls[i].m_leftBone.str());
+			m_treadScrollBones[i * 2 + 1] = m_renderObject->Get_Bone_Index(d->m_treadScrolls[i].m_rightBone.str());
+		}
+		const Object* obj = getDrawable()->getObject();
+		m_treadScrollLastAngle = obj != nullptr ? obj->getOrientation() : 0.0f;
+	}
+
+	const Object* obj = getDrawable()->getObject();
+	const PhysicsBehavior* physics = obj != nullptr ? obj->getPhysics() : nullptr;
+	if (physics == nullptr)
+		return;
+	const Real seconds = WW3D::Get_Sync_Frame_Time() * 0.001f;
+	if (seconds <= 0.0f)
+		return;
+	// the drive: the velocity along the facing (units per logic frame) over the time this draw covers
+	Coord3D dir;
+	obj->getUnitDirectionVector2D(dir);
+	const Coord3D* vel = physics->getVelocity();
+	const Real along = (vel->x * dir.x + vel->y * dir.y) * LOGICFRAMES_PER_SECOND * seconds;
+	const AIUpdateInterface* ai = obj->getAIUpdateInterface();
+	const Real maxSpeed = ai != nullptr ? ai->getCurLocomotorSpeed() : 0.0f;
+	const Real speedFraction = maxSpeed > 0.0f ? physics->getVelocityMagnitude() / maxSpeed : 0.0f;
+	// the turn since the last draw, the treads' run along half the unit's width
+	Real turn = obj->getOrientation() - m_treadScrollLastAngle;
+	m_treadScrollLastAngle = obj->getOrientation();
+	if (turn > PI) turn -= 2.0f * PI;
+	if (turn < -PI) turn += 2.0f * PI;
+	const Real halfWidth = obj->getGeometryInfo().getMinorRadius();
+	const Real pivot = turn * halfWidth;
+	for (size_t i = 0; i < d->m_treadScrolls.size(); ++i)
+	{
+		const W3DModelDrawModuleData::TreadScrollInfo& t = d->m_treadScrolls[i];
+		Real left = 0.0f, right = 0.0f;
+		if (speedFraction >= t.m_driveSpeedFraction)
+			left = right = along;
+		// a left turn (positive angle) runs the right tread forward and the left back
+		left -= pivot;
+		right += pivot;
+		Real& l = m_treadScrollOffsets[i * 2];
+		Real& r = m_treadScrollOffsets[i * 2 + 1];
+		l += left * t.m_multiplier;
+		r += right * t.m_multiplier;
+		l -= WWMath::Floor(l);
+		r -= WWMath::Floor(r);
+	}
+#ifdef RTS_RENDERER_D3D9
+	Sage2MaterialClass::Set_Bone_Scroll(m_renderObject, &m_treadScrollBones[0], &m_treadScrollOffsets[0], (int)count);
+#endif
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2856,6 +3064,11 @@ void W3DModelDraw::nukeCurrentRender(Matrix3D* xform)
 			*xform = m_renderObject->Get_Transform();
 		if (W3DDisplay::m_3DScene != nullptr)
 			W3DDisplay::m_3DScene->Remove_Render_Object(m_renderObject);
+#ifdef RTS_RENDERER_D3D9
+		if (m_treadScrollRobj != nullptr)
+			Sage2MaterialClass::Clear_Bone_Scroll(m_treadScrollRobj);	// Tiberium Project
+#endif
+		m_treadScrollRobj = nullptr;
 		REF_PTR_RELEASE(m_renderObject);
 		m_renderObject = nullptr;
 	}
@@ -4014,7 +4227,12 @@ void W3DModelDraw::doHideShowProjectileObjects( UnsignedInt showCount, UnsignedI
 	{
 		for( UnsignedInt projectileIndex = 0; projectileIndex < maxCount; projectileIndex++ )
 		{
-			oneEntry.subObjName.format("%s%02d", m_curState->m_weaponProjectileLaunchBoneName[slot].str(), (projectileIndex + 1));
+			// Tiberium Project: a slot named with several bones hides and shows its first name's
+			AsciiString launchName = m_curState->m_weaponProjectileLaunchBoneName[slot];
+			const char* space = launchName.find(' ');
+			if (space != nullptr)
+				launchName.truncateBy((Int)strlen(space));
+			oneEntry.subObjName.format("%s%02d", launchName.str(), (projectileIndex + 1));
 			oneEntry.hide = (projectileIndex < hideCount);
 			showHideVector.push_back( oneEntry );
 		}
