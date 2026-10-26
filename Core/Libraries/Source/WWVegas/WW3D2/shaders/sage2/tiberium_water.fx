@@ -267,7 +267,6 @@ struct VSOutput
 	float4 FoamTexCoords : TEXCOORD1;
 	float4 WorldPosition_ViewZ : TEXCOORD2;
 	float4 ShroudTexCoord_Fog : TEXCOORD3;
-	float4 ScreenPosition : TEXCOORD4;
 	float4 ShadowMapTexCoord : TEXCOORD5;
 };
 
@@ -304,7 +303,6 @@ VSOutput VS_Water(VSInput In)
 	Out.ShroudTexCoord_Fog.xy = (worldPosition.xy + ShroudParams.xy) * ShroudParams.zw;
 	Out.ShroudTexCoord_Fog.z = CalculateFog(Fog, worldPosition, EyePosition);
 	Out.ShroudTexCoord_Fog.w = 0;
-	Out.ScreenPosition = Out.Position;
 	Out.ShadowMapTexCoord = CalculateShadowMapTexCoord(worldPosition, SHADOWMAP_SAMPLE_DEFAULT);
 	return Out;
 }
@@ -347,8 +345,12 @@ float4 PS_Water(VSOutput In, uniform bool hasShadow, float2 vPos : PIXELLOC) : C
 	float2 nDisp = (n0.xy + n1.xy) * 0.5;
 	float3 Nn = normalize(float3(nDisp * WaterParams.x, 50.0));
 
-	// screen position of this pixel, and of the refracted one
-	float2 screenTexCoord = In.ScreenPosition.xy / In.ScreenPosition.w * float2(0.5, -0.5) + 0.5 + 0.5 * OneOverFrameBufferSizeW.xy;
+	// this pixel in the frame, and the refracted one. Tiberium Project @bugfix: from the pixel's own
+	// place in the render target (VPOS), as the terrain reads the light buffers. Clip space only spans
+	// the viewport, which stops above the control bar: read through it, the depth and the frame copy
+	// came from lower in the frame, nearer the camera, so the floor read as level with the surface and
+	// the water faded out (TournamentB's sea, five units deep, vanished but for a far strip)
+	float2 screenTexCoord = (vPos + 0.5) * OneOverFrameBufferSizeW.xy;
 	float2 refractedTexCoord = screenTexCoord + Nn.xy * WaterParams.y;
 
 	// the water under this pixel: the scene behind the surface along the eye ray (view depth
