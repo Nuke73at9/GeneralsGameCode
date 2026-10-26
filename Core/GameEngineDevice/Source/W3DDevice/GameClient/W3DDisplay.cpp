@@ -1032,6 +1032,7 @@ void W3DDisplay::init()
 			Sage2WaterClass::Set_Shallow(prefs.getReal("Sage2WaterShallow", 20.0f));	// shallow water tinted as RA3's table is twenty units down
 			WW3D::Enable_Night_Lights_On_Load(cnc4Style && prefs.getBool("Sage2NightLights", TRUE));	// buildings' lit windows glow at night
 			Sage2SceneClass::Set_Point_Light_Strength(prefs.getReal("Sage2PointLights", 2.0f));	// explosions and fires light the ground, as Zero Hour's vertex lighting did (ambient plus diffuse; 0: off)
+			Sage2SceneClass::Set_Pulse_Light_Strength(prefs.getReal("Sage2PulseLights", 1.0f));	// Tiberium Project @tweak the explosions' and muzzle flashes' light pulses on their own
 			Sage2SceneClass::Set_Particle_Lighting(cnc4Style && prefs.getBool("Sage2LitParticles", TRUE));	// smoke and dust lit by the scene and by fires, as C&C4's lit particles
 			Sage2LightingClass::Set_Tree_Light(prefs.getBool("Sage2TreeLight", TRUE));	// trees lit in linear light, as the effects light the rest
 			Sage2SoftParticleClass::Set_Enabled(cnc4Style && prefs.getBool("Sage2SoftParticles", TRUE));	// particles fade where they meet the ground, as C&C4's

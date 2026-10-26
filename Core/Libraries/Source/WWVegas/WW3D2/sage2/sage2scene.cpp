@@ -58,9 +58,10 @@ namespace
 	bool s_clearedThisFrame = false;
 
 	// Tiberium Project @feature this frame's point lights
-	const unsigned MAX_POINT_LIGHTS = 64;
+	const unsigned MAX_POINT_LIGHTS = 128;	// Tiberium Project @tweak a pulse is three (gatherSage2PointLights)
 	std::vector<Sage2SceneClass::PointLight> s_pointLights;
 	float s_pointLightStrength = 2.0f;	// Zero Hour lit the ground with a pulse's ambient and diffuse both
+	float s_pulseLightStrength = 1.0f;	// Tiberium Project @tweak the light pulses' own (see Set_Pulse_Light_Strength)
 	bool s_particleLighting = true;
 	bool s_pointLightsLogged = false;
 
@@ -566,6 +567,16 @@ void Sage2SceneClass::Set_Point_Light_Strength(float strength)
 float Sage2SceneClass::Get_Point_Light_Strength()
 {
 	return s_pointLightStrength;
+}
+
+void Sage2SceneClass::Set_Pulse_Light_Strength(float strength)
+{
+	s_pulseLightStrength = strength < 0.0f ? 0.0f : (strength > 4.0f ? 4.0f : strength);
+}
+
+float Sage2SceneClass::Get_Pulse_Light_Strength()
+{
+	return s_pulseLightStrength;
 }
 
 void Sage2SceneClass::Get_Point_Light_Particle(const float position[3], float light[3])

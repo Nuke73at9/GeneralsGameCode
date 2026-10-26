@@ -107,6 +107,11 @@ public:
 	/// near side, so it counts from there, and lifts only the share of the object it can reach
 	static void Get_Point_Light_Ambient(const float position[3], float radius, float ambient[3]);
 	static float Get_Point_Light_Strength();
+	/// Tiberium Project @tweak Zero Hour's light pulses (explosions, muzzle flashes) apart from the other
+	/// point lights: their strength (Options.ini Sage2PulseLights), which the scene gives them in place of
+	/// Get_Point_Light_Strength (0 to 4)
+	static void Set_Pulse_Light_Strength(float strength);
+	static float Get_Pulse_Light_Strength();
 	/// Tiberium Project @feature lit smoke, as C&C4's lit particles (GPUParticleLitAccumLight.fx):
 	/// the light the point lights that light particles shed at 'position', strength included
 	static void Get_Point_Light_Particle(const float position[3], float light[3]);

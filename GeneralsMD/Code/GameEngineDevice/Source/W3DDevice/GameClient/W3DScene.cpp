@@ -1805,13 +1805,27 @@ void RTS3DScene::gatherSage2PointLights()
 		point.position[0] = position.X;
 		point.position[1] = position.Y;
 		point.position[2] = position.Z;
-		point.color[0] = diffuse.X * intensity;
-		point.color[1] = diffuse.Y * intensity;
-		point.color[2] = diffuse.Z * intensity;
-		point.innerRadius = (float)attenStart;
-		point.outerRadius = (float)attenEnd;
 		point.lightsObjects = false;	// the light environment adds a pulse's ambient to the objects it reaches
-		Sage2SceneClass::Add_Point_Light(point);
+		// Tiberium Project @tweak Zero Hour's vertex lighting let a pulse fade from its start radius to its
+		// end radius in a straight line. C&C4's point light keeps nearly full strength over most of the
+		// way and drops near the end: one light became a bright disc with an edge, blown to white on snow
+		// at night. Three nested lights, each a third of the colour and ending a third further out, add
+		// up to Zero Hour's fade. The pulses take their own strength (Sage2PulseLights) in place of the
+		// point lights' (which the light pass multiplies every light by).
+		const int RINGS = 3;
+		const float strength = Sage2SceneClass::Get_Pulse_Light_Strength() / Sage2SceneClass::Get_Point_Light_Strength();
+		const float scale = intensity * strength / (float)RINGS;
+		if (scale <= 0.0f)
+			continue;
+		point.color[0] = diffuse.X * scale;
+		point.color[1] = diffuse.Y * scale;
+		point.color[2] = diffuse.Z * scale;
+		point.innerRadius = (float)attenStart;
+		for (Int ring = 0; ring < RINGS; ++ring)
+		{
+			point.outerRadius = (float)(attenStart + (attenEnd - attenStart) * (RINGS - ring) / RINGS);
+			Sage2SceneClass::Add_Point_Light(point);
+		}
 	}
 	gatherSage2FireLights();
 	gatherSage2NightLights();
