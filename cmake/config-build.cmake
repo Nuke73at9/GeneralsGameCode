@@ -28,6 +28,10 @@ endif()
 # d3d9, so Vulkan underneath) through the Direct3D 8 adapter in Core/Libraries/Source/WWVegas/WW3D2/d3d9compat.
 # Needed for the C&C4 shaders (Direct3D 9 shader model 3). Off: the original Direct3D 8 renderer.
 option(SAGE_USE_D3D9 "Draw with Direct3D 9 instead of Direct3D 8 (DXVK)" OFF)
+# Tiberium Project @feature The render-device interface (Core/Libraries/Source/RHI) with its Vulkan 1.3
+# device (ray queries when the GPU has them) and its headless self-test. Loads Vulkan at run time;
+# the game does not use it yet.
+option(SAGE_USE_VULKAN_RHI "Build the Vulkan render device (RHI) and its self-test" OFF)
 option(SAGE_USE_MOLTENVK "Use MoltenVK for Vulkan on macOS (Phase 5 macOS port)" OFF)
 
 # SagePatch — optional QoL features for casual play (screenshot, cursor lock,

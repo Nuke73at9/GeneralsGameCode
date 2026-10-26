@@ -1,0 +1,6 @@
+# The self-test's shaders: <source> <profile> <entry> <symbol>
+# Rebuild the headers in ../spirv with scripts/tooling/rhi/build_spirv.py --dxc <dxc> manifest.txt ../spirv
+selftest_raster.hlsl vs_6_5 VSMain spv_selftest_raster_vs
+selftest_raster.hlsl ps_6_5 PSMain spv_selftest_raster_ps
+selftest_compute.hlsl cs_6_5 main spv_selftest_compute
+selftest_rayquery.hlsl cs_6_5 main spv_selftest_rayquery
