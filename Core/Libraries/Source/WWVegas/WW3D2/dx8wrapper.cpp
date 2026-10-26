@@ -430,6 +430,7 @@ static HWND						_Hwnd															= nullptr;
 bool								DX8Wrapper::IsInitted									= false;
 bool								DX8Wrapper::_EnableTriangleDraw						= true;
 bool								DX8Wrapper::_SoftParticle								= false;
+float								DX8Wrapper::_SoftParticleFade							= 0.0f;
 bool								DX8Wrapper::_DrawsOnDXVK								= true;
 
 int								DX8Wrapper::CurRenderDevice							= -1;

@@ -618,7 +618,15 @@ void W3DParticleSystemManager::flushParticleBatch(RenderInfoClass& rinfo, Unsign
 #ifdef RTS_RENDERER_D3D9
 		// Tiberium Project @feature soft particles: billboards fade where they meet the scene, as
 		// C&C4's particles do (ground-aligned ones lie on it and stay as they are)
-		DX8Wrapper::Set_Soft_Particle(m_batchParticleAlignment == ParticleSystemInfo::PARTICLE_ALIGNMENT_BILLBOARD);
+		// Tiberium Project @tweak over the batch's particles' average radius (C&C4 fades by size)
+		{
+			const float *sizes = m_sizeBuffer->Get_Array();
+			float sum = 0.0f;
+			for (UnsignedInt i = 0; i < pointCount; ++i)
+				sum += sizes[i];
+			DX8Wrapper::Set_Soft_Particle(m_batchParticleAlignment == ParticleSystemInfo::PARTICLE_ALIGNMENT_BILLBOARD,
+				0.5f * sum / (float)pointCount);
+		}
 #endif
 		m_pointGroup->Render(rinfo);
 #ifdef RTS_RENDERER_D3D9

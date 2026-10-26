@@ -483,8 +483,11 @@ public:
 	/// Tiberium Project @feature soft particles: the draws made while this is set are billboard
 	/// particles, drawn faded where they meet the scene (Direct3D 9; the sorting renderer keeps the
 	/// mark with each draw it defers)
-	static void Set_Soft_Particle(bool soft) { _SoftParticle=soft; }
+	static void Set_Soft_Particle(bool soft, float fade = 0.0f) { _SoftParticle=soft; _SoftParticleFade=fade; }
 	static bool Is_Soft_Particle() { return _SoftParticle; }
+	/// Tiberium Project @tweak how far in front of the scene the marked draw's particles fade (their
+	/// radius, as C&C4's fade by particle size); 0: Sage2SoftParticleClass's own distance
+	static float Get_Soft_Particle_Fade() { return _SoftParticleFade; }
 	/// Tiberium Project @feature whether the Direct3D 9 that draws is DXVK's (on Vulkan) rather than Windows' own
 	static bool Draws_On_DXVK() { return _DrawsOnDXVK; }
 	static void Set_Draws_On_DXVK(bool dxvk) { _DrawsOnDXVK = dxvk; }
@@ -685,6 +688,7 @@ protected:
 
 	static bool								_EnableTriangleDraw;
 	static bool								_SoftParticle;
+	static float							_SoftParticleFade;
 	static bool								_DrawsOnDXVK;
 
 	static int								CurRenderDevice;

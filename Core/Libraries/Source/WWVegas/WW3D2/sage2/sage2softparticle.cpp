@@ -113,7 +113,12 @@ bool Sage2SoftParticleClass::Begin(const ShaderClass& shader)
 		return false;
 	const ShaderClass::SrcBlendFuncType src = shader.Get_Src_Blend_Func();
 	const ShaderClass::DstBlendFuncType dst = shader.Get_Dst_Blend_Func();
-	float soft[4] = { 1.0f / s_fadeDistance, 0.0f, 0.0f, 0.0f };
+	// Tiberium Project @tweak C&C4 fades a particle over a depth that grows with its size; the batch's
+	// particles' radius, when it is further than the set distance (a big flash fading over a fixed
+	// ten units cut a hard line where it met the ground)
+	float fadeDistance = DX8Wrapper::Get_Soft_Particle_Fade();
+	fadeDistance = fadeDistance > s_fadeDistance ? (fadeDistance < 200.0f ? fadeDistance : 200.0f) : s_fadeDistance;
+	float soft[4] = { 1.0f / fadeDistance, 0.0f, 0.0f, 0.0f };
 	if (src == ShaderClass::SRCBLEND_ONE && dst == ShaderClass::DSTBLEND_ONE)
 		soft[1] = 1.0f;
 	else if (src == ShaderClass::SRCBLEND_ZERO && dst == ShaderClass::DSTBLEND_SRC_COLOR)
