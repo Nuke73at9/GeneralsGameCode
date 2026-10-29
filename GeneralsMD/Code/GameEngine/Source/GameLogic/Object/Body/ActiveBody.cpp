@@ -522,6 +522,8 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 			// Apply the damage scalar (extra bonuses -- like strategy center defensive battle plan)
 			// And remember not to adjust unresistable damage, just like the armor code can't.
 			amount *= m_damageScalar;
+			// Tiberium Project @feature attribute modifiers on the damage it takes (C&C4's armour buffs and debuffs)
+			amount *= getObject()->getAttributeModifierScalar(MODIFIER_ARMOR);
 		}
 	}
 

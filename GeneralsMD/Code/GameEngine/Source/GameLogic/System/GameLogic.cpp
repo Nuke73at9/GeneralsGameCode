@@ -4152,6 +4152,11 @@ void GameLogic::update()
 			{
 				obj->checkDisabledStatus();
 			}
+			// Tiberium Project @feature attribute modifiers whose time is up come off
+			if( obj->hasAttributeModifiers() )
+			{
+				obj->updateAttributeModifiers();
+			}
 		}
 	}
 

@@ -69,6 +69,7 @@
 #include "GameLogic/ObjectCreationList.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Weapon.h"
+#include "GameLogic/AttributeModifier.h"	// Tiberium Project
 
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/AssistedTargetingUpdate.h"
@@ -194,6 +195,7 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "ProjectileDetonationFX",			parseAllVetLevelsFXList,							nullptr,							offsetof(WeaponTemplate, m_projectileDetonateFXs) },
 	{ "FireOCL",										parseAllVetLevelsAsciiString,					nullptr,							offsetof(WeaponTemplate, m_fireOCLNames) },
 	{ "TargetOCL",									INI::parseAsciiString,								nullptr,							offsetof(WeaponTemplate, m_targetOCLName) },	// Tiberium Project
+	{ "AttributeModifier",					AttributeModifierStore::parseModifierName,	nullptr,				offsetof(WeaponTemplate, m_victimModifier) },	// Tiberium Project
 	{ "ProjectileDetonationOCL",		parseAllVetLevelsAsciiString,					nullptr,							offsetof(WeaponTemplate, m_projectileDetonationOCLNames) },
 	{ "ProjectileExhaust",					parseAllVetLevelsPSys,								nullptr,							offsetof(WeaponTemplate, m_projectileExhausts) },
 	{ "VeterancyFireFX",										parsePerVetLevelFXList,				nullptr,							offsetof(WeaponTemplate, m_fireFXs) },
@@ -283,6 +285,7 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_projectileName.clear();					// no projectile
 	m_projectileTmpl								= nullptr;
 	m_targetOCL										= nullptr;	// Tiberium Project
+	m_victimModifier							= NAMEKEY_INVALID;	// Tiberium Project
 	for (Int i = LEVEL_FIRST; i <= LEVEL_LAST; ++i)
 	{
 		m_fireOCLNames[i].clear();
@@ -1597,6 +1600,10 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 			}
 
 			curVictim->attemptDamage(&damageInfo);
+			// Tiberium Project @feature the weapon's attribute modifier on each object its damage reaches
+			// (C&C4's AttributeModifierNugget: a slow, an armour debuff, an ally's damage boost)
+			if (m_victimModifier != NAMEKEY_INVALID && !curVictim->isEffectivelyDead())
+				curVictim->applyAttributeModifier(TheAttributeModifierStore->find(m_victimModifier), sourceID);
 			//DEBUG_ASSERTLOG(damageInfo.out.m_noEffect, ("WeaponTemplate::dealDamageInternal: dealt to %s %08lx: attempted %f, actual %f (%f)",
 			//	curVictim->getTemplate()->getName().str(),curVictim,
 			//	damageInfo.in.m_amount, damageInfo.out.m_actualDamageDealt, damageInfo.out.m_actualDamageClipped));
@@ -1954,6 +1961,14 @@ void Weapon::computeBonus(const Object *source, WeaponBonusConditionFlags extraB
 	const WeaponBonusSet* extra = m_template->getExtraBonus();
 	if (extra)
 		extra->appendBonuses(flags, bonus);
+
+	// Tiberium Project @feature the shooter's attribute modifiers (C&C4's damage, rate of fire and range buffs)
+	if (source->hasAttributeModifiers())
+	{
+		bonus.setField(WeaponBonus::DAMAGE, bonus.getField(WeaponBonus::DAMAGE) * source->getAttributeModifierScalar(MODIFIER_DAMAGE));
+		bonus.setField(WeaponBonus::RATE_OF_FIRE, bonus.getField(WeaponBonus::RATE_OF_FIRE) * source->getAttributeModifierScalar(MODIFIER_RATE_OF_FIRE));
+		bonus.setField(WeaponBonus::RANGE, bonus.getField(WeaponBonus::RANGE) * source->getAttributeModifierScalar(MODIFIER_RANGE));
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

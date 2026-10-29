@@ -62,6 +62,7 @@
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/FiringTracker.h"
+#include "GameClient/FXList.h"	// Tiberium Project: an attribute modifier's StartFX
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Locomotor.h"
 
@@ -4092,7 +4093,8 @@ void Object::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 9;
+	// Tiberium Project @feature version 10: the attribute modifiers
+	const XferVersion currentVersion = 10;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -4496,6 +4498,174 @@ void Object::xfer( Xfer *xfer )
 	else
 		m_isReceivingDifficultyBonus = FALSE;
 
+	// Tiberium Project @feature the attribute modifiers (by name: the templates are the INI's)
+	if (version >= 10)
+	{
+		UnsignedShort count = (UnsignedShort)m_attributeModifiers.size();
+		xfer->xferUnsignedShort(&count);
+		if (xfer->getXferMode() == XFER_LOAD)
+			m_attributeModifiers.clear();
+		for (UnsignedShort i = 0; i < count; ++i)
+		{
+			AttributeModifierEntry entry = { nullptr, INVALID_ID, 0 };
+			AsciiString name;
+			if (xfer->getXferMode() != XFER_LOAD)
+			{
+				entry = m_attributeModifiers[i];
+				name = entry.tmpl->getName();
+			}
+			xfer->xferAsciiString(&name);
+			xfer->xferObjectID(&entry.source);
+			xfer->xferUnsignedInt(&entry.expireFrame);
+			if (xfer->getXferMode() == XFER_LOAD)
+			{
+				entry.tmpl = TheAttributeModifierStore->find(name);
+				if (entry.tmpl != nullptr)
+					m_attributeModifiers.push_back(entry);
+			}
+		}
+		m_attributeModifierConditions.xfer(xfer);
+	}
+	else
+	{
+		m_attributeModifiers.clear();
+		m_attributeModifierConditions.clear();
+	}
+
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature an attribute modifier on this object (AttributeModifier.h): the same
+	one from the same source is refreshed (its later end kept); from another source it stacks up to
+	its StackingLimit, past which the one ending first gives way */
+//-------------------------------------------------------------------------------------------------
+void Object::applyAttributeModifier(const AttributeModifierTemplate *tmpl, ObjectID source, UnsignedInt duration)
+{
+	if (tmpl == nullptr)
+		return;
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const UnsignedInt length = duration > 0 ? duration : tmpl->getDuration();
+	const UnsignedInt expire = length > 0 ? now + length : 0;
+
+	Int same = 0;
+	AttributeModifierEntry *first = nullptr;
+	for (size_t i = 0; i < m_attributeModifiers.size(); ++i)
+	{
+		AttributeModifierEntry &entry = m_attributeModifiers[i];
+		if (entry.tmpl != tmpl)
+			continue;
+		if (entry.source == source)
+		{
+			if (entry.expireFrame != 0 && (expire == 0 || expire > entry.expireFrame))
+				entry.expireFrame = expire;
+			return;
+		}
+		++same;
+		if (first == nullptr || (entry.expireFrame != 0 && (first->expireFrame == 0 || entry.expireFrame < first->expireFrame)))
+			first = &entry;
+	}
+	if (same >= tmpl->getStackingLimit() && first != nullptr)
+	{
+		first->source = source;
+		first->expireFrame = expire;
+		return;
+	}
+
+	AttributeModifierEntry entry;
+	entry.tmpl = tmpl;
+	entry.source = source;
+	entry.expireFrame = expire;
+	m_attributeModifiers.push_back(entry);
+	refreshAttributeModifierConditions();
+
+	const FXList *fx = tmpl->getStartFX();
+	if (fx != nullptr)
+		FXList::doFXObj(fx, this);
+}
+
+//-------------------------------------------------------------------------------------------------
+void Object::removeAttributeModifier(const AttributeModifierTemplate *tmpl, ObjectID source)
+{
+	Bool removed = FALSE;
+	for (size_t i = 0; i < m_attributeModifiers.size(); )
+	{
+		if (m_attributeModifiers[i].tmpl == tmpl && (source == INVALID_ID || m_attributeModifiers[i].source == source))
+		{
+			m_attributeModifiers.erase(m_attributeModifiers.begin() + i);
+			removed = TRUE;
+		}
+		else
+			++i;
+	}
+	if (removed)
+		refreshAttributeModifierConditions();
+}
+
+//-------------------------------------------------------------------------------------------------
+Int Object::purgeAttributeModifiers(UnsignedInt buffMask, Int maxCount)
+{
+	Int purged = 0;
+	for (size_t i = m_attributeModifiers.size(); i > 0 && (maxCount <= 0 || purged < maxCount); --i)
+	{
+		const AttributeModifierTemplate *tmpl = m_attributeModifiers[i - 1].tmpl;
+		if (tmpl->getBuff() != MODIFIER_BUFF_NONE && (buffMask & (1u << tmpl->getBuff())) != 0)
+		{
+			m_attributeModifiers.erase(m_attributeModifiers.begin() + (i - 1));
+			++purged;
+		}
+	}
+	if (purged > 0)
+		refreshAttributeModifierConditions();
+	return purged;
+}
+
+//-------------------------------------------------------------------------------------------------
+Real Object::getAttributeModifierScalar(AttributeModifierAttribute what) const
+{
+	if (m_attributeModifiers.empty())
+		return 1.0f;
+	const UnsignedInt now = TheGameLogic->getFrame();
+	Real scalar = 1.0f;
+	for (size_t i = 0; i < m_attributeModifiers.size(); ++i)
+	{
+		const AttributeModifierEntry &entry = m_attributeModifiers[i];
+		if (entry.expireFrame == 0 || entry.expireFrame > now)
+			scalar *= entry.tmpl->getScalar(what);
+	}
+	return scalar;
+}
+
+//-------------------------------------------------------------------------------------------------
+void Object::updateAttributeModifiers()
+{
+	const UnsignedInt now = TheGameLogic->getFrame();
+	Bool removed = FALSE;
+	for (size_t i = 0; i < m_attributeModifiers.size(); )
+	{
+		if (m_attributeModifiers[i].expireFrame != 0 && m_attributeModifiers[i].expireFrame <= now)
+		{
+			m_attributeModifiers.erase(m_attributeModifiers.begin() + i);
+			removed = TRUE;
+		}
+		else
+			++i;
+	}
+	if (removed)
+		refreshAttributeModifierConditions();
+}
+
+//-------------------------------------------------------------------------------------------------
+/** the model conditions the modifiers on it show */
+//-------------------------------------------------------------------------------------------------
+void Object::refreshAttributeModifierConditions()
+{
+	ModelConditionFlags shown;
+	for (size_t i = 0; i < m_attributeModifiers.size(); ++i)
+		shown.set(m_attributeModifiers[i].tmpl->getModelConditions());
+	if (shown == m_attributeModifierConditions)
+		return;
+	clearAndSetModelConditionFlags(m_attributeModifierConditions, shown);
+	m_attributeModifierConditions = shown;
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -534,6 +534,7 @@ private:
 	const ObjectCreationList* m_projectileDetonationOCLs[LEVEL_COUNT];	///< Post-loaded lookup of name string for ease and speed (and subsystem init order)
 	AsciiString m_targetOCLName;												///< Tiberium Project: OCL made where the weapon's damage lands
 	const ObjectCreationList* m_targetOCL;										///< Tiberium Project: post-loaded m_targetOCLName
+	NameKeyType m_victimModifier;													///< Tiberium Project: an attribute modifier put on each object the damage reaches (C&C4's AttributeModifierNugget)
 	const FXList* m_fireFXs[LEVEL_COUNT];															///< weapon is fired fx
 	const FXList* m_projectileDetonateFXs[LEVEL_COUNT];								///< if we have a projectile, fx for projectile blowing up
 	AudioEventRTS m_fireSound;							///< weapon is fired sound

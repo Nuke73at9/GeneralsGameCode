@@ -24,7 +24,8 @@
 // faster one for a sprint, one that does not move for a deployed form) and object status (CAN_STEALTH
 // for a burrowed unit). Switching takes TransitionTime (UNPACKING into the second state, PACKING back,
 // or the ToggleInConditions and ToggleOutConditions given; TransitionBackTime for the way back, when it
-// differs), the unit standing still; with AutoRevertTime the second state ends by itself.
+// differs), the unit standing still; with AutoRevertTime the second state ends by itself. The second
+// state can carry an attribute modifier (ToggledAttributeModifier: a burrowed unit's armour).
 //
 //   Behavior = SpecialAbility ModuleTag_DeployPower
 //     SpecialPowerTemplate = C4SP_Deploy
@@ -43,6 +44,7 @@
 #include "Common/INI.h"
 #include "Common/ModelState.h"
 #include "Common/ObjectStatusTypes.h"
+#include "GameLogic/AttributeModifier.h"
 #include "GameLogic/Module/UpdateModule.h"
 
 class CommandButton;
@@ -67,6 +69,7 @@ public:
 	ObjectStatusMaskType m_toggledStatus;		///< set in the second
 	Bool m_toggledWeaponSet;			///< WEAPONSET_ABILITY_TOGGLED in the second
 	Bool m_toggledLocomotor;			///< SET_NORMAL_UPGRADED in the second
+	NameKeyType m_toggledModifier;		///< an attribute modifier the second carries (AttributeModifier.h)
 
 	ToggleAbilityUpdateModuleData()
 	{
@@ -77,6 +80,7 @@ public:
 		m_autoRevertTime = 0;
 		m_toggledWeaponSet = FALSE;
 		m_toggledLocomotor = FALSE;
+		m_toggledModifier = NAMEKEY_INVALID;
 	}
 
 	static void parseBackTime( INI *ini, void *instance, void *store, const void *userData )
@@ -102,6 +106,7 @@ public:
 			{ "ToggledStatus",			ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( ToggleAbilityUpdateModuleData, m_toggledStatus ) },
 			{ "ToggledWeaponSet",		INI::parseBool,					nullptr, offsetof( ToggleAbilityUpdateModuleData, m_toggledWeaponSet ) },
 			{ "ToggledLocomotor",		INI::parseBool,					nullptr, offsetof( ToggleAbilityUpdateModuleData, m_toggledLocomotor ) },
+			{ "ToggledAttributeModifier",	AttributeModifierStore::parseModifierName,	nullptr, offsetof( ToggleAbilityUpdateModuleData, m_toggledModifier ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 		p.add( dataFieldParse );

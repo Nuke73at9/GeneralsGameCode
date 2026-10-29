@@ -219,6 +219,7 @@ public:
 	static void parseWeatherDefinition( INI *ini );
 	static void parseMappedImageDefinition( INI *ini );
 	static void parseArmorDefinition( INI *ini );
+	static void parseAttributeModifierDefinition( INI *ini );	///< Tiberium Project (Zero Hour)
 	static void parseDamageFXDefinition( INI *ini );
 	static void parseDrawGroupNumberDefinition( INI *ini );
 	static void parseTerrainDefinition( INI *ini );

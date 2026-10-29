@@ -237,6 +237,7 @@ set(GAMEENGINE_SRC
     Include/GameLogic/AIStateMachine.h
     Include/GameLogic/AITNGuard.h
     Include/GameLogic/Armor.h
+    Include/GameLogic/AttributeModifier.h
     Include/GameLogic/ArmorSet.h
 #    Include/GameLogic/CaveSystem.h
 #    Include/GameLogic/CrateSystem.h
@@ -398,6 +399,9 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/RadarUpgrade.h
     Include/GameLogic/Module/RadiusDecalUpdate.h
     Include/GameLogic/Module/ReplaceSelfUpdate.h
+    Include/GameLogic/Module/ModifierAbilityUpdate.h
+    Include/GameLogic/Module/AttributeModifierAuraUpdate.h
+    Include/GameLogic/Module/AttributeModifierUpgrade.h
     Include/GameLogic/Module/FireWeaponAbilityUpdate.h
     Include/GameLogic/Module/ToggleAbilityUpdate.h
     Include/GameLogic/Module/ReloadAmmoSpecialPower.h
@@ -844,6 +848,7 @@ set(GAMEENGINE_SRC
 #    Source/GameLogic/Map/SidesList.cpp
 #    Source/GameLogic/Map/TerrainLogic.cpp
     Source/GameLogic/Object/Armor.cpp
+    Source/GameLogic/Object/AttributeModifier.cpp
     Source/GameLogic/Object/Behavior/AutoHealBehavior.cpp
     Source/GameLogic/Object/Behavior/BattleBusSlowDeathBehavior.cpp
     Source/GameLogic/Object/Behavior/BehaviorModule.cpp
@@ -1039,6 +1044,8 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Update/RadarUpdate.cpp
     Source/GameLogic/Object/Update/RadiusDecalUpdate.cpp
     Source/GameLogic/Object/Update/ReplaceSelfUpdate.cpp
+    Source/GameLogic/Object/Update/ModifierAbilityUpdate.cpp
+    Source/GameLogic/Object/Update/AttributeModifierAuraUpdate.cpp
     Source/GameLogic/Object/Update/FireWeaponAbilityUpdate.cpp
     Source/GameLogic/Object/Update/ToggleAbilityUpdate.cpp
     Source/GameLogic/Object/Update/SlavedUpdate.cpp
@@ -1078,6 +1085,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Upgrade/UnpauseSpecialPowerUpgrade.cpp
     Source/GameLogic/Object/Upgrade/UpgradeModule.cpp
     Source/GameLogic/Object/Upgrade/WeaponBonusUpgrade.cpp
+    Source/GameLogic/Object/Upgrade/AttributeModifierUpgrade.cpp
     Source/GameLogic/Object/Upgrade/WeaponSetUpgrade.cpp
     Source/GameLogic/Object/Weapon.cpp
     Source/GameLogic/Object/WeaponSet.cpp

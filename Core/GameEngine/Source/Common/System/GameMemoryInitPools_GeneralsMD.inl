@@ -183,6 +183,9 @@ static PoolSizeRec PoolSizes[] =
 	{ "ReplaceSelfUpdate", 64, 32 },	// Tiberium Project @feature Crawler deploy and pack up
 	{ "FireWeaponAbilityUpdate", 256, 64 },	// Tiberium Project @feature C&C4 unit abilities
 	{ "ToggleAbilityUpdate", 256, 64 },
+	{ "ModifierAbilityUpdate", 64, 32 },	// Tiberium Project @feature attribute modifiers
+	{ "AttributeModifierAuraUpdate", 256, 64 },
+	{ "AttributeModifierUpgrade", 1024, 128 },
 	{ "ReloadAmmoSpecialPower", 256, 64 },
 	{ "BattlePlanUpdate", 32, 32 },
 	{ "LifetimeUpdate", 32, 32 },

@@ -40,6 +40,7 @@
 
 #include "GameClient/Color.h"
 
+#include "GameLogic/AttributeModifier.h"	// Tiberium Project
 #include "GameLogic/Damage.h" //for kill()
 #include "GameLogic/WeaponBonusConditionFlags.h"
 #include "GameLogic/WeaponSet.h"
@@ -628,6 +629,16 @@ public:
 	Bool getReceivingDifficultyBonus() const { return m_isReceivingDifficultyBonus; }
 	void setReceivingDifficultyBonus(Bool receive);
 
+	// Tiberium Project @feature SAGE 2's attribute modifiers (AttributeModifier.h): put on by a
+	// weapon's hit, an ability, a toggled state or an aura, for their Duration (or the one given), or
+	// until taken off (a Duration of 0)
+	void applyAttributeModifier( const AttributeModifierTemplate *tmpl, ObjectID source, UnsignedInt duration = 0 );
+	void removeAttributeModifier( const AttributeModifierTemplate *tmpl, ObjectID source );	///< INVALID_ID: from every source
+	Int purgeAttributeModifiers( UnsignedInt buffMask, Int maxCount );	///< of those classes (1 << buff), latest first; maxCount 0: all; returns how many
+	Real getAttributeModifierScalar( AttributeModifierAttribute what ) const;	///< the product of those in force (1: none)
+	Bool hasAttributeModifiers() const { return !m_attributeModifiers.empty(); }
+	void updateAttributeModifiers();	///< takes off those whose time is up (GameLogic, each frame)
+
 	inline UnsignedInt getSafeOcclusionFrame() { return m_safeOcclusionFrame; }	//< this is an object specific frame at which it's safe to enable building occlusion.
 	inline void	setSafeOcclusionFrame(UnsignedInt frame) { m_safeOcclusionFrame = frame;}
 
@@ -817,6 +828,16 @@ private:
 	Byte													m_numTriggerAreasActive;
 	Bool													m_singleUseCommandUsed;
 	Bool													m_isReceivingDifficultyBonus;
+
+	struct AttributeModifierEntry	///< Tiberium Project @feature (applyAttributeModifier)
+	{
+		const AttributeModifierTemplate *tmpl;
+		ObjectID source;
+		UnsignedInt expireFrame;	///< 0: until taken off
+	};
+	std::vector<AttributeModifierEntry>	m_attributeModifiers;
+	ModelConditionFlags						m_attributeModifierConditions;	///< what they show
+	void refreshAttributeModifierConditions();
 
 };
 

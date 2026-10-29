@@ -107,6 +107,14 @@ void ToggleAbilityUpdate::applyState( Bool toggled )
 		me->getAI()->setLocomotorUpgrade( toggled );
 	if( data->m_toggledStatus.any() )
 		me->setStatus( data->m_toggledStatus, toggled );
+	if( data->m_toggledModifier != NAMEKEY_INVALID )
+	{
+		const AttributeModifierTemplate *modifier = TheAttributeModifierStore->find( data->m_toggledModifier );
+		if( toggled )
+			me->applyAttributeModifier( modifier, me->getID() );
+		else
+			me->removeAttributeModifier( modifier, me->getID() );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

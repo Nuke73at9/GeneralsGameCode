@@ -73,6 +73,7 @@
 #include "Common/GameCommon.h"	// FOR THE ALLOW_DEBUG_CHEATS_IN_RELEASE #define
 
 #include "GameLogic/Armor.h"
+#include "GameLogic/AttributeModifier.h"
 #include "GameLogic/AI.h"
 #include "GameLogic/CaveSystem.h"
 #include "GameLogic/CrateSystem.h"
@@ -674,6 +675,8 @@ void GameEngine::init()
 	#endif/////////////////////////////////////////////////////////////////////////////////////////////
 
 
+		// Tiberium Project @feature SAGE 2's attribute modifiers (first: any file may hold them)
+		initSubsystem(TheAttributeModifierStore,"TheAttributeModifierStore", MSGNEW("GameEngineSubsystem") AttributeModifierStore(), &xferCRC, nullptr, "Data\\INI\\AttributeModifier");
 		initSubsystem(TheFXListStore,"TheFXListStore", MSGNEW("GameEngineSubsystem") FXListStore(), &xferCRC, "Data\\INI\\Default\\FXList", "Data\\INI\\FXList");
 		initSubsystem(TheWeaponStore,"TheWeaponStore", MSGNEW("GameEngineSubsystem") WeaponStore(), &xferCRC, nullptr, "Data\\INI\\Weapon");
 		initSubsystem(TheObjectCreationListStore,"TheObjectCreationListStore", MSGNEW("GameEngineSubsystem") ObjectCreationListStore(), &xferCRC, "Data\\INI\\Default\\ObjectCreationList", "Data\\INI\\ObjectCreationList");

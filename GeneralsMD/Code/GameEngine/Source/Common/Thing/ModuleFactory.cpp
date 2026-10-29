@@ -144,6 +144,9 @@
 #include "GameLogic/Module/LifetimeUpdate.h"
 #include "GameLogic/Module/RadiusDecalUpdate.h"
 #include "GameLogic/Module/ReplaceSelfUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/ModifierAbilityUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/AttributeModifierAuraUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/AttributeModifierUpgrade.h"	// Tiberium Project
 #include "GameLogic/Module/FireWeaponAbilityUpdate.h"
 #include "GameLogic/Module/ToggleAbilityUpdate.h"
 #include "GameLogic/Module/ReloadAmmoSpecialPower.h"
@@ -403,6 +406,9 @@ void ModuleFactory::init()
 	addModule( LifetimeUpdate );
 	addModule( RadiusDecalUpdate );
 	addModule( ReplaceSelfUpdate );	// Tiberium Project
+	addModule( ModifierAbilityUpdate );	// Tiberium Project
+	addModule( AttributeModifierAuraUpdate );	// Tiberium Project
+	addModule( AttributeModifierUpgrade );	// Tiberium Project
 	addModule( FireWeaponAbilityUpdate );
 	addModule( ToggleAbilityUpdate );
 	addModule( ReloadAmmoSpecialPower );

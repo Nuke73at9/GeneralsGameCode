@@ -97,6 +97,10 @@ static const BlockParse theTypeTable[] =
 	{ "AIData",                         INI::parseAIDataDefinition },
 	{ "Animation",                      INI::parseAnim2DDefinition },
 	{ "Armor",                          INI::parseArmorDefinition },
+#if RTS_ZEROHOUR
+	// Tiberium Project @feature SAGE 2's attribute modifiers (C&C4's buffs and debuffs)
+	{ "AttributeModifier",              INI::parseAttributeModifierDefinition },
+#endif
 	{ "AudioEvent",                     INI::parseAudioEventDefinition },
 	{ "AudioSettings",                  INI::parseAudioSettingsDefinition },
 	{ "BenchProfile",                   INI::parseBenchProfile },

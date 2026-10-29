@@ -793,7 +793,8 @@ WhichTurretType AIUpdateInterface::getWhichTurretForWeaponSlot(WeaponSlotType ws
 Real AIUpdateInterface::getCurLocomotorSpeed() const
 {
 	if (m_curLocomotor != nullptr)
-		return m_curLocomotor->getMaxSpeedForCondition(getObject()->getBodyModule()->getDamageState());
+		return m_curLocomotor->getMaxSpeedForCondition(getObject()->getBodyModule()->getDamageState())
+			* getObject()->getAttributeModifierScalar(MODIFIER_SPEED);	// Tiberium Project @feature attribute modifiers
 
 	DEBUG_LOG(("no current locomotor!"));
 	return 0.0f;
