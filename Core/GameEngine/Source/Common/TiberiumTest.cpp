@@ -44,6 +44,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/TerrainLogic.h"
 #include "Common/Player.h"
+#include "Common/Upgrade.h"
 #include "Common/PlayerList.h"
 #include "GameLogic/PartitionManager.h"
 #include "Common/Team.h"
@@ -398,7 +399,8 @@ void TiberiumTest::setSpawn( const char *spec )
 // as from the bar), click=slot (a command bar button, from 1), mouse=x,y (the cursor, as fractions of
 // the screen), bar (the buttons shown, to the log), money=amount (for the local player),
 // build=Template[,dx,dy] (the selected dozer builds it at the view's centre), sell (the selection),
-// power=Button[,dx,dy] (the selection uses a location power at dx,dy from the first spawned object)
+// power=Button[,dx,dy] (the selection uses a location power at dx,dy from the first spawned object),
+// upgrade=Upgrade (the local player's, or each spawned object's)
 void TiberiumTest::setUI( const char *spec )
 {
 	if ( spec == nullptr )
@@ -832,13 +834,31 @@ void TiberiumTest::update()
 					if ( name != nullptr )
 						conditions += std::string( conditions.empty() ? "" : " " ) + name;
 				}
+				// the attribute modifiers on it and on its target (Zero Hour's), as speed armour damage rate range
+				char modifiers[160] = "";
+#if RTS_ZEROHOUR
+				{
+					const Object *who[2] = { obj, target };
+					for ( Int w = 0; w < 2; ++w )
+					{
+						if ( who[w] == nullptr || !who[w]->hasAttributeModifiers() )
+							continue;
+						char one[80];
+						snprintf( one, sizeof( one ), ", %s modifiers %.2f %.2f %.2f %.2f %.2f", w == 0 ? "its" : "target",
+							who[w]->getAttributeModifierScalar( MODIFIER_SPEED ), who[w]->getAttributeModifierScalar( MODIFIER_ARMOR ),
+							who[w]->getAttributeModifierScalar( MODIFIER_DAMAGE ), who[w]->getAttributeModifierScalar( MODIFIER_RATE_OF_FIRE ),
+							who[w]->getAttributeModifierScalar( MODIFIER_RANGE ) );
+						strlcat( modifiers, one, sizeof( modifiers ) );
+					}
+				}
+#endif
 				log( "frame %d: %s #%d at %.0f %.0f, health %.0f/%.0f, target health %.0f (last hit %.1f, type %d, from %d), "
-					"shots fired %d, weapon %s, status %d, range %.0f, conditions %s", (int)s_frame,
+					"shots fired %d, weapon %s, status %d, range %.0f, conditions %s%s", (int)s_frame,
 					obj->getTemplate()->getName().str(), (int)k, pos->x, pos->y, body->getHealth(), body->getMaxHealth(),
 					tb != nullptr ? tb->getHealth() : -1.0f, last != nullptr ? last->out.m_actualDamageDealt : -1.0f,
 					last != nullptr ? (int)last->in.m_damageType : -1, last != nullptr ? (int)last->in.m_sourceID : -1,
 					w != nullptr ? (int)w->getLastShotFrame() : -1, w != nullptr ? w->getName().str() : "none",
-					w != nullptr ? (int)w->getStatus() : -1, w != nullptr ? w->getAttackRange( obj ) : 0.0f, conditions.empty() ? "none" : conditions.c_str() );
+					w != nullptr ? (int)w->getStatus() : -1, w != nullptr ? w->getAttackRange( obj ) : 0.0f, conditions.empty() ? "none" : conditions.c_str(), modifiers );
 			}
 			// built up by its construction's progress, then sold (unbuilt the same way)
 			if ( s_spawnBuildFrames > 0 && obj->isKindOf( KINDOF_STRUCTURE ) && since <= 2 * s_spawnBuildFrames + 1 )
@@ -1002,6 +1022,21 @@ void TiberiumTest::update()
 			}
 			else
 				log( "frame %d: ui: power %s: no such button, power or object", (int)s_frame, step.arg.c_str() );
+		}
+		else if ( step.action == "upgrade" && TheUpgradeCenter != nullptr && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
+		{
+			// a player upgrade for the local player, or an object upgrade for each spawned object
+			const UpgradeTemplate *up = TheUpgradeCenter->findUpgrade( step.arg.c_str() );
+			if ( up != nullptr && up->getUpgradeType() == UPGRADE_TYPE_PLAYER )
+				ThePlayerList->getLocalPlayer()->addUpgrade( up, UPGRADE_STATUS_COMPLETE );
+			else if ( up != nullptr )
+				for ( size_t k = 0; k < s_spawned.size(); ++k )
+				{
+					Object *obj = TheGameLogic->findObjectByID( s_spawned[k] );
+					if ( obj != nullptr )
+						obj->giveUpgrade( up );
+				}
+			log( "frame %d: ui: upgrade %s%s", (int)s_frame, step.arg.c_str(), up != nullptr ? "" : " (no such upgrade)" );
 		}
 		else if ( step.action == "sell" )
 		{
