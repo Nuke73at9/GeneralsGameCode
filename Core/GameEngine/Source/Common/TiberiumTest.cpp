@@ -400,7 +400,8 @@ void TiberiumTest::setSpawn( const char *spec )
 // the screen), bar (the buttons shown, to the log), money=amount (for the local player),
 // build=Template[,dx,dy] (the selected dozer builds it at the view's centre), sell (the selection),
 // power=Button[,dx,dy] (the selection uses a location power at dx,dy from the first spawned object),
-// upgrade=Upgrade (the local player's, or each spawned object's)
+// upgrade=Upgrade (the local player's, or each spawned object's), players (each player's money and
+// objects, to the log)
 void TiberiumTest::setUI( const char *spec )
 {
 	if ( spec == nullptr )
@@ -1038,6 +1039,45 @@ void TiberiumTest::update()
 						obj->giveUpgrade( up );
 				}
 			log( "frame %d: ui: upgrade %s%s", (int)s_frame, step.arg.c_str(), up != nullptr ? "" : " (no such upgrade)" );
+		}
+		else if ( step.action == "players" && ThePlayerList != nullptr )
+		{
+			// what each player has: money, and its objects by kind, most first (an AI's build-up)
+			for ( Int n = 0; n < ThePlayerList->getPlayerCount(); ++n )
+			{
+				Player *player = ThePlayerList->getNthPlayer( n );
+				if ( player == nullptr || player == ThePlayerList->getNeutralPlayer() )
+					continue;
+				struct Tally { std::map<std::string, Int> kinds; Int total; static void each( Object *obj, void *data )
+				{
+					Tally *me = (Tally *)data;
+					if ( obj->isEffectivelyDead() || obj->isKindOf( KINDOF_PROJECTILE ) )
+						return;
+					++me->kinds[ obj->getTemplate()->getName().str() ];
+					++me->total;
+				} };
+				Tally tally;
+				tally.total = 0;
+				player->iterateObjects( Tally::each, &tally );
+				if ( tally.total == 0 )
+					continue;
+				std::vector< std::pair<Int, std::string> > sorted;
+				for ( std::map<std::string, Int>::const_iterator it = tally.kinds.begin(); it != tally.kinds.end(); ++it )
+					sorted.push_back( std::make_pair( -it->second, it->first ) );
+				std::sort( sorted.begin(), sorted.end() );
+				std::string all;
+				for ( size_t k = 0; k < sorted.size() && k < 14; ++k )
+				{
+					char one[96];
+					snprintf( one, sizeof( one ), " %s %d", sorted[k].second.c_str(), -sorted[k].first );
+					all += one;
+				}
+				AsciiString playerName;
+				playerName.translate( player->getPlayerDisplayName() );
+				log( "frame %d: ui: player %d (%s, %s) $%u, %d objects:%s", (int)s_frame, (int)n,
+					playerName.str(), player->getPlayerType() == PLAYER_COMPUTER ? "AI" : "human",
+					player->getMoney()->countMoney(), (int)tally.total, all.c_str() );
+			}
 		}
 		else if ( step.action == "sell" )
 		{
