@@ -400,6 +400,8 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/RadiusDecalUpdate.h
     Include/GameLogic/Module/ReplaceSelfUpdate.h
     Include/GameLogic/Module/ModifierAbilityUpdate.h
+    Include/GameLogic/Module/OrderAbilityUpdate.h
+    Include/GameLogic/Module/AssembleStructureUpdate.h
     Include/GameLogic/Module/AttributeModifierAuraUpdate.h
     Include/GameLogic/Module/AttributeModifierUpgrade.h
     Include/GameLogic/Module/FireWeaponAbilityUpdate.h
@@ -1045,6 +1047,8 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Update/RadiusDecalUpdate.cpp
     Source/GameLogic/Object/Update/ReplaceSelfUpdate.cpp
     Source/GameLogic/Object/Update/ModifierAbilityUpdate.cpp
+    Source/GameLogic/Object/Update/OrderAbilityUpdate.cpp
+    Source/GameLogic/Object/Update/AssembleStructureUpdate.cpp
     Source/GameLogic/Object/Update/AttributeModifierAuraUpdate.cpp
     Source/GameLogic/Object/Update/FireWeaponAbilityUpdate.cpp
     Source/GameLogic/Object/Update/ToggleAbilityUpdate.cpp
