@@ -1455,6 +1455,23 @@ Int W3DProjectedShadowManager::renderShadows(RenderInfoClass & rinfo)
 		flushDecals(lastShadowDecalTexture,lastShadowType);	//make sure there are not any unrendered decals left over.
 		TheDX8MeshRenderer.Flush();	//draw all the shadow receiving objects
 	}
+	projectionCount += renderDecals(rinfo, FALSE);
+	return projectionCount;
+}
+
+// Tiberium Project @bugfix the decals on their own: the cursors that aim a general's power, the
+// rings under units and the like still draw when C&C4's shadow map has replaced Zero Hour's shadows
+Int W3DProjectedShadowManager::renderDecals(RenderInfoClass & rinfo, Bool newFrame)
+{
+	Int projectionCount=0;
+	if (!TheTerrainRenderObject || !m_decalList)
+		return projectionCount;
+	W3DProjectedShadow *shadow;
+	if (newFrame)
+	{	// a new dynamic VB each frame, as renderShadows does
+		nShadowDecalVertsInBuf = 0xffff;
+		nShadowDecalIndicesInBuf = 0xffff;
+	}
 	if (m_decalList)
 	{
 		//keep track of active decal texture so we can render all decals at once.

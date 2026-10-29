@@ -98,6 +98,17 @@ void DoShadows(RenderInfoClass & rinfo, Bool stencilPass)
 
 }
 
+// Tiberium Project @bugfix the ground decals without Zero Hour's shadows (C&C4's shadow map shades the
+// scene): the cursor that aims a general's power, the rings under units, crate glows
+void DoDecals(RenderInfoClass & rinfo)
+{
+	if (!TheW3DProjectedShadowManager || !TheW3DShadowManager || !TheW3DShadowManager->isShadowScene())
+		return;
+	shadowCameraFrustum=&rinfo.Camera.Get_Frustum();
+	TheW3DProjectedShadowManager->renderDecals(rinfo, TRUE);
+	TheW3DShadowManager->queueShadows(FALSE);	// once a frame, as DoShadows
+}
+
 W3DShadowManager::W3DShadowManager()
 {
 	DEBUG_ASSERTCRASH(TheW3DVolumetricShadowManager == nullptr && TheW3DProjectedShadowManager == nullptr,

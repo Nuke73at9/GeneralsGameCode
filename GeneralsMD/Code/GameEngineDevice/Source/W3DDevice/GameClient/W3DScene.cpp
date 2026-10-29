@@ -72,6 +72,7 @@
 extern void PrepareShadows();
 extern void DoTrees(RenderInfoClass & rinfo);
 extern void DoShadows(RenderInfoClass & rinfo, Bool stencilPass);
+extern void DoDecals(RenderInfoClass & rinfo);	// Tiberium Project @bugfix
 #ifdef RTS_RENDERER_D3D9
 #include "WW3D2/sage2/sage2shadow.h"	// Tiberium Project @feature C&C4's shadow map
 #include "WW3D2/sage2/sage2scene.h"	// Tiberium Project @feature point lights in the deferred pass
@@ -867,8 +868,15 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 	const Bool zhShadows = TRUE;
 #endif
 	//don't draw shadows in this mode because they interfere with destination alpha or are invisible (wireframe)
-	if (zhShadows && m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
-		DoShadows(rinfo, false);	//draw all non-stencil shadows (decals) since they fall under other objects.
+	if (m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
+	{
+		if (zhShadows)
+			DoShadows(rinfo, false);	//draw all non-stencil shadows (decals) since they fall under other objects.
+#ifdef RTS_RENDERER_D3D9
+		else if (!Sage2ShadowClass::Is_Rendering())
+			DoDecals(rinfo);	// Tiberium Project @bugfix the ground decals still draw under C&C4's shadow map
+#endif
+	}
 
 #ifdef RTS_RENDERER_D3D9
 	if (!Sage2ShadowClass::Is_Rendering())

@@ -57,6 +57,8 @@ class W3DProjectedShadowManager	: public ProjectedShadowManager
 		void shutdown();			///<free all assets prior to shutdown of entire game.
 		void prepareShadows();
 		Int	 renderShadows(RenderInfoClass & rinfo);	///<iterate over each object and render its shadow onto affected objects.
+		// Tiberium Project @bugfix the ground decals alone (targeting cursors, status rings), for when C&C4's shadow map replaces the shadows
+		Int	 renderDecals(RenderInfoClass & rinfo, Bool newFrame);
 		void ReleaseResources();	///<release device dependent D3D resources.
 		Bool ReAcquireResources();	///<allocate device dependent D3D resources.
 		void invalidateCachedLightPositions();	///<forces shadows to update regardless of last lightposition
