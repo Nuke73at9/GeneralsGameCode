@@ -33,6 +33,7 @@
 #include "Common/GameEngine.h"
 #include "Common/GlobalData.h"
 #include "GameClient/ControlBar.h"
+#include "Common/SpecialPower.h"
 #include "GameClient/FXList.h"
 #include "WWMath/matrix3d.h"
 #include "GameClient/Display.h"
@@ -95,6 +96,7 @@ namespace
 	std::vector<std::string> s_spawnNames;
 	Bool s_spawnMove = FALSE, s_spawnFight = FALSE, s_spawnDamage = FALSE, s_spawnExplode = FALSE;
 	Real s_spawnSpacing = 70.0f;	// between the objects of a row ("space=N": structures need more)
+	Int s_spawnBuildFrames = 0;		// "build=N": structures built up over N frames, then sold over N
 	std::vector<ObjectID> s_spawned, s_spawnTargets;
 	ObjectID s_baseVictim = INVALID_ID;
 	Coord3D s_baseVictimPos;
@@ -382,6 +384,9 @@ void TiberiumTest::setSpawn( const char *spec )
 		s_spawnFight = parts[2].find( "fight" ) != std::string::npos;
 		s_spawnDamage = parts[2].find( "damage" ) != std::string::npos;
 		s_spawnExplode = parts[2].find( "explode" ) != std::string::npos;	// the killing blow blows them up (their exploded death)
+		const size_t build = parts[2].find( "build=" );
+		if ( build != std::string::npos )
+			s_spawnBuildFrames = atoi( parts[2].c_str() + build + 6 );
 		const size_t space = parts[2].find( "space=" );
 		if ( space != std::string::npos )
 			s_spawnSpacing = (Real)atof( parts[2].c_str() + space + 6 );
@@ -391,7 +396,9 @@ void TiberiumTest::setSpawn( const char *spec )
 }
 // "frame:action[=arg];...": select[=index] (the spawned objects), command=Button (a targeted command,
 // as from the bar), click=slot (a command bar button, from 1), mouse=x,y (the cursor, as fractions of
-// the screen), bar (the buttons shown, to the log), money=amount (for the local player)
+// the screen), bar (the buttons shown, to the log), money=amount (for the local player),
+// build=Template[,dx,dy] (the selected dozer builds it at the view's centre), sell (the selection),
+// power=Button[,dx,dy] (the selection uses a location power at dx,dy from the first spawned object)
 void TiberiumTest::setUI( const char *spec )
 {
 	if ( spec == nullptr )
@@ -817,13 +824,46 @@ void TiberiumTest::update()
 				const BodyModuleInterface *tb = target != nullptr ? target->getBodyModule() : nullptr;
 				const Weapon *w = obj->getCurrentWeapon();
 				const DamageInfo* last = tb != nullptr ? tb->getLastDamageInfo() : nullptr;
+				std::string conditions;
+				const ModelConditionFlags flags = obj->getDrawable() != nullptr ? obj->getDrawable()->getModelConditionFlags() : ModelConditionFlags();
+				for ( Int bit = 0; bit < flags.size(); ++bit )
+				{
+					const char *name = flags.getBitNameIfSet( bit );
+					if ( name != nullptr )
+						conditions += std::string( conditions.empty() ? "" : " " ) + name;
+				}
 				log( "frame %d: %s #%d at %.0f %.0f, health %.0f/%.0f, target health %.0f (last hit %.1f, type %d, from %d), "
-					"shots fired %d, weapon %s, status %d, range %.0f", (int)s_frame,
+					"shots fired %d, weapon %s, status %d, range %.0f, conditions %s", (int)s_frame,
 					obj->getTemplate()->getName().str(), (int)k, pos->x, pos->y, body->getHealth(), body->getMaxHealth(),
 					tb != nullptr ? tb->getHealth() : -1.0f, last != nullptr ? last->out.m_actualDamageDealt : -1.0f,
 					last != nullptr ? (int)last->in.m_damageType : -1, last != nullptr ? (int)last->in.m_sourceID : -1,
 					w != nullptr ? (int)w->getLastShotFrame() : -1, w != nullptr ? w->getName().str() : "none",
-					w != nullptr ? (int)w->getStatus() : -1, w != nullptr ? w->getAttackRange( obj ) : 0.0f );
+					w != nullptr ? (int)w->getStatus() : -1, w != nullptr ? w->getAttackRange( obj ) : 0.0f, conditions.empty() ? "none" : conditions.c_str() );
+			}
+			// built up by its construction's progress, then sold (unbuilt the same way)
+			if ( s_spawnBuildFrames > 0 && obj->isKindOf( KINDOF_STRUCTURE ) && since <= 2 * s_spawnBuildFrames + 1 )
+			{
+				if ( since == 1 )
+				{
+					obj->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_UNDER_CONSTRUCTION ) );
+					obj->clearAndSetModelConditionFlags( MAKE_MODELCONDITION_MASK( MODELCONDITION_AWAITING_CONSTRUCTION ),
+						MAKE_MODELCONDITION_MASK2( MODELCONDITION_PARTIALLY_CONSTRUCTED, MODELCONDITION_ACTIVELY_BEING_CONSTRUCTED ) );
+				}
+				const Int b = s_spawnBuildFrames;
+				const Real pct = since <= b ? 100.0f * since / b : 100.0f * ( 2 * b - since ) / b;
+				obj->setConstructionPercent( pct < 0.0f ? 0.0f : pct );
+				if ( since == b )
+				{
+					obj->clearStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_UNDER_CONSTRUCTION ) );
+					obj->clearModelConditionFlags( MAKE_MODELCONDITION_MASK2( MODELCONDITION_PARTIALLY_CONSTRUCTED, MODELCONDITION_ACTIVELY_BEING_CONSTRUCTED ) );
+					obj->setConstructionPercent( CONSTRUCTION_COMPLETE );
+				}
+				else if ( since == b + b / 4 )
+				{
+					// sold: Zero Hour unbuilds a sold structure the same way, with SOLD set
+					obj->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_SOLD ) );
+					obj->setModelConditionFlags( MAKE_MODELCONDITION_MASK( MODELCONDITION_PARTIALLY_CONSTRUCTED ) );
+				}
 			}
 			if ( s_spawnDamage && body != nullptr && ( since == 90 || since == 180 || since == 270 ) )
 			{
@@ -887,6 +927,87 @@ void TiberiumTest::update()
 			const std::string::size_type comma = step.arg.find( ',' );
 			s_uiMouseY = comma != std::string::npos ? (Real)atof( step.arg.c_str() + comma + 1 ) : 0.5f;
 		}
+		else if ( step.action == "build" && TheThingFactory != nullptr && TheTacticalView != nullptr )
+		{
+			// the selected dozer builds Template at the view's centre, offset by dx,dy (its build-up, watched)
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			const ThingTemplate *tmpl = f.empty() ? nullptr : TheThingFactory->findTemplate( f[0].c_str() );
+			if ( tmpl != nullptr )
+			{
+				Coord3D at = TheTacticalView->getPosition();
+				at.x += f.size() > 1 ? (Real)atof( f[1].c_str() ) : 0.0f;
+				at.y += f.size() > 2 ? (Real)atof( f[2].c_str() ) : 0.0f;
+				at.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( at.x, at.y ) : 0.0f;
+				// the nearest place it may stand (rings out to 800 units), as a player would pick one
+				Object *picker = !s_spawned.empty() ? TheGameLogic->findObjectByID( s_spawned[0] ) : nullptr;
+				if ( picker != nullptr && TheBuildAssistant != nullptr )
+				{
+					const UnsignedInt opts = BuildAssistant::TERRAIN_RESTRICTIONS | BuildAssistant::NO_OBJECT_OVERLAP;
+					const Coord3D wanted = at;
+					Bool found = TheBuildAssistant->isLocationLegalToBuild( &at, tmpl, 0.0f, opts, picker, picker->getControllingPlayer() ) == LBC_OK;
+					for ( Int ring = 1; ring <= 16 && !found; ++ring )
+					{
+						for ( Int k = 0; k < 8 * ring && !found; ++k )
+						{
+							const Real a = 2.0f * PI * k / ( 8 * ring );
+							Coord3D p = wanted;
+							p.x += ring * 50.0f * Cos( a );
+							p.y += ring * 50.0f * Sin( a );
+							p.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( p.x, p.y ) : 0.0f;
+							if ( TheBuildAssistant->isLocationLegalToBuild( &p, tmpl, 0.0f, opts, picker, picker->getControllingPlayer() ) == LBC_OK )
+							{
+								at = p;
+								found = TRUE;
+							}
+						}
+					}
+				}
+				// the first spawned object (a dozer) builds it, as the logic does a player's placement
+				// (a test, not a player's command: not with -testCRC)
+				Object *builder = !s_spawned.empty() ? TheGameLogic->findObjectByID( s_spawned[0] ) : nullptr;
+				if ( builder != nullptr && TheBuildAssistant != nullptr )
+				{
+					const Int can = (Int)TheBuildAssistant->canMakeUnit( builder, tmpl );
+					const Int where = (Int)TheBuildAssistant->isLocationLegalToBuild( &at, tmpl, 0.0f,
+						BuildAssistant::TERRAIN_RESTRICTIONS | BuildAssistant::NO_OBJECT_OVERLAP, builder, builder->getControllingPlayer() );
+					Object *made = TheBuildAssistant->buildObjectNow( builder, tmpl, &at, 0.0f, builder->getControllingPlayer() );
+					log( "frame %d: ui: build at %.0f %.0f: can make %d, location %d, %s", (int)s_frame, at.x, at.y, can, where,
+						made != nullptr ? "started" : "refused" );
+				}
+			}
+			log( "frame %d: ui: build %s%s", (int)s_frame, step.arg.c_str(), tmpl != nullptr ? "" : " (no such object)" );
+		}
+		else if ( step.action == "power" && TheControlBar != nullptr && TheGameLogic != nullptr )
+		{
+			// the selection uses a location power (Button) at dx,dy from the first spawned object, as a
+			// player's click on the ground does (a test, not a player's command: not with -testCRC)
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			const CommandButton *button = f.empty() ? nullptr : TheControlBar->findCommandButton( AsciiString( f[0].c_str() ) );
+			Object *from = !s_spawned.empty() ? TheGameLogic->findObjectByID( s_spawned[0] ) : nullptr;
+			if ( button != nullptr && button->getSpecialPowerTemplate() != nullptr && from != nullptr )
+			{
+				Coord3D at = *from->getPosition();
+				at.x += f.size() > 1 ? (Real)atof( f[1].c_str() ) : 0.0f;
+				at.y += f.size() > 2 ? (Real)atof( f[2].c_str() ) : 0.0f;
+				at.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( at.x, at.y ) : 0.0f;
+				GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_DO_SPECIAL_POWER_AT_LOCATION );
+				msg->appendIntegerArgument( button->getSpecialPowerTemplate()->getID() );
+				msg->appendLocationArgument( at );
+				msg->appendRealArgument( INVALID_ANGLE );
+				msg->appendObjectIDArgument( INVALID_ID );
+				msg->appendIntegerArgument( button->getOptions() );
+				msg->appendObjectIDArgument( INVALID_ID );
+				log( "frame %d: ui: power %s at %.0f %.0f (from %.0f %.0f)", (int)s_frame, f[0].c_str(), at.x, at.y,
+					from->getPosition()->x, from->getPosition()->y );
+			}
+			else
+				log( "frame %d: ui: power %s: no such button, power or object", (int)s_frame, step.arg.c_str() );
+		}
+		else if ( step.action == "sell" )
+		{
+			TheMessageStream->appendMessage( GameMessage::MSG_SELL );
+			log( "frame %d: ui: sell", (int)s_frame );
+		}
 		else if ( step.action == "money" && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
 		{
 			ThePlayerList->getLocalPlayer()->getMoney()->deposit( (UnsignedInt)atoi( step.arg.c_str() ), FALSE );
@@ -899,7 +1020,23 @@ void TiberiumTest::update()
 			Int count = 0;
 			if ( tmpl != nullptr )
 				ThePlayerList->getLocalPlayer()->countObjectsByThingTemplate( 1, &tmpl, FALSE, &count );
-			log( "frame %d: ui: %d of %s%s", (int)s_frame, (int)count, step.arg.c_str(), tmpl != nullptr ? "" : " (no such object)" );
+			// and where the first of them stands
+			struct First { const ThingTemplate *tmpl; Coord3D pos; Bool found; static void each( Object *obj, void *data )
+			{
+				First *me = (First *)data;
+				if ( !me->found && obj->getTemplate()->isEquivalentTo( me->tmpl ) )
+				{
+					me->pos = *obj->getPosition();
+					me->found = TRUE;
+				}
+			} };
+			First first = { tmpl, Coord3D(), FALSE };
+			if ( tmpl != nullptr )
+				ThePlayerList->getLocalPlayer()->iterateObjects( First::each, &first );
+			char where[64] = "";
+			if ( first.found )
+				snprintf( where, sizeof( where ), ", the first at %.0f %.0f", first.pos.x, first.pos.y );
+			log( "frame %d: ui: %d of %s%s%s", (int)s_frame, (int)count, step.arg.c_str(), tmpl != nullptr ? "" : " (no such object)", where );
 		}
 		else if ( step.action == "prod" && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
 		{
