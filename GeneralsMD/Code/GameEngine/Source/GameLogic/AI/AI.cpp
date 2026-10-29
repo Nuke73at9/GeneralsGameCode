@@ -131,8 +131,20 @@ void AISideBuildList::addInfo(BuildListInfo *info)
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // PRIVATE DATA ///////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+//--------------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature UnitStandIn = Unit Replacement [Replacement ...] */
+static void parseUnitStandIn( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ )
+{
+	const char *name = ini->getNextToken();
+	std::vector<AsciiString> standIns;
+	for( const char *token = ini->getNextTokenOrNull(); token != nullptr; token = ini->getNextTokenOrNull() )
+		standIns.push_back( AsciiString( token ) );
+	((TAiData*)instance)->m_unitStandIns[ AsciiString( name ) ] = standIns;
+}
+
 static const FieldParse TheAIFieldParseTable[] =
 {
+	{ "UnitStandIn",						parseUnitStandIn, nullptr, 0 },	// Tiberium Project
 
 	{ "StructureSeconds",				INI::parseReal,nullptr,		offsetof( TAiData, m_structureSeconds ) },
 	{ "TeamSeconds",						INI::parseReal,nullptr,		offsetof( TAiData, m_teamSeconds ) },
@@ -412,6 +424,17 @@ void AI::addSideInfo(AISideInfo *infoToAdd)
 {
 	m_aiData->addSideInfo(infoToAdd);
 
+}
+
+//--------------------------------------------------------------------------------------------------------
+AsciiString AI::getUnitStandIn( const AsciiString &name, Int slot ) const
+{
+	if( m_aiData == nullptr )
+		return name;
+	std::map< AsciiString, std::vector<AsciiString> >::const_iterator it = m_aiData->m_unitStandIns.find( name );
+	if( it == m_aiData->m_unitStandIns.end() || it->second.empty() )
+		return name;
+	return it->second[ (size_t)( slot < 0 ? 0 : slot ) % it->second.size() ];
 }
 
 //-------------------------------------------------------------------------------------------------

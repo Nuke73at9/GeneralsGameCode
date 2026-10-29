@@ -230,6 +230,9 @@ public:
 
 
 	AISideInfo *m_sideInfo;
+	/// Tiberium Project @feature the units standing in for others in the AI's teams (UnitStandIn): a
+	/// mod that no longer builds a unit names what its teams build instead (each slot the next of them)
+	std::map< AsciiString, std::vector<AsciiString> > m_unitStandIns;
 
 	AISideBuildList *m_sideBuildLists;
 
@@ -295,6 +298,9 @@ public:
 	static void parseScience( INI* ini, void *instance, void *store, const void *userData );					///< Parse the image part of the INI file
 
 	UnsignedInt getNextGroupID() { return ++m_nextGroupID; }
+
+	/// Tiberium Project @feature the unit an AI team builds for name in its slot-th slot (itself when none stands in)
+	AsciiString getUnitStandIn( const AsciiString &name, Int slot ) const;
 
 protected:
 	Pathfinder *m_pathfinder;							///< the pathfinding system

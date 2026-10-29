@@ -41,6 +41,7 @@
 #include "Common/Xfer.h"
 #include "GameClient/Drawable.h"
 
+#include "GameLogic/AI.h"
 #include "GameLogic/SidesList.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/BodyModule.h"
@@ -697,6 +698,12 @@ TeamTemplateInfo::TeamTemplateInfo(Dict *d) :
 		m_unitsInfo[m_numUnitsInfo].unitThingName = templateName;
 		m_numUnitsInfo++;
 	}
+
+	// Tiberium Project @feature the AI's stand-ins (AIData UnitStandIn): a team that names a unit the mod
+	// no longer builds gets the one standing in for it
+	if (TheAI != nullptr)
+		for (Int i = 0; i < m_numUnitsInfo; ++i)
+			m_unitsInfo[i].unitThingName = TheAI->getUnitStandIn(m_unitsInfo[i].unitThingName, i);
 
 	AsciiString waypoint = d->getAsciiString(TheKey_teamHome, &exists);
 	m_homeLocation.x = m_homeLocation.y = 0;
