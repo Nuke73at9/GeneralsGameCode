@@ -1275,12 +1275,15 @@ Bool BuildAssistant::isPossibleToMakeUnit( Object *builder, const ThingTemplate 
 	//
 	const CommandButton *commandButton;
 	const CommandButton *foundCommand = nullptr;
+	// Tiberium Project @feature and on the pages its page buttons lead to
+	const CommandSet *pages[ ControlBar::MAX_COMMAND_SET_PAGES ];
+	const Int pageCount = TheControlBar->getCommandSetPages( commandSet, pages, ControlBar::MAX_COMMAND_SET_PAGES );
 	Int i;
-	for( i = 0; i < MAX_COMMANDS_PER_SET; i++ )
+	for( i = 0; i < MAX_COMMANDS_PER_SET * pageCount; i++ )
 	{
 
 		// get this button
-		commandButton = commandSet->getCommandButton(i);
+		commandButton = pages[ i / MAX_COMMANDS_PER_SET ]->getCommandButton( i % MAX_COMMANDS_PER_SET );
 		if( commandButton &&
 				(commandButton->getCommandType() == GUI_COMMAND_UNIT_BUILD || commandButton->getCommandType() == GUI_COMMAND_DOZER_CONSTRUCT) &&
 				commandButton->getThingTemplate() && commandButton->getThingTemplate()->isEquivalentTo(whatToBuild) )

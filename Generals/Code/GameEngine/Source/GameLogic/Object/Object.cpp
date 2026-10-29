@@ -5369,9 +5369,12 @@ Bool Object::canProduceUpgrade( const UpgradeTemplate *upgrade )
 	// We need to have the button to make the upgrade.  CommandSets are a weird Logic/Client hybrid.
 	const CommandSet *set = TheControlBar->findCommandSet(getCommandSetString());
 
- 	for( Int buttonIndex = 0; buttonIndex < MAX_COMMANDS_PER_SET; buttonIndex++ )
+	// Tiberium Project @feature and on the pages its page buttons lead to
+	const CommandSet *pages[ ControlBar::MAX_COMMAND_SET_PAGES ];
+	const Int pageCount = TheControlBar->getCommandSetPages( set, pages, ControlBar::MAX_COMMAND_SET_PAGES );
+ 	for( Int buttonIndex = 0; buttonIndex < MAX_COMMANDS_PER_SET * pageCount; buttonIndex++ )
  	{
- 		const CommandButton *button = set->getCommandButton(buttonIndex);
+ 		const CommandButton *button = pages[ buttonIndex / MAX_COMMANDS_PER_SET ]->getCommandButton( buttonIndex % MAX_COMMANDS_PER_SET );
  		if( button &&
 				( (button->getCommandType() == GUI_COMMAND_PLAYER_UPGRADE)  ||  (button->getCommandType() == GUI_COMMAND_OBJECT_UPGRADE) ) && // Or else a button that requires an upgrade will appear the same as a button that gives an upgrade
 				button->getUpgradeTemplate() &&

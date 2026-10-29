@@ -124,6 +124,7 @@ const FieldParse CommandButton::s_commandButtonFieldParseTable[] =
 	{ "ButtonBorderType",			INI::parseLookupList,				 CommandButtonMappedBorderTypeNames, offsetof( CommandButton, m_commandButtonBorder ) },
 	{ "RadiusCursorType",			INI::parseIndexList,				 TheRadiusCursorNames, offsetof( CommandButton, m_radiusCursor ) },
 	{ "UnitSpecificSound",		INI::parseAudioEventRTS,		 nullptr, offsetof( CommandButton, m_unitSpecificSound ) },
+	{ "PageCommandSet",			INI::parseAsciiString,			 nullptr, offsetof( CommandButton, m_pageCommandSetName ) },	// Tiberium Project @feature
 
 	{ nullptr,						nullptr,												 nullptr, 0 }
 
@@ -952,6 +953,8 @@ ControlBar::ControlBar()
 	m_rightHUDUnitSelectParent = nullptr;
 	m_communicatorButton = nullptr;
 	m_currentSelectedDrawable = nullptr;
+	m_displayedPage = nullptr;	// Tiberium Project @feature command set pages
+	m_displayedPageObject = INVALID_ID;
 	m_currContext = CB_CONTEXT_NONE;
 	m_rallyPointDrawableID = INVALID_DRAWABLE_ID;
 	m_displayedConstructPercent = -1.0f;
@@ -1327,6 +1330,8 @@ void ControlBar::reset()
 
 	m_displayedConstructPercent = -1.0f;
 	m_displayedOCLTimerSeconds = 0;
+	m_displayedPage = nullptr;	// Tiberium Project @feature command set pages
+	m_displayedPageObject = INVALID_ID;
 
 	m_isObserverCommandBar = FALSE; // reset us to use a normal command bar
 	m_observerLookAtPlayer = nullptr;
@@ -2090,6 +2095,59 @@ const CommandSet *ControlBar::findCommandSet( const AsciiString& name )
 	if (set)
 		set = (CommandSet*)set->friend_getFinalOverride();
 	return set;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature command set pages. A set's COMMAND_SET_PAGE buttons name other sets
+// (PageCommandSet); this collects the set and every page reachable from it, the set first, each once.
+// Data only (no client state), so the logic uses it too: a unit on page 2 is buildable like one on page 1.
+//-------------------------------------------------------------------------------------------------
+Int ControlBar::getCommandSetPages( const CommandSet *set, const CommandSet *pages[], Int maxPages )
+{
+	Int count = 0;
+	if( set == nullptr || maxPages <= 0 )
+		return 0;
+	pages[ count++ ] = set;
+	for( Int at = 0; at < count; ++at )
+	{
+		for( Int i = 0; i < MAX_COMMANDS_PER_SET; ++i )
+		{
+			const CommandButton *button = pages[ at ]->getCommandButton( i );
+			if( button == nullptr || button->getCommandType() != GUI_COMMAND_COMMAND_SET_PAGE )
+				continue;
+			const CommandSet *page = findCommandSet( button->getPageCommandSetName() );
+			if( page == nullptr )
+				continue;
+			Bool seen = FALSE;
+			for( Int k = 0; k < count && !seen; ++k )
+				seen = pages[ k ] == page;
+			if( !seen && count < maxPages )
+				pages[ count++ ] = page;
+		}
+	}
+	return count;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the page of an object's commands on the bar: its own set, or the page
+// a page button turned to, while that object stays the one shown and the page is still one of its
+// set's (a Crawler that deploys, or an upgrade that changes the set, starts again at the first)
+//-------------------------------------------------------------------------------------------------
+const CommandSet *ControlBar::getDisplayedCommandSet( const Object *obj )
+{
+	if( obj == nullptr )
+		return nullptr;
+	const CommandSet *own = findCommandSet( obj->getCommandSetString() );
+	if( m_displayedPage == nullptr || m_displayedPageObject != obj->getID() || own == nullptr )
+		return own;
+	const CommandSet *pages[ MAX_COMMAND_SET_PAGES ];
+	const Int count = getCommandSetPages( own, pages, MAX_COMMAND_SET_PAGES );
+	for( Int k = 0; k < count; ++k )
+		if( pages[ k ] == m_displayedPage )
+			return m_displayedPage;
+	m_displayedPage = nullptr;
+	m_displayedPageObject = INVALID_ID;
+	return own;
 }
 
 //-------------------------------------------------------------------------------------------------

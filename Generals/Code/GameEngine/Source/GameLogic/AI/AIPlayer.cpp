@@ -1718,10 +1718,13 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 			Bool canUpgradeHere = false;
 			const CommandSet *commandSet = TheControlBar->findCommandSet( factory->getCommandSetString() );
 			if( commandSet == nullptr) continue;
-			for( Int j = 0; j < MAX_COMMANDS_PER_SET; j++ )
+			// Tiberium Project @feature and on the pages its page buttons lead to
+			const CommandSet *pages[ ControlBar::MAX_COMMAND_SET_PAGES ];
+			const Int pageCount = TheControlBar->getCommandSetPages( commandSet, pages, ControlBar::MAX_COMMAND_SET_PAGES );
+			for( Int j = 0; j < MAX_COMMANDS_PER_SET * pageCount; j++ )
 			{
 				//Get the command button.
-				const CommandButton *commandButton = commandSet->getCommandButton(j);
+				const CommandButton *commandButton = pages[ j / MAX_COMMANDS_PER_SET ]->getCommandButton( j % MAX_COMMANDS_PER_SET );
 				if (commandButton==nullptr) continue;
 				if (commandButton->getName().isEmpty() )	continue;
 				if (commandButton->getUpgradeTemplate() == nullptr )	continue;

@@ -664,6 +664,21 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 		}
 
 		//---------------------------------------------------------------------------------------------
+		// Tiberium Project @feature turn to another page of the selected object's commands
+		case GUI_COMMAND_COMMAND_SET_PAGE:
+		{
+			const CommandSet *page = findCommandSet( commandButton->getPageCommandSetName() );
+			if( obj != nullptr && page != nullptr )
+			{
+				const Bool own = page == findCommandSet( obj->getCommandSetString() );
+				m_displayedPage = own ? nullptr : page;
+				m_displayedPageObject = own ? INVALID_ID : obj->getID();
+				markUIDirty();
+			}
+			break;
+		}
+
+		//---------------------------------------------------------------------------------------------
 		case GUI_COMMAND_WAYPOINTS:
 			break;
 

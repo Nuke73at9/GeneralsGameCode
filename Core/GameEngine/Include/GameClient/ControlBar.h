@@ -215,6 +215,8 @@ enum GUICommandType CPP_11(: Int)
 
 	GUI_COMMAND_SELECT_ALL_UNITS_OF_TYPE,
 
+	GUI_COMMAND_COMMAND_SET_PAGE,					///< Tiberium Project @feature show another page of the selected object's commands
+
 	// add more commands here, don't forget to update the string command list below too ...
 
 	GUI_COMMAND_NUM_COMMANDS
@@ -268,6 +270,7 @@ static const char *const TheGuiCommandNames[] =
 	"SPECIAL_POWER_CONSTRUCT",
 	"SPECIAL_POWER_CONSTRUCT_FROM_SHORTCUT",
 	"SELECT_ALL_UNITS_OF_TYPE",
+	"COMMAND_SET_PAGE",	// Tiberium Project @feature
 
 	nullptr
 };
@@ -346,6 +349,8 @@ public:
 	Int getMaxShotsToFire() const { return m_maxShotsToFire; }
 	const ScienceVec& getScienceVec() const { return m_science; }
 	CommandButtonMappedBorderType getCommandButtonMappedBorderType() const { return m_commandButtonBorder; }
+	// Tiberium Project @feature the command set a COMMAND_SET_PAGE button shows
+	const AsciiString& getPageCommandSetName() const { return m_pageCommandSetName; }
 	const Image* getButtonImage() const { return m_buttonImage;	}
 	void cacheButtonImage();
 
@@ -396,6 +401,7 @@ private:
 	AsciiString										m_buttonImageName;
 	GameWindow*										m_window;											///< used during the run-time assignment of a button to a gadget button window
 	AudioEventRTS									m_unitSpecificSound;					///< Unit sound played whenever button is clicked.
+	AsciiString										m_pageCommandSetName;					///< Tiberium Project @feature PageCommandSet: the set a COMMAND_SET_PAGE button shows
 
 	// bleah. shouldn't be mutable, but is. sue me. (srj)
 	mutable const Image*					m_buttonImage;								///< button image
@@ -697,6 +703,16 @@ public:
 	/// find existing command set
 	const CommandSet *findCommandSet( const AsciiString& name );
 
+	// Tiberium Project @feature command set pages: a COMMAND_SET_PAGE button shows another set (its
+	// PageCommandSet) in place of the selected object's own, for build lists longer than a page
+	enum { MAX_COMMAND_SET_PAGES = 8 };
+	/// the set and the pages its page buttons lead to, the set first (the logic checks them all)
+	Int getCommandSetPages( const CommandSet *set, const CommandSet *pages[], Int maxPages );
+	/// the page of an object's commands the bar shows
+	const CommandSet *getDisplayedCommandSet( const Object *obj );
+	/// a command button window (by slot, from 0), for tests
+	GameWindow *getCommandWindow( Int index ) const { return index >= 0 && index < MAX_COMMANDS_PER_SET ? m_commandWindows[ index ] : nullptr; }
+
 	void showPurchaseScience();
 	void hidePurchaseScience();
 	void togglePurchaseScience();
@@ -928,6 +944,8 @@ protected:
 	GameWindow *m_specialPowerShortcutParent;
 
 	GameWindow *m_commandWindows[ MAX_COMMANDS_PER_SET ];			///< command window controls for easy access
+	const CommandSet *m_displayedPage;								///< Tiberium Project @feature the page shown in place of an object's own set
+	ObjectID m_displayedPageObject;									///< Tiberium Project @feature whose page it is
 	const CommandButton *m_commonCommands[ MAX_COMMANDS_PER_SET ];	///< shared commands we will use for multi-selection
 
 		// removed from multiplayer branch

@@ -271,8 +271,8 @@ void ControlBar::populateCommand( Object *obj )
 	// reset the build queue data
 	resetBuildQueueData();
 
-	// get command set
-	commandSet = findCommandSet( obj->getCommandSetString() );
+	// get command set (Tiberium Project @feature or the page of it a page button turned to)
+	commandSet = getDisplayedCommandSet( obj );
 
 	// if no command set match is found hide all the buttons
 	if( commandSet == nullptr )
@@ -1108,6 +1108,7 @@ CommandAvailability ControlBar::getCommandAvailability( const CommandButton *com
 				commandType != GUI_COMMAND_BEACON_DELETE &&
 				commandType != GUI_COMMAND_SET_RALLY_POINT &&
 				commandType != GUI_COMMAND_STOP &&
+				commandType != GUI_COMMAND_COMMAND_SET_PAGE &&	// Tiberium Project @feature
 				commandType != GUI_COMMAND_SWITCH_WEAPON )
 		{
 			if( getCommandAvailability( command, obj, win, applyToWin, TRUE ) == COMMAND_HIDDEN )
