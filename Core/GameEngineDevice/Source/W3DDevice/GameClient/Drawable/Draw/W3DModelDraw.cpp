@@ -1205,6 +1205,12 @@ void W3DModelDrawModuleData::validateStuffForTimeAndWeather(const Drawable* draw
 				b = true;
 
 		}
+		// Tiberium Project: or a transition with that key (a chained transition starts where one ends)
+		for (TransitionMap::const_iterator u_it = m_transitionMap.begin(); !a && u_it != m_transitionMap.end(); ++u_it)
+		{
+			if (u_it->second.m_transitionKey == src)
+				a = true;
+		}
 		if (a && b)
 		{
 			t_it->second.loadAnimations();
@@ -1817,9 +1823,12 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 			throw INI_INVALID_DATA;
 		}
 
-		if (info.m_transitionKey != NAMEKEY_INVALID || info.m_allowToFinishKey != NAMEKEY_INVALID)
+		// Tiberium Project @feature a transition may have a TransitionKey of its own: when it ends, the
+		// transition from it to the state that follows plays next (SAGE 2's draws chain their transitions:
+		// a C&C4 unit stands down, then settles into its idle)
+		if (info.m_allowToFinishKey != NAMEKEY_INVALID)
 		{
-			DEBUG_CRASH(("*** ASSET ERROR: Transition States must not have transition keys or m_allowToFinishKey"));
+			DEBUG_CRASH(("*** ASSET ERROR: Transition States must not have m_allowToFinishKey"));
 			throw INI_INVALID_DATA;
 		}
 

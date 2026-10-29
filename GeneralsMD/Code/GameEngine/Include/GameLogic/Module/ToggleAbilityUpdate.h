@@ -22,8 +22,9 @@
 // second one: deployed, burrowed, armoured up, sprinting. Each state can set model conditions, and
 // the second can set the ABILITY_TOGGLED weapon set, the upgraded locomotor (SET_NORMAL_UPGRADED: a
 // faster one for a sprint, one that does not move for a deployed form) and object status (CAN_STEALTH
-// for a burrowed unit). Switching takes TransitionTime (UNPACKING into the second state, PACKING back),
-// the unit standing still; with AutoRevertTime the second state ends by itself.
+// for a burrowed unit). Switching takes TransitionTime (UNPACKING into the second state, PACKING back,
+// or the ToggleInConditions and ToggleOutConditions given; TransitionBackTime for the way back, when it
+// differs), the unit standing still; with AutoRevertTime the second state ends by itself.
 //
 //   Behavior = SpecialAbility ModuleTag_DeployPower
 //     SpecialPowerTemplate = C4SP_Deploy
@@ -56,6 +57,10 @@ class ToggleAbilityUpdateModuleData : public UpdateModuleData
 public:
 	SpecialPowerTemplate *m_specialPowerTemplate;
 	UnsignedInt m_transitionTime;		///< frames
+	UnsignedInt m_transitionBackTime;	///< frames back to the first state (when m_hasBackTime)
+	Bool m_hasBackTime;
+	ModelConditionFlags m_toggleInConditions;	///< shown while switching into the second state (none given: UNPACKING)
+	ModelConditionFlags m_toggleOutConditions;	///< and back (none given: PACKING)
 	UnsignedInt m_autoRevertTime;		///< frames in the second state before it ends by itself (0: until toggled)
 	ModelConditionFlags m_normalConditions;	///< set in the first state
 	ModelConditionFlags m_toggledConditions;	///< set in the second
@@ -67,9 +72,18 @@ public:
 	{
 		m_specialPowerTemplate = nullptr;
 		m_transitionTime = 0;
+		m_transitionBackTime = 0;
+		m_hasBackTime = FALSE;
 		m_autoRevertTime = 0;
 		m_toggledWeaponSet = FALSE;
 		m_toggledLocomotor = FALSE;
+	}
+
+	static void parseBackTime( INI *ini, void *instance, void *store, const void *userData )
+	{
+		ToggleAbilityUpdateModuleData *self = (ToggleAbilityUpdateModuleData *)instance;
+		INI::parseDurationUnsignedInt( ini, instance, &self->m_transitionBackTime, userData );
+		self->m_hasBackTime = TRUE;
 	}
 
 	static void buildFieldParse( MultiIniFieldParse& p )
@@ -80,6 +94,9 @@ public:
 			{ "SpecialPowerTemplate",	INI::parseSpecialPowerTemplate,	nullptr, offsetof( ToggleAbilityUpdateModuleData, m_specialPowerTemplate ) },
 			{ "TransitionTime",			INI::parseDurationUnsignedInt,	nullptr, offsetof( ToggleAbilityUpdateModuleData, m_transitionTime ) },
 			{ "AutoRevertTime",			INI::parseDurationUnsignedInt,	nullptr, offsetof( ToggleAbilityUpdateModuleData, m_autoRevertTime ) },
+			{ "TransitionBackTime",		parseBackTime,					nullptr, 0 },
+			{ "ToggleInConditions",		ModelConditionFlags::parseFromINI,	nullptr, offsetof( ToggleAbilityUpdateModuleData, m_toggleInConditions ) },
+			{ "ToggleOutConditions",	ModelConditionFlags::parseFromINI,	nullptr, offsetof( ToggleAbilityUpdateModuleData, m_toggleOutConditions ) },
 			{ "NormalConditions",		ModelConditionFlags::parseFromINI,	nullptr, offsetof( ToggleAbilityUpdateModuleData, m_normalConditions ) },
 			{ "ToggledConditions",		ModelConditionFlags::parseFromINI,	nullptr, offsetof( ToggleAbilityUpdateModuleData, m_toggledConditions ) },
 			{ "ToggledStatus",			ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( ToggleAbilityUpdateModuleData, m_toggledStatus ) },
@@ -122,6 +139,7 @@ private:
 
 	void beginSwitch();
 	void applyState( Bool toggled );
+	ModelConditionFlags switchingConditions( Bool intoToggled ) const;
 
 	Bool m_initialized;		///< the first state's conditions are set (once there is a drawable)
 	Bool m_toggled;			///< in the second state (or switching from it)

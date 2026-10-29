@@ -65,16 +65,28 @@ void ToggleAbilityUpdate::beginSwitch()
 	Object *me = getObject();
 	m_switching = TRUE;
 	m_revertFrame = 0;
-	m_switchEndFrame = TheGameLogic->getFrame() + data->m_transitionTime;
-	if( data->m_transitionTime > 0 )
+	const UnsignedInt time = ( m_toggled && data->m_hasBackTime ) ? data->m_transitionBackTime : data->m_transitionTime;
+	m_switchEndFrame = TheGameLogic->getFrame() + time;
+	if( time > 0 )
 	{
 		// it stands still while it switches
 		AIUpdateInterface *ai = me->getAI();
 		if( ai != nullptr )
 			ai->aiIdle( CMD_FROM_AI );
-		me->setModelConditionState( m_toggled ? MODELCONDITION_PACKING : MODELCONDITION_UNPACKING );
+		me->clearAndSetModelConditionFlags( ModelConditionFlags(), switchingConditions( !m_toggled ) );
 	}
 	setWakeFrame( me, UPDATE_SLEEP_NONE );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** what it shows while switching into the second state (intoToggled) or back */
+ModelConditionFlags ToggleAbilityUpdate::switchingConditions( Bool intoToggled ) const
+{
+	const ToggleAbilityUpdateModuleData *data = getToggleAbilityUpdateModuleData();
+	const ModelConditionFlags &given = intoToggled ? data->m_toggleInConditions : data->m_toggleOutConditions;
+	if( given.any() )
+		return given;
+	return MAKE_MODELCONDITION_MASK( intoToggled ? MODELCONDITION_UNPACKING : MODELCONDITION_PACKING );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -112,7 +124,7 @@ UpdateSleepTime ToggleAbilityUpdate::update()
 	{
 		if( now < m_switchEndFrame )
 			return UPDATE_SLEEP( m_switchEndFrame - now );
-		me->clearModelConditionFlags( MAKE_MODELCONDITION_MASK2( MODELCONDITION_UNPACKING, MODELCONDITION_PACKING ) );
+		me->clearAndSetModelConditionFlags( switchingConditions( !m_toggled ), ModelConditionFlags() );
 		m_switching = FALSE;
 		m_toggled = !m_toggled;
 		applyState( m_toggled );

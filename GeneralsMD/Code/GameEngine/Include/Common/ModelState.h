@@ -243,6 +243,20 @@ enum ModelConditionFlagType CPP_11(: Int)
 	// (ReplaceSelfUpdate) shows the first stage of its arrival, then the second
 	MODELCONDITION_CRAWLER_TRANSITION_1,
 	MODELCONDITION_CRAWLER_TRANSITION_2,
+
+	// Tiberium Project @feature SAGE 2's states the C&C4 units' animations are chosen by:
+	MODELCONDITION_SELECTED,					///< the local player has it selected (shown by the client only, never seen by the logic)
+	MODELCONDITION_AFFECTED_BY_EMP,				///< disabled by an EMP
+	MODELCONDITION_UNDERPOWERED,				///< disabled for want of power
+	MODELCONDITION_AIM_HIGH,					///< attacking something in the air
+	MODELCONDITION_COMING_OUT_OF_FACTORY,		///< following its way out of the building that made it
+	MODELCONDITION_BURROWING,					///< burrowed (a toggle ability's second state)
+	MODELCONDITION_BURROWING_TRANSITION_ENTER,	///< burrowing into the ground
+	MODELCONDITION_BURROWING_TRANSITION_EXIT,	///< coming back up
+	MODELCONDITION_USER_3,						///< more wildcards, for abilities
+	MODELCONDITION_USER_4,
+	MODELCONDITION_USER_5,
+	MODELCONDITION_USER_6,
 //
 // Note: these values are saved in save files, so you MUST NOT REMOVE OR CHANGE
 // existing values!

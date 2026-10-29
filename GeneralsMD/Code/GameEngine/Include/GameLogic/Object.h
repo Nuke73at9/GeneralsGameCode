@@ -586,6 +586,7 @@ public:
 	DisabledMaskType getDisabledFlags() const { return m_disabledMask; }
 	Bool isDisabled() const { return m_disabledMask.any(); }
 	Bool clearDisabled( DisabledType type );
+	void updateDisabledModelCondition( DisabledType type );	///< Tiberium Project: AFFECTED_BY_EMP, UNDERPOWERED
 
 	void setDisabled( DisabledType type );
 	void setDisabledUntil( DisabledType type, UnsignedInt frame );

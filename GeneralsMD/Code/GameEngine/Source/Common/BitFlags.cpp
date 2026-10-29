@@ -177,6 +177,18 @@ const char* const ModelConditionFlags::s_bitNameList[] =
 	"DEATH_4",
 	"CRAWLER_TRANSITION_1",	// Tiberium Project
 	"CRAWLER_TRANSITION_2",
+	"SELECTED",	// Tiberium Project
+	"AFFECTED_BY_EMP",
+	"UNDERPOWERED",
+	"AIM_HIGH",
+	"COMING_OUT_OF_FACTORY",
+	"BURROWING",
+	"BURROWING_TRANSITION_ENTER",
+	"BURROWING_TRANSITION_EXIT",
+	"USER_3",
+	"USER_4",
+	"USER_5",
+	"USER_6",
 
 
 	nullptr

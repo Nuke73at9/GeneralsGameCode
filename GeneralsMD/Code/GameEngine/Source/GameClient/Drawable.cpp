@@ -944,6 +944,11 @@ void Drawable::friend_setSelected()
 	{
 		m_selected = TRUE;
 		onSelected();
+#ifdef DIRTY_CONDITION_FLAGS
+		m_isModelDirty = true;	// Tiberium Project: its SELECTED look, at the next draw
+#else
+		replaceModelConditionStateInDrawable();
+#endif
 	}
 
 }
@@ -958,6 +963,11 @@ void Drawable::friend_clearSelected()
 	{
 		m_selected = FALSE;
 		onUnselected();
+#ifdef DIRTY_CONDITION_FLAGS
+		m_isModelDirty = true;	// Tiberium Project: its SELECTED look, at the next draw
+#else
+		replaceModelConditionStateInDrawable();
+#endif
 	}
 }
 
@@ -4083,11 +4093,17 @@ void Drawable::replaceModelConditionStateInDrawable()
 	const TerrainDecalType terrainDecalType = getTerrainDecalType();
 	setTerrainDecal(TERRAIN_DECAL_NONE);
 
+	// Tiberium Project @feature SELECTED is shown to this player only: the draw modules see it, the
+	// logic's own copy of the conditions (its weapons' bones, its pristine bones) never does
+	ModelConditionFlags shown = m_conditionState;
+	if (m_selected)
+		shown.set(MODELCONDITION_SELECTED);
+
 	for (DrawModule** dm = getDrawModules(); *dm; ++dm)
 	{
 		ObjectDrawInterface* di = (*dm)->getObjectDrawInterface();
 		if (di)
-			di->replaceModelConditionState( m_conditionState );
+			di->replaceModelConditionState( shown );
 	}
 
 	setTerrainDecal(terrainDecalType);

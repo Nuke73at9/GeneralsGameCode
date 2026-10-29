@@ -3298,6 +3298,8 @@ StateReturnType AIFollowPathState::onEnter()
 		ai->setCanPathThroughUnits(true);
 		setAdjustsDestination(false);
 		m_adjustFinal = true;
+		// Tiberium Project @feature SAGE 2's COMING_OUT_OF_FACTORY: its look on its way out of the factory
+		obj->setModelConditionState( MODELCONDITION_COMING_OUT_OF_FACTORY );
 	}
 	StateReturnType ret = AIInternalMoveToState::onEnter();
 	if (obj->getFormationID() != NO_FORMATION_ID) {
@@ -3338,6 +3340,9 @@ StateReturnType AIFollowPathState::onEnter()
 void AIFollowPathState::onExit( StateExitType status )
 {
 	AIInternalMoveToState::onExit( status );
+
+	if (getID() == AI_FOLLOW_EXITPRODUCTION_PATH)
+		getMachineOwner()->clearModelConditionState( MODELCONDITION_COMING_OUT_OF_FACTORY );	// Tiberium Project
 
 	// turn off precision-z-pos when we exit, just in case.
 	AIUpdateInterface *ai = getMachineOwner()->getAI();
@@ -5693,6 +5698,12 @@ StateReturnType AIAttackState::update()
 			// Our parent machine has changed the goal.  We need to reset to the new goal.  jba.
 			m_attackMachine->setGoalObject( victim );
 		}
+
+		// Tiberium Project @feature SAGE 2's AIM_HIGH: the look of a unit attacking something in the air
+		if (victim->isAirborneTarget())
+			source->setModelConditionState( MODELCONDITION_AIM_HIGH );
+		else
+			source->clearModelConditionState( MODELCONDITION_AIM_HIGH );
 	}
 
 	// re-evaluate our weapon choice every frame, so the sub-states don't have to.
@@ -5745,6 +5756,7 @@ void AIAttackState::onExit( StateExitType status )
 																							OBJECT_STATUS_IS_ATTACKING,
 																							OBJECT_STATUS_IGNORING_STEALTH ) );
 	obj->clearModelConditionState( MODELCONDITION_ATTACKING );
+	obj->clearModelConditionState( MODELCONDITION_AIM_HIGH );	// Tiberium Project
 
 	obj->clearLeechRangeModeForAllWeapons();
 

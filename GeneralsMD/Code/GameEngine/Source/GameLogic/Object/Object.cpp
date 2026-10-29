@@ -2169,6 +2169,7 @@ void Object::setDisabledUntil( DisabledType type, UnsignedInt frame )
 
 		m_disabledTillFrame[ type ] = frame;
 		m_disabledMask.set( type, frame > TheGameLogic->getFrame() );
+		updateDisabledModelCondition( type );
 
 		if( m_drawable )
 		{
@@ -2255,6 +2256,24 @@ void Object::setDisabledUntil( DisabledType type, UnsignedInt frame )
 	if (edgeCase) {
 		onDisabledEdge(true);
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the look of an object an EMP or a want of power disables (SAGE 2's
+// AFFECTED_BY_EMP and UNDERPOWERED states: C&C4's units play their own animations for them)
+void Object::updateDisabledModelCondition( DisabledType type )
+{
+	ModelConditionFlagType mc;
+	if( type == DISABLED_EMP )
+		mc = MODELCONDITION_AFFECTED_BY_EMP;
+	else if( type == DISABLED_UNDERPOWERED )
+		mc = MODELCONDITION_UNDERPOWERED;
+	else
+		return;
+	if( m_disabledMask.test( type ) )
+		setModelConditionState( mc );
+	else
+		clearModelConditionState( mc );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2350,6 +2369,7 @@ Bool Object::clearDisabled( DisabledType type )
 
 	m_disabledTillFrame[ type ] = NEVER;
 	m_disabledMask.set( type, 0 );
+	updateDisabledModelCondition( type );
 
 	DisabledMaskType exceptions;
 	exceptions.set(DISABLED_HELD);
