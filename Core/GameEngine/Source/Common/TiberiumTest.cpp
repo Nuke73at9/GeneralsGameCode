@@ -853,12 +853,13 @@ void TiberiumTest::update()
 				}
 #endif
 				log( "frame %d: %s #%d at %.0f %.0f, health %.0f/%.0f, target health %.0f (last hit %.1f, type %d, from %d), "
-					"shots fired %d, weapon %s, status %d, range %.0f, conditions %s%s", (int)s_frame,
+					"shots fired %d, weapon %s, status %d, range %.0f, conditions %s%s%s", (int)s_frame,
 					obj->getTemplate()->getName().str(), (int)k, pos->x, pos->y, body->getHealth(), body->getMaxHealth(),
 					tb != nullptr ? tb->getHealth() : -1.0f, last != nullptr ? last->out.m_actualDamageDealt : -1.0f,
 					last != nullptr ? (int)last->in.m_damageType : -1, last != nullptr ? (int)last->in.m_sourceID : -1,
 					w != nullptr ? (int)w->getLastShotFrame() : -1, w != nullptr ? w->getName().str() : "none",
-					w != nullptr ? (int)w->getStatus() : -1, w != nullptr ? w->getAttackRange( obj ) : 0.0f, conditions.empty() ? "none" : conditions.c_str(), modifiers );
+					w != nullptr ? (int)w->getStatus() : -1, w != nullptr ? w->getAttackRange( obj ) : 0.0f, conditions.empty() ? "none" : conditions.c_str(), modifiers,
+					obj->testStatus( OBJECT_STATUS_STEALTHED ) ? ", stealthed" : "" );
 			}
 			// built up by its construction's progress, then sold (unbuilt the same way)
 			if ( s_spawnBuildFrames > 0 && obj->isKindOf( KINDOF_STRUCTURE ) && since <= 2 * s_spawnBuildFrames + 1 )
@@ -1056,20 +1057,23 @@ void TiberiumTest::update()
 			if ( tmpl != nullptr )
 				ThePlayerList->getLocalPlayer()->countObjectsByThingTemplate( 1, &tmpl, FALSE, &count );
 			// and where the first of them stands
-			struct First { const ThingTemplate *tmpl; Coord3D pos; Bool found; static void each( Object *obj, void *data )
+			struct First { const ThingTemplate *tmpl; Coord3D pos; Bool found; Real built; static void each( Object *obj, void *data )
 			{
 				First *me = (First *)data;
 				if ( !me->found && obj->getTemplate()->isEquivalentTo( me->tmpl ) )
 				{
 					me->pos = *obj->getPosition();
 					me->found = TRUE;
+					me->built = obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) ? obj->getConstructionPercent() : -1.0f;
 				}
 			} };
-			First first = { tmpl, Coord3D(), FALSE };
+			First first = { tmpl, Coord3D(), FALSE, -1.0f };
 			if ( tmpl != nullptr )
 				ThePlayerList->getLocalPlayer()->iterateObjects( First::each, &first );
-			char where[64] = "";
-			if ( first.found )
+			char where[96] = "";
+			if ( first.found && first.built >= 0.0f )
+				snprintf( where, sizeof( where ), ", the first at %.0f %.0f (%.0f%% built)", first.pos.x, first.pos.y, first.built );
+			else if ( first.found )
 				snprintf( where, sizeof( where ), ", the first at %.0f %.0f", first.pos.x, first.pos.y );
 			log( "frame %d: ui: %d of %s%s%s", (int)s_frame, (int)count, step.arg.c_str(), tmpl != nullptr ? "" : " (no such object)", where );
 		}
