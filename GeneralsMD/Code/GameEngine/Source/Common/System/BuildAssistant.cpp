@@ -1298,6 +1298,16 @@ Bool BuildAssistant::isPossibleToMakeUnit( Object *builder, const ThingTemplate 
 	if( player->canBuild( foundCommand->getThingTemplate() ) == FALSE )
 		return FALSE;
 
+	// Tiberium Project @feature a build button that waits on an upgrade (C&C4's tech tiers) builds nothing
+	// before it, whoever asks (the bar shows it disabled; this keeps the AI and any message to it too)
+	const UpgradeTemplate *neededUpgrade = foundCommand->getUpgradeTemplate();
+	if( BitIsSet( foundCommand->getOptions(), NEED_UPGRADE ) && neededUpgrade != nullptr )
+	{
+		const Bool have = neededUpgrade->getUpgradeType() == UPGRADE_TYPE_PLAYER ? player->hasUpgradeComplete( neededUpgrade ) : builder->hasUpgrade( neededUpgrade );
+		if( !have )
+			return FALSE;
+	}
+
 	// all is well
 	return TRUE;
 
