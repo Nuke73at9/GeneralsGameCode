@@ -124,6 +124,7 @@ const FieldParse UpgradeTemplate::m_upgradeFieldParseTable[] =
 	{ "ResearchSound",			INI::parseAudioEventRTS,	nullptr, offsetof( UpgradeTemplate, m_researchSound ) },
 	{ "UnitSpecificSound",	INI::parseAudioEventRTS,	nullptr, offsetof( UpgradeTemplate, m_unitSpecificSound ) },
 	{ "AcademyClassify",		INI::parseIndexList,			TheAcademyClassificationTypeNames, offsetof( UpgradeTemplate, m_academyClassificationType ) },
+	{ "NeededUpgrade",			INI::parseAsciiString,		nullptr, offsetof( UpgradeTemplate, m_neededUpgradeName ) },	// Tiberium Project
 	{ nullptr,						nullptr,												 nullptr, 0 }
 
 };
@@ -442,6 +443,15 @@ Bool UpgradeCenter::canAffordUpgrade( Player *player, const UpgradeTemplate *upg
 	// sanity
 	if( player == nullptr || upgradeTemplate == nullptr )
 		return FALSE;
+
+	// Tiberium Project @feature an upgrade that needs another first (NeededUpgrade: C&C4's second tech
+	// tier waits for the first); the command bar shows it unavailable until the player has that one
+	if( upgradeTemplate->getNeededUpgradeName().isNotEmpty() )
+	{
+		const UpgradeTemplate *needed = findUpgrade( upgradeTemplate->getNeededUpgradeName() );
+		if( needed != nullptr && !player->hasUpgradeComplete( needed ) )
+			return FALSE;
+	}
 
 	// money check
 	Money *money = player->getMoney();

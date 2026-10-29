@@ -180,6 +180,8 @@ public:
 	const AudioEventRTS* getResearchCompleteSound() const { return &m_researchSound; }
 	const AudioEventRTS* getUnitSpecificSound() const { return &m_unitSpecificSound; }
 	AcademyClassificationType getAcademyClassificationType() const { return m_academyClassificationType; }
+	/// Tiberium Project @feature the upgrade the player must have first (NeededUpgrade; empty: none)
+	const AsciiString& getNeededUpgradeName() const { return m_neededUpgradeName; }
 
 	/// inventory pictures
 	void cacheButtonImage();
@@ -210,6 +212,7 @@ protected:
 	AudioEventRTS	m_researchSound;			///< Sound played when upgrade researched.
 	AudioEventRTS	m_unitSpecificSound;	///< Secondary sound played when upgrade researched.
 	AcademyClassificationType m_academyClassificationType; ///< A value used by the academy to evaluate advice based on what players do.
+	AsciiString m_neededUpgradeName;		///< Tiberium Project @feature the upgrade the player must have first (C&C4's tech tiers)
 
 	UpgradeTemplate *m_next;						///< next
 	UpgradeTemplate *m_prev;						///< prev

@@ -96,6 +96,20 @@
 
 #include "GameNetwork/NetworkInterface.h"
 
+#if RTS_ZEROHOUR
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature the upgrade that upgrade needs first (NeededUpgrade) when the player
+	* lacks it, else null */
+//-------------------------------------------------------------------------------------------------
+static const UpgradeTemplate *findMissingNeededUpgrade( const Player *player, const UpgradeTemplate *upgrade )
+{
+	if( player == nullptr || upgrade == nullptr || upgrade->getNeededUpgradeName().isEmpty() )
+		return nullptr;
+	const UpgradeTemplate *needed = TheUpgradeCenter->findUpgrade( upgrade->getNeededUpgradeName() );
+	return ( needed != nullptr && !player->hasUpgradeComplete( needed ) ) ? needed : nullptr;
+}
+#endif
+
 static WindowLayout *theLayout = nullptr;
 static GameWindow *theWindow = nullptr;
 static AnimateWindowManager *theAnimateWindowManager = nullptr;
@@ -408,6 +422,16 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 							descrip.concat( L"\n\n" );
 							descrip.concat( TheGameText->fetch( "TOOLTIP:TooltipCannotPurchaseBecauseQueueFull" ) );
 						}
+#if RTS_ZEROHOUR
+						// Tiberium Project @feature an upgrade that needs another first says which (NeededUpgrade)
+						else if( const UpgradeTemplate *needed = findMissingNeededUpgrade( ThePlayerList->getLocalPlayer(), upgradeTemplate ) )
+						{
+							UnicodeString neededText;
+							neededText.format( TheGameText->fetch( "CONTROLBAR:Requirements" ).str(), TheGameText->fetch( needed->getDisplayNameLabel().str() ).str() );
+							descrip.concat( L"\n\n" );
+							descrip.concat( neededText );
+						}
+#endif
 						else if( !TheUpgradeCenter->canAffordUpgrade( ThePlayerList->getLocalPlayer(), upgradeTemplate, FALSE ) )
 						{
 							descrip.concat( L"\n\n" );
