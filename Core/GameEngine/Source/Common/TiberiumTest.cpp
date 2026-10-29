@@ -53,7 +53,16 @@
 #include "Common/BuildAssistant.h"
 #include "GameLogic/Damage.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Weapon.h"
+#include "GameClient/InGameUI.h"
+#include "GameClient/Mouse.h"
+#include "GameClient/GameWindow.h"
+#include "GameClient/Gadget.h"
+#include "GameClient/GadgetPushButton.h"
+#include "Common/MessageStream.h"
+#include "Common/Money.h"
+#include "Common/NameKeyGenerator.h"
 
 namespace
 {
@@ -90,6 +99,12 @@ namespace
 	Coord3D s_baseVictimPos;
 	const Int BASE_BUILD_FRAMES = 600;
 	const Int BASE_KILL_FRAMES = 300;
+	// -testUI: steps on the command bar, the selection and the cursor, each at its frame
+	struct UIStep { Int frame; std::string action, arg; };
+	std::vector<UIStep> s_uiSteps;
+	Bool s_uiMouse = FALSE;
+	Real s_uiMouseX = 0.5f, s_uiMouseY = 0.5f;
+	std::string s_side;		// -testSide: the local player's side in a skirmish on the test map
 	Bool s_reveal = FALSE;
 	Bool s_revealed = FALSE;
 	Int s_controlBarStage = -1;	// ControlBarStages, or -1: as it is
@@ -370,6 +385,31 @@ void TiberiumTest::setSpawn( const char *spec )
 	if ( s_spawnFrame >= 0 && !s_spawnNames.empty() )
 		s_active = TRUE;
 }
+// "frame:action[=arg];...": select[=index] (the spawned objects), command=Button (a targeted command,
+// as from the bar), click=slot (a command bar button, from 1), mouse=x,y (the cursor, as fractions of
+// the screen), bar (the buttons shown, to the log), money=amount (for the local player)
+void TiberiumTest::setUI( const char *spec )
+{
+	if ( spec == nullptr )
+		return;
+	for ( const std::string &part : split( spec, ';' ) )
+	{
+		const std::string::size_type colon = part.find( ':' );
+		if ( colon == std::string::npos )
+			continue;
+		UIStep step;
+		step.frame = atoi( part.substr( 0, colon ).c_str() );
+		std::string rest = part.substr( colon + 1 );
+		const std::string::size_type eq = rest.find( '=' );
+		step.action = rest.substr( 0, eq );
+		step.arg = eq == std::string::npos ? std::string() : rest.substr( eq + 1 );
+		s_uiSteps.push_back( step );
+	}
+	if ( !s_uiSteps.empty() )
+		s_active = TRUE;
+}
+void TiberiumTest::setSide( const char *side ) { if ( side != nullptr && *side != '\0' ) { s_side = side; s_active = TRUE; } }
+const char *TiberiumTest::getSide() { return s_side.empty() ? nullptr : s_side.c_str(); }
 void TiberiumTest::setReveal( Bool reveal ) { s_reveal = reveal; if ( reveal ) s_active = TRUE; }
 void TiberiumTest::setCRCFrame( Int frame ) { if ( frame >= 0 ) { s_crcFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setQuitFrame( Int frame ) { if ( frame > 0 ) { s_quitFrame = frame; s_active = TRUE; } }
@@ -790,6 +830,106 @@ void TiberiumTest::update()
 				damage.in.m_amount = since == 270 ? body->getMaxHealth() * 2.0f : body->getMaxHealth() * 0.3f;
 				obj->attemptDamage( &damage );
 			}
+		}
+	}
+
+	// Tiberium Project @feature -testUI: the command bar driven as a player would (client side, but its
+	// commands go to the logic like a player's: not with -testCRC)
+	if ( s_uiMouse && TheMouse != nullptr && TheDisplay != nullptr )
+		TheMouse->setPosition( (Int)( s_uiMouseX * TheDisplay->getWidth() ), (Int)( s_uiMouseY * TheDisplay->getHeight() ) );
+	for ( size_t n = 0; n < s_uiSteps.size() && inGame; ++n )
+	{
+		const UIStep &step = s_uiSteps[n];
+		if ( step.frame != s_frame )
+			continue;
+		if ( step.action == "select" && TheInGameUI != nullptr && TheGameLogic != nullptr )
+		{
+			TheInGameUI->deselectAllDrawables();
+			GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_CREATE_SELECTED_GROUP_NO_SOUND );
+			msg->appendBooleanArgument( TRUE );
+			const Int only = step.arg.empty() ? -1 : atoi( step.arg.c_str() );
+			Int picked = 0;
+			for ( size_t k = 0; k < s_spawned.size(); ++k )
+			{
+				Object *obj = TheGameLogic->findObjectByID( s_spawned[k] );
+				if ( obj == nullptr || obj->getDrawable() == nullptr || ( only >= 0 && (Int)k != only ) )
+					continue;
+				TheInGameUI->selectDrawable( obj->getDrawable() );
+				msg->appendObjectIDArgument( obj->getID() );
+				++picked;
+			}
+			log( "frame %d: ui: selected %d", (int)s_frame, (int)picked );
+		}
+		else if ( step.action == "command" && TheControlBar != nullptr && TheInGameUI != nullptr )
+		{
+			const CommandButton *button = TheControlBar->findCommandButton( AsciiString( step.arg.c_str() ) );
+			TheInGameUI->setGUICommand( button );
+			log( "frame %d: ui: command %s%s", (int)s_frame, step.arg.c_str(), button != nullptr ? "" : " (no such button)" );
+		}
+		else if ( step.action == "click" && TheControlBar != nullptr )
+		{
+			GameWindow *win = TheControlBar->getCommandWindow( atoi( step.arg.c_str() ) - 1 );
+			const CommandButton *button = win != nullptr ? (const CommandButton *)GadgetButtonGetData( win ) : nullptr;
+			const Bool usable = win != nullptr && !win->winIsHidden() && win->winGetEnabled();
+			if ( usable )
+				TheControlBar->processContextSensitiveButtonClick( win, GBM_SELECTED );
+			log( "frame %d: ui: click slot %s: %s%s", (int)s_frame, step.arg.c_str(),
+				button != nullptr ? button->getName().str() : "(empty)", usable ? "" : " (not usable)" );
+		}
+		else if ( step.action == "mouse" )
+		{
+			s_uiMouse = TRUE;
+			s_uiMouseX = (Real)atof( step.arg.c_str() );
+			const std::string::size_type comma = step.arg.find( ',' );
+			s_uiMouseY = comma != std::string::npos ? (Real)atof( step.arg.c_str() + comma + 1 ) : 0.5f;
+		}
+		else if ( step.action == "money" && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
+		{
+			ThePlayerList->getLocalPlayer()->getMoney()->deposit( (UnsignedInt)atoi( step.arg.c_str() ), FALSE );
+			log( "frame %d: ui: money %s", (int)s_frame, step.arg.c_str() );
+		}
+		else if ( step.action == "count" && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
+		{
+			// how many of an object the local player has (what a factory made)
+			const ThingTemplate *tmpl = TheThingFactory != nullptr ? TheThingFactory->findTemplate( step.arg.c_str() ) : nullptr;
+			Int count = 0;
+			if ( tmpl != nullptr )
+				ThePlayerList->getLocalPlayer()->countObjectsByThingTemplate( 1, &tmpl, FALSE, &count );
+			log( "frame %d: ui: %d of %s%s", (int)s_frame, (int)count, step.arg.c_str(), tmpl != nullptr ? "" : " (no such object)" );
+		}
+		else if ( step.action == "prod" && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
+		{
+			// what the local player's factories are making: each queue's length and its first entry's progress
+			struct Gather { static void each( Object *obj, void *data )
+			{
+				ProductionUpdateInterface *pu = obj->getProductionUpdateInterface();
+				const ProductionEntry *first = pu != nullptr ? pu->firstProduction() : nullptr;
+				if ( first == nullptr )
+					return;
+				char one[200];
+				snprintf( one, sizeof( one ), " %s: %d queued, first %.0f%%%s", obj->getTemplate()->getName().str(), (int)pu->getProductionCount(),
+					first->getPercentComplete(), obj->isDisabled() ? " (disabled)" : "" );
+				*(std::string *)data += one;
+			} };
+			std::string all;
+			ThePlayerList->getLocalPlayer()->iterateObjects( Gather::each, &all );
+			log( "frame %d: ui: production%s", (int)s_frame, all.empty() ? " (none)" : all.c_str() );
+		}
+		else if ( step.action == "bar" && TheControlBar != nullptr )
+		{
+			std::string shown;
+			for ( Int i = 0; i < 14; ++i )
+			{
+				GameWindow *win = TheControlBar->getCommandWindow( i );
+				const CommandButton *button = win != nullptr ? (const CommandButton *)GadgetButtonGetData( win ) : nullptr;
+				if ( win == nullptr || win->winIsHidden() || button == nullptr )
+					continue;
+				char one[160];
+				snprintf( one, sizeof( one ), " %d=%s%s%s", (int)( i + 1 ), button->getName().str(), win->winGetEnabled() ? "" : "(off)",
+					button->getButtonImage() != nullptr ? "" : "(no image)" );
+				shown += one;
+			}
+			log( "frame %d: ui: bar%s", (int)s_frame, shown.empty() ? " (empty)" : shown.c_str() );
 		}
 	}
 

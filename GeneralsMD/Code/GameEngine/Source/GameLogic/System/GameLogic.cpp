@@ -88,6 +88,7 @@
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/LoadScreen.h"
+#include "Common/TiberiumTest.h"	// Tiberium Project
 #include "GameClient/MapUtil.h"
 #include "GameClient/Mouse.h"
 #include "GameClient/ParticleSys.h"
@@ -666,6 +667,10 @@ static void placeNetworkBuildingsForPlayer(Int slotNum, const GameSlot *pSlot, P
 // ------------------------------------------------------------------------------------------------
 LoadScreen *GameLogic::getLoadScreen( Bool loadingSaveGame )
 {
+	// Tiberium Project @feature a -testSide skirmish loads behind the plain screen (test runs: the
+	// multiplayer one's portraits are not needed, and the software renderer of the test rig fails on it)
+	if (TiberiumTest::getSide() != nullptr)
+		return NEW ShellGameLoadScreen;
 	switch (m_gameMode)
 	{
 	case GAME_SHELL:

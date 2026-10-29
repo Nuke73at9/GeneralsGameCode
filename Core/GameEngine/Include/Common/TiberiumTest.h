@@ -66,6 +66,9 @@ public:
 	static void setUnitsFrame( Int frame );	///< a few of the local player's vehicles and buildings around the view at that frame (changes the game: not with -testCRC)
 	static void setBaseFrame( Int frame );	///< America's core base around the view at that frame, whole, damaged, being built and destroyed (changes the game: not with -testCRC)
 	static void setSpawn( const char *spec );	///< "frame;Object,Object...;modes": objects of the local player's in a row before the view; modes move, fight (Zero Hour targets to shoot at), damage (through the damage states to death) (changes the game: not with -testCRC)
+	static void setUI( const char *spec );	///< "frame:action[=arg];...": select, command=Button, click=slot, mouse=x,y, bar, money=amount (the command bar as a player uses it: not with -testCRC)
+	static void setSide( const char *side );	///< -testSide FactionAmerica: the test map as a skirmish, the local player on that side (an easy AI on the second start), so the command bar works as in a game
+	static const char *getSide();	///< or nullptr
 	static void setReveal( Bool reveal );	///< reveal the map to the local player at the start (changes the logic's state: not with -testCRC)
 	static void setCRCFrame( Int frame );
 	static void setQuitFrame( Int frame );

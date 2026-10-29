@@ -940,6 +940,22 @@ Int parseTestSpawn(char *args[], int num)
 	return 2;
 }
 
+// Tiberium Project @feature -testSide FactionAmerica: the test map as a skirmish on that side
+Int parseTestSide(char *args[], int num)
+{
+	if (num > 1)
+		TiberiumTest::setSide(args[1]);
+	return 2;
+}
+
+// Tiberium Project @feature -testUI "frame:action[=arg];...": the command bar, as a player uses it
+Int parseTestUI(char *args[], int num)
+{
+	if (num > 1)
+		TiberiumTest::setUI(args[1]);
+	return 2;
+}
+
 // Tiberium Project @feature -testBase <frame>: America's core base, in the states its art has
 Int parseTestBase(char *args[], int num)
 {
@@ -1372,6 +1388,8 @@ static CommandLineParam paramsForEngineInit[] =
 	{ "-testFXLists", parseTestFXLists },
 	{ "-testUnits", parseTestUnits },
 	{ "-testSpawn", parseTestSpawn },
+	{ "-testUI", parseTestUI },
+	{ "-testSide", parseTestSide },
 	{ "-testBase", parseTestBase },
 	{ "-testReveal", parseTestReveal },
 	{ "-testCRC", parseTestCRC },

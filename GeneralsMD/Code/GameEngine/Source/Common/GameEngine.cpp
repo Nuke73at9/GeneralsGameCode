@@ -101,6 +101,8 @@
 #include "GameClient/TerrainRoads.h"
 #include "GameClient/MetaEvent.h"
 #include "GameClient/MapUtil.h"
+#include "GameNetwork/GameInfo.h"	// Tiberium Project @feature -testSide
+#include "Common/Money.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GlobalLanguage.h"
 #include "GameClient/Drawable.h"
@@ -846,12 +848,59 @@ void GameEngine::init()
 				// shutdown the top, but do not pop it off the stack
 	//			TheShell->hideShell();
 
+				// Tiberium Project @feature -testSide: the map as a skirmish, the local player on that side
+				// and an easy AI on the second start, so the command bar works as in a game (test runs)
+				const char *testSide = TiberiumTest::getSide();
+				const Int sideNum = testSide != nullptr && ThePlayerTemplateStore != nullptr
+					? ThePlayerTemplateStore->getTemplateNumByName( AsciiString( testSide ) ) : -1;
+				if (sideNum >= 0)
+				{
+					if (TheSkirmishGameInfo == nullptr)
+						TheSkirmishGameInfo = NEW SkirmishGameInfo;
+					TheSkirmishGameInfo->init();
+					TheSkirmishGameInfo->clearSlotList();
+					TheSkirmishGameInfo->reset();
+					TheSkirmishGameInfo->setLocalIP(TheSkirmishGameInfo->getSlot(0)->getIP());
+					TheSkirmishGameInfo->enterGame();
+					GameSlot human;
+					human.setName(UnicodeString(L"Test"));
+					human.setState(SLOT_PLAYER, UnicodeString(L"Test"));
+					human.setColor(0);
+					human.setPlayerTemplate(sideNum);
+					human.setStartPos(0);
+					TheSkirmishGameInfo->setSlot(0, human);
+					GameSlot ai;
+					ai.setState(SLOT_EASY_AI);
+					ai.setColor(1);
+					ai.setPlayerTemplate(sideNum);
+					ai.setStartPos(1);
+					TheSkirmishGameInfo->setSlot(1, ai);
+					TheSkirmishGameInfo->setMap(fname);
+					const MapMetaData *md = TheMapCache != nullptr ? TheMapCache->findMap(fname) : nullptr;
+					TheSkirmishGameInfo->setMapCRC(md != nullptr ? md->m_CRC : 0);
+					TheSkirmishGameInfo->setMapSize(md != nullptr ? md->m_filesize : 0);
+					Money cash;
+					cash.deposit(20000, FALSE, FALSE);
+					TheSkirmishGameInfo->setStartingCash(cash);
+					TheSkirmishGameInfo->setSeed(0);
+					TheWritableGlobalData->m_mapName = fname;
+					TheSkirmishGameInfo->startGame(0);
+					InitRandom(0);
+					GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_NEW_GAME );
+					msg->appendIntegerArgument(GAME_SKIRMISH);
+					msg->appendIntegerArgument(DIFFICULTY_NORMAL);
+					msg->appendIntegerArgument(0);
+					msg->appendIntegerArgument(30);
+				}
+				else
+				{
 				// send a message to the logic for a new game
 				GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_NEW_GAME );
 				msg->appendIntegerArgument(GAME_SINGLE_PLAYER);
 				msg->appendIntegerArgument(DIFFICULTY_NORMAL);
 				msg->appendIntegerArgument(0);
 				InitRandom(0);
+				}
 			}
 		}
 
