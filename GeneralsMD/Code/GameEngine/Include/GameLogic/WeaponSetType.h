@@ -56,6 +56,7 @@ enum WeaponSetType CPP_11(: Int)
 	WEAPONSET_RIDER6,
 	WEAPONSET_RIDER7,
 	WEAPONSET_RIDER8,
+	WEAPONSET_ABILITY_TOGGLED,	///< Tiberium Project @feature a unit ability's second state (ToggleAbilityUpdate)
 
 	WEAPONSET_COUNT
 };

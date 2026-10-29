@@ -180,6 +180,10 @@ static PoolSizeRec PoolSizes[] =
 	{ "SpectreGunshipDeploymentUpdate", 8, 8 },
 	{ "BaikonurLaunchPower", 4, 4 },
 	{ "RadiusDecalUpdate", 16, 16 },
+	{ "ReplaceSelfUpdate", 64, 32 },	// Tiberium Project @feature Crawler deploy and pack up
+	{ "FireWeaponAbilityUpdate", 256, 64 },	// Tiberium Project @feature C&C4 unit abilities
+	{ "ToggleAbilityUpdate", 256, 64 },
+	{ "ReloadAmmoSpecialPower", 256, 64 },
 	{ "BattlePlanUpdate", 32, 32 },
 	{ "LifetimeUpdate", 32, 32 },
 	{ "LocomotorSetUpgrade", 512, 128 },

@@ -78,6 +78,7 @@ const char* const WeaponSetFlags::s_bitNameList[] =
 	"WEAPON_RIDER6",
 	"WEAPON_RIDER7",
 	"WEAPON_RIDER8",
+	"ABILITY_TOGGLED",	// Tiberium Project
 
 	nullptr
 };

@@ -37,6 +37,7 @@ class ModelConditionUpgradeModuleData : public UpgradeModuleData
 {
 public:
 	ModelConditionFlagType m_conditionFlag;
+	ModelConditionFlags m_removeFlags;	///< Tiberium Project @feature SAGE 2's RemoveConditionFlags: cleared as the flag is set (one tier's look replaces the last)
 
 	ModelConditionUpgradeModuleData();
 

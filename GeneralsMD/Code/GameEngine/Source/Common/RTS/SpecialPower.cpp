@@ -130,6 +130,9 @@ const char* const SpecialPowerMaskType::s_bitNameList[] =
 	"SPECIAL_BATTLESHIP_BOMBARDMENT",
 
 	"SPECIAL_TOGGLE_DEPLOY",
+	"SPECIAL_ABILITY_NO_TARGET",	// Tiberium Project
+	"SPECIAL_ABILITY_AT_LOCATION",
+	"SPECIAL_ABILITY_AT_OBJECT",
 
 	nullptr
 };

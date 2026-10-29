@@ -175,6 +175,8 @@ const char* const ModelConditionFlags::s_bitNameList[] =
 	"DEATH_2",
 	"DEATH_3",
 	"DEATH_4",
+	"CRAWLER_TRANSITION_1",	// Tiberium Project
+	"CRAWLER_TRANSITION_2",
 
 
 	nullptr

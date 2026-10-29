@@ -129,6 +129,11 @@ enum SpecialPowerType CPP_11(: Int)
 
 	SPECIAL_TOGGLE_DEPLOY,	///< Tiberium Project: deploy/pack up a ManualDeploy unit (DeployToggleSpecialPower)
 
+	// Tiberium Project: the converted C&C4 unit abilities, by how they are aimed
+	SPECIAL_ABILITY_NO_TARGET,
+	SPECIAL_ABILITY_AT_LOCATION,
+	SPECIAL_ABILITY_AT_OBJECT,
+
 	SPECIALPOWER_COUNT,
 	// don't forget to add new strings to SpecialPowerMaskType::s_bitNameList[]
 };

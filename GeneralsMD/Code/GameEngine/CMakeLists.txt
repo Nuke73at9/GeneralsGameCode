@@ -397,6 +397,10 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/RadarUpdate.h
     Include/GameLogic/Module/RadarUpgrade.h
     Include/GameLogic/Module/RadiusDecalUpdate.h
+    Include/GameLogic/Module/ReplaceSelfUpdate.h
+    Include/GameLogic/Module/FireWeaponAbilityUpdate.h
+    Include/GameLogic/Module/ToggleAbilityUpdate.h
+    Include/GameLogic/Module/ReloadAmmoSpecialPower.h
     Include/GameLogic/Module/RailedTransportAIUpdate.h
     Include/GameLogic/Module/RailedTransportContain.h
     Include/GameLogic/Module/RailedTransportDockUpdate.h
@@ -957,6 +961,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/SpecialPower/CashHackSpecialPower.cpp
     Source/GameLogic/Object/SpecialPower/CleanupAreaPower.cpp
     Source/GameLogic/Object/SpecialPower/DeployToggleSpecialPower.cpp
+    Source/GameLogic/Object/SpecialPower/ReloadAmmoSpecialPower.cpp
     Source/GameLogic/Object/SpecialPower/DefectorSpecialPower.cpp
     Source/GameLogic/Object/SpecialPower/DemoralizeSpecialPower.cpp
     Source/GameLogic/Object/SpecialPower/FireWeaponPower.cpp
@@ -1033,6 +1038,9 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Update/ProneUpdate.cpp
     Source/GameLogic/Object/Update/RadarUpdate.cpp
     Source/GameLogic/Object/Update/RadiusDecalUpdate.cpp
+    Source/GameLogic/Object/Update/ReplaceSelfUpdate.cpp
+    Source/GameLogic/Object/Update/FireWeaponAbilityUpdate.cpp
+    Source/GameLogic/Object/Update/ToggleAbilityUpdate.cpp
     Source/GameLogic/Object/Update/SlavedUpdate.cpp
     Source/GameLogic/Object/Update/SmartBombTargetHomingUpdate.cpp
     Source/GameLogic/Object/Update/SpecialAbilityUpdate.cpp

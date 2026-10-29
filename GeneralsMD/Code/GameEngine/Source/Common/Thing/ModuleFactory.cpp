@@ -143,6 +143,10 @@
 #include "GameLogic/Module/BattlePlanUpdate.h"
 #include "GameLogic/Module/LifetimeUpdate.h"
 #include "GameLogic/Module/RadiusDecalUpdate.h"
+#include "GameLogic/Module/ReplaceSelfUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/FireWeaponAbilityUpdate.h"
+#include "GameLogic/Module/ToggleAbilityUpdate.h"
+#include "GameLogic/Module/ReloadAmmoSpecialPower.h"
 #include "GameLogic/Module/AutoDepositUpdate.h"
 #include "GameLogic/Module/MissileAIUpdate.h"
 #include "GameLogic/Module/NeutronMissileUpdate.h"
@@ -398,6 +402,10 @@ void ModuleFactory::init()
 	addModule( EnemyNearUpdate );
 	addModule( LifetimeUpdate );
 	addModule( RadiusDecalUpdate );
+	addModule( ReplaceSelfUpdate );	// Tiberium Project
+	addModule( FireWeaponAbilityUpdate );
+	addModule( ToggleAbilityUpdate );
+	addModule( ReloadAmmoSpecialPower );
 	addModule( EMPUpdate );
   addModule( LeafletDropBehavior );
 	addModule( AutoDepositUpdate );

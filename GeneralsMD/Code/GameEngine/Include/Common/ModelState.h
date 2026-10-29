@@ -238,6 +238,11 @@ enum ModelConditionFlagType CPP_11(: Int)
 	MODELCONDITION_DEATH_2,
 	MODELCONDITION_DEATH_3,
 	MODELCONDITION_DEATH_4,
+
+	// Tiberium Project @feature SAGE 2's Crawler transitions: an object that replaced another
+	// (ReplaceSelfUpdate) shows the first stage of its arrival, then the second
+	MODELCONDITION_CRAWLER_TRANSITION_1,
+	MODELCONDITION_CRAWLER_TRANSITION_2,
 //
 // Note: these values are saved in save files, so you MUST NOT REMOVE OR CHANGE
 // existing values!

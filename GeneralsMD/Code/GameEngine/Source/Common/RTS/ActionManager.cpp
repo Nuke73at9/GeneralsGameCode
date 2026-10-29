@@ -1554,6 +1554,7 @@ Bool ActionManager::canDoSpecialPowerAtLocation( const Object *obj, const Coord3
 			case LAZR_SPECIAL_PARTICLE_UPLINK_CANNON:
 			case SPECIAL_CLEANUP_AREA:
 			case SPECIAL_BATTLESHIP_BOMBARDMENT:
+			case SPECIAL_ABILITY_AT_LOCATION:	// Tiberium Project @feature converted C&C4 abilities
 				//Don't allow "damaging" special powers in shrouded areas, but Fogged are okay.
 				return ThePartitionManager->getShroudStatusForPlayer( obj->getControllingPlayer()->getPlayerIndex(), loc ) != CELLSHROUD_SHROUDED;
 
@@ -1656,6 +1657,9 @@ Bool ActionManager::canDoSpecialPowerAtObject( const Object *obj, const Object *
 
 		switch( spTemplate->getSpecialPowerType() )
 		{
+			case SPECIAL_ABILITY_AT_OBJECT:	// Tiberium Project @feature converted C&C4 abilities: the button's options pick the targets
+				return TRUE;
+
 			case SPECIAL_CASH_BOUNTY:
 				return false;
 
@@ -1965,6 +1969,7 @@ Bool ActionManager::canDoSpecialPower( const Object *obj, const SpecialPowerTemp
 			case SPECIAL_CHANGE_BATTLE_PLANS:
 			case SPECIAL_LAUNCH_BAIKONUR_ROCKET:
 			case SPECIAL_TOGGLE_DEPLOY:	// Tiberium Project @feature the Deploy / Pack Up button
+			case SPECIAL_ABILITY_NO_TARGET:	// Tiberium Project @feature converted C&C4 abilities
 				//Detonate's any existing charges
 				return true;
 		}

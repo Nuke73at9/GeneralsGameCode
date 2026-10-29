@@ -49,6 +49,7 @@ void ModelConditionUpgradeModuleData::buildFieldParse(MultiIniFieldParse& p)
 	static const FieldParse dataFieldParse[] =
 	{
 		{ "ConditionFlag",	ModelConditionFlags::parseSingleBitFromINI,	nullptr, offsetof( ModelConditionUpgradeModuleData, m_conditionFlag ) },
+		{ "RemoveConditionFlags",	ModelConditionFlags::parseFromINI,	nullptr, offsetof( ModelConditionUpgradeModuleData, m_removeFlags ) },	// Tiberium Project @feature
 		{ nullptr, nullptr, nullptr, 0 }
 	};
   p.add(dataFieldParse);
@@ -74,6 +75,8 @@ void ModelConditionUpgrade::upgradeImplementation()
 
 	Object *me = getObject();
 
+	if( data->m_removeFlags.any() )
+		me->clearModelConditionFlags( data->m_removeFlags );	// Tiberium Project @feature
 	if( data->m_conditionFlag != MODELCONDITION_INVALID )
 		me->setModelConditionState(data->m_conditionFlag);
 }
