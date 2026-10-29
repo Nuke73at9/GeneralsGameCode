@@ -94,6 +94,7 @@ namespace
 	Int s_spawnFrame = -1;
 	std::vector<std::string> s_spawnNames;
 	Bool s_spawnMove = FALSE, s_spawnFight = FALSE, s_spawnDamage = FALSE, s_spawnExplode = FALSE;
+	Real s_spawnSpacing = 70.0f;	// between the objects of a row ("space=N": structures need more)
 	std::vector<ObjectID> s_spawned, s_spawnTargets;
 	ObjectID s_baseVictim = INVALID_ID;
 	Coord3D s_baseVictimPos;
@@ -381,6 +382,9 @@ void TiberiumTest::setSpawn( const char *spec )
 		s_spawnFight = parts[2].find( "fight" ) != std::string::npos;
 		s_spawnDamage = parts[2].find( "damage" ) != std::string::npos;
 		s_spawnExplode = parts[2].find( "explode" ) != std::string::npos;	// the killing blow blows them up (their exploded death)
+		const size_t space = parts[2].find( "space=" );
+		if ( space != std::string::npos )
+			s_spawnSpacing = (Real)atof( parts[2].c_str() + space + 6 );
 	}
 	if ( s_spawnFrame >= 0 && !s_spawnNames.empty() )
 		s_active = TRUE;
@@ -712,7 +716,7 @@ void TiberiumTest::update()
 		Team *team = ThePlayerList->getLocalPlayer()->getDefaultTeam();
 		const Coord3D center = TheTacticalView->getPosition();
 		const Int count = (Int)s_spawnNames.size();
-		const Real spacing = 70.0f;
+		const Real spacing = s_spawnSpacing > 1.0f ? s_spawnSpacing : 70.0f;
 		for ( Int k = 0; k < count; ++k )
 		{
 			const ThingTemplate *tmpl = TheThingFactory->findTemplate( s_spawnNames[k].c_str() );
@@ -728,7 +732,7 @@ void TiberiumTest::update()
 			const Int inRow = ( count - row * perRow ) < perRow ? ( count - row * perRow ) : perRow;
 			Coord3D p = center;
 			p.x += ( col - ( inRow - 1 ) * 0.5f ) * spacing;
-			p.y += row * 90.0f - 25.0f;
+			p.y += row * ( spacing > 90.0f ? spacing : 90.0f ) - 25.0f;
 			p.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( p.x, p.y ) : 0.0f;
 			obj->setPosition( &p );
 			obj->setOrientation( PI * 0.5f );
