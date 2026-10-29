@@ -149,6 +149,7 @@
 #include "GameLogic/Module/AttributeModifierUpgrade.h"	// Tiberium Project
 #include "GameLogic/Module/OrderAbilityUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/AssembleStructureUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/AIAbilityUseUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/FireWeaponAbilityUpdate.h"
 #include "GameLogic/Module/ToggleAbilityUpdate.h"
 #include "GameLogic/Module/ReloadAmmoSpecialPower.h"
@@ -413,6 +414,7 @@ void ModuleFactory::init()
 	addModule( AttributeModifierUpgrade );	// Tiberium Project
 	addModule( OrderAbilityUpdate );	// Tiberium Project
 	addModule( AssembleStructureUpdate );	// Tiberium Project
+	addModule( AIAbilityUseUpdate );	// Tiberium Project
 	addModule( FireWeaponAbilityUpdate );
 	addModule( ToggleAbilityUpdate );
 	addModule( ReloadAmmoSpecialPower );

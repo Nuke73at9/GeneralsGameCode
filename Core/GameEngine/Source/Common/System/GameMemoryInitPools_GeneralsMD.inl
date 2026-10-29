@@ -188,6 +188,7 @@ static PoolSizeRec PoolSizes[] =
 	{ "AttributeModifierUpgrade", 1024, 128 },
 	{ "OrderAbilityUpdate", 128, 32 },
 	{ "AssembleStructureUpdate", 128, 32 },
+	{ "AIAbilityUseUpdate", 512, 128 },
 	{ "ReloadAmmoSpecialPower", 256, 64 },
 	{ "BattlePlanUpdate", 32, 32 },
 	{ "LifetimeUpdate", 32, 32 },
