@@ -37,6 +37,7 @@
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
+#include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/CreateModule.h"
 #include "GameLogic/Module/ProductionUpdate.h"
@@ -46,6 +47,7 @@ ReplaceSelfUpdate::ReplaceSelfUpdate( Thing *thing, const ModuleData* moduleData
 {
 	m_stage = STAGE_NONE;
 	m_stageEndFrame = 0;
+	m_goal.zero();
 	setWakeFrame( getObject(), UPDATE_SLEEP_FOREVER );
 }
 
@@ -62,14 +64,36 @@ Bool ReplaceSelfUpdate::initiateIntentToDoSpecialPower( const SpecialPowerTempla
 		return FALSE;
 
 	Object *me = getObject();
-	if( me->isDisabled() || me->isEffectivelyDead() || m_stage != STAGE_NONE )
+	if( me->isDisabled() || me->isEffectivelyDead() || ( m_stage != STAGE_NONE && m_stage != STAGE_MOVING ) )
 		return FALSE;
 
+	// Tiberium Project @feature a deploy at a chosen spot (C&C4's Command_CrawlerUnpack): it drives
+	// there first, then deploys (update)
+	AIUpdateInterface *ai = me->getAI();
+	if( targetPos != nullptr && ai != nullptr )
+	{
+		m_goal = *targetPos;
+		m_stage = STAGE_MOVING;
+		ai->aiMoveToPosition( &m_goal, CMD_FROM_AI );
+		setWakeFrame( me, UPDATE_SLEEP_NONE );
+		return TRUE;
+	}
+	replace();
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** replace us with the replacement, now */
+void ReplaceSelfUpdate::replace()
+{
+	const ReplaceSelfUpdateModuleData *data = getReplaceSelfUpdateModuleData();
+	Object *me = getObject();
+	m_stage = STAGE_NONE;
 	const ThingTemplate *replacement = TheThingFactory->findTemplate( data->m_replacementName );
 	if( replacement == nullptr )
 	{
 		DEBUG_CRASH( ( "ReplaceSelfUpdate on %s: no object '%s'", me->getTemplate()->getName().str(), data->m_replacementName.str() ) );
-		return FALSE;
+		return;
 	}
 
 	// what carries over
@@ -139,7 +163,6 @@ Bool ReplaceSelfUpdate::initiateIntentToDoSpecialPower( const SpecialPowerTempla
 			msg->appendObjectIDArgument( made->getID() );
 		}
 	}
-	return TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -175,6 +198,33 @@ UpdateSleepTime ReplaceSelfUpdate::update()
 {
 	if( m_stage == STAGE_NONE )
 		return UPDATE_SLEEP_FOREVER;
+	if( m_stage == STAGE_MOVING )
+	{
+		// on its way to the spot it was told to deploy at: deploys there, or where it stopped near it;
+		// another order (the player's) calls the deploy off
+		Object *me = getObject();
+		AIUpdateInterface *ai = me->getAI();
+		if( ai == nullptr || me->isEffectivelyDead() || ai->getLastCommandSource() != CMD_FROM_AI )
+		{
+			m_stage = STAGE_NONE;
+			return UPDATE_SLEEP_FOREVER;
+		}
+		const Coord3D *pos = me->getPosition();
+		const Real dx = pos->x - m_goal.x, dy = pos->y - m_goal.y;
+		const Real dist2 = dx * dx + dy * dy;
+		const Real nearDist = me->getGeometryInfo().getMajorRadius() + 2.0f * PATHFIND_CELL_SIZE_F;
+		if( !me->isDisabled() && ( dist2 <= sqr( 2.0f * PATHFIND_CELL_SIZE_F ) || ( ai->isIdle() && dist2 <= sqr( nearDist ) ) ) )
+		{
+			replace();
+			return UPDATE_SLEEP_FOREVER;
+		}
+		if( ai->isIdle() && dist2 > sqr( nearDist ) )
+		{
+			m_stage = STAGE_NONE;	// stopped short of it: no deploy
+			return UPDATE_SLEEP_FOREVER;
+		}
+		return UPDATE_SLEEP( LOGICFRAMES_PER_SECOND / 4 );
+	}
 	const UnsignedInt now = TheGameLogic->getFrame();
 	if( now < m_stageEndFrame )
 		return UPDATE_SLEEP( m_stageEndFrame - now );
@@ -196,10 +246,11 @@ void ReplaceSelfUpdate::crc( Xfer *xfer )
 // Xfer method
 // Version Info:
 // 1: Initial version
+// 2: the spot it drives to before it deploys
 //-------------------------------------------------------------------------------------------------
 void ReplaceSelfUpdate::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -209,6 +260,8 @@ void ReplaceSelfUpdate::xfer( Xfer *xfer )
 	xfer->xferInt( &stage );
 	m_stage = (Stage)stage;
 	xfer->xferUnsignedInt( &m_stageEndFrame );
+	if( version >= 2 )
+		xfer->xferCoord3D( &m_goal );
 }
 
 //-------------------------------------------------------------------------------------------------

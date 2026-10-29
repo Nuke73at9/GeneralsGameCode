@@ -20,7 +20,8 @@
 // Tiberium Project @feature SAGE 2's ReplaceSelfSpecialAbility: a special power that replaces the
 // object with another (a C&C4 Crawler deploys into its structure form and packs up into its vehicle
 // form). The new object keeps the old one's health (as a share of its own), veterancy, owner,
-// place, facing, selection and hotkey group; whatever the old one was building is refunded. The new
+// place, facing, selection and hotkey group; whatever the old one was building is refunded. Given a
+// spot (a location power: C&C4's deploy where you click), it drives there first. The new
 // object is held for NewObjectUnpackTime while it unfolds, showing CRAWLER_TRANSITION_1 for its own
 // Transition1Time and then CRAWLER_TRANSITION_2 for its Transition2Time (its arrival, if it has this
 // module too).
@@ -119,11 +120,14 @@ private:
 		STAGE_NONE = 0,
 		STAGE_TRANSITION_1,
 		STAGE_TRANSITION_2,
+		STAGE_MOVING,		///< driving to the spot it was told to deploy at
 	};
 
 	void enterStage( Stage stage );
+	void replace();
 
 	Stage m_stage;
 	UnsignedInt m_stageEndFrame;
+	Coord3D m_goal;			///< where it deploys (STAGE_MOVING)
 
 };
