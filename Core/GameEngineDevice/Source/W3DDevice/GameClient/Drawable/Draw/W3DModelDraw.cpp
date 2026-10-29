@@ -1556,6 +1556,15 @@ static Bool doesStateExist(const ModelConditionVector& v, const ModelConditionFl
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @tweak a release build says what was wrong with a draw's condition state as well
+// (DEBUG_CRASH is compiled out there, and the INI error alone names only the line)
+static void assetError( INI *ini, const char *what )
+{
+	fprintf( stderr, "[W3DModelDraw] ASSET ERROR at line %d of %s: %s\n", (int)ini->getLineNum(), ini->getFilename().str(), what );
+	fflush( stderr );
+}
+
+//-------------------------------------------------------------------------------------------------
 void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void * /*store*/, const void* userData)
 {
 	static const FieldParse myFieldParse[] =
@@ -1598,11 +1607,13 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 			if (self->m_defaultState >= 0)
 			{
 				DEBUG_CRASH(("*** ASSET ERROR: you may have only one default state!"));
+				assetError( ini, "you may have only one default state!" );
 				throw INI_INVALID_DATA;
 			}
 			else if (ini->getNextTokenOrNull())
 			{
 				DEBUG_CRASH(("*** ASSET ERROR: unknown keyword"));
+				assetError( ini, "unknown keyword" );
 				throw INI_INVALID_DATA;
 			}
 			else
@@ -1610,6 +1621,7 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 				if (!self->m_conditionStates.empty())
 				{
 					DEBUG_CRASH(("*** ASSET ERROR: when using DefaultConditionState, it must be the first state listed (%s)",TheThingTemplateBeingParsedName.str()));
+					assetError( ini, "when using DefaultConditionState, it must be the first state listed" );
 					throw INI_INVALID_DATA;
 				}
 
@@ -1643,6 +1655,7 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 			if (firstKey == secondKey)
 			{
 				DEBUG_CRASH(("*** ASSET ERROR: You may not declare a transition between two identical states"));
+				assetError( ini, "You may not declare a transition between two identical states" );
 				throw INI_INVALID_DATA;
 			}
 
@@ -1672,6 +1685,7 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 			if (self->m_conditionStates.empty())
 			{
 				DEBUG_CRASH(("*** ASSET ERROR: AliasConditionState must refer to the previous state!"));
+				assetError( ini, "AliasConditionState must refer to the previous state!" );
 				throw INI_INVALID_DATA;
 			}
 
@@ -1692,12 +1706,14 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 			if (conditionsYes.anyIntersectionWith(self->m_ignoreConditionStates))
 			{
 				DEBUG_CRASH(("You should not specify bits in a state once they are used in IgnoreConditionStates (%s)", TheThingTemplateBeingParsedName.str()));
+				assetError( ini, "You should not specify bits in a state once they are used in IgnoreConditionStates" );
 				throw INI_INVALID_DATA;
 			}
 
 			if (doesStateExist(self->m_conditionStates, conditionsYes))
 			{
 				DEBUG_CRASH(("*** ASSET ERROR: duplicate condition states are not currently allowed"));
+				assetError( ini, "duplicate condition states are not currently allowed" );
 				throw INI_INVALID_DATA;
 			}
 
@@ -1705,6 +1721,7 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 			if (!conditionsYes.any() && self->m_defaultState >= 0)
 			{
 				DEBUG_CRASH(("*** ASSET ERROR: you may not specify both a Default state and a Conditions=None state"));
+				assetError( ini, "you may not specify both a Default state and a Conditions=None state" );
 				throw INI_INVALID_DATA;
 			}
 
@@ -1746,6 +1763,7 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 			if (conditionsYes.anyIntersectionWith(self->m_ignoreConditionStates))
 			{
 				DEBUG_CRASH(("You should not specify bits in a state once they are used in IgnoreConditionStates (%s)", TheThingTemplateBeingParsedName.str()));
+				assetError( ini, "You should not specify bits in a state once they are used in IgnoreConditionStates" );
 				throw INI_INVALID_DATA;
 			}
 
@@ -1753,18 +1771,21 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 			{
 				// it doesn't actually NEED to be first, but it does need to be present, and this is the simplest way to enforce...
 				DEBUG_CRASH(("*** ASSET ERROR: when not using DefaultConditionState, the first ConditionState must be for NONE (%s)",TheThingTemplateBeingParsedName.str()));
+				assetError( ini, "when not using DefaultConditionState, the first ConditionState must be for NONE" );
 				throw INI_INVALID_DATA;
 			}
 
 			if (!conditionsYes.any() && self->m_defaultState >= 0)
 			{
 				DEBUG_CRASH(("*** ASSET ERROR: you may not specify both a Default state and a Conditions=None state"));
+				assetError( ini, "you may not specify both a Default state and a Conditions=None state" );
 				throw INI_INVALID_DATA;
 			}
 
 			if (doesStateExist(self->m_conditionStates, conditionsYes))
 			{
 				DEBUG_CRASH(("*** ASSET ERROR: duplicate condition states are not currently allowed (%s)",info.m_description.str()));
+				assetError( ini, "duplicate condition states are not currently allowed" );
 				throw INI_INVALID_DATA;
 			}
 
@@ -1780,6 +1801,7 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 	if (info.m_modelName.isEmpty())
 	{
 		DEBUG_CRASH(("*** ASSET ERROR: you must specify a model name"));
+		assetError( ini, "you must specify a model name" );
 		throw INI_INVALID_DATA;
 	}
 	else if (info.m_modelName.isNone())
@@ -1790,12 +1812,14 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 	if ((info.m_iniReadFlags & (1<<GOT_IDLE_ANIMS)) && (info.m_iniReadFlags & (1<<GOT_NONIDLE_ANIMS)))
 	{
 		DEBUG_CRASH(("*** ASSET ERROR: you should not specify both Animations and IdleAnimations for the same state"));
+		assetError( ini, "you should not specify both Animations and IdleAnimations for the same state" );
 		throw INI_INVALID_DATA;
 	}
 
 	if ((info.m_iniReadFlags & (1<<GOT_IDLE_ANIMS)) && (info.m_mode != RenderObjClass::ANIM_MODE_ONCE && info.m_mode != RenderObjClass::ANIM_MODE_ONCE_BACKWARDS))
 	{
 		DEBUG_CRASH(("*** ASSET ERROR: Idle Anims should always use ONCE or ONCE_BACKWARDS (%s)",TheThingTemplateBeingParsedName.str()));
+		assetError( ini, "Idle Anims should always use ONCE or ONCE_BACKWARDS" );
 		throw INI_INVALID_DATA;
 	}
 
@@ -1814,12 +1838,14 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 		if (info.m_iniReadFlags & (1<<GOT_IDLE_ANIMS))
 		{
 			DEBUG_CRASH(("*** ASSET ERROR: Transition States should not specify Idle anims"));
+			assetError( ini, "Transition States should not specify Idle anims" );
 			throw INI_INVALID_DATA;
 		}
 
 		if (info.m_mode != RenderObjClass::ANIM_MODE_ONCE && info.m_mode != RenderObjClass::ANIM_MODE_ONCE_BACKWARDS)
 		{
 			DEBUG_CRASH(("*** ASSET ERROR: Transition States should always use ONCE or ONCE_BACKWARDS"));
+			assetError( ini, "Transition States should always use ONCE or ONCE_BACKWARDS" );
 			throw INI_INVALID_DATA;
 		}
 
@@ -1829,6 +1855,7 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 		if (info.m_allowToFinishKey != NAMEKEY_INVALID)
 		{
 			DEBUG_CRASH(("*** ASSET ERROR: Transition States must not have m_allowToFinishKey"));
+			assetError( ini, "Transition States must not have m_allowToFinishKey" );
 			throw INI_INVALID_DATA;
 		}
 
