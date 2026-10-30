@@ -98,6 +98,9 @@ namespace
 	Int s_spawnFrame = -1;
 	std::vector<std::string> s_spawnNames;
 	Bool s_spawnMove = FALSE, s_spawnFight = FALSE, s_spawnDamage = FALSE, s_spawnExplode = FALSE;
+	Bool s_spawnRear = FALSE;		// "rear": the fight targets face away (their backs to the spawned objects)
+	std::string s_spawnTarget = "ChinaTankBattleMaster";	// "target=Template": the fight targets
+	Bool s_spawnBack = FALSE;		// "back": told to move to a spot close behind them (backing up)
 	Real s_spawnSpacing = 70.0f;	// between the objects of a row ("space=N": structures need more)
 	Int s_spawnBuildFrames = 0;		// "build=N": structures built up over N frames, then sold over N
 	std::vector<ObjectID> s_spawned, s_spawnTargets;
@@ -387,6 +390,16 @@ void TiberiumTest::setSpawn( const char *spec )
 		s_spawnFight = parts[2].find( "fight" ) != std::string::npos;
 		s_spawnDamage = parts[2].find( "damage" ) != std::string::npos;
 		s_spawnExplode = parts[2].find( "explode" ) != std::string::npos;	// the killing blow blows them up (their exploded death)
+		s_spawnRear = parts[2].find( "rear" ) != std::string::npos;
+		const size_t tgt = parts[2].find( "target=" );
+		if ( tgt != std::string::npos )
+		{
+			s_spawnTarget = parts[2].substr( tgt + 7 );
+			const size_t end = s_spawnTarget.find( ' ' );
+			if ( end != std::string::npos )
+				s_spawnTarget = s_spawnTarget.substr( 0, end );
+		}
+		s_spawnBack = parts[2].find( "back" ) != std::string::npos;
 		const size_t build = parts[2].find( "build=" );
 		if ( build != std::string::npos )
 			s_spawnBuildFrames = atoi( parts[2].c_str() + build + 6 );
@@ -757,7 +770,7 @@ void TiberiumTest::update()
 		{
 			const Object *first = TheGameLogic->findObjectByID( s_spawned[0] );
 			Player *ours = first != nullptr ? first->getControllingPlayer() : nullptr;
-			const ThingTemplate *tt = TheThingFactory->findTemplate( "ChinaTankBattleMaster" );
+			const ThingTemplate *tt = TheThingFactory->findTemplate( s_spawnTarget.c_str() );
 			Player *foe = nullptr;
 			for ( Int n = 0; n < ThePlayerList->getPlayerCount() && foe == nullptr && tt != nullptr; ++n )
 			{
@@ -788,7 +801,7 @@ void TiberiumTest::update()
 					q.y += 160.0f;
 					q.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( q.x, q.y ) : 0.0f;
 					target->setPosition( &q );
-					target->setOrientation( -PI * 0.5f );
+					target->setOrientation( s_spawnRear ? PI * 0.5f : -PI * 0.5f );
 					s_spawnTargets.push_back( target->getID() );
 				}
 			}
@@ -811,6 +824,13 @@ void TiberiumTest::update()
 					Object *target = TheGameLogic->findObjectByID( s_spawnTargets[k] );
 					if ( target != nullptr )
 						ai->aiForceAttackObject( target, NO_MAX_SHOTS_LIMIT, CMD_FROM_SCRIPT );
+				}
+				else if ( s_spawnBack )
+				{
+					// a spot close behind it (it faces +y)
+					Coord3D dest = *obj->getPosition();
+					dest.y -= 90.0f;
+					ai->aiMoveToPosition( &dest, CMD_FROM_SCRIPT );
 				}
 				else if ( s_spawnMove )
 				{
@@ -874,6 +894,11 @@ void TiberiumTest::update()
 					}
 				}
 #endif
+				{
+					char facing[48];
+					snprintf( facing, sizeof( facing ), ", facing %.0f", obj->getOrientation() * 180.0f / PI );
+					strlcat( modifiers, facing, sizeof( modifiers ) );
+				}
 				log( "frame %d: %s #%d at %.0f %.0f, health %.0f/%.0f, target health %.0f (last hit %.1f, type %d, from %d), "
 					"shots fired %d, weapon %s, status %d, range %.0f, conditions %s%s%s", (int)s_frame,
 					obj->getTemplate()->getName().str(), (int)k, pos->x, pos->y, body->getHealth(), body->getMaxHealth(),
