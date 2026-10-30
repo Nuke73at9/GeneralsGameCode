@@ -57,6 +57,8 @@
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Weapon.h"
+#include "Common/DrawModule.h"
+#include "GameClient/Drawable.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/Mouse.h"
 #include "GameClient/GameWindow.h"
@@ -836,7 +838,7 @@ void TiberiumTest::update()
 						conditions += std::string( conditions.empty() ? "" : " " ) + name;
 				}
 				// the attribute modifiers on it and on its target (Zero Hour's), as speed armour damage rate range
-				char modifiers[160] = "";
+				char modifiers[256] = "";
 #if RTS_ZEROHOUR
 				{
 					const Object *who[2] = { obj, target };
@@ -850,6 +852,25 @@ void TiberiumTest::update()
 							who[w]->getAttributeModifierScalar( MODIFIER_DAMAGE ), who[w]->getAttributeModifierScalar( MODIFIER_RATE_OF_FIRE ),
 							who[w]->getAttributeModifierScalar( MODIFIER_RANGE ) );
 						strlcat( modifiers, one, sizeof( modifiers ) );
+					}
+				}
+#endif
+				// the animation its draw plays now, and the frame (for sounds on frames)
+#if RTS_ZEROHOUR
+				{
+					AsciiString anim;
+					Real animFrame = 0.0f;
+					const Drawable *draw = obj->getDrawable();
+					for ( DrawModule const **dm = draw != nullptr ? draw->getDrawModules() : nullptr; dm != nullptr && *dm; ++dm )
+					{
+						const ObjectDrawInterface *odi = (*dm)->getObjectDrawInterface();
+						if ( odi != nullptr && odi->clientOnly_getAnimationFrame( &anim, &animFrame ) )
+						{
+							char one[96];
+							snprintf( one, sizeof( one ), ", playing %s at %.0f", anim.str(), animFrame );
+							strlcat( modifiers, one, sizeof( modifiers ) );
+							break;
+						}
 					}
 				}
 #endif
