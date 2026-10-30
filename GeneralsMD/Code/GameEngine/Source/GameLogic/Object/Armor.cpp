@@ -35,6 +35,8 @@
 #include "Common/ThingFactory.h"
 #include "GameLogic/Armor.h"
 #include "GameLogic/Damage.h"
+#include "GameLogic/Object.h"
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // PUBLIC DATA ////////////////////////////////////////////////////////////////////////////////////
@@ -61,6 +63,34 @@ void ArmorTemplate::clear()
 	{
 		m_damageCoefficient[i] = 1.0f;
 	}
+	m_sideDamageScalar = 1.0f;
+	m_rearDamageScalar = 1.0f;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature directional armour: where the source stands, seen from the victim's facing:
+// within 45 degrees of its front a hit counts in full, past 135 degrees (behind) it takes the rear
+// scalar, between them the side's
+Real ArmorTemplate::directionalScalar(const Object *victim, const Object *source) const
+{
+	if (victim == nullptr || source == nullptr || victim == source)
+		return 1.0f;
+	if (m_sideDamageScalar == 1.0f && m_rearDamageScalar == 1.0f)
+		return 1.0f;
+	const Coord3D *v = victim->getPosition();
+	const Coord3D *s = source->getPosition();
+	const Real dx = s->x - v->x, dy = s->y - v->y;
+	if (dx * dx + dy * dy < 0.01f)
+		return 1.0f;
+	Real rel = WWMath::Atan2Origin(dy, dx) - victim->getOrientation();
+	while (rel > PI) rel -= 2.0f * PI;
+	while (rel < -PI) rel += 2.0f * PI;
+	rel = fabs(rel);
+	if (rel <= PI * 0.25f)
+		return 1.0f;
+	if (rel >= PI * 0.75f)
+		return m_rearDamageScalar;
+	return m_sideDamageScalar;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -147,6 +177,8 @@ const ArmorTemplate* ArmorStore::findArmorTemplate(const char* name) const
 	static const FieldParse myFieldParse[] =
 	{
 		{ "Armor", ArmorTemplate::parseArmorCoefficients, nullptr, 0 },
+		{ "SideDamageScalar", INI::parsePercentToReal, nullptr, offsetof(ArmorTemplate, m_sideDamageScalar) },	// Tiberium Project
+		{ "RearDamageScalar", INI::parsePercentToReal, nullptr, offsetof(ArmorTemplate, m_rearDamageScalar) },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
 

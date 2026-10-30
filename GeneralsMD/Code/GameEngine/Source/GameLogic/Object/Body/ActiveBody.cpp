@@ -370,6 +370,9 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 	Bool alreadyHandled = FALSE;
 	Bool allowModifier = TRUE;
 	Real amount = m_curArmor.adjustDamage(damageInfo->in.m_damageType, damageInfo->in.m_amount);
+	// Tiberium Project @feature directional armour: more from the sides and behind (SAGE 2's)
+	if( amount > 0.0f && damageInfo->in.m_damageType != DAMAGE_HEALING && damageInfo->in.m_sourceID != INVALID_ID )
+		amount *= m_curArmor.directionalScalar( getObject(), TheGameLogic->findObjectByID( damageInfo->in.m_sourceID ) );
 
 	switch( damageInfo->in.m_damageType )
 	{

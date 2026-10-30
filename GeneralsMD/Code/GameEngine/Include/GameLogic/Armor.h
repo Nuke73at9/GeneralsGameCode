@@ -43,6 +43,9 @@ class ArmorStore;
 	to simulate different materials, and to help make game balance easier to adjust.
 */
 //-------------------------------------------------------------------------------------------------
+class Object;
+
+//-------------------------------------------------------------------------------------------------
 class ArmorTemplate
 {
 public:
@@ -57,7 +60,14 @@ public:
 	*/
 	Real adjustDamage(DamageType t, Real damage) const;
 
+	/// Tiberium Project @feature directional armour (SAGE 2's): the damage scalar for a hit from the
+	/// source's side of the victim (front 1, else SideDamageScalar, from behind RearDamageScalar)
+	Real directionalScalar(const Object *victim, const Object *source) const;
+
 	static void parseArmorCoefficients( INI* ini, void *instance, void* /* store */, const void* userData );
+
+	Real						m_sideDamageScalar;		///< Tiberium Project: hits from the sides
+	Real						m_rearDamageScalar;		///< Tiberium Project: hits from behind
 
 protected:
 
@@ -77,6 +87,12 @@ public:
 	inline Real adjustDamage(DamageType t, Real damage) const
 	{
 		return m_template ? m_template->adjustDamage(t, damage) : damage;
+	}
+
+	/// Tiberium Project @feature directional armour
+	inline Real directionalScalar(const Object *victim, const Object *source) const
+	{
+		return m_template ? m_template->directionalScalar(victim, source) : 1.0f;
 	}
 
 	inline void clear()
