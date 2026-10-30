@@ -61,6 +61,10 @@
 #include "GameClient/Drawable.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/Mouse.h"
+#if RTS_ZEROHOUR
+#include "GameClient/TiberiumSidebar.h"
+#include "GameLogic/Module/BaseConstructionUpdate.h"
+#endif
 #include "GameClient/GameWindow.h"
 #include "GameClient/Gadget.h"
 #include "GameClient/GadgetPushButton.h"
@@ -856,9 +860,10 @@ void TiberiumTest::update()
 				}
 				else if ( s_spawnBack )
 				{
-					// a spot close behind it (it faces +y)
+					// a spot close behind it, whichever way it faces
 					Coord3D dest = *obj->getPosition();
-					dest.y -= 90.0f;
+					dest.x -= 90.0f * Cos( obj->getOrientation() );
+					dest.y -= 90.0f * Sin( obj->getOrientation() );
 					ai->aiMoveToPosition( &dest, CMD_FROM_SCRIPT );
 				}
 				else if ( s_spawnMove )
@@ -1070,6 +1075,89 @@ void TiberiumTest::update()
 					any != nullptr && any->getObject() != nullptr ? any->getObject()->getTemplate()->getName().str() : "nothing" );
 			}
 		}
+#if RTS_ZEROHOUR
+		else if ( step.action == "sidebar" )
+		{
+			// a click on the sidebar at fx,fy (fractions of the screen), ",right" for a right click; and what it shows
+			// (or on a part by what it is: "tab,N", "queue,N", "item,N", each with ",right" too)
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			Bool took = FALSE;
+			if ( f.size() >= 2 && ( f[0] == "tab" || f[0] == "queue" || f[0] == "item" ) )
+				took = TiberiumSidebar::testClickPart( f[0].c_str(), atoi( f[1].c_str() ), f.size() > 2 && f[2] == "right" );
+			else if ( f.size() >= 2 )
+				took = TiberiumSidebar::testClick( (Real)atof( f[0].c_str() ), (Real)atof( f[1].c_str() ), f.size() > 2 && f[2] == "right" );
+			char what[256];
+			TiberiumSidebar::describe( what, sizeof( what ) );
+			log( "frame %d: ui: sidebar click %s: %s; %s", (int)s_frame, step.arg.c_str(), took ? "taken" : "missed", what );
+		}
+		else if ( step.action == "yard" && TheGameLogic != nullptr && ThePlayerList != nullptr )
+		{
+			// the local player's construction yard (Kane's Wrath's base): its state; "place,dx,dy" places the
+			// ready structure at the nearest legal spot to the yard's position + dx,dy, by the message a
+			// player's click on the ground sends (MSG_TIBERIUM_BASE_PLACE); "place,dx,dy,anywhere" picks the
+			// spot by the ground alone, so the logic's own check of the build areas is what is tested
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			Player *me = ThePlayerList->getLocalPlayer();
+			Object *yard = nullptr;
+			BaseConstructionUpdate *base = nullptr;
+			for ( Object *o = TheGameLogic->getFirstObject(); o != nullptr && base == nullptr; o = o->getNextObject() )
+			{
+				if ( o->getControllingPlayer() == me && !o->isEffectivelyDead() && BaseConstructionUpdate::find( o ) != nullptr )
+				{
+					yard = o;
+					base = BaseConstructionUpdate::find( o );
+				}
+			}
+			if ( base == nullptr )
+			{
+				log( "frame %d: ui: yard: none", (int)s_frame );
+			}
+			else
+			{
+				const ThingTemplate *tmpl = base->getBuilding();
+				Bool sent = FALSE;
+				Coord3D at = *yard->getPosition();
+				if ( !f.empty() && f[0] == "place" && base->isReady() && TheBuildAssistant != nullptr )
+				{
+					at.x += f.size() > 1 ? (Real)atof( f[1].c_str() ) : 0.0f;
+					at.y += f.size() > 2 ? (Real)atof( f[2].c_str() ) : 0.0f;
+					const Coord3D wanted = at;
+					const UnsignedInt opts = BuildAssistant::TERRAIN_RESTRICTIONS | BuildAssistant::NO_OBJECT_OVERLAP;
+					Bool found = FALSE;
+					for ( Int ring = 0; ring <= 16 && !found; ++ring )
+					{
+						for ( Int k = 0; k < ( ring > 0 ? 8 * ring : 1 ) && !found; ++k )
+						{
+							const Real a = ring > 0 ? 2.0f * PI * k / ( 8 * ring ) : 0.0f;
+							Coord3D p = wanted;
+							p.x += ring * 50.0f * Cos( a );
+							p.y += ring * 50.0f * Sin( a );
+							p.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( p.x, p.y ) : 0.0f;
+							if ( TheBuildAssistant->isLocationLegalToBuild( &p, tmpl, 0.0f, opts, nullptr, me ) == LBC_OK
+								&& ( f.size() > 3 && f[3] == "anywhere" ? TRUE : base->isWithinBuildRadius( &p ) ) )
+							{
+								at = p;
+								found = TRUE;
+							}
+						}
+					}
+					if ( found && TheMessageStream != nullptr )
+					{
+						GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_TIBERIUM_BASE_PLACE );
+						msg->appendObjectIDArgument( yard->getID() );
+						msg->appendLocationArgument( at );
+						msg->appendRealArgument( 0.0f );
+						sent = TRUE;
+					}
+				}
+				log( "frame %d: ui: yard %s: %s, %s %.0f%%%s", (int)s_frame, yard->getTemplate()->getName().str(),
+					tmpl != nullptr ? tmpl->getName().str() : "idle", base->isReady() ? "ready" : "building", base->getPercent(),
+					sent ? " (placed)" : "" );
+				if ( sent )
+					log( "frame %d: ui: yard place at %.0f %.0f", (int)s_frame, at.x, at.y );
+			}
+		}
+#endif
 		else if ( step.action == "mouse" )
 		{
 			s_uiMouse = TRUE;
