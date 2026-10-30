@@ -56,6 +56,8 @@ FireWeaponUpdateModuleData::FireWeaponUpdateModuleData()
 		{ "Weapon",								INI::parseWeaponTemplate,	      nullptr, offsetof( FireWeaponUpdateModuleData, m_weaponTemplate ) },
 		{ "InitialDelay",					INI::parseDurationUnsignedInt,	nullptr, offsetof( FireWeaponUpdateModuleData, m_initialDelayFrames ) },
 		{ "ExclusiveWeaponDelay",	INI::parseDurationUnsignedInt,	nullptr, offsetof( FireWeaponUpdateModuleData, m_exclusiveWeaponDelay ) },
+		{ "RequiredStatus",				ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( FireWeaponUpdateModuleData, m_requiredStatus ) },	// Tiberium Project
+		{ "ForbiddenStatus",			ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( FireWeaponUpdateModuleData, m_forbiddenStatus ) },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
   p.add(dataFieldParse);
@@ -119,6 +121,12 @@ Bool FireWeaponUpdate::isOkayToFire()
 
 	if( me->testStatus(OBJECT_STATUS_UNDER_CONSTRUCTION) )
 		return FALSE; // no hitting with a 0% building, cheater
+
+	// Tiberium Project @feature only in the states given (a deployed unit's pulse, a toggled one's)
+	if( data->m_requiredStatus.any() && !me->getStatusBits().testForAll( data->m_requiredStatus ) )
+		return FALSE;
+	if( me->getStatusBits().testForAny( data->m_forbiddenStatus ) )
+		return FALSE;
 
 	// Firing a real weapon suppresses this module
 	if( data->m_exclusiveWeaponDelay > 0  &&  ( TheGameLogic->getFrame() < (me->getLastShotFiredFrame() + data->m_exclusiveWeaponDelay) ) )

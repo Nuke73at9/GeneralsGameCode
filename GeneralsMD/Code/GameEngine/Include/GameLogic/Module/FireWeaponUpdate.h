@@ -32,6 +32,7 @@
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "GameLogic/Module/UpdateModule.h"
 #include "GameLogic/Weapon.h"
+#include "Common/ObjectStatusTypes.h"
 
 //-------------------------------------------------------------------------------------------------
 class FireWeaponUpdateModuleData : public UpdateModuleData
@@ -40,6 +41,8 @@ public:
 	const WeaponTemplate* m_weaponTemplate;
   UnsignedInt m_initialDelayFrames;
 	UnsignedInt m_exclusiveWeaponDelay;	///< If non-zero, any other weapon having fired this recently will keep us from doing anything
+	ObjectStatusMaskType m_requiredStatus;	///< Tiberium Project @feature fires only with all of these (SAGE 2's ObjectStatusValidation)
+	ObjectStatusMaskType m_forbiddenStatus;	///< Tiberium Project: and none of these
 
 	FireWeaponUpdateModuleData();
 
