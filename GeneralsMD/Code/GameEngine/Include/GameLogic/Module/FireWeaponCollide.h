@@ -44,11 +44,18 @@ public:
 	ObjectStatusMaskType m_requiredStatus;
 	ObjectStatusMaskType m_forbiddenStatus;
 	Bool m_fireOnce;
+	// Tiberium Project @feature SAGE 2's mine and ramming rules: what may set it off, and how often
+	Bool m_enemiesOnly;					///< only an enemy's touch fires it (a mine)
+	Bool m_targetMustBeMoving;			///< only something moving fires it
+	UnsignedInt m_delayBetweenHits;		///< frames before it fires again (0: every frame touched)
 
 	FireWeaponCollideModuleData()
 	{
 		m_collideWeaponTemplate = nullptr;
 		m_fireOnce = FALSE;
+		m_enemiesOnly = FALSE;
+		m_targetMustBeMoving = FALSE;
+		m_delayBetweenHits = 0;
 	}
 
 	static void buildFieldParse(MultiIniFieldParse& p);
@@ -75,5 +82,6 @@ protected:
 private:
 	Weapon* m_collideWeapon;
 	Bool m_everFired;
+	UnsignedInt m_nextFireFrame;	///< Tiberium Project: not before this frame (DelayBetweenHits)
 
 };

@@ -32,7 +32,9 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 #define DEFINE_OBJECT_STATUS_NAMES
 #include "Common/Xfer.h"
+#include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
+#include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/FireWeaponCollide.h"
 
 //-------------------------------------------------------------------------------------------------
@@ -47,6 +49,10 @@ void FireWeaponCollideModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "FireOnce",					INI::parseBool,											nullptr, offsetof( FireWeaponCollideModuleData, m_fireOnce ) },
 		{ "RequiredStatus",		ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( FireWeaponCollideModuleData, m_requiredStatus ) },
 		{ "ForbiddenStatus",	ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( FireWeaponCollideModuleData, m_forbiddenStatus ) },
+		// Tiberium Project @feature
+		{ "EnemiesOnly",			INI::parseBool,											nullptr, offsetof( FireWeaponCollideModuleData, m_enemiesOnly ) },
+		{ "TargetMustBeMoving",	INI::parseBool,										nullptr, offsetof( FireWeaponCollideModuleData, m_targetMustBeMoving ) },
+		{ "DelayBetweenHits",	INI::parseDurationUnsignedInt,			nullptr, offsetof( FireWeaponCollideModuleData, m_delayBetweenHits ) },
 		{ nullptr, nullptr, nullptr, 0 }
 	};
   p.add(dataFieldParse);
@@ -60,6 +66,7 @@ FireWeaponCollide::FireWeaponCollide( Thing *thing, const ModuleData* moduleData
 {
 	m_collideWeapon = TheWeaponStore->allocateNewWeapon(getFireWeaponCollideModuleData()->m_collideWeaponTemplate, PRIMARY_WEAPON);
 	m_everFired = FALSE;
+	m_nextFireFrame = 0;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -79,6 +86,16 @@ void FireWeaponCollide::onCollide( Object *other, const Coord3D *loc, const Coor
 
 	Object *me = getObject();
 
+	// Tiberium Project @feature what may set it off: an enemy's touch, something moving; and not again
+	// before its delay
+	const FireWeaponCollideModuleData *d = getFireWeaponCollideModuleData();
+	if( d->m_enemiesOnly && me->getRelationship( other ) != ENEMIES )
+		return;
+	if( d->m_targetMustBeMoving && ( other->getAIUpdateInterface() == nullptr || !other->getAIUpdateInterface()->isMoving() ) )
+		return;
+	if( d->m_delayBetweenHits > 0 && TheGameLogic->getFrame() < m_nextFireFrame )
+		return;
+
 	// This will fire at you every frame, because multiple people could be colliding and we want
 	// to hurt them all.  Another solution would be to keep a Map of other->objetIDs and
 	// delays for each individually.  However, this solution here is so quick and simple that it
@@ -87,6 +104,10 @@ void FireWeaponCollide::onCollide( Object *other, const Coord3D *loc, const Coor
 	{
 		m_collideWeapon->loadAmmoNow( me );
 		m_collideWeapon->fireWeapon( me, other );
+		if( d->m_fireOnce )
+			m_everFired = TRUE;	// Tiberium Project @bugfix FireOnce: nothing set it before
+		if( d->m_delayBetweenHits > 0 )
+			m_nextFireFrame = TheGameLogic->getFrame() + d->m_delayBetweenHits;
 	}
 }
 
@@ -131,7 +152,11 @@ void FireWeaponCollide::xfer( Xfer *xfer )
 {
 
 	// version
+#if RETAIL_COMPATIBLE_XFER_SAVE
 	XferVersion currentVersion = 1;
+#else
+	XferVersion currentVersion = 2;	// Tiberium Project: 2, the delay between hits
+#endif
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -159,6 +184,10 @@ void FireWeaponCollide::xfer( Xfer *xfer )
 
 	// ever fired
 	xfer->xferBool( &m_everFired );
+
+	// Tiberium Project: not before this frame
+	if( version >= 2 )
+		xfer->xferUnsignedInt( &m_nextFireFrame );
 
 }
 
