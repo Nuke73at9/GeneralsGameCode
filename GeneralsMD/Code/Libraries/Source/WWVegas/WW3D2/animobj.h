@@ -91,6 +91,10 @@ public:
 
 	virtual void					Set_Animation_Frame_Rate_Multiplier(float multiplier);	// 020607 srj -- added
 
+	// Tiberium Project @feature the next single animation set fades in from the one playing, over this
+	// many seconds (as SAGE 2's AnimationBlendTime); a one-shot request, cleared by that call
+	void								Set_Animation_Blend_Time(float seconds) { BlendTime = seconds; }
+
 	virtual HAnimClass *	Peek_Animation_And_Info(float& frame, int& numFrames, int& mode, float& mult);	// 020710 srj -- added
 
 	virtual HAnimClass *			Peek_Animation() override;
@@ -158,6 +162,9 @@ protected:
 	// Release any animations
 	void								Release();
 
+	// Tiberium Project: let go of the animation being blended from
+	void								Release_Blend();
+
 protected:
 
 	// Is the hierarchy tree currently valid
@@ -177,6 +184,13 @@ protected:
 	};
 
 	int								CurMotionMode;
+
+	// Tiberium Project @feature the animation a new single animation fades in from, and its frame then
+	HAnimClass *					BlendFromMotion;
+	float								BlendFromFrame;
+	float								BlendTime;			///< requested for the next Set_Animation
+	float								BlendLength;		///< of the blend in progress, seconds
+	int								BlendStartTime;	///< milliseconds
 
 	union {
 		// CurMotionMode == SINGLE_ANIM

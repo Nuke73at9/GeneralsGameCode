@@ -973,8 +973,18 @@ void ModelConditionInfo::validateTurretInfo() const
 		{
 			tur.m_turretAngleBone = 0;
 			tur.m_turretPitchBone = 0;
+			tur.m_twinAngleBone = 0;
+			tur.m_twinPitchBone = 0;
 			continue;
 		}
+
+		// Tiberium Project @feature the twin bones turn with the turret; one missing is left still
+		tur.m_twinAngleBone = 0;
+		tur.m_twinPitchBone = 0;
+		if (tur.m_twinAngleNameKey != NAMEKEY_INVALID && findPristineBone(tur.m_twinAngleNameKey, &tur.m_twinAngleBone) == nullptr)
+			tur.m_twinAngleBone = 0;
+		if (tur.m_twinPitchNameKey != NAMEKEY_INVALID && findPristineBone(tur.m_twinPitchNameKey, &tur.m_twinPitchBone) == nullptr)
+			tur.m_twinPitchBone = 0;
 
 		if (tur.m_turretAngleNameKey != NAMEKEY_INVALID)
 		{
@@ -1113,6 +1123,7 @@ void ModelConditionInfo::clear()
 	m_mode = RenderObjClass::ANIM_MODE_ONCE;
 	m_transitionSig = NO_TRANSITION;
 	m_animMinSpeedFactor = 1.0f;
+	m_animBlendTime = 0.0f;
 	m_animMaxSpeedFactor = 1.0f;
 	m_pristineBones.clear();
 	m_validStuff = 0;
@@ -1524,6 +1535,15 @@ static void parseLowercaseNameKey(INI* ini, void *instance, void * store, const 
 }
 
 //-------------------------------------------------------------------------------------------------
+#if RTS_ZEROHOUR
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project: AnimationBlendTime = msec, kept in seconds */
+static void parseAnimBlendTime(INI* ini, void * /*instance*/, void * store, const void * /*userData*/)
+{
+	*(Real *)store = INI::scanReal(ini->getNextToken()) / 1000.0f;
+}
+#endif
+
 static void parseBoneNameKey(INI* ini, void *instance, void * store, const void * /*userData*/)
 {
 	ModelConditionInfo* self = (ModelConditionInfo*)instance;
@@ -1578,6 +1598,15 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 		{ "AltTurretArtAngle", INI::parseAngleReal, nullptr, offsetof(ModelConditionInfo, m_turrets[1].m_turretArtAngle) },
 		{ "AltTurretPitch",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[1].m_turretPitchNameKey) },
 		{ "AltTurretArtPitch", INI::parseAngleReal, nullptr, offsetof(ModelConditionInfo, m_turrets[1].m_turretArtPitch) },
+#if RTS_ZEROHOUR
+		// Tiberium Project @feature the time (msec) this state's animation fades in from the previous one's
+		{ "AnimationBlendTime", parseAnimBlendTime, nullptr, offsetof(ModelConditionInfo, m_animBlendTime) },
+#endif
+		// Tiberium Project @feature a second bone each turret turns and pitches alike (twin gun pods)
+		{ "TurretTwin",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[0].m_twinAngleNameKey) },
+		{ "TurretTwinPitch",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[0].m_twinPitchNameKey) },
+		{ "AltTurretTwin",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[1].m_twinAngleNameKey) },
+		{ "AltTurretTwinPitch",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[1].m_twinPitchNameKey) },
 		{ "ShowSubObject", parseShowHideSubObject, (void*)nullptr, offsetof(ModelConditionInfo, m_hideShowVec) },
 		{ "HideSubObject", parseShowHideSubObject, (void*)1, offsetof(ModelConditionInfo, m_hideShowVec) },
 		{ "WeaponFireFXBone", parseWeaponBoneName, nullptr, offsetof(ModelConditionInfo, m_weaponFireFXBoneName[0]) },
@@ -2509,6 +2538,11 @@ void W3DModelDraw::adjustAnimation(const ModelConditionInfo* prevState, Real pre
 					startFrame = REAL_TO_INT(prevAnimFraction * animHandle->Get_Num_Frames()-1);
 				}
 
+#if RTS_ZEROHOUR
+				// Tiberium Project @feature fade in from the animation playing (a state's AnimationBlendTime)
+				if (m_curState->m_animBlendTime > 0.0f && m_renderObject->Class_ID() == RenderObjClass::CLASSID_HLOD)
+					((HLodClass*)m_renderObject)->Set_Animation_Blend_Time(m_curState->m_animBlendTime);
+#endif
 				m_renderObject->Set_Animation(animHandle, startFrame, m_curState->m_mode);
 				REF_PTR_RELEASE(animHandle);
 				animHandle = nullptr;
@@ -2749,6 +2783,11 @@ void W3DModelDraw::handleClientTurretPositioning()
 				{
 					m_renderObject->Capture_Bone( tur.m_turretAngleBone );
 					m_renderObject->Control_Bone( tur.m_turretAngleBone, turretXfrm );
+					if (tur.m_twinAngleBone != 0)	// Tiberium Project
+					{
+						m_renderObject->Capture_Bone( tur.m_twinAngleBone );
+						m_renderObject->Control_Bone( tur.m_twinAngleBone, turretXfrm );
+					}
 				}
 			}
 
@@ -2763,6 +2802,11 @@ void W3DModelDraw::handleClientTurretPositioning()
 				{
 					m_renderObject->Capture_Bone( tur.m_turretPitchBone );
 					m_renderObject->Control_Bone( tur.m_turretPitchBone, turretPitchXfrm );
+					if (tur.m_twinPitchBone != 0)	// Tiberium Project
+					{
+						m_renderObject->Capture_Bone( tur.m_twinPitchBone );
+						m_renderObject->Control_Bone( tur.m_twinPitchBone, turretPitchXfrm );
+					}
 				}
 			}
 		}
@@ -3198,7 +3242,9 @@ static Bool turretNamesDiffer(const ModelConditionInfo* a, const ModelConditionI
 	}
 	for (int i = 0; i < MAX_TURRETS; ++i)
 		if (a->m_turrets[i].m_turretAngleNameKey != b->m_turrets[i].m_turretAngleNameKey ||
-				a->m_turrets[i].m_turretPitchNameKey != b->m_turrets[i].m_turretPitchNameKey)
+				a->m_turrets[i].m_turretPitchNameKey != b->m_turrets[i].m_turretPitchNameKey ||
+				a->m_turrets[i].m_twinAngleNameKey != b->m_turrets[i].m_twinAngleNameKey ||
+				a->m_turrets[i].m_twinPitchNameKey != b->m_turrets[i].m_twinPitchNameKey)
 			return true;
 
 	return false;

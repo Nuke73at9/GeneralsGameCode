@@ -100,6 +100,11 @@ Animatable3DObjClass::Animatable3DObjClass(const char * htree_name) :
 	ModeInterp.Frame1=0.0f;
 	ModeInterp.Percentage=0.0f;
 	ModeCombo.AnimCombo=nullptr;
+	BlendFromMotion=nullptr;	// Tiberium Project
+	BlendFromFrame=0.0f;
+	BlendTime=0.0f;
+	BlendLength=0.0f;
+	BlendStartTime=0;
 
 	/*
 	** Store a pointer to the htree
@@ -156,6 +161,11 @@ Animatable3DObjClass::Animatable3DObjClass(const Animatable3DObjClass & src) :
 	ModeInterp.Frame1=0.0f;
 	ModeInterp.Percentage=0.0f;
 	ModeCombo.AnimCombo=nullptr;
+	BlendFromMotion=nullptr;	// Tiberium Project
+	BlendFromFrame=0.0f;
+	BlendTime=0.0f;
+	BlendLength=0.0f;
+	BlendStartTime=0;
 
 	*this = src;
 }
@@ -176,6 +186,7 @@ Animatable3DObjClass::Animatable3DObjClass(const Animatable3DObjClass & src) :
 Animatable3DObjClass::~Animatable3DObjClass()
 {
 	Release();
+	Release_Blend();
 
 	delete HTree;
 }
@@ -197,6 +208,7 @@ Animatable3DObjClass & Animatable3DObjClass::operator = (const Animatable3DObjCl
 {
 	if (&that != this) {
 		Release();
+		Release_Blend();
 
 		CompositeRenderObjClass::operator = (that);
 
@@ -216,6 +228,7 @@ Animatable3DObjClass & Animatable3DObjClass::operator = (const Animatable3DObjCl
 		ModeInterp.Frame1 = 0.0f;
 		ModeInterp.Percentage = 0.0f;
 		ModeCombo.AnimCombo = nullptr;
+		BlendTime = 0.0f;
 
 		delete HTree;
 		HTree = W3DNEW HTreeClass(*that.HTree);
@@ -235,6 +248,14 @@ Animatable3DObjClass & Animatable3DObjClass::operator = (const Animatable3DObjCl
  * HISTORY:                                                                                    *
  *   12/8/98    GTH : Created.                                                                 *
  *=============================================================================================*/
+void Animatable3DObjClass::Release_Blend()
+{
+	if (BlendFromMotion != nullptr) {
+		BlendFromMotion->Release_Ref();
+		BlendFromMotion = nullptr;
+	}
+}
+
 void Animatable3DObjClass::Release()
 {
 	switch (CurMotionMode) {
@@ -292,7 +313,7 @@ void Animatable3DObjClass::Render(RenderInfoClass & rinfo)
 	//
 	// Force the hierarchy to be recalculated for single animations.
 	//
-	const bool isSingleAnim = CurMotionMode == SINGLE_ANIM && ModeAnim.AnimMode != ANIM_MODE_MANUAL;
+	const bool isSingleAnim = CurMotionMode == SINGLE_ANIM && (ModeAnim.AnimMode != ANIM_MODE_MANUAL || BlendFromMotion != nullptr);
 
 	if (isSingleAnim || !Is_Hierarchy_Valid() || Are_Sub_Object_Transforms_Dirty()) {
 		Update_Sub_Object_Transforms();
@@ -318,7 +339,7 @@ void Animatable3DObjClass::Special_Render(SpecialRenderInfoClass & rinfo)
 	//
 	// Force the hierarchy to be recalculated for single animations.
 	//
-	const bool isSingleAnim = CurMotionMode == SINGLE_ANIM && ModeAnim.AnimMode != ANIM_MODE_MANUAL;
+	const bool isSingleAnim = CurMotionMode == SINGLE_ANIM && (ModeAnim.AnimMode != ANIM_MODE_MANUAL || BlendFromMotion != nullptr);
 
 	if (isSingleAnim || !Is_Hierarchy_Valid()) {
 		Update_Sub_Object_Transforms();
@@ -445,6 +466,8 @@ int Animatable3DObjClass::Get_Bone_Index(const char * bonename)
  *=============================================================================================*/
 void Animatable3DObjClass::Set_Animation()
 {
+	Release_Blend();
+	BlendTime = 0.0f;
 	Release();
 	CurMotionMode = BASE_POSE;
 	Set_Hierarchy_Valid(false);
@@ -467,6 +490,21 @@ void Animatable3DObjClass::Set_Animation(HAnimClass * motion, float frame, int m
 {
 
 	if ( motion ) {
+		// Tiberium Project @feature fade in from the animation playing, when asked to and it is another
+		// of the same skeleton (a blend between unrelated skeletons would twist the model)
+		if ( BlendTime > 0.0f && CurMotionMode == SINGLE_ANIM && ModeAnim.Motion != nullptr && ModeAnim.Motion != motion
+				&& ModeAnim.Motion->Get_Num_Pivots() == motion->Get_Num_Pivots() ) {
+			ModeAnim.Motion->Add_Ref();
+			Release_Blend();
+			BlendFromMotion = ModeAnim.Motion;
+			BlendFromFrame = ModeAnim.Frame;
+			BlendLength = BlendTime;
+			BlendStartTime = WW3D::Get_Logic_Time_Milliseconds();
+		} else {
+			Release_Blend();
+		}
+		BlendTime = 0.0f;
+
 		// Add_Ref before we remove, in case it is the same one.
 		motion->Add_Ref();
 		Release();
@@ -491,6 +529,8 @@ void Animatable3DObjClass::Set_Animation(HAnimClass * motion, float frame, int m
 			motion->Set_Embedded_Sound_Bone_Index(bone_index);
 		}
 	} else {
+		Release_Blend();
+		BlendTime = 0.0f;
 		CurMotionMode = BASE_POSE;
 		Release();
 	}
@@ -793,7 +833,18 @@ void Animatable3DObjClass::Update_Sub_Object_Transforms()
 			if ( ModeAnim.AnimMode != ANIM_MODE_MANUAL ) {
 				Single_Anim_Progress();
 			}
-			Anim_Update(Transform,ModeAnim.Motion,ModeAnim.Frame);
+			// Tiberium Project @feature fading in from the previous animation's pose
+			if ( BlendFromMotion != nullptr ) {
+				const float t = BlendLength > 0.0f ? (WW3D::Get_Logic_Time_Milliseconds() - BlendStartTime) / (1000.0f * BlendLength) : 1.0f;
+				if ( t >= 1.0f || t < 0.0f ) {
+					Release_Blend();
+				} else {
+					Blend_Update(Transform,BlendFromMotion,BlendFromFrame,ModeAnim.Motion,ModeAnim.Frame,t);
+				}
+			}
+			if ( BlendFromMotion == nullptr ) {
+				Anim_Update(Transform,ModeAnim.Motion,ModeAnim.Frame);
+			}
 
 			/*
 			**	Play any sounds that are triggered by this frame of animation

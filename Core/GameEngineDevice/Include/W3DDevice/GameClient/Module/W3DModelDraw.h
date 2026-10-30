@@ -154,18 +154,26 @@ struct ModelConditionInfo
 		NameKeyType		m_turretPitchNameKey;
 		Real					m_turretArtAngle;
 		Real					m_turretArtPitch;
+		NameKeyType		m_twinAngleNameKey;		///< Tiberium Project @feature a second bone turning with the turret (twin gun pods)
+		NameKeyType		m_twinPitchNameKey;
 		// calculated at runtime
 		Int						m_turretAngleBone;
 		Int						m_turretPitchBone;
+		Int						m_twinAngleBone;
+		Int						m_twinPitchBone;
 
 		void clear()
 		{
 			m_turretAngleNameKey = NAMEKEY_INVALID;
 			m_turretPitchNameKey = NAMEKEY_INVALID;
+			m_twinAngleNameKey = NAMEKEY_INVALID;
+			m_twinPitchNameKey = NAMEKEY_INVALID;
 			m_turretArtAngle = 0;
 			m_turretArtPitch = 0;
 			m_turretAngleBone = 0;
 			m_turretPitchBone = 0;
+			m_twinAngleBone = 0;
+			m_twinPitchBone = 0;
 		}
 	};
 
@@ -220,6 +228,7 @@ struct ModelConditionInfo
 	ParticleSysBoneInfoVector					m_particleSysBones;			///< Bone names and attached particle systems.
 	TransitionSig											m_transitionSig;
 	Real															m_animMinSpeedFactor; //Min speed factor (randomized each time it's played)
+	Real															m_animBlendTime;			///< Tiberium Project @feature seconds to fade in from the previous animation
 	Real															m_animMaxSpeedFactor; //Max speed factor (randomized each time it's played)
 
 	mutable PristineBoneInfoMap				m_pristineBones;
