@@ -31,9 +31,34 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "GameLogic/Module/UpgradeModule.h"
+#include "GameLogic/WeaponSetFlags.h"
 
 // FORWARD REFERENCES /////////////////////////////////////////////////////////////////////////////
 class Thing;
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature the weapon set condition it sets (WeaponCondition; PLAYER_UPGRADE as before):
+	* C&C4's weapons that follow a unit's status bits (the Crawlers' tiers: WEAPON_UPGRADED_01, _02) take
+	* one condition each */
+//-------------------------------------------------------------------------------------------------
+class WeaponSetUpgradeModuleData : public UpgradeModuleData
+{
+public:
+	Int m_weaponCondition;
+
+	WeaponSetUpgradeModuleData() : m_weaponCondition( WEAPONSET_PLAYER_UPGRADE ) { }
+
+	static void buildFieldParse( MultiIniFieldParse& p )
+	{
+		UpgradeModuleData::buildFieldParse( p );
+		static const FieldParse dataFieldParse[] =
+		{
+			{ "WeaponCondition", INI::parseIndexList, WeaponSetFlags::getBitNames(), offsetof( WeaponSetUpgradeModuleData, m_weaponCondition ) },
+			{ nullptr, nullptr, nullptr, 0 }
+		};
+		p.add( dataFieldParse );
+	}
+};
 
 //-------------------------------------------------------------------------------------------------
 /** The default	die module */
@@ -42,7 +67,7 @@ class WeaponSetUpgrade : public UpgradeModule
 {
 
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE( WeaponSetUpgrade, "WeaponSetUpgrade" )
-	MAKE_STANDARD_MODULE_MACRO( WeaponSetUpgrade );
+	MAKE_STANDARD_MODULE_MACRO_WITH_MODULE_DATA( WeaponSetUpgrade, WeaponSetUpgradeModuleData );
 
 public:
 

@@ -53,7 +53,7 @@ void WeaponSetUpgrade::upgradeImplementation()
 	// Very simple; just need to flag the Object as having the player upgrade, and the WeaponSet chooser
 	// will do the work of picking the right one from ini.  This comment is as long as the code.
 	Object *obj = getObject();
-	obj->setWeaponSetFlag( WEAPONSET_PLAYER_UPGRADE );
+	obj->setWeaponSetFlag( (WeaponSetType)getWeaponSetUpgradeModuleData()->m_weaponCondition );	// Tiberium Project: WeaponCondition
 }
 
 // ------------------------------------------------------------------------------------------------
