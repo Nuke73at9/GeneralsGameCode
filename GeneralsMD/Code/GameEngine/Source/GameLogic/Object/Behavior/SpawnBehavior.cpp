@@ -33,6 +33,7 @@
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Player.h"
+#include "Common/Upgrade.h"
 #include "Common/Xfer.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
@@ -841,6 +842,18 @@ Bool SpawnBehavior::shouldTryToSpawn()
 	// Not if we are civilian controlled
 	if( getObject()->isNeutralControlled() )
 		return FALSE;
+
+	// Tiberium Project @feature not before the upgrade that grants the spawns (C&C4's drones)
+	if( modData->m_requiredUpgrade.isNotEmpty() && TheUpgradeCenter != nullptr )
+	{
+		const UpgradeTemplate *up = TheUpgradeCenter->findUpgrade( modData->m_requiredUpgrade );
+		const Player *player = getObject()->getControllingPlayer();
+		const Bool had = up != nullptr && ( up->getUpgradeType() == UPGRADE_TYPE_PLAYER
+			? ( player != nullptr && player->hasUpgradeComplete( up ) )
+			: getObject()->hasUpgrade( up ) );
+		if( !had )
+			return FALSE;
+	}
 
 	return TRUE;
 }

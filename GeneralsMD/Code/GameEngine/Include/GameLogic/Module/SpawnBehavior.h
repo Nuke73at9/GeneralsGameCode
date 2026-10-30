@@ -60,6 +60,7 @@ public:
 	DamageTypeFlags m_damageTypesToPropagateToSlaves;
 	std::vector<AsciiString> m_spawnTemplateNameData;
 	DieMuxData m_dieMuxData;
+	AsciiString m_requiredUpgrade;							///< Tiberium Project @feature nothing is spawned before the player (or the object) has this upgrade
 
 	SpawnBehaviorModuleData()
 	{
@@ -92,6 +93,7 @@ public:
 			{ "PropagateDamageTypesToSlavesWhenExisting",   INI::parseDamageTypeFlags, nullptr, offsetof( SpawnBehaviorModuleData, m_damageTypesToPropagateToSlaves ) },
 			{ "InitialBurst",				      INI::parseInt,						        nullptr, offsetof( SpawnBehaviorModuleData, m_initialBurst ) },
 			{ "SlavesHaveFreeWill",				INI::parseBool,										nullptr, offsetof( SpawnBehaviorModuleData, m_slavesHaveFreeWill ) },
+			{ "RequiredUpgrade",					INI::parseAsciiString,						nullptr, offsetof( SpawnBehaviorModuleData, m_requiredUpgrade ) },	// Tiberium Project
 			{ nullptr, nullptr, nullptr, 0 }
 
 		};
