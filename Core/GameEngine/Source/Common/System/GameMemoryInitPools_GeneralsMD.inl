@@ -58,6 +58,7 @@ static PoolSizeRec PoolSizes[] =
 	{ "AnimatedParticleSysBoneClientUpdate", 16, 16 },
 	{ "SwayClientUpdate", 32, 32 },
 	{ "BeaconClientUpdate", 64, 32 },
+	{ "ConditionSoundClientUpdate", 512, 128 },	// Tiberium Project
 	{ "AIGroupPool", 64, 32 },
 	{ "AIDockMachinePool", 256, 32 },
 	{ "AIGuardMachinePool", 32, 32 },

@@ -385,6 +385,9 @@ public:
 
 	// this method must ONLY be called from the client, NEVER From the logic, not even indirectly.
 	virtual Bool clientOnly_getRenderObjInfo(Coord3D* pos, Real* boundingSphereRadius, Matrix3D* transform) const override;
+#if RTS_ZEROHOUR
+	virtual Bool clientOnly_getAnimationFrame(AsciiString* name, Real* frame) const override;	///< Tiberium Project
+#endif
 	virtual Bool clientOnly_getRenderObjBoundBox(OBBoxClass * boundbox) const override;
 	virtual Bool clientOnly_getRenderObjBoneTransform(const AsciiString & boneName,Matrix3D * set_tm) const override;
 	virtual Int getPristineBonePositionsForConditionState(const ModelConditionFlags& condition, const char* boneNamePrefix, Int startIndex, Coord3D* positions, Matrix3D* transforms, Int maxBones) const override;

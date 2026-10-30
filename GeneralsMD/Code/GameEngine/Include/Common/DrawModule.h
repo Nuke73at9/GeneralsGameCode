@@ -156,6 +156,10 @@ public:
 	// this method must ONLY be called from the client, NEVER From the logic, not even indirectly.
 	virtual Bool clientOnly_getRenderObjInfo(Coord3D* pos, Real* boundingSphereRadius, Matrix3D* transform) const = 0;
 
+	/// Tiberium Project @feature the animation playing now (its name, upper case) and its frame, for
+	/// sounds on frames; client only, like the above
+	virtual Bool clientOnly_getAnimationFrame(AsciiString* name, Real* frame) const { return FALSE; }
+
 	// (gth) C&C3 adding these accessors to render object properties
 	virtual Bool clientOnly_getRenderObjBoundBox(OBBoxClass * boundbox) const = 0;
 	virtual Bool clientOnly_getRenderObjBoneTransform(const AsciiString & boneName,Matrix3D * set_tm) const = 0;

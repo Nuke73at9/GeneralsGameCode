@@ -3546,6 +3546,25 @@ Bool W3DModelDraw::clientOnly_getRenderObjInfo(Coord3D* pos, Real* boundingSpher
 	return true;
 }
 
+#if RTS_ZEROHOUR
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the animation playing now and its frame (client only: sounds on frames)
+Bool W3DModelDraw::clientOnly_getAnimationFrame(AsciiString* name, Real* frame) const
+{
+	if (m_renderObject == nullptr || m_renderObject->Class_ID() != RenderObjClass::CLASSID_HLOD)
+		return false;
+	float framenum, mult;
+	int mode, numFrames;
+	HAnimClass* anim = ((HLodClass*)m_renderObject)->Peek_Animation_And_Info(framenum, numFrames, mode, mult);
+	if (anim == nullptr || anim->Get_Name() == nullptr)
+		return false;
+	*name = anim->Get_Name();
+	name->toUpper();
+	*frame = framenum;
+	return true;
+}
+#endif
+
 //-------------------------------------------------------------------------------------------------
 Bool W3DModelDraw::getProjectileLaunchOffset(
 	const ModelConditionFlags& condition,

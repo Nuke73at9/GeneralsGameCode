@@ -290,6 +290,7 @@
 #include "GameClient/Module/AnimatedParticleSysBoneClientUpdate.h"
 #include "GameClient/Module/SwayClientUpdate.h"
 #include "GameClient/Module/BeaconClientUpdate.h"
+#include "GameClient/Module/ConditionSoundClientUpdate.h"	// Tiberium Project
 
 // PUBLIC DATA ////////////////////////////////////////////////////////////////////////////////////
 ModuleFactory *TheModuleFactory = nullptr;  ///< the module factory singleton
@@ -579,6 +580,7 @@ void ModuleFactory::init()
 	addModule( AnimatedParticleSysBoneClientUpdate );
 	addModule( SwayClientUpdate );
 	addModule( BeaconClientUpdate );
+	addModule( ConditionSoundClientUpdate );	// Tiberium Project
 
 }
 

@@ -402,6 +402,7 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/ModifierAbilityUpdate.h
     Include/GameLogic/Module/OrderAbilityUpdate.h
     Include/GameLogic/Module/AssembleStructureUpdate.h
+    Include/GameClient/Module/ConditionSoundClientUpdate.h
     Include/GameLogic/Module/AIAbilityUseUpdate.h
     Include/GameLogic/Module/AttributeModifierAuraUpdate.h
     Include/GameLogic/Module/AttributeModifierUpgrade.h
@@ -1050,6 +1051,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Update/ModifierAbilityUpdate.cpp
     Source/GameLogic/Object/Update/OrderAbilityUpdate.cpp
     Source/GameLogic/Object/Update/AssembleStructureUpdate.cpp
+    Source/GameClient/Drawable/Update/ConditionSoundClientUpdate.cpp
     Source/GameLogic/Object/Update/AIAbilityUseUpdate.cpp
     Source/GameLogic/Object/Update/AttributeModifierAuraUpdate.cpp
     Source/GameLogic/Object/Update/FireWeaponAbilityUpdate.cpp
