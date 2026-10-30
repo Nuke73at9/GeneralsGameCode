@@ -415,10 +415,11 @@ namespace
 			s_small = TheDisplayStringManager->newDisplayString();
 			s_info = TheDisplayStringManager->newDisplayString();
 		}
-		const Int big = max( 11, sh / 60 ), small = max( 9, sh / 80 );
-		s_label->setFont( TheFontLibrary->getFont( AsciiString( "Arial" ), big, TRUE ) );
-		s_small->setFont( TheFontLibrary->getFont( AsciiString( "Arial" ), small, TRUE ) );
-		s_info->setFont( TheFontLibrary->getFont( AsciiString( "Arial" ), small, FALSE ) );
+		// (not "small": Windows' headers define it as a type)
+		const Int labelSize = max( 11, sh / 60 ), smallSize = max( 9, sh / 80 );
+		s_label->setFont( TheFontLibrary->getFont( AsciiString( "Arial" ), labelSize, TRUE ) );
+		s_small->setFont( TheFontLibrary->getFont( AsciiString( "Arial" ), smallSize, TRUE ) );
+		s_info->setFont( TheFontLibrary->getFont( AsciiString( "Arial" ), smallSize, FALSE ) );
 	}
 
 	//-----------------------------------------------------------------------------------------------
