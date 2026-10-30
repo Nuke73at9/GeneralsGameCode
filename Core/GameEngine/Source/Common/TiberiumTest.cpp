@@ -101,6 +101,9 @@ namespace
 	Bool s_spawnRear = FALSE;		// "rear": the fight targets face away (their backs to the spawned objects)
 	std::string s_spawnTarget = "ChinaTankBattleMaster";	// "target=Template": the fight targets
 	Bool s_spawnBack = FALSE;		// "back": told to move to a spot close behind them (backing up)
+	Bool s_spawnDrive = FALSE;		// "drive": the fight targets drive over the spawned objects (mines)
+	Bool s_spawnMutual = FALSE;		// "mutual": the fight targets attack the spawned objects too
+	Real s_spawnTargetDistance = 160.0f;	// "dist=N": how far ahead the fight targets stand
 	Real s_spawnSpacing = 70.0f;	// between the objects of a row ("space=N": structures need more)
 	Int s_spawnBuildFrames = 0;		// "build=N": structures built up over N frames, then sold over N
 	std::vector<ObjectID> s_spawned, s_spawnTargets;
@@ -400,6 +403,11 @@ void TiberiumTest::setSpawn( const char *spec )
 				s_spawnTarget = s_spawnTarget.substr( 0, end );
 		}
 		s_spawnBack = parts[2].find( "back" ) != std::string::npos;
+		s_spawnDrive = parts[2].find( "drive" ) != std::string::npos;
+		s_spawnMutual = parts[2].find( "mutual" ) != std::string::npos;
+		const size_t dist = parts[2].find( "dist=" );
+		if ( dist != std::string::npos )
+			s_spawnTargetDistance = (Real)atof( parts[2].c_str() + dist + 5 );
 		const size_t build = parts[2].find( "build=" );
 		if ( build != std::string::npos )
 			s_spawnBuildFrames = atoi( parts[2].c_str() + build + 6 );
@@ -798,7 +806,7 @@ void TiberiumTest::update()
 				if ( target != nullptr )
 				{
 					Coord3D q = *obj->getPosition();
-					q.y += 160.0f;
+					q.y += s_spawnTargetDistance;
 					q.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( q.x, q.y ) : 0.0f;
 					target->setPosition( &q );
 					target->setOrientation( s_spawnRear ? PI * 0.5f : -PI * 0.5f );
@@ -815,15 +823,36 @@ void TiberiumTest::update()
 		{
 			Object *obj = TheGameLogic->findObjectByID( s_spawned[k] );
 			if ( obj == nullptr )
+			{
+				// gone (a mine set off): how its target is doing
+				const Object *target = s_spawnDrive && k < s_spawnTargets.size() ? TheGameLogic->findObjectByID( s_spawnTargets[k] ) : nullptr;
+				if ( target != nullptr && since % 30 == 0 && target->getBodyModule() != nullptr )
+					log( "frame %d: #%d gone, its target %s health %.0f/%.0f", (int)s_frame, (int)k, target->getTemplate()->getName().str(),
+						target->getBodyModule()->getHealth(), target->getBodyModule()->getMaxHealth() );
 				continue;
+			}
 			AIUpdateInterface *ai = obj->getAIUpdateInterface();
-			if ( since == 10 && ai != nullptr )
+			if ( since == 10 && s_spawnDrive && k < s_spawnTargets.size() )
+			{
+				// the target drives onto it
+				Object *target = TheGameLogic->findObjectByID( s_spawnTargets[k] );
+				AIUpdateInterface *tai = target != nullptr ? target->getAIUpdateInterface() : nullptr;
+				if ( tai != nullptr )
+				{
+					Coord3D dest = *obj->getPosition();
+					tai->aiMoveToPosition( &dest, CMD_FROM_SCRIPT );
+				}
+			}
+			else if ( since == 10 && ai != nullptr )
 			{
 				if ( s_spawnFight && k < s_spawnTargets.size() )
 				{
 					Object *target = TheGameLogic->findObjectByID( s_spawnTargets[k] );
 					if ( target != nullptr )
 						ai->aiForceAttackObject( target, NO_MAX_SHOTS_LIMIT, CMD_FROM_SCRIPT );
+					AIUpdateInterface *tai = target != nullptr ? target->getAIUpdateInterface() : nullptr;
+					if ( s_spawnMutual && tai != nullptr )
+						tai->aiForceAttackObject( obj, NO_MAX_SHOTS_LIMIT, CMD_FROM_SCRIPT );
 				}
 				else if ( s_spawnBack )
 				{
@@ -898,6 +927,17 @@ void TiberiumTest::update()
 					char facing[48];
 					snprintf( facing, sizeof( facing ), ", facing %.0f", obj->getOrientation() * 180.0f / PI );
 					strlcat( modifiers, facing, sizeof( modifiers ) );
+					if ( target != nullptr )
+					{
+						snprintf( facing, sizeof( facing ), ", target at %.0f %.0f", target->getPosition()->x, target->getPosition()->y );
+						strlcat( modifiers, facing, sizeof( modifiers ) );
+					}
+					const DamageInfo *own = body->getLastDamageInfo();
+					if ( own != nullptr && own->in.m_sourceID != INVALID_ID )
+					{
+						snprintf( facing, sizeof( facing ), ", hit last %.1f type %d", own->out.m_actualDamageDealt, (int)own->in.m_damageType );
+						strlcat( modifiers, facing, sizeof( modifiers ) );
+					}
 				}
 				log( "frame %d: %s #%d at %.0f %.0f, health %.0f/%.0f, target health %.0f (last hit %.1f, type %d, from %d), "
 					"shots fired %d, weapon %s, status %d, range %.0f, conditions %s%s%s", (int)s_frame,
@@ -987,6 +1027,30 @@ void TiberiumTest::update()
 				TheControlBar->processContextSensitiveButtonClick( win, GBM_SELECTED );
 			log( "frame %d: ui: click slot %s: %s%s", (int)s_frame, step.arg.c_str(),
 				button != nullptr ? button->getName().str() : "(empty)", usable ? "" : " (not usable)" );
+		}
+		else if ( step.action == "pick" && TheTacticalView != nullptr && TheGameLogic != nullptr )
+		{
+			// a player's click on each spawned object (at its centre, raised by half its height): what the
+			// view's pick finds there, and whether the object may be selected at all
+			for ( size_t k = 0; k < s_spawned.size(); ++k )
+			{
+				Object *obj = TheGameLogic->findObjectByID( s_spawned[k] );
+				if ( obj == nullptr )
+					continue;
+				Coord3D at = *obj->getPosition();
+				at.z += obj->getGeometryInfo().getMaxHeightAbovePosition() * 0.5f;
+				ICoord2D screen;
+				TheTacticalView->worldToScreen( &at, &screen );
+				Drawable *hit = TheTacticalView->pickDrawable( &screen, FALSE, PICK_TYPE_SELECTABLE );
+				Drawable *any = TheTacticalView->pickDrawable( &screen, FALSE, (PickType)0xFF );
+				const Drawable *mine = obj->getDrawable();
+				log( "frame %d: ui: pick %s at %d,%d: selectable %d, kind %d, hidden %d; picked %s, any %s",
+					(int)s_frame, obj->getTemplate()->getName().str(), (int)screen.x, (int)screen.y,
+					(int)obj->isSelectable(), (int)obj->isKindOf( KINDOF_SELECTABLE ),
+					mine != nullptr ? (int)mine->isDrawableEffectivelyHidden() : -1,
+					hit != nullptr && hit->getObject() != nullptr ? hit->getObject()->getTemplate()->getName().str() : "nothing",
+					any != nullptr && any->getObject() != nullptr ? any->getObject()->getTemplate()->getName().str() : "nothing" );
+			}
 		}
 		else if ( step.action == "mouse" )
 		{
