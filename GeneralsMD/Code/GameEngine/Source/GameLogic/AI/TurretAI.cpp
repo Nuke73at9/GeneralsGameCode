@@ -211,6 +211,7 @@ TurretAIData::TurretAIData()
 	m_initiallyDisabled = false;
 	m_firesWhileTurning = FALSE;
 	m_isAllowsPitch = false;
+	m_independent = false;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -256,6 +257,7 @@ void TurretAIData::buildFieldParse(MultiIniFieldParse& p)
 		{ "TurretSweepSpeedModifier",TurretAIData::parseTurretSweepSpeed,	nullptr, 0 },
 		{ "ControlledWeaponSlots",	parseTWS,															nullptr, offsetof( TurretAIData, m_turretWeaponSlots ) },
 		{ "AllowsPitch",						INI::parseBool,												nullptr, offsetof( TurretAIData, m_isAllowsPitch ) },
+		{ "Independent",						INI::parseBool,												nullptr, offsetof( TurretAIData, m_independent ) },	// Tiberium Project
 #ifdef INTER_TURRET_DELAY
 		{ "InterTurretDelay",				INI::parseDurationUnsignedInt,				nullptr, offsetof( TurretAIData, m_interTurretDelay ) },
 #endif
@@ -301,6 +303,19 @@ TurretAI::TurretAI(Object* owner, const TurretAIData* data, WhichTurretType tur)
 		DEBUG_CRASH(("TurretAI MUST have ModuleData"));
 		throw INI_INVALID_DATA;
 	}
+
+	// Tiberium Project: an independent turret starts with the first of its slots
+	m_independentSlot = PRIMARY_WEAPON;
+	for (Int i = 0; i < WEAPONSLOT_COUNT; ++i)
+	{
+		if (m_data->m_turretWeaponSlots & (1 << i))
+		{
+			m_independentSlot = (WeaponSlotType)i;
+			break;
+		}
+	}
+	m_nextIndependentScan = 0;
+	m_settingIndependentTarget = FALSE;
 
 	if (m_data->m_turretWeaponSlots == 0)
 	{
@@ -375,6 +390,13 @@ void TurretAI::xfer( Xfer *xfer )
 
 	if (version >= 2)
 		xfer->xferUnsignedInt(&m_sleepUntil);
+
+	// Tiberium Project: an independent turret's slot and next look (only such turrets, whose data says so)
+	if (m_data->m_independent)
+	{
+		xfer->xferUser(&m_independentSlot, sizeof(m_independentSlot));
+		xfer->xferUnsignedInt(&m_nextIndependentScan);
+	}
 
 }
 
@@ -469,6 +491,117 @@ Bool TurretAI::isWeaponSlotOkToFire(WeaponSlotType wslot) const
     return TRUE;
 
 	return isWeaponSlotOnTurret(wslot);
+}
+
+//----------------------------------------------------------------------------------------------------------
+Bool TurretAI::getIndependentWeaponSlot( WeaponSlotType* slot ) const
+{
+	if (!m_data->m_independent)
+		return FALSE;
+	*slot = m_independentSlot;
+	return TRUE;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** Tiberium Project: the first of this turret's weapons that can hit the victim (within reach, if asked) */
+Weapon* TurretAI::getIndependentWeaponFor( const Object* victim, WeaponSlotType* slot, Bool needInRange ) const
+{
+	const Object *owner = getOwner();
+	if (victim == nullptr)
+		return nullptr;
+	const Int antiMask = WeaponSet::getVictimAntiMaskFor(victim);
+	for (Int i = 0; i < WEAPONSLOT_COUNT; ++i)
+	{
+		if (!isWeaponSlotOnTurret((WeaponSlotType)i))
+			continue;
+		Weapon *w = owner->getWeaponInWeaponSlot((WeaponSlotType)i);
+		if (w == nullptr)
+			continue;
+		if (w->getStatus() == OUT_OF_AMMO && !w->getAutoReloadsClip())
+			continue;
+		if ((w->getAntiMask() & antiMask) == 0)
+			continue;
+		if (!w->isWithinTargetPitch(owner, victim))
+			continue;
+		if (needInRange && !w->isWithinAttackRange(owner, victim))
+			continue;
+		*slot = (WeaponSlotType)i;
+		return w;
+	}
+	return nullptr;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature SAGE 2's weapon slots: an independent turret keeps its own target: what the
+	* object attacks, if it can hit it; else what it already aims at, while it can; else the nearest enemy
+	* within reach of one of its weapons; and fires the first of its weapons that can hit it */
+void TurretAI::updateIndependentTarget()
+{
+	static const UnsignedInt INDEPENDENT_SCAN_FRAMES = LOGICFRAMES_PER_SECOND / 3;
+	Object *owner = getOwner();
+	const UnsignedInt now = TheGameLogic->getFrame();
+	if (now < m_nextIndependentScan)
+		return;
+	m_nextIndependentScan = now + INDEPENDENT_SCAN_FRAMES;
+	AIUpdateInterface *ai = owner->getAI();
+	if (ai == nullptr || owner->isEffectivelyDead())
+		return;
+
+	WeaponSlotType slot = m_independentSlot;
+	Object *want = ai->getCurrentVictim();
+	if (want != nullptr && (want->isEffectivelyDead() || getIndependentWeaponFor(want, &slot, TRUE) == nullptr))
+		want = nullptr;
+	if (want == nullptr)
+	{
+		Object *cur = nullptr;
+		Coord3D pos;
+		if (friend_getTurretTarget(cur, pos) == TARGET_OBJECT && cur != nullptr && !cur->isEffectivelyDead()
+			&& owner->getRelationship(cur) == ENEMIES && getIndependentWeaponFor(cur, &slot, TRUE) != nullptr)
+			want = cur;
+	}
+	if (want == nullptr)
+	{
+		Real reach = 0.0f;
+		for (Int i = 0; i < WEAPONSLOT_COUNT; ++i)
+		{
+			const Weapon *w = isWeaponSlotOnTurret((WeaponSlotType)i) ? owner->getWeaponInWeaponSlot((WeaponSlotType)i) : nullptr;
+			if (w != nullptr && w->getAttackRange(owner) > reach)
+				reach = w->getAttackRange(owner);
+		}
+		if (reach > 0.0f)
+		{
+			PartitionFilterRelationship filterTeam(owner, PartitionFilterRelationship::ALLOW_ENEMIES);
+			PartitionFilterPossibleToAttack filterAttack(ATTACK_NEW_TARGET, owner, CMD_FROM_AI);
+			PartitionFilterSameMapStatus filterMapStatus(owner);
+			PartitionFilter *filters[] = { &filterTeam, &filterAttack, &filterMapStatus, nullptr };
+			ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(owner, reach, FROM_BOUNDINGSPHERE_2D, filters, ITER_SORTED_NEAR_TO_FAR);
+			MemoryPoolObjectHolder hold(iter);
+			for (Object *other = iter->first(); other != nullptr; other = iter->next())
+			{
+				if (getIndependentWeaponFor(other, &slot, TRUE) != nullptr)
+				{
+					want = other;
+					break;
+				}
+			}
+		}
+	}
+
+	Object *cur = nullptr;
+	Coord3D pos;
+	const TurretTargetType had = friend_getTurretTarget(cur, pos);
+	m_settingIndependentTarget = TRUE;
+	if (want != nullptr)
+	{
+		m_independentSlot = slot;
+		if (had != TARGET_OBJECT || cur != want)
+			setTurretTargetObject(want, FALSE);
+	}
+	else if (had != TARGET_NONE)
+	{
+		setTurretTargetObject(nullptr, FALSE);
+	}
+	m_settingIndependentTarget = FALSE;
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -571,7 +704,13 @@ void TurretAI::removeSelfAsTargeter()
 //----------------------------------------------------------------------------------------------------------
 void TurretAI::setTurretTargetObject( Object *victim, Bool forceAttacking )
 {
-	if( !victim || victim->isEffectivelyDead() ||	!isOwnersCurWeaponOnTurret() )
+	// Tiberium Project: an independent turret chooses its own targets (updateIndependentTarget)
+	if( m_data->m_independent )
+	{
+		if( !m_settingIndependentTarget )
+			return;
+	}
+	else if( !victim || victim->isEffectivelyDead() ||	!isOwnersCurWeaponOnTurret() )
 	{
 		if( !getOwner()->getAI()->areTurretsLinked() )
 		{
@@ -613,6 +752,9 @@ void TurretAI::setTurretTargetObject( Object *victim, Bool forceAttacking )
 //----------------------------------------------------------------------------------------------------------
 void TurretAI::setTurretTargetPosition( const Coord3D* pos )
 {
+	// Tiberium Project: an independent turret chooses its own targets (updateIndependentTarget)
+	if (m_data->m_independent)
+		return;
 	if (!pos ||	!isOwnersCurWeaponOnTurret())
 	{
 		if( !getOwner()->getAI()->areTurretsLinked() )
@@ -697,6 +839,13 @@ UpdateSleepTime TurretAI::updateTurretAI()
 #endif
 
 	UnsignedInt now = TheGameLogic->getFrame();
+	// Tiberium Project @feature an independent turret chooses its own target, waking for it
+	if (m_data->m_independent && m_enabled)
+	{
+		updateIndependentTarget();
+		if (m_sleepUntil > m_nextIndependentScan)
+			m_sleepUntil = m_nextIndependentScan;
+	}
 	if (m_sleepUntil != 0 && now < m_sleepUntil)
 	{
 		return UPDATE_SLEEP(m_sleepUntil - now);
@@ -748,6 +897,19 @@ UpdateSleepTime TurretAI::updateTurretAI()
 	}
 
 	m_sleepUntil = now + subMachineSleep;
+	// Tiberium Project: an independent turret's slots show their own states
+	if (m_data->m_independent)
+	{
+		for (Int i = 0; i < WEAPONSLOT_COUNT; ++i)
+			if (isWeaponSlotOnTurret((WeaponSlotType)i))
+				m_owner->adjustModelConditionForIndependentWeapon((WeaponSlotType)i, m_target != TARGET_NONE);
+	}
+	// Tiberium Project: an independent turret wakes for its next look
+	if (m_data->m_independent && m_enabled && m_sleepUntil > m_nextIndependentScan)
+	{
+		m_sleepUntil = m_nextIndependentScan;
+		subMachineSleep = UPDATE_SLEEP(m_nextIndependentScan > now ? m_nextIndependentScan - now : 1);
+	}
 
 #if defined(RTS_DEBUG)
 	DEBUG_ASSERTCRASH(!m_enabled ||
@@ -879,6 +1041,9 @@ UnsignedInt TurretAI::friend_getNextIdleMoodTargetFrame() const
 //----------------------------------------------------------------------------------------------------------
 void TurretAI::friend_checkForIdleMoodTarget()
 {
+	// Tiberium Project: an independent turret looks for its own (updateIndependentTarget)
+	if (m_data->m_independent)
+		return;
 	Object* obj = getOwner();
 	AIUpdateInterface *ai = obj->getAIUpdateInterface();
 
@@ -1069,6 +1234,9 @@ StateReturnType TurretAIAimTurretState::update()
 
 	WeaponSlotType slot;
 	Weapon *curWeapon = obj->getCurrentWeapon( &slot );
+	// Tiberium Project: an independent turret aims its own slot's weapon
+	if (turret->getIndependentWeaponSlot( &slot ))
+		curWeapon = obj->getWeaponInWeaponSlot( slot );
 	if (!curWeapon)
 	{
 		DEBUG_CRASH(("TurretAIAimTurretState::update - curWeapon is null."));

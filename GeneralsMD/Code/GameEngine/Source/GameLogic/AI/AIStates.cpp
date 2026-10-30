@@ -1107,6 +1107,34 @@ Squad *AIStateMachine::getGoalSquad()
 	return m_goalSquad;
 }
 
+//----------------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature an independent turret (SAGE 2's weapon slots) fires its own slot's weapon:
+	* while it does, that slot stands as the object's current weapon, and the object's own comes back after */
+class ScopedIndependentTurretWeapon
+{
+public:
+	ScopedIndependentTurretWeapon( Object *obj, const NotifyWeaponFiredInterface *att ) :
+		m_obj( obj ), m_slot( PRIMARY_WEAPON ), m_lock( NOT_LOCKED ), m_swapped( FALSE )
+	{
+		if( att != nullptr && att->getIndependentWeaponSlot( &m_slot ) && m_obj->getWeaponInWeaponSlot( m_slot ) != nullptr )
+		{
+			m_obj->friend_swapCurWeapon( m_slot, m_lock );
+			m_swapped = TRUE;
+		}
+	}
+	Bool isActive() const { return m_swapped; }
+	~ScopedIndependentTurretWeapon()
+	{
+		if( m_swapped )
+			m_obj->friend_swapCurWeapon( m_slot, m_lock );
+	}
+private:
+	Object *m_obj;
+	WeaponSlotType m_slot;
+	WeaponLockType m_lock;
+	Bool m_swapped;
+};
+
 // State transition conditions ----------------------------------------------------------------------------
 /**
  * Return true if the machine's owner's current weapon's range
@@ -1116,6 +1144,7 @@ Bool outOfWeaponRangeObject( State *thisState, void* userData )
 {
 	Object *obj = thisState->getMachineOwner();
 	Object *victim = thisState->getMachineGoalObject();
+	ScopedIndependentTurretWeapon independent( obj, thisState->getWeaponFiredInterface() );	// Tiberium Project
 	Weapon *weapon = obj->getCurrentWeapon();
 
 	CRCDEBUG_LOG(("outOfWeaponRangeObject()"));
@@ -1511,6 +1540,32 @@ StateReturnType AIDeadState::onEnter()
 		nonDyingStuff.set(MODELCONDITION_PREATTACK_A);
 		nonDyingStuff.set(MODELCONDITION_PREATTACK_B);
 		nonDyingStuff.set(MODELCONDITION_PREATTACK_C);
+		// Tiberium Project @feature the further weapon slots' states (D to H)
+		nonDyingStuff.set(MODELCONDITION_USING_WEAPON_D);
+		nonDyingStuff.set(MODELCONDITION_FIRING_D);
+		nonDyingStuff.set(MODELCONDITION_BETWEEN_FIRING_SHOTS_D);
+		nonDyingStuff.set(MODELCONDITION_RELOADING_D);
+		nonDyingStuff.set(MODELCONDITION_PREATTACK_D);
+		nonDyingStuff.set(MODELCONDITION_USING_WEAPON_E);
+		nonDyingStuff.set(MODELCONDITION_FIRING_E);
+		nonDyingStuff.set(MODELCONDITION_BETWEEN_FIRING_SHOTS_E);
+		nonDyingStuff.set(MODELCONDITION_RELOADING_E);
+		nonDyingStuff.set(MODELCONDITION_PREATTACK_E);
+		nonDyingStuff.set(MODELCONDITION_USING_WEAPON_F);
+		nonDyingStuff.set(MODELCONDITION_FIRING_F);
+		nonDyingStuff.set(MODELCONDITION_BETWEEN_FIRING_SHOTS_F);
+		nonDyingStuff.set(MODELCONDITION_RELOADING_F);
+		nonDyingStuff.set(MODELCONDITION_PREATTACK_F);
+		nonDyingStuff.set(MODELCONDITION_USING_WEAPON_G);
+		nonDyingStuff.set(MODELCONDITION_FIRING_G);
+		nonDyingStuff.set(MODELCONDITION_BETWEEN_FIRING_SHOTS_G);
+		nonDyingStuff.set(MODELCONDITION_RELOADING_G);
+		nonDyingStuff.set(MODELCONDITION_PREATTACK_G);
+		nonDyingStuff.set(MODELCONDITION_USING_WEAPON_H);
+		nonDyingStuff.set(MODELCONDITION_FIRING_H);
+		nonDyingStuff.set(MODELCONDITION_BETWEEN_FIRING_SHOTS_H);
+		nonDyingStuff.set(MODELCONDITION_RELOADING_H);
+		nonDyingStuff.set(MODELCONDITION_PREATTACK_H);
 #ifdef ALLOW_SURRENDER
 		nonDyingStuff.set(MODELCONDITION_SURRENDER);
 #endif
@@ -5199,6 +5254,7 @@ void AIAttackAimAtTargetState::onExit( StateExitType status )
  */
 StateReturnType AIAttackFireWeaponState::onEnter()
 {
+	ScopedIndependentTurretWeapon independent( getMachineOwner(), m_att );	// Tiberium Project
 	// contained by AIAttackState, so no separate timer
 	DEBUG_ASSERTCRASH(m_att != nullptr, ("m_att may not be null"));
 
@@ -5234,6 +5290,7 @@ StateReturnType AIAttackFireWeaponState::update()
 	// contained by AIAttackState, so no separate timer
 
 	Object *obj = getMachineOwner();
+	ScopedIndependentTurretWeapon independent( obj, m_att );	// Tiberium Project
 	Object* victim = getMachineGoalObject();
 
 	if (m_att->isAttackingObject())
@@ -5289,7 +5346,8 @@ StateReturnType AIAttackFireWeaponState::update()
 		//to transfer attackers (AIUpdateInterface::transferAttack), it is unable to modify our current victim in our attack state
 		//machine. When we move immediately to the aim state in the same frame as the transfer (after this call in fact), the victim
 		//was still pointing to the building and not the hole we transferred to. This code fixes that.
-		if( victim != obj->getAI()->getCurrentVictim() )
+		// (Tiberium Project: an independent turret keeps its own victim)
+		if( !independent.isActive() && victim != obj->getAI()->getCurrentVictim() )
 		{
 			getMachine()->setGoalObject( obj->getAI()->getCurrentVictim() );
 		}
@@ -5363,6 +5421,7 @@ void AIAttackFireWeaponState::onExit( StateExitType status )
 {
 	// contained by AIAttackState, so no separate timer
 	Object *obj = getMachineOwner();
+	ScopedIndependentTurretWeapon independent( obj, m_att );	// Tiberium Project
 	obj->clearStatus( MAKE_OBJECT_STATUS_MASK2( OBJECT_STATUS_IS_FIRING_WEAPON, OBJECT_STATUS_IGNORING_STEALTH ) );
 
 	// this can occur if we start a preattack (eg, bayonet)

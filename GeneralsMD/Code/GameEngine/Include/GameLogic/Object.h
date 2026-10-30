@@ -494,6 +494,7 @@ public:
 	const Weapon* getCurrentWeapon(WeaponSlotType* wslot = nullptr) const;
 	void setFiringConditionForCurrentWeapon() const;
 	void adjustModelConditionForWeaponStatus();	///< Check to see if I should change my model condition.
+	void adjustModelConditionForIndependentWeapon( WeaponSlotType slot, Bool engaged );	///< Tiberium Project: an independent turret's slot's
 	void fireCurrentWeapon(Object *target);
 	void fireCurrentWeapon(const Coord3D* pos);
 	void preFireCurrentWeapon( const Object *victim );
@@ -551,6 +552,7 @@ public:
 	inline const WeaponSetFlags& getWeaponSetFlags() const { return m_curWeaponSetFlags; }
 	Bool setWeaponLock( WeaponSlotType weaponSlot, WeaponLockType lockType ){ return m_weaponSet.setWeaponLock( weaponSlot, lockType ); }
 	void releaseWeaponLock(WeaponLockType lockType){ m_weaponSet.releaseWeaponLock(lockType); }
+	void friend_swapCurWeapon( WeaponSlotType& slot, WeaponLockType& lock ) { m_weaponSet.friend_swapCurWeapon( slot, lock ); }	///< Tiberium Project: an independent turret's fire
 	Bool isCurWeaponLocked() const { return m_weaponSet.isCurWeaponLocked(); }
 
 	void setArmorSetFlag(ArmorSetType ast);

@@ -149,6 +149,8 @@ public:
 
 	virtual Bool isIdle() const { return false; }
 	virtual Bool isAttack() const { return false; }
+	/// Tiberium Project: the fire state's notify interface (an independent turret's), for its conditions
+	virtual const class NotifyWeaponFiredInterface* getWeaponFiredInterface() const { return nullptr; }
 	virtual Bool isGuardIdle() const { return FALSE; }
 	//Definition of busy -- when explicitly in the busy state. Moving or attacking is not considered busy!
 	virtual Bool isBusy() const { return false; }

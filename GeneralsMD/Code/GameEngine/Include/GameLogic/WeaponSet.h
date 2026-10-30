@@ -56,6 +56,12 @@ static const char *const TheWeaponSlotTypeNames[] =
 	"PRIMARY",
 	"SECONDARY",
 	"TERTIARY",
+	// Tiberium Project @feature SAGE 2's further weapon slots
+	"QUATERNARY",
+	"QUINARY",
+	"SENARY",
+	"SEPTENARY",
+	"OCTONARY",
 
 	nullptr
 };
@@ -66,6 +72,12 @@ static const LookupListRec TheWeaponSlotTypeNamesLookupList[] =
 	{ "PRIMARY",		PRIMARY_WEAPON },
 	{ "SECONDARY",	SECONDARY_WEAPON },
 	{ "TERTIARY",		TERTIARY_WEAPON },
+	// Tiberium Project @feature SAGE 2's further weapon slots
+	{ "QUATERNARY",	QUATERNARY_WEAPON },
+	{ "QUINARY",		QUINARY_WEAPON },
+	{ "SENARY",			SENARY_WEAPON },
+	{ "SEPTENARY",	SEPTENARY_WEAPON },
+	{ "OCTONARY",		OCTONARY_WEAPON },
 
 	{ nullptr, 0	}
 };
@@ -238,6 +250,14 @@ public:
 	Bool setWeaponLock( WeaponSlotType weaponSlot, WeaponLockType lockType );
 	void releaseWeaponLock(WeaponLockType lockType);
 	Bool isSharedReloadTime() const;
+	// Tiberium Project @feature an independent turret's slot stands as the current weapon while it fires,
+	// and the object's own comes back after (the same call, swapping back)
+	static Int getVictimAntiMaskFor( const Object* victim );	///< Tiberium Project: the anti mask a weapon needs to hit it
+	void friend_swapCurWeapon( WeaponSlotType& slot, WeaponLockType& lock )
+	{
+		WeaponSlotType s = m_curWeapon; m_curWeapon = slot; slot = s;
+		WeaponLockType l = m_curWeaponLockedStatus; m_curWeaponLockedStatus = lock; lock = l;
+	}
 
 	//When an AIAttackState is over, it needs to clean up any weapons that might be in leech range mode
 	//or else those weapons will have unlimited range!

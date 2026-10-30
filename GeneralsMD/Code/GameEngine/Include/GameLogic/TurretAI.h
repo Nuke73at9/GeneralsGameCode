@@ -235,6 +235,7 @@ public:
 	Bool						m_initiallyDisabled;		///< manually controlled and disabled.
 	Bool						m_firesWhileTurning;    ///< so the firing state does not instantly expire the turning state
 	Bool						m_isAllowsPitch;				///< This type of turret can pitch up and down as well as spin
+	Bool						m_independent;					///< Tiberium Project @feature SAGE 2's weapon slots: it picks its own targets and fires its own slots' weapons, whatever the object's current weapon
 
 	TurretAIData();
 	static void buildFieldParse(MultiIniFieldParse& p);
@@ -311,6 +312,9 @@ public:
 	virtual void notifyNewVictimChosen(Object* victim) override;
 	virtual const Coord3D* getOriginalVictimPos() const override { return nullptr; }	// yes, we return nullptr here
 	virtual Bool isWeaponSlotOkToFire(WeaponSlotType wslot) const override;
+	virtual Bool getIndependentWeaponSlot( WeaponSlotType* slot ) const override;	///< Tiberium Project
+	Bool isIndependent() const { return m_data->m_independent; }
+	UnsignedInt getControlledWeaponSlots() const { return m_data->m_turretWeaponSlots; }
 
 	// these are only for use by the state machines... don't call them otherwise, please
 	Bool friend_turnTowardsAngle(Real desiredAngle, Real rateModifier, Real relThresh);
@@ -347,8 +351,14 @@ private:
 	void getOtherTurretWeaponInfo(Int& numSelf, Int& numSelfReloading, Int& numSelfReady, Int& numOther, Int& numOtherReloading, Int& numOtherReady) const;
 #endif
 
+	void updateIndependentTarget();				///< Tiberium Project: an independent turret's choice of target and slot
+	Weapon* getIndependentWeaponFor( const Object* victim, WeaponSlotType* slot, Bool needInRange ) const;
+
 	const TurretAIData*				m_data;
 	const WhichTurretType			m_whichTurret;
+	WeaponSlotType						m_independentSlot;					///< Tiberium Project: the slot an independent turret fires
+	UnsignedInt								m_nextIndependentScan;			///< Tiberium Project: when it next looks for a target
+	Bool											m_settingIndependentTarget;	///< Tiberium Project: its own choice being set (others' are ignored)
 	Object*										m_owner;
 	TurretStateMachine*				m_turretStateMachine;							///< the state machine
 	Real											m_angle;										///< angle of the turret

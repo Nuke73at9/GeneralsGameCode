@@ -941,6 +941,8 @@ public:
 	virtual Bool isWeaponSlotOkToFire(WeaponSlotType wslot) const = 0;
 	virtual Bool isAttackingObject() const = 0;
 	virtual const Coord3D* getOriginalVictimPos() const = 0;
+	/// Tiberium Project @feature an independent turret's own slot (it fires that one, not the object's current weapon)
+	virtual Bool getIndependentWeaponSlot( WeaponSlotType* /*slot*/ ) const { return FALSE; }
 };
 
 //-----------------------------------------------------------------------------------------------------------
@@ -948,6 +950,7 @@ class AIAttackFireWeaponState : public State
 {
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(AIAttackFireWeaponState, "AIAttackFireWeaponState")
 public:
+	virtual const NotifyWeaponFiredInterface* getWeaponFiredInterface() const override { return m_att; }	///< Tiberium Project
 	AIAttackFireWeaponState( StateMachine *machine, NotifyWeaponFiredInterface* att ) :
 		State( machine, "AIAttackFireWeaponState" ),
 		m_att(att)

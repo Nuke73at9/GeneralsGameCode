@@ -142,6 +142,46 @@ static const ModelConditionFlags s_allWeaponFireFlags[WEAPONSLOT_COUNT] =
 		MODELCONDITION_RELOADING_C,
 		MODELCONDITION_PREATTACK_C,
 		MODELCONDITION_USING_WEAPON_C
+	),
+	// Tiberium Project @feature the further weapon slots
+	MAKE_MODELCONDITION_MASK5(
+		MODELCONDITION_FIRING_D,
+		MODELCONDITION_BETWEEN_FIRING_SHOTS_D,
+		MODELCONDITION_RELOADING_D,
+		MODELCONDITION_PREATTACK_D,
+		MODELCONDITION_USING_WEAPON_D
+	),
+	// Tiberium Project @feature the further weapon slots
+	MAKE_MODELCONDITION_MASK5(
+		MODELCONDITION_FIRING_E,
+		MODELCONDITION_BETWEEN_FIRING_SHOTS_E,
+		MODELCONDITION_RELOADING_E,
+		MODELCONDITION_PREATTACK_E,
+		MODELCONDITION_USING_WEAPON_E
+	),
+	// Tiberium Project @feature the further weapon slots
+	MAKE_MODELCONDITION_MASK5(
+		MODELCONDITION_FIRING_F,
+		MODELCONDITION_BETWEEN_FIRING_SHOTS_F,
+		MODELCONDITION_RELOADING_F,
+		MODELCONDITION_PREATTACK_F,
+		MODELCONDITION_USING_WEAPON_F
+	),
+	// Tiberium Project @feature the further weapon slots
+	MAKE_MODELCONDITION_MASK5(
+		MODELCONDITION_FIRING_G,
+		MODELCONDITION_BETWEEN_FIRING_SHOTS_G,
+		MODELCONDITION_RELOADING_G,
+		MODELCONDITION_PREATTACK_G,
+		MODELCONDITION_USING_WEAPON_G
+	),
+	// Tiberium Project @feature the further weapon slots
+	MAKE_MODELCONDITION_MASK5(
+		MODELCONDITION_FIRING_H,
+		MODELCONDITION_BETWEEN_FIRING_SHOTS_H,
+		MODELCONDITION_RELOADING_H,
+		MODELCONDITION_PREATTACK_H,
+		MODELCONDITION_USING_WEAPON_H
 	)
 };
 
@@ -1315,6 +1355,34 @@ void Object::setFiringConditionForCurrentWeapon() const
 		WeaponSlotType wslot = m_weaponSet.getCurWeaponSlot();
 		ModelConditionFlags c = m_weaponSet.getModelConditionForWeaponSlot(wslot, WSF_FIRING);
 		m_drawable->clearAndSetModelConditionFlags(s_allWeaponFireFlags[wslot], c);
+	}
+}
+
+//=============================================================================
+// Tiberium Project @feature an independent turret's slot shows its own state: firing on the frame it
+// fires, then its reload or the time between shots while its turret is engaged, else nothing
+void Object::adjustModelConditionForIndependentWeapon( WeaponSlotType slot, Bool engaged )
+{
+	const Weapon* w = m_weaponSet.getWeaponInWeaponSlot(slot);
+	if (w == nullptr || m_drawable == nullptr)
+		return;
+	WeaponSetConditionType conditionToSet = WSF_NONE;
+	if (w->getLastShotFrame() == TheGameLogic->getFrame())
+		conditionToSet = WSF_FIRING;
+	else if (engaged)
+	{
+		switch (w->getStatus())
+		{
+			case BETWEEN_FIRING_SHOTS:	conditionToSet = WSF_BETWEEN; break;
+			case RELOADING_CLIP:				conditionToSet = WSF_RELOADING; break;
+			case PRE_ATTACK:						conditionToSet = WSF_PREATTACK; break;
+			default:										conditionToSet = WSF_BETWEEN; break;	// ready, between bursts: keep the firing pose
+		}
+	}
+	if (conditionToSet != m_lastWeaponCondition[slot])
+	{
+		m_lastWeaponCondition[slot] = conditionToSet;
+		m_drawable->clearAndSetModelConditionFlags(s_allWeaponFireFlags[slot], m_weaponSet.getModelConditionForWeaponSlot(slot, conditionToSet));
 	}
 }
 
@@ -4093,8 +4161,9 @@ void Object::xfer( Xfer *xfer )
 {
 
 	// version
-	// Tiberium Project @feature version 10: the attribute modifiers
-	const XferVersion currentVersion = 10;
+	// Tiberium Project @feature version 10: the attribute modifiers; 11: eight weapon slots' last
+	// conditions (three before)
+	const XferVersion currentVersion = 11;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -4479,7 +4548,10 @@ void Object::xfer( Xfer *xfer )
 		// xfer the weaponSetFlags FIRST, since we need 'em to restore the weaponSet properly. (srj)
 		m_curWeaponSetFlags.xfer( xfer );
 		xfer->xferUnsignedInt(&m_weaponBonusCondition);
-		xfer->xferUser(&m_lastWeaponCondition, sizeof(m_lastWeaponCondition));
+		if (version >= 11)
+			xfer->xferUser(&m_lastWeaponCondition, sizeof(m_lastWeaponCondition));
+		else
+			xfer->xferUser(&m_lastWeaponCondition, 3 * sizeof(m_lastWeaponCondition[0]));	// three slots then
 
 		// do the weaponSet itself after all the weapon-related stuff, just in case
 		xfer->xferSnapshot(&m_weaponSet);
@@ -4989,6 +5061,9 @@ void Object::adjustModelConditionForWeaponStatus()
 		WeaponSetConditionType conditionToSet = WSF_INVALID;
 		if (i != m_weaponSet.getCurWeaponSlot())
 		{
+			// Tiberium Project: an independent turret's slot keeps its own (adjustModelConditionForIndependentWeapon)
+			if (m_ai != nullptr && (m_ai->getIndependentWeaponSlotMask() & (1 << i)) != 0)
+				continue;
 			// if this isn't the current weapon, then we never set ANYTHING for it.
 			conditionToSet = WSF_NONE;
 		}

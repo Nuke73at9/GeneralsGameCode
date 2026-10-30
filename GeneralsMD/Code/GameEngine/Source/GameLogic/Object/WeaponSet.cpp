@@ -210,6 +210,7 @@ void WeaponSet::crc( Xfer *xfer )
 	* 2: TheSuperHackers @tweak Upgrade damage type flags from integer to BitFlags for Generals.
 	*    Zero Hour already had this at version 1.
 	* 3: TheSuperHackers @bugfix bobtista 14/08/2026 Now serialize m_hasPitchLimit instead of m_hasDamageWeapon twice
+	* 4: Tiberium Project @feature every weapon slot (eight; three before)
 	*/
 // ------------------------------------------------------------------------------------------------
 void WeaponSet::xfer( Xfer *xfer )
@@ -218,7 +219,7 @@ void WeaponSet::xfer( Xfer *xfer )
 #if RETAIL_COMPATIBLE_XFER_SAVE
 	const XferVersion currentVersion = 1;
 #else
-	const XferVersion currentVersion = 3;
+	const XferVersion currentVersion = 4;
 #endif
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
@@ -266,7 +267,9 @@ void WeaponSet::xfer( Xfer *xfer )
 		wsFlags.xfer( xfer );
 	}
 
-	for (Int i = 0; i < WEAPONSLOT_COUNT; ++i)
+	// Tiberium Project: the slots saved (three before version 4)
+	const Int savedSlots = version >= 4 ? (Int)WEAPONSLOT_COUNT : 3;
+	for (Int i = 0; i < savedSlots; ++i)
 	{
 		Bool hasWeaponInSlot = (m_weapons[i] != nullptr);
 		xfer->xferBool(&hasWeaponInSlot);
@@ -366,26 +369,51 @@ void WeaponSet::updateWeaponSet(const Object* obj)
 //-------------------------------------------------------------------------------------------------
 /*static*/ ModelConditionFlags WeaponSet::getModelConditionForWeaponSlot(WeaponSlotType wslot, WeaponSetConditionType a)
 {
-	static const ModelConditionFlagType Nothing[WEAPONSLOT_COUNT] = { MODELCONDITION_INVALID, MODELCONDITION_INVALID, MODELCONDITION_INVALID };
+	// Tiberium Project @feature a state for each of the further slots too (D to H)
+	static const ModelConditionFlagType Nothing[WEAPONSLOT_COUNT] = { MODELCONDITION_INVALID, MODELCONDITION_INVALID, MODELCONDITION_INVALID
+#if RTS_ZEROHOUR
+		, MODELCONDITION_INVALID, MODELCONDITION_INVALID, MODELCONDITION_INVALID, MODELCONDITION_INVALID, MODELCONDITION_INVALID
+#endif
+	};
 	static const ModelConditionFlagType Firing[WEAPONSLOT_COUNT] = {
 		MODELCONDITION_FIRING_A,
 		MODELCONDITION_FIRING_B,
-		MODELCONDITION_FIRING_C
+		MODELCONDITION_FIRING_C,
+		MODELCONDITION_FIRING_D,
+		MODELCONDITION_FIRING_E,
+		MODELCONDITION_FIRING_F,
+		MODELCONDITION_FIRING_G,
+		MODELCONDITION_FIRING_H
 	};
 	static const ModelConditionFlagType Betweening[WEAPONSLOT_COUNT] = {
 		MODELCONDITION_BETWEEN_FIRING_SHOTS_A,
 		MODELCONDITION_BETWEEN_FIRING_SHOTS_B,
-		MODELCONDITION_BETWEEN_FIRING_SHOTS_C
+		MODELCONDITION_BETWEEN_FIRING_SHOTS_C,
+		MODELCONDITION_BETWEEN_FIRING_SHOTS_D,
+		MODELCONDITION_BETWEEN_FIRING_SHOTS_E,
+		MODELCONDITION_BETWEEN_FIRING_SHOTS_F,
+		MODELCONDITION_BETWEEN_FIRING_SHOTS_G,
+		MODELCONDITION_BETWEEN_FIRING_SHOTS_H
 	};
 	static const ModelConditionFlagType Reloading[WEAPONSLOT_COUNT] = {
 		MODELCONDITION_RELOADING_A,
 		MODELCONDITION_RELOADING_B,
-		MODELCONDITION_RELOADING_C
+		MODELCONDITION_RELOADING_C,
+		MODELCONDITION_RELOADING_D,
+		MODELCONDITION_RELOADING_E,
+		MODELCONDITION_RELOADING_F,
+		MODELCONDITION_RELOADING_G,
+		MODELCONDITION_RELOADING_H
 	};
 	static const ModelConditionFlagType PreAttack[WEAPONSLOT_COUNT] = {
 		MODELCONDITION_PREATTACK_A,
 		MODELCONDITION_PREATTACK_B,
-		MODELCONDITION_PREATTACK_C
+		MODELCONDITION_PREATTACK_C,
+		MODELCONDITION_PREATTACK_D,
+		MODELCONDITION_PREATTACK_E,
+		MODELCONDITION_PREATTACK_F,
+		MODELCONDITION_PREATTACK_G,
+		MODELCONDITION_PREATTACK_H
 	};
 	static const ModelConditionFlagType* Lookup[WSF_COUNT] = {
 		Nothing,
@@ -404,7 +432,12 @@ void WeaponSet::updateWeaponSet(const Object* obj)
 	static const ModelConditionFlagType Using[WEAPONSLOT_COUNT] = {
 		MODELCONDITION_USING_WEAPON_A,
 		MODELCONDITION_USING_WEAPON_B,
-		MODELCONDITION_USING_WEAPON_C
+		MODELCONDITION_USING_WEAPON_C,
+		MODELCONDITION_USING_WEAPON_D,
+		MODELCONDITION_USING_WEAPON_E,
+		MODELCONDITION_USING_WEAPON_F,
+		MODELCONDITION_USING_WEAPON_G,
+		MODELCONDITION_USING_WEAPON_H
 	};
 	if (a != WSF_NONE)
 		flags.set(Using[wslot]);
@@ -456,6 +489,12 @@ static Int getVictimAntiMask(const Object* victim)
 	{
 		return WEAPON_ANTI_GROUND;
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/*static*/ Int WeaponSet::getVictimAntiMaskFor( const Object* victim )
+{
+	return getVictimAntiMask( victim );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -871,6 +910,23 @@ Bool WeaponSet::chooseBestWeaponForTarget(const Object* obj, const Object* victi
 	WeaponSlotType currentDecision = PRIMARY_WEAPON;
 	WeaponSlotType currentDecisionBackup = PRIMARY_WEAPON;
 
+	// Tiberium Project @feature an independent turret's weapons are its own (it picks their targets and
+	// fires them), so the object chooses among the others, unless none of those can hit the victim
+	UnsignedInt independentSlots = 0;
+	{
+		const AIUpdateInterface *ai = obj->getAI();
+		independentSlots = ai != nullptr ? ai->getIndependentWeaponSlotMask() : 0;
+		if (independentSlots != 0)
+		{
+			Bool othersCanHit = FALSE;
+			for (Int k = 0; k < WEAPONSLOT_COUNT && !othersCanHit; ++k)
+				othersCanHit = m_weapons[k] != nullptr && (independentSlots & (1 << k)) == 0
+					&& (m_weapons[k]->getAntiMask() & getVictimAntiMask(victim)) != 0;
+			if (!othersCanHit)
+				independentSlots = 0;
+		}
+	}
+
 	// go backwards, so that in the event of ties, the primary weapon is preferred
 	for (Int i = WEAPONSLOT_COUNT - 1; i >= PRIMARY_WEAPON ; --i)
 	{
@@ -880,6 +936,10 @@ Bool WeaponSet::chooseBestWeaponForTarget(const Object* obj, const Object* victi
 
 		// no weapon in this slot.
 		if (!m_weapons[i])
+			continue;
+
+		// Tiberium Project: an independent turret's
+		if (independentSlots & (1 << i))
 			continue;
 
 		// weapon not allowed to be specified via this command source.

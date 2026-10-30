@@ -473,6 +473,15 @@ enum WhichTurretType CPP_11(: Int)
 
 	TURRET_MAIN = 0,
 	TURRET_ALT,
+#if RTS_ZEROHOUR
+	// Tiberium Project @feature further turrets (SAGE 2: a turret for each weapon slot)
+	TURRET_3,
+	TURRET_4,
+	TURRET_5,
+	TURRET_6,
+	TURRET_7,
+	TURRET_8,
+#endif
 
 	MAX_TURRETS
 };

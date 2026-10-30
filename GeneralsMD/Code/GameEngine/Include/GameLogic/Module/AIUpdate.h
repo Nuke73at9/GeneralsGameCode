@@ -434,6 +434,7 @@ public:
 	// turret stuff.
 	WhichTurretType getWhichTurretForWeaponSlot(WeaponSlotType wslot, Real* turretAngle, Real* turretPitch = nullptr) const;
 	WhichTurretType getWhichTurretForCurWeapon() const;
+	UnsignedInt getIndependentWeaponSlotMask() const;	///< Tiberium Project: the slots independent turrets fire
 	/**
 		return true iff the weapon is on a turret, that turret is trying to aim at the victim,
 		BUT is not yet pointing in the right dir.

@@ -171,6 +171,15 @@ enum WeaponSlotType CPP_11(: Int)
 	PRIMARY_WEAPON = 0,
 	SECONDARY_WEAPON,
 	TERTIARY_WEAPON,
+#if RTS_ZEROHOUR
+	// Tiberium Project @feature SAGE 2's further weapon slots (C&C4's units carry up to seven, each
+	// on its own turret)
+	QUATERNARY_WEAPON,
+	QUINARY_WEAPON,
+	SENARY_WEAPON,
+	SEPTENARY_WEAPON,
+	OCTONARY_WEAPON,
+#endif
 
 	WEAPONSLOT_COUNT
 };
