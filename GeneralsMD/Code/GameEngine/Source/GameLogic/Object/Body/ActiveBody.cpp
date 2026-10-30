@@ -55,6 +55,7 @@
 #include "GameLogic/Weapon.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/ActiveBody.h"
+#include "GameLogic/Module/ShieldSphereUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/BridgeBehavior.h"
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/DamageModule.h"
@@ -373,6 +374,10 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 	// Tiberium Project @feature directional armour: more from the sides and behind (SAGE 2's)
 	if( amount > 0.0f && damageInfo->in.m_damageType != DAMAGE_HEALING && damageInfo->in.m_sourceID != INVALID_ID )
 		amount *= m_curArmor.directionalScalar( getObject(), TheGameLogic->findObjectByID( damageInfo->in.m_sourceID ) );
+	// Tiberium Project @feature a shield sphere around it (SAGE 2's) takes the hit instead
+	if( amount > 0.0f && !damageInfo->in.m_kill && damageInfo->in.m_damageType != DAMAGE_HEALING
+		&& ShieldSphereUpdate::absorbDamage( obj, damager, damageInfo->in.m_damageType, amount ) )
+		return;
 
 	switch( damageInfo->in.m_damageType )
 	{

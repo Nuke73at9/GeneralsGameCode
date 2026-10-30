@@ -405,6 +405,7 @@ set(GAMEENGINE_SRC
     Include/GameClient/Module/ConditionSoundClientUpdate.h
     Include/GameLogic/Module/AIAbilityUseUpdate.h
     Include/GameLogic/Module/AttributeModifierAuraUpdate.h
+    Include/GameLogic/Module/ShieldSphereUpdate.h
     Include/GameLogic/Module/AttributeModifierUpgrade.h
     Include/GameLogic/Module/FireWeaponAbilityUpdate.h
     Include/GameLogic/Module/ToggleAbilityUpdate.h
@@ -1054,6 +1055,7 @@ set(GAMEENGINE_SRC
     Source/GameClient/Drawable/Update/ConditionSoundClientUpdate.cpp
     Source/GameLogic/Object/Update/AIAbilityUseUpdate.cpp
     Source/GameLogic/Object/Update/AttributeModifierAuraUpdate.cpp
+    Source/GameLogic/Object/Update/ShieldSphereUpdate.cpp
     Source/GameLogic/Object/Update/FireWeaponAbilityUpdate.cpp
     Source/GameLogic/Object/Update/ToggleAbilityUpdate.cpp
     Source/GameLogic/Object/Update/SlavedUpdate.cpp
