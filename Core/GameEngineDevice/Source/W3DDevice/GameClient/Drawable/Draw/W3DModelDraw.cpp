@@ -64,6 +64,7 @@
 #include "W3DDevice/GameClient/WorldHeightMap.h"
 #include "WW3D2/hanim.h"
 #include "WW3D2/hlod.h"
+#include "WW3D2/htree.h"	// Tiberium Project
 #include "WW3D2/rendobj.h"
 #include "WW3D2/mesh.h"
 #include "WW3D2/meshmdl.h"
@@ -2796,6 +2797,24 @@ void W3DModelDraw::handleClientTurretPositioning()
 	if (!m_curState || !(m_curState->m_validStuff & ModelConditionInfo::TURRETS_VALID))
 		return;
 
+	// Tiberium Project @feature a turret on a turret (C&C4's hierarchical turrets): its bone hangs under
+	// the other turret's bone, so it already turns with that one; it is turned by the difference, so it
+	// points where its own (object-relative) angle says. Each turret's angle as drawn, first.
+	Real drawnAngle[MAX_TURRETS];
+	for (int s = 0; s < MAX_TURRETS; ++s)
+	{
+		drawnAngle[s] = 0.0f;
+		Real pitch = 0.0f;
+		const Object *obj = getDrawable()->getObject();
+		const AIUpdateInterface* ai = obj ? obj->getAIUpdateInterface() : nullptr;
+		if (ai && m_curState->m_turrets[s].m_turretAngleBone != 0)
+		{
+			ai->getTurretRotAndPitch((WhichTurretType)s, &drawnAngle[s], &pitch);
+			drawnAngle[s] += m_curState->m_turrets[s].m_turretArtAngle;
+		}
+	}
+	const HTreeClass *tree = m_renderObject ? m_renderObject->Get_HTree() : nullptr;
+
 	for (int tslot = 0; tslot < MAX_TURRETS; ++tslot)
 	{
 		const ModelConditionInfo::TurretInfo& tur = m_curState->m_turrets[tslot];
@@ -2816,6 +2835,24 @@ void W3DModelDraw::handleClientTurretPositioning()
 			{
 				if (m_curState)
 					turretAngle += tur.m_turretArtAngle;
+				// Tiberium Project: less the turret it hangs under, if any (the nearest up its bone's parents)
+				if (tree != nullptr && tur.m_turretAngleBone < tree->Num_Pivots())
+				{
+					Int parentSlot = -1;
+					for (Int bone = tree->Get_Parent_Index(tur.m_turretAngleBone), guard = 0; bone > 0 && parentSlot < 0 && guard < 64; bone = tree->Get_Parent_Index(bone), ++guard)
+					{
+						for (Int s = 0; s < MAX_TURRETS; ++s)
+						{
+							if (s != tslot && m_curState->m_turrets[s].m_turretAngleBone == bone)
+							{
+								parentSlot = s;
+								break;
+							}
+						}
+					}
+					if (parentSlot >= 0)
+						turretAngle -= drawnAngle[parentSlot];
+				}
 				Matrix3D turretXfrm(1);
 				turretXfrm.Rotate_Z(turretAngle);
 				if (m_renderObject)
