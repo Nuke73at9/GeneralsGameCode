@@ -53,6 +53,7 @@ public:
 	Real m_secondHeight;				///< And the second, this.
 	Real m_firstPercentIndent;	///< The first point will be this percent along the target line
 	Real m_secondPercentIndent;	///< And the second, this.
+	Real m_sidewaysDrift;				///< Tiberium Project @feature the inner points move up to this far to either side (a volley weaves, as SAGE 2's)
 	UnsignedInt m_maxLifespan;
 	Bool m_tumbleRandomly;
 	Bool m_orientToFlightPath;
@@ -112,6 +113,8 @@ private:
 	Real									m_flightPathSpeed;				///< flight path speed (in case we must regen it)
 	Int										m_flightPathSegments;			///< number of segments in the flightpath (in case we must regen it)
 	Int										m_currentFlightPathStep;	///< Our current index in the flight path vector.  Quicker than popping off.
+	Real									m_driftFirst;							///< Tiberium Project: the inner points' sideways drift, chosen at launch
+	Real									m_driftSecond;
 	WeaponBonusConditionFlags		m_extraBonusFlags;
 
   Bool                  m_hasDetonated;           ///<

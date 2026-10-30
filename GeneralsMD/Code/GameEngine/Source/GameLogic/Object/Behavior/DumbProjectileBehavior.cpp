@@ -64,6 +64,7 @@ DumbProjectileBehaviorModuleData::DumbProjectileBehaviorModuleData() :
 	m_secondHeight(0.0f),
 	m_firstPercentIndent(0.0f),
 	m_secondPercentIndent(0.0f),
+	m_sidewaysDrift(0.0f),
 	m_garrisonHitKillCount(0),
 	m_garrisonHitKillFX(nullptr),
 	m_flightPathAdjustDistPerFrame(0.0f)
@@ -86,6 +87,7 @@ void DumbProjectileBehaviorModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "SecondHeight",					INI::parseReal,						nullptr, offsetof( DumbProjectileBehaviorModuleData, m_secondHeight ) },
 		{ "FirstPercentIndent",		INI::parsePercentToReal,	nullptr, offsetof( DumbProjectileBehaviorModuleData, m_firstPercentIndent ) },
 		{ "SecondPercentIndent",	INI::parsePercentToReal,	nullptr, offsetof( DumbProjectileBehaviorModuleData, m_secondPercentIndent ) },
+		{ "SidewaysDrift",				INI::parseReal,						nullptr, offsetof( DumbProjectileBehaviorModuleData, m_sidewaysDrift ) },	// Tiberium Project
 
 		{ "GarrisonHitKillRequiredKindOf", KindOfMaskType::parseFromINI, nullptr, offsetof( DumbProjectileBehaviorModuleData, m_garrisonHitKillKindof ) },
 		{ "GarrisonHitKillForbiddenKindOf", KindOfMaskType::parseFromINI, nullptr, offsetof( DumbProjectileBehaviorModuleData, m_garrisonHitKillKindofNot ) },
@@ -119,6 +121,8 @@ DumbProjectileBehavior::DumbProjectileBehavior( Thing *thing, const ModuleData* 
 	m_flightPathEnd.zero();
 	m_currentFlightPathStep = 0;
 	m_extraBonusFlags = 0;
+	m_driftFirst = 0.0f;
+	m_driftSecond = 0.0f;
 
   m_hasDetonated = FALSE;
 }
@@ -388,6 +392,12 @@ void DumbProjectileBehavior::projectileFireAtObjectOrPosition( const Object *vic
 
 	m_flightPathStart = *getObject()->getPosition();
 	m_flightPathEnd = victimPosToUse;
+	// Tiberium Project @feature each shot of a volley weaves its own way (SidewaysDrift)
+	if (d->m_sidewaysDrift > 0.0f)
+	{
+		m_driftFirst = GameLogicRandomValueReal( -d->m_sidewaysDrift, d->m_sidewaysDrift );
+		m_driftSecond = GameLogicRandomValueReal( -d->m_sidewaysDrift, d->m_sidewaysDrift );
+	}
 	if (!calcFlightPath(true))
 	{
 		//Can only fail if wildly incorrect points
@@ -431,6 +441,22 @@ Bool DumbProjectileBehavior::calcFlightPath(Bool recalcNumSegments)
 	controlPoints[1].y = firstPointAlongLine.Y + controlPoints[0].y;
 	controlPoints[2].x = secondPointAlongLine.X + controlPoints[0].x;
 	controlPoints[2].y = secondPointAlongLine.Y + controlPoints[0].y;
+
+	// Tiberium Project @feature the inner points drift to the side, across the line to the target
+	if (m_driftFirst != 0.0f || m_driftSecond != 0.0f)
+	{
+		Real sideX = -targetVector.Y, sideY = targetVector.X;
+		const Real sideLen = WWMath::SqrtOrigin( sideX * sideX + sideY * sideY );
+		if (sideLen > 0.001f)
+		{
+			sideX /= sideLen;
+			sideY /= sideLen;
+			controlPoints[1].x += sideX * m_driftFirst;
+			controlPoints[1].y += sideY * m_driftFirst;
+			controlPoints[2].x += sideX * m_driftSecond;
+			controlPoints[2].y += sideY * m_driftSecond;
+		}
+	}
 
 	// Z's are determined using the highest intervening height so they won't hit hills, low end bounded by current Zs
 	highestInterveningTerrain = max( highestInterveningTerrain, controlPoints[0].z );
@@ -758,7 +784,7 @@ void DumbProjectileBehavior::xfer( Xfer *xfer )
 #if RETAIL_COMPATIBLE_XFER_SAVE
 	XferVersion currentVersion = 1;
 #else
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 3;	// Tiberium Project: 3, the sideways drift
 #endif
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
@@ -813,6 +839,13 @@ void DumbProjectileBehavior::xfer( Xfer *xfer )
 	if( version >= 2 )
 	{
 		xfer->xferInt( &m_currentFlightPathStep );
+	}
+
+	// Tiberium Project: the sideways drift chosen at launch
+	if( version >= 3 )
+	{
+		xfer->xferReal( &m_driftFirst );
+		xfer->xferReal( &m_driftSecond );
 	}
 
 }
