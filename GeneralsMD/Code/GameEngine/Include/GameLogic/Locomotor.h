@@ -203,6 +203,7 @@ private:
 	Bool											m_downhillOnly;	// pinewood derby, moves only by gravity pulling downhill
 	Bool											m_stickToGround;				// if true, can't leave ground
 	Bool											m_canMoveBackward;				// if true, can move backwards.
+	Real											m_reverseSpeedPercent;		///< Tiberium Project @feature the speed backing up, of the most (SAGE 2's ReverseMoveSpeed; 100%)
 	Bool											m_hasSuspension;				///< If true, calculate 4 wheel independent suspension values.
 	Real											m_maximumWheelExtension; ///< Maximum distance wheels can move down.  (negative value)
 	Real											m_maximumWheelCompression; ///< Maximum distance wheels can move up.  (positive value)
@@ -362,6 +363,9 @@ public:
 	void setUltraAccurate(Bool u) { setFlag(ULTRA_ACCURATE, u); }
 	Bool isUltraAccurate() const { return getFlag(ULTRA_ACCURATE); }
 
+	/// Tiberium Project @feature where the move under way ends (its path's last point), set by the AI before
+	/// each step: whether a vehicle backs up is decided on it, not on the path's next point
+	void setMoveEnd( const Coord3D *end ) { m_hasMoveEnd = end != nullptr; if( end != nullptr ) m_moveEnd = *end; }
 	Bool isMovingBackwards() const {return getFlag(MOVING_BACKWARDS);}
 
 	void startMove(); ///< Indicates that a move is starting, primarily to reset the donut timer. jba.
@@ -458,6 +462,8 @@ private:
 
 	Real				m_angleOffset;
 	Real				m_offsetIncrement;
+	Coord3D			m_moveEnd;							///< Tiberium Project: where the move ends (set by the AI before each step; not saved)
+	Bool				m_hasMoveEnd;
 	UnsignedInt m_donutTimer;				///< Frame time to keep units from doing the donut. jba.
 
 

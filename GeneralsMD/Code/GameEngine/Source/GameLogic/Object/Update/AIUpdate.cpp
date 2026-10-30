@@ -2187,6 +2187,7 @@ UpdateSleepTime AIUpdateInterface::doLocomotor()
 						Real myMaxSpeed = m_curLocomotor->getMaxSpeedForCondition(getObject()->getBodyModule()->getDamageState());
 						if( speed == FAST_AS_POSSIBLE || speed > myMaxSpeed )
 							speed = myMaxSpeed;
+						m_curLocomotor->setMoveEnd( &m_locomotorGoalData );	// Tiberium Project
 						m_curLocomotor->locoUpdate_moveTowardsPosition(getObject(),
 							m_locomotorGoalData, 0.0f, speed, &blocked);
 						m_doFinalPosition = FALSE;
@@ -2258,6 +2259,8 @@ UpdateSleepTime AIUpdateInterface::doLocomotor()
 							}
 						}
 
+						// Tiberium Project @feature where the move ends (a vehicle's backing up is decided on it)
+						m_curLocomotor->setMoveEnd( getPath()->getLastNode() != nullptr ? getPath()->getLastNode()->getPosition() : &goalPos );
 						m_curLocomotor->locoUpdate_moveTowardsPosition(getObject(), goalPos,
 							onPathDistToGoal+getPathExtraDistance(), speed, &blocked);
 

@@ -334,6 +334,7 @@ LocomotorTemplate::LocomotorTemplate()
 	m_airborneTargetingHeight = INT_MAX;
 	m_stickToGround = false;
 	m_canMoveBackward = false;
+	m_reverseSpeedPercent = 1.0f;	// Tiberium Project
 	m_hasSuspension = false;
 	m_wheelTurnAngle = 0;
 	m_maximumWheelExtension = 0;
@@ -492,6 +493,7 @@ const FieldParse* LocomotorTemplate::getFieldParse() const
 		{ "AirborneTargetingHeight", INI::parseInt, nullptr, offsetof( LocomotorTemplate, m_airborneTargetingHeight ) },
 		{ "StickToGround",				INI::parseBool,			nullptr,	offsetof(LocomotorTemplate, m_stickToGround) },
 		{ "CanMoveBackwards",				INI::parseBool,			nullptr,	offsetof(LocomotorTemplate, m_canMoveBackward) },
+		{ "ReverseSpeed",						INI::parsePercentToReal,	nullptr,	offsetof(LocomotorTemplate, m_reverseSpeedPercent) },	// Tiberium Project
 		{ "HasSuspension",				INI::parseBool,			nullptr,	offsetof(LocomotorTemplate, m_hasSuspension) },
 		{ "FrontWheelTurnAngle", INI::parseAngleReal, nullptr, offsetof(LocomotorTemplate, m_wheelTurnAngle) },
 		{ "MaximumWheelExtension", INI::parseReal, nullptr, offsetof(LocomotorTemplate, m_maximumWheelExtension) },
@@ -675,6 +677,8 @@ Locomotor::Locomotor(const LocomotorTemplate* tmpl)
 	m_offsetIncrement = (PI/40) * (GameLogicRandomValueReal(0.8f, 1.2f)/m_template->m_wanderLengthFactor);
 	setFlag(OFFSET_INCREASING, GameLogicRandomValue(0,1));
 	m_donutTimer = TheGameLogic->getFrame()+DONUT_TIME_DELAY_SECONDS*static_cast<float>(LOGICFRAMES_PER_SECOND);
+	m_moveEnd.zero();	// Tiberium Project
+	m_hasMoveEnd = FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -682,6 +686,8 @@ Locomotor::Locomotor(const Locomotor& that)
 {
 	m_angleOffset = 0.0f;
 	m_maintainPos.zero();
+	m_moveEnd = that.m_moveEnd;	// Tiberium Project
+	m_hasMoveEnd = that.m_hasMoveEnd;
 	m_template = that.m_template;
 	m_brakingFactor = that.m_brakingFactor;
 	m_maxLift = that.m_maxLift;
@@ -719,6 +725,8 @@ Locomotor& Locomotor::operator=(const Locomotor& that)
 #endif
 		m_preferredHeight = that.m_preferredHeight;
 		m_preferredHeightDamping = that.m_preferredHeightDamping;
+		m_moveEnd = that.m_moveEnd;	// Tiberium Project
+		m_hasMoveEnd = that.m_hasMoveEnd;
 	}
 	return *this;
 }
@@ -1176,6 +1184,51 @@ void Locomotor::moveTowardsPositionTreads(Object* obj, PhysicsBehavior *physics,
 
 	// Locomotion for treaded vehicles, ie tanks.
 
+	// Tiberium Project @feature a tracked vehicle that CanMoveBackwards backs up to a goal behind it and
+	// near (within five times its radius, as the wheels' three-point turn reckons), rather than turning
+	// round, as SAGE 2's do (CanReverseMove), at ReverseSpeed; it drives forward again once the goal is
+	// ahead or far. Retail treads cannot move backwards, so nothing changes for them.
+	Bool reverse = FALSE;
+	Coord3D steerPos = goalPos;
+	if( m_template->m_canMoveBackward )
+	{
+		// (where the move ends: a path's first point is often off to a side of the way to it)
+		const Coord3D &end = m_hasMoveEnd ? m_moveEnd : goalPos;
+		const Real toGoal = WWMath::Atan2Origin( end.y - obj->getPosition()->y, end.x - obj->getPosition()->x );
+		const Real goalAngle = (Real)fabs( stdAngleDiff( toGoal, obj->getOrientation() ) );
+		const Real nearEnough = 5.0f * obj->getGeometryInfo().getMajorRadius();
+		if( physics->getForwardSpeed2D() == 0.0f )
+			setFlag( MOVING_BACKWARDS, false );
+		if( !getFlag( MOVING_BACKWARDS ) )
+		{
+			if( goalAngle > 2.0f * PI / 3.0f && onPathDistToGoal <= nearEnough )
+				setFlag( MOVING_BACKWARDS, true );
+		}
+		else if( goalAngle < PI / 3.0f || onPathDistToGoal > 2.0f * nearEnough )
+		{
+			setFlag( MOVING_BACKWARDS, false );
+		}
+		reverse = getFlag( MOVING_BACKWARDS );
+		if( reverse )
+		{
+			// the back towards where the move ends (the move is short; a path's next point, often just
+			// beside the vehicle, would swing it about): steer for the point as far ahead as that is
+			// behind. Within its own radius of it, it keeps its heading and backs straight in.
+			const Real ex = end.x - obj->getPosition()->x, ey = end.y - obj->getPosition()->y;
+			if( ex * ex + ey * ey > sqr( obj->getGeometryInfo().getMajorRadius() ) )
+			{
+				steerPos.x = obj->getPosition()->x - ex;
+				steerPos.y = obj->getPosition()->y - ey;
+			}
+			else
+			{
+				steerPos.x = obj->getPosition()->x + obj->getUnitDirectionVector2D()->x * 10.0f;
+				steerPos.y = obj->getPosition()->y + obj->getUnitDirectionVector2D()->y * 10.0f;
+			}
+			desiredSpeed *= m_template->m_reverseSpeedPercent;
+		}
+	}
+
 	//
 	// Orient toward goal position
 	//
@@ -1183,7 +1236,7 @@ void Locomotor::moveTowardsPositionTreads(Object* obj, PhysicsBehavior *physics,
 //	Real relAngle = ThePartitionManager->getRelativeAngle2D( obj, &goalPos );
 //	Real desiredAngle = angle + relAngle;
 	Real relAngle ;
-	PhysicsTurningType rotating = rotateTowardsPosition(obj, goalPos, &relAngle);
+	PhysicsTurningType rotating = rotateTowardsPosition(obj, steerPos, &relAngle);
 	physics->setTurning(rotating);
 
 	//
@@ -1206,6 +1259,8 @@ void Locomotor::moveTowardsPositionTreads(Object* obj, PhysicsBehavior *physics,
 //		speed = m_minTurnSpeed;
 
 	Real actualSpeed = physics->getForwardSpeed2D();
+	if( reverse )
+		actualSpeed = -actualSpeed;	// Tiberium Project: the speed backwards
 	Real slowDownTime = actualSpeed / getBraking();
 	Real slowDownDist = (actualSpeed/1.50f) * slowDownTime;
 
@@ -1265,6 +1320,8 @@ void Locomotor::moveTowardsPositionTreads(Object* obj, PhysicsBehavior *physics,
 			accelForce = maxForceNeeded;
 
 		const Coord3D *dir = obj->getUnitDirectionVector2D();
+		if( reverse )
+			accelForce = -accelForce;	// Tiberium Project: backing up
 
 		Coord3D force;
 		force.x = accelForce * dir->x;
@@ -1347,6 +1404,7 @@ void Locomotor::moveTowardsPositionWheels(Object* obj, PhysicsBehavior *physics,
 	Real goalSpeed = desiredSpeed;
 	if (moveBackwards) {
 		actualSpeed = -actualSpeed;
+		goalSpeed *= m_template->m_reverseSpeedPercent;	// Tiberium Project @feature ReverseSpeed (100% by default, as before)
 	}
 
 

@@ -396,9 +396,11 @@ void W3DTankDraw::doDrawModule(const Matrix3D* transformMtx)
 			//we stop scrolling when tank slows down to reduce the appearance of sliding
 			//tread scrolling speed was not directly tied into tank velocity because it looked odd
 			//under certain situations when tank moved sideways.
+			// Tiberium Project @feature backing up, the treads run the other way
+			const Real driveScroll = physics->getForwardSpeed2D() < 0.0f ? -treadScrollSpeed : treadScrollSpeed;
 			for (Int i=0; i<m_treadCount; i++)
 			{
-				offset_u = pTread->m_materialSettings.customUVOffset.X - treadScrollSpeed;
+				offset_u = pTread->m_materialSettings.customUVOffset.X - driveScroll;
 				// ensure coordinates of offset are in [0, 1] range:
 				offset_u = offset_u - WWMath::Floor(offset_u);
 				pTread->m_materialSettings.customUVOffset.Set(offset_u,0);
