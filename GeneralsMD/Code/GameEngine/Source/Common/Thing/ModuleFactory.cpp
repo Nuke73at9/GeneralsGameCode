@@ -147,6 +147,7 @@
 #include "GameLogic/Module/ModifierAbilityUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/AttributeModifierAuraUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/ShieldSphereUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/StealthFieldUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/AttributeModifierUpgrade.h"	// Tiberium Project
 #include "GameLogic/Module/OrderAbilityUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/AssembleStructureUpdate.h"	// Tiberium Project
@@ -414,6 +415,7 @@ void ModuleFactory::init()
 	addModule( ModifierAbilityUpdate );	// Tiberium Project
 	addModule( AttributeModifierAuraUpdate );	// Tiberium Project
 	addModule( ShieldSphereUpdate );	// Tiberium Project
+	addModule( StealthFieldUpdate );	// Tiberium Project
 	addModule( AttributeModifierUpgrade );	// Tiberium Project
 	addModule( OrderAbilityUpdate );	// Tiberium Project
 	addModule( AssembleStructureUpdate );	// Tiberium Project

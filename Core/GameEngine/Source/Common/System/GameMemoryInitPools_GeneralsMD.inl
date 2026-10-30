@@ -187,6 +187,7 @@ static PoolSizeRec PoolSizes[] =
 	{ "ModifierAbilityUpdate", 64, 32 },	// Tiberium Project @feature attribute modifiers
 	{ "AttributeModifierAuraUpdate", 256, 64 },
 	{ "ShieldSphereUpdate", 256, 64 },
+	{ "StealthFieldUpdate", 64, 16 },
 	{ "AttributeModifierUpgrade", 1024, 128 },
 	{ "OrderAbilityUpdate", 128, 32 },
 	{ "AssembleStructureUpdate", 128, 32 },

@@ -142,6 +142,7 @@ public:
 
   Bool isGrantedBySpecialPower() { return getStealthUpdateModuleData()->m_grantedBySpecialPower; }
 	Bool isTemporaryGrant() { return m_framesGranted > 0; }
+	Bool isInnateStealth() const { return getStealthUpdateModuleData()->m_innateStealth; }	///< Tiberium Project
 
 protected:
 
