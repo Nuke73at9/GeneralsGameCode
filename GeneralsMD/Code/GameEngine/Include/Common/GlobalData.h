@@ -93,6 +93,7 @@ public:
 	Bool setTimeOfDay( TimeOfDay tod );		///< Use this function to set the Time of day;
 
 	static void parseGameDataDefinition( INI* ini );
+	static void parseTiberiumGameData( INI* ini );	///< Tiberium Project @feature a mod's TiberiumGameData block
 	void parseCustomDefinition();
 
 	//-----------------------------------------------------------------------------------------------
@@ -200,6 +201,7 @@ public:
 #endif
 	Real m_maxCameraHeight;
 	Real m_minCameraHeight;
+	Bool m_tiberiumSidebar;		///< Tiberium Project @feature the Red Alert 3 style sidebar (TiberiumSidebar.h)
 
 	Real m_terrainDrawDistanceScale;
 

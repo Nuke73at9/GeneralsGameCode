@@ -190,6 +190,7 @@ set(GAMEENGINE_SRC
 #    Include/GameClient/Image.h
 #    Include/GameClient/IMEManager.h
     Include/GameClient/InGameUI.h
+    Include/GameClient/TiberiumSidebar.h
 #    Include/GameClient/Keyboard.h
     Include/GameClient/KeyDefs.h
 #    Include/GameClient/LanguageFilter.h
@@ -407,6 +408,8 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/AttributeModifierAuraUpdate.h
     Include/GameLogic/Module/ShieldSphereUpdate.h
     Include/GameLogic/Module/StealthFieldUpdate.h
+    Include/GameLogic/Module/BaseConstructionUpdate.h
+    Include/GameLogic/Module/BuildAreaBehavior.h
     Include/GameLogic/Module/AttributeModifierUpgrade.h
     Include/GameLogic/Module/FireWeaponAbilityUpdate.h
     Include/GameLogic/Module/ToggleAbilityUpdate.h
@@ -805,6 +808,7 @@ set(GAMEENGINE_SRC
 #    Source/GameClient/GUI/WindowVideoManager.cpp
 #    Source/GameClient/GUI/WinInstanceData.cpp
     Source/GameClient/InGameUI.cpp
+    Source/GameClient/GUI/TiberiumSidebar.cpp
 #    Source/GameClient/Input/Keyboard.cpp
 #    Source/GameClient/Input/Mouse.cpp
 #    Source/GameClient/LanguageFilter.cpp
@@ -861,6 +865,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Behavior/BridgeBehavior.cpp
     Source/GameLogic/Object/Behavior/BridgeScaffoldBehavior.cpp
     Source/GameLogic/Object/Behavior/BridgeTowerBehavior.cpp
+    Source/GameLogic/Object/Behavior/BuildAreaBehavior.cpp
     Source/GameLogic/Object/Behavior/BunkerBusterBehavior.cpp
     Source/GameLogic/Object/Behavior/CountermeasuresBehavior.cpp
     Source/GameLogic/Object/Behavior/DumbProjectileBehavior.cpp
@@ -1058,6 +1063,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Update/AttributeModifierAuraUpdate.cpp
     Source/GameLogic/Object/Update/ShieldSphereUpdate.cpp
     Source/GameLogic/Object/Update/StealthFieldUpdate.cpp
+    Source/GameLogic/Object/Update/BaseConstructionUpdate.cpp
     Source/GameLogic/Object/Update/FireWeaponAbilityUpdate.cpp
     Source/GameLogic/Object/Update/ToggleAbilityUpdate.cpp
     Source/GameLogic/Object/Update/SlavedUpdate.cpp

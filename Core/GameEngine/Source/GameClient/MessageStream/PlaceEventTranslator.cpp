@@ -27,6 +27,9 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#if RTS_ZEROHOUR
+#include "GameLogic/Module/BaseConstructionUpdate.h"	// Tiberium Project
+#endif
 #include "Common/BuildAssistant.h"
 #include "Common/GameAudio.h"
 #include "Common/Player.h"
@@ -186,6 +189,34 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 					break;
 
 				Object *builderObj = TheGameLogic->findObjectByID( TheInGameUI->getPendingPlaceSourceObjectID() );
+
+#if RTS_ZEROHOUR
+				// Tiberium Project @feature a construction yard's ready structure (Kane's Wrath's build-then-place
+				// base): paid for already, placed where it may stand, no builder walking there
+				BaseConstructionUpdate *yardBase = BaseConstructionUpdate::find( builderObj );
+				if( yardBase != nullptr && yardBase->isReady() && yardBase->getBuilding() == build )
+				{
+					LegalBuildCode yardLbc = TheBuildAssistant->isLocationLegalToBuild( &worldStart, build, angle,
+						BuildAssistant::TERRAIN_RESTRICTIONS | BuildAssistant::NO_OBJECT_OVERLAP | BuildAssistant::SHROUD_REVEALED |
+						BuildAssistant::IGNORE_STEALTHED | BuildAssistant::FAIL_STEALTHED_WITHOUT_FEEDBACK,
+						nullptr, builderObj->getControllingPlayer() );
+					if( yardLbc == LBC_OK && !yardBase->isWithinBuildRadius( &worldStart ) )
+						yardLbc = LBC_GENERIC_FAILURE;	// outside the base's build areas
+					if( yardLbc == LBC_OK )
+					{
+						placeMsg = TheMessageStream->appendMessage( GameMessage::MSG_TIBERIUM_BASE_PLACE );
+						placeMsg->appendObjectIDArgument( builderObj->getID() );
+						placeMsg->appendLocationArgument( worldStart );
+						placeMsg->appendRealArgument( angle );
+						TheInGameUI->placeBuildAvailable( nullptr, nullptr );
+						disp = DESTROY_MESSAGE;
+						m_frameOfUpButton = TheGameLogic->getFrame();
+					}
+					else
+						TheInGameUI->displayCantBuildMessage( yardLbc );
+					break;
+				}
+#endif
 
 				//Kris: September 27, 2002
 				//Make sure we have enough CASH to build it! It's possible that between the

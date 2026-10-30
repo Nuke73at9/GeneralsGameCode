@@ -30,6 +30,8 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
 #include "GameClient/AbramTeamMenu.h"
+#include "GameClient/TiberiumSidebar.h"	// Tiberium Project
+#include "GameLogic/Module/BaseConstructionUpdate.h"	// Tiberium Project
 #include <stdio.h>
 
 #define DEFINE_SHADOW_NAMES
@@ -1725,6 +1727,17 @@ void InGameUI::handleBuildPlacements()
 				Object *builderObject = TheGameLogic->findObjectByID( getPendingPlaceSourceObjectID() );
 
 				LegalBuildCode lbc;
+				// Tiberium Project: a construction yard's structure is placed, not walked to (no path, no builder)
+				// (and within the base's build areas)
+				if( BaseConstructionUpdate::find( builderObject ) != nullptr )
+				{
+					lbc = TheBuildAssistant->isLocationLegalToBuild( &world, m_pendingPlaceType, angle,
+						BuildAssistant::TERRAIN_RESTRICTIONS | BuildAssistant::NO_OBJECT_OVERLAP | BuildAssistant::SHROUD_REVEALED | BuildAssistant::IGNORE_STEALTHED,
+						nullptr, builderObject->getControllingPlayer() );
+					if( lbc == LBC_OK && !BaseConstructionUpdate::find( builderObject )->isWithinBuildRadius( &world ) )
+						lbc = LBC_GENERIC_FAILURE;
+				}
+				else
 				lbc = TheBuildAssistant->isLocationLegalToBuild( &world,
 																												 m_pendingPlaceType,
 																												 angle,
@@ -1868,6 +1881,8 @@ void InGameUI::update()
 {
 	// Abram's Personal Test @feature Show gifts and requests from allies (team menu, Ctrl+G).
 	AbramTeamMenu::update();
+	// Tiberium Project @feature the Red Alert 3 style sidebar (when the game's data asks for it)
+	TiberiumSidebar::update();
 
 	//USE_PERF_TIMER(InGameUI_update)
 	Int i;
@@ -2183,6 +2198,9 @@ void InGameUI::unregisterWindowLayout( WindowLayout *layout )
 //-------------------------------------------------------------------------------------------------
 void InGameUI::reset()
 {
+	// Tiberium Project: the sidebar comes down with the game
+	TiberiumSidebar::reset();
+
 	// Abram's Personal Test @feature Close the team menu with the game.
 	AbramTeamMenu::reset();
 

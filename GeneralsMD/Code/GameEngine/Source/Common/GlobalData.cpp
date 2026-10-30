@@ -60,6 +60,7 @@
 #include "GameClient/Color.h"
 #include "GameClient/Display.h"
 #include "GameClient/TerrainVisual.h"
+#include "GameClient/TiberiumSidebar.h"	// Tiberium Project
 
 #include "GameNetwork/FirewallHelper.h"
 
@@ -209,6 +210,7 @@ GlobalData* GlobalData::m_theOriginal = nullptr;
 #endif
 	{ "MaxCameraHeight",						INI::parseReal,				nullptr,			offsetof( GlobalData, m_maxCameraHeight ) },
 	{ "MinCameraHeight",						INI::parseReal,				nullptr,			offsetof( GlobalData, m_minCameraHeight ) },
+	{ "TiberiumSidebar",						INI::parseBool,				nullptr,			offsetof( GlobalData, m_tiberiumSidebar ) },	// Tiberium Project
 	{ "TerrainDrawDistanceScale",				INI::parseReal,				nullptr,			offsetof( GlobalData, m_terrainDrawDistanceScale ) },
 	{ "TerrainHeightAtEdgeOfMap",					INI::parseReal,				nullptr,			offsetof( GlobalData, m_terrainHeightAtEdgeOfMap ) },
 	{ "UnitDamagedThreshold",				INI::parseReal,				nullptr,			offsetof( GlobalData, m_unitDamagedThresh ) },
@@ -879,6 +881,7 @@ GlobalData::GlobalData()
 #endif
 	m_minCameraHeight = 100.0f;
 	m_maxCameraHeight = 300.0f;
+	m_tiberiumSidebar = FALSE;
 	m_terrainDrawDistanceScale = 1.0f;
 	m_terrainHeightAtEdgeOfMap = 0.0f;
 
@@ -1199,6 +1202,39 @@ void GlobalData::reset()
 
 //-------------------------------------------------------------------------------------------------
 /** Parse GameData entry */
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature a mod's own game data. A mod's archives mount after the game data has been
+	* read (GameEngine::init: the mod folder comes from that data and the command line), so a GameData
+	* block in a mod changes nothing; this block, read after they mount, sets the few fields a mod needs:
+	*
+	*   TiberiumGameData
+	*     TiberiumSidebar = Yes
+	*     MaxCameraHeight = 620
+	*     MinCameraHeight = 180
+	*     BuildAreaCursor                ; the base's build areas, drawn while a yard's structure is placed
+	*       Texture = SCCGuard_Generic   ; (a radius cursor's fields)
+	*       ...
+	*     End
+	*   End
+	*/
+//-------------------------------------------------------------------------------------------------
+void GlobalData::parseTiberiumGameData( INI* ini )
+{
+	static const FieldParse tiberiumFieldParse[] =
+	{
+		{ "TiberiumSidebar",		INI::parseBool,		nullptr,	offsetof( GlobalData, m_tiberiumSidebar ) },
+		{ "MaxCameraHeight",		INI::parseReal,		nullptr,	offsetof( GlobalData, m_maxCameraHeight ) },
+		{ "MinCameraHeight",		INI::parseReal,		nullptr,	offsetof( GlobalData, m_minCameraHeight ) },
+		{ "BuildAreaCursor",		TiberiumSidebar::parseBuildAreaCursor,	nullptr,	0 },
+#if PRESERVE_RETAIL_SCRIPTED_CAMERA
+		{ "CameraHeight",				INI::parseReal,		nullptr,	offsetof( GlobalData, m_cameraHeight ) },
+#endif
+		{ nullptr, nullptr, nullptr, 0 }
+	};
+	if( TheWritableGlobalData != nullptr )
+		ini->initFromINI( TheWritableGlobalData, tiberiumFieldParse );
+}
+
 //-------------------------------------------------------------------------------------------------
 void GlobalData::parseGameDataDefinition( INI* ini )
 {

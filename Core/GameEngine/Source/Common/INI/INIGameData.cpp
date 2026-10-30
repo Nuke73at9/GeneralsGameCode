@@ -49,4 +49,14 @@ void INI::parseGameDataDefinition( INI* ini )
 	GlobalData::parseGameDataDefinition(ini);
 }
 
+#if RTS_ZEROHOUR
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature a mod's own game data (TiberiumGameData), read after its archives mount */
+//-------------------------------------------------------------------------------------------------
+void INI::parseTiberiumGameDataDefinition( INI* ini )
+{
+	GlobalData::parseTiberiumGameData(ini);
+}
+#endif
+
 

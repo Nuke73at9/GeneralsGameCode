@@ -613,6 +613,12 @@ public:
 		MSG_ABRAM_TAKE_AI_CONTROL,									///< (Int aiPlayerIndex)
 		MSG_ABRAM_RELEASE_AI_CONTROL,								///< () sent as the controlled AI player
 
+		// Tiberium Project @feature Kane's Wrath's build-then-place base (BaseConstructionUpdate); fixed values,
+		// as the team menu's, so later upstream messages cannot shift them
+		MSG_TIBERIUM_BASE_QUEUE = 1850,							///< (objectID constructionYard, Int templateID) pay for and build a structure
+		MSG_TIBERIUM_BASE_CANCEL,										///< (objectID constructionYard) the one building or ready, refunded
+		MSG_TIBERIUM_BASE_PLACE,										///< (objectID constructionYard, Location where, Real angle) the ready one, there
+
 		MSG_BEGIN_DEBUG_NETWORK_MESSAGES = 1900,		///< network messages that exist only in debug/internal builds. all grouped separately.
 
 #if defined(RTS_DEBUG) || defined(_ALLOW_DEBUG_CHEATS_IN_RELEASE)

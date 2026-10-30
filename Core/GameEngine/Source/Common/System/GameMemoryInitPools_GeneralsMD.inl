@@ -188,6 +188,8 @@ static PoolSizeRec PoolSizes[] =
 	{ "AttributeModifierAuraUpdate", 256, 64 },
 	{ "ShieldSphereUpdate", 256, 64 },
 	{ "StealthFieldUpdate", 64, 16 },
+	{ "BaseConstructionUpdate", 32, 8 },
+	{ "BuildAreaBehavior", 128, 32 },
 	{ "AttributeModifierUpgrade", 1024, 128 },
 	{ "OrderAbilityUpdate", 128, 32 },
 	{ "AssembleStructureUpdate", 128, 32 },

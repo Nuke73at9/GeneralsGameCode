@@ -85,6 +85,9 @@
 #include "GameClient/LookAtXlat.h"
 
 #include "GameNetwork/NetworkInterface.h"
+#if RTS_ZEROHOUR
+#include "GameLogic/Module/BaseConstructionUpdate.h"	// Tiberium Project
+#endif
 
 
 
@@ -518,6 +521,25 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, void *userData )
 		case GameMessage::MSG_ABRAM_RELEASE_AI_CONTROL:
 		{
 			AbramTeamActions::processMessage(msg);
+			break;
+		}
+		// Tiberium Project @feature Kane's Wrath's build-then-place base (BaseConstructionUpdate)
+		case GameMessage::MSG_TIBERIUM_BASE_QUEUE:
+		case GameMessage::MSG_TIBERIUM_BASE_CANCEL:
+		case GameMessage::MSG_TIBERIUM_BASE_PLACE:
+		{
+#if RTS_ZEROHOUR
+			Object *yard = msg->getArgumentCount() >= 1 ? findObjectByID( msg->getArgument( 0 )->objectID ) : nullptr;
+			BaseConstructionUpdate *base = yard != nullptr && yard->getControllingPlayer() == getMessagePlayer( msg ) ? BaseConstructionUpdate::find( yard ) : nullptr;
+			if( base == nullptr )
+				break;
+			if( msg->getType() == GameMessage::MSG_TIBERIUM_BASE_QUEUE && msg->getArgumentCount() >= 2 )
+				base->queue( TheThingFactory->findByTemplateID( msg->getArgument( 1 )->integer ) );
+			else if( msg->getType() == GameMessage::MSG_TIBERIUM_BASE_CANCEL )
+				base->cancel();
+			else if( msg->getType() == GameMessage::MSG_TIBERIUM_BASE_PLACE && msg->getArgumentCount() >= 3 )
+				base->place( &msg->getArgument( 1 )->location, msg->getArgument( 2 )->real );
+#endif
 			break;
 		}
 		case GameMessage::MSG_DO_WEAPON_AT_LOCATION:
@@ -1827,6 +1849,21 @@ bool GameLogic::onQueueUpgrade(MAYBE_UNUSED GameMessage *msg, AIGroupPtr &curren
 	if (!upgradeT)	// sanity
 		return false;
 
+	// Tiberium Project @feature a sidebar queues at a producer that is not selected (the first argument
+	// names it; Zero Hour's bar names the selected one, which goes the usual way): the sender's own, with
+	// the selection's checks (AIGroup::queueUpgrade)
+	Object *named = msg->getArgumentCount() >= 1 ? findObjectByID( msg->getArgument( 0 )->objectID ) : nullptr;
+	if( named != nullptr && named->getControllingPlayer() == getMessagePlayer( msg )
+		&& !( currentlySelectedGroup && currentlySelectedGroup->isMember( named ) ) )
+	{
+		ProductionUpdateInterface *pu = named->getProductionUpdateInterface();
+		if( pu != nullptr && TheUpgradeCenter->canAffordUpgrade( named->getControllingPlayer(), upgradeT, FALSE )
+			&& !( upgradeT->getUpgradeType() == UPGRADE_TYPE_OBJECT && ( named->hasUpgrade( upgradeT ) || !named->affectedByUpgrade( upgradeT ) ) )
+			&& named->canProduceUpgrade( upgradeT ) && pu->canQueueUpgrade( upgradeT ) != CANMAKE_QUEUE_FULL )
+			pu->queueUpgrade( upgradeT );
+		return true;
+	}
+
 	if (currentlySelectedGroup)
 		currentlySelectedGroup->queueUpgrade( upgradeT );
 
@@ -1843,6 +1880,14 @@ bool GameLogic::onCancelUpgrade(MAYBE_UNUSED GameMessage *msg, AIGroupPtr &curre
 	Object *producer = getSingleObjectFromSelection(currentlySelectedGroup.Peek());
 #endif
 	const UpgradeTemplate *upgradeT = TheUpgradeCenter->findUpgradeByKey( (NameKeyType)(msg->getArgument( 0 )->integer) );
+
+	// Tiberium Project @feature a sidebar names the producer (a second argument), selected or not; the
+	// sender's own only
+	if( msg->getArgumentCount() >= 2 )
+	{
+		Object *named = findObjectByID( msg->getArgument( 1 )->objectID );
+		producer = ( named != nullptr && named->getControllingPlayer() == getMessagePlayer( msg ) ) ? named : nullptr;
+	}
 
 	// sanity
 	if( producer == nullptr || upgradeT == nullptr )
@@ -1877,6 +1922,14 @@ bool GameLogic::onQueueUnitCreate(MAYBE_UNUSED GameMessage *msg, AIGroupPtr &cur
 	whatToCreate = TheThingFactory->findByTemplateID( msg->getArgument( 0 )->integer );
 	productionID = (ProductionID)msg->getArgument( 1 )->integer;
 
+	// Tiberium Project @feature a sidebar names the producer (a third argument), selected or not; the
+	// sender's own only
+	if( msg->getArgumentCount() >= 3 )
+	{
+		Object *named = findObjectByID( msg->getArgument( 2 )->objectID );
+		producer = ( named != nullptr && named->getControllingPlayer() == getMessagePlayer( msg ) ) ? named : nullptr;
+	}
+
 	// sanity
 	if ( producer == nullptr || whatToCreate == nullptr )
 		return false;
@@ -1906,6 +1959,14 @@ bool GameLogic::onCancelUnitCreate(MAYBE_UNUSED GameMessage *msg, AIGroupPtr &cu
 	Object *producer = getSingleObjectFromSelection(currentlySelectedGroup.Peek());
 #endif
 	ProductionID productionID = (ProductionID)msg->getArgument( 0 )->integer;
+
+	// Tiberium Project @feature a sidebar names the producer (a second argument), selected or not; the
+	// sender's own only
+	if( msg->getArgumentCount() >= 2 )
+	{
+		Object *named = findObjectByID( msg->getArgument( 1 )->objectID );
+		producer = ( named != nullptr && named->getControllingPlayer() == getMessagePlayer( msg ) ) ? named : nullptr;
+	}
 
 	// sanity
 	if( producer == nullptr )

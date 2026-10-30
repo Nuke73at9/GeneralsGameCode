@@ -152,6 +152,10 @@ static const BlockParse theTypeTable[] =
 	{ "SpecialPower",                   INI::parseSpecialPowerDefinition },
 	{ "StaticGameLOD",                  INI::parseStaticGameLODDefinition },
 	{ "Terrain",                        INI::parseTerrainDefinition },
+#if RTS_ZEROHOUR
+	// Tiberium Project @feature a mod's own game data, read after the mod's archives are in
+	{ "TiberiumGameData",               INI::parseTiberiumGameDataDefinition },
+#endif
 	{ "Upgrade",                        INI::parseUpgradeDefinition },
 	{ "Video",                          INI::parseVideoDefinition },
 	{ "WaterSet",                       INI::parseWaterSettingDefinition },

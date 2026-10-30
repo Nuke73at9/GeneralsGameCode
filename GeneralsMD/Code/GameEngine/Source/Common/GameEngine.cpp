@@ -585,6 +585,13 @@ void GameEngine::init()
 
 		TheArchiveFileSystem->loadMods();
 
+		// Tiberium Project @feature a mod's own game data (TiberiumGameData: the sidebar, the camera's
+		// heights), now that its archives are in; a GameData block in a mod was read before they mounted
+		if (TheFileSystem->doesFileExist("Data\\INI\\TiberiumGameData.ini"))
+		{
+			ini.load("Data\\INI\\TiberiumGameData.ini", INI_LOAD_OVERWRITE, nullptr);
+		}
+
 		// doesn't require resets so just create a single instance here.
 		TheGameLODManager = MSGNEW("GameEngineSubsystem") GameLODManager;
 		TheGameLODManager->init();
