@@ -676,7 +676,13 @@ void GameEngine::init()
 
 
 		// Tiberium Project @feature SAGE 2's attribute modifiers (first: any file may hold them)
-		initSubsystem(TheAttributeModifierStore,"TheAttributeModifierStore", MSGNEW("GameEngineSubsystem") AttributeModifierStore(), &xferCRC, nullptr, "Data\\INI\\AttributeModifier");
+		// Tiberium Project @bugfix the modifiers come with a mod (C&C4's units), not with Zero Hour's own data:
+		// none is fine (loading the folder as the others are expects a file, and threw on a plain start)
+		initSubsystem(TheAttributeModifierStore,"TheAttributeModifierStore", MSGNEW("GameEngineSubsystem") AttributeModifierStore(), &xferCRC, nullptr, nullptr);
+		{
+			INI modifierIni;
+			modifierIni.loadFileDirectory("Data\\INI\\AttributeModifier", INI_LOAD_OVERWRITE, &xferCRC, INI::LoadFlags_SearchSubDirs);
+		}
 		initSubsystem(TheFXListStore,"TheFXListStore", MSGNEW("GameEngineSubsystem") FXListStore(), &xferCRC, "Data\\INI\\Default\\FXList", "Data\\INI\\FXList");
 		initSubsystem(TheWeaponStore,"TheWeaponStore", MSGNEW("GameEngineSubsystem") WeaponStore(), &xferCRC, nullptr, "Data\\INI\\Weapon");
 		initSubsystem(TheObjectCreationListStore,"TheObjectCreationListStore", MSGNEW("GameEngineSubsystem") ObjectCreationListStore(), &xferCRC, "Data\\INI\\Default\\ObjectCreationList", "Data\\INI\\ObjectCreationList");
