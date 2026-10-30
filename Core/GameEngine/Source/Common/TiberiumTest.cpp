@@ -887,7 +887,7 @@ void TiberiumTest::update()
 						conditions += std::string( conditions.empty() ? "" : " " ) + name;
 				}
 				// the attribute modifiers on it and on its target (Zero Hour's), as speed armour damage rate range
-				char modifiers[256] = "";
+				char modifiers[512] = "";
 #if RTS_ZEROHOUR
 				{
 					const Object *who[2] = { obj, target };
@@ -931,6 +931,24 @@ void TiberiumTest::update()
 					{
 						snprintf( facing, sizeof( facing ), ", target at %.0f %.0f", target->getPosition()->x, target->getPosition()->y );
 						strlcat( modifiers, facing, sizeof( modifiers ) );
+					}
+					// each slot's last shot (several turrets firing at once)
+					{
+						std::string shots;
+						for ( Int s = 0; s < WEAPONSLOT_COUNT; ++s )
+						{
+							const Weapon *sw = obj->getWeaponInWeaponSlot( (WeaponSlotType)s );
+							if ( sw == nullptr )
+								continue;
+							char one[24];
+							snprintf( one, sizeof( one ), "%s%c:%d", shots.empty() ? "" : " ", 'A' + s, (int)sw->getLastShotFrame() );
+							shots += one;
+						}
+						if ( shots.find( ' ' ) != std::string::npos )
+						{
+							strlcat( modifiers, ", slots ", sizeof( modifiers ) );
+							strlcat( modifiers, shots.c_str(), sizeof( modifiers ) );
+						}
 					}
 					const DamageInfo *own = body->getLastDamageInfo();
 					if ( own != nullptr && own->in.m_sourceID != INVALID_ID )
