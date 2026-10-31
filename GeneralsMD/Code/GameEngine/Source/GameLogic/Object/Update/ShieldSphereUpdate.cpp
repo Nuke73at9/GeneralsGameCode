@@ -117,6 +117,25 @@ void ShieldSphereUpdate::upgradeImplementation()
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the interface's reading of an object's shield (TiberiumHUD's panel)
+Bool ShieldSphereUpdate::getShieldOf( const Object *obj, Real *left, Real *most, Bool *up )
+{
+	if( obj == nullptr )
+		return FALSE;
+	static const NameKeyType key = NAMEKEY( "ShieldSphereUpdate" );
+	const ShieldSphereUpdate *shield = static_cast<const ShieldSphereUpdate *>( const_cast<Object *>( obj )->findUpdateModule( key ) );
+	if( shield == nullptr || !shield->isAlreadyUpgraded() )
+		return FALSE;
+	const Real full = shield->getMaxDamage();
+	if( full <= 0.0f )
+		return FALSE;
+	*most = full;
+	*left = shield->m_damage >= full ? 0.0f : full - shield->m_damage;
+	*up = !shield->m_down;
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
 Real ShieldSphereUpdate::getMaxDamage() const
 {
 	const ShieldSphereUpdateModuleData *d = getShieldSphereUpdateModuleData();

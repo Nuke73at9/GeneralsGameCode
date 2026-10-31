@@ -64,6 +64,7 @@
 #include "GameClient/InGameUI.h"
 #include "GameClient/Mouse.h"
 #if RTS_ZEROHOUR
+#include "GameClient/TiberiumHUD.h"
 #include "GameClient/TiberiumSidebar.h"
 #include "GameLogic/Module/BaseConstructionUpdate.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
@@ -1147,6 +1148,21 @@ void TiberiumTest::update()
 			char what[256];
 			TiberiumSidebar::describe( what, sizeof( what ) );
 			log( "frame %d: ui: sidebar click %s: %s; %s", (int)s_frame, step.arg.c_str(), took ? "taken" : "missed", what );
+		}
+		else if ( step.action == "hud" )
+		{
+			// what the HUD shows; with a part, a click on it first: "button,N" (0 menu, 1 idle worker, 2 beacon,
+			// 3 general), "row,N" and "slot,N" (the commands above the panel, the abilities in it), "group,N"
+			// (the kinds of a selection of several), "portrait"; each with ",right" for a right click
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			const Bool clicked = !f.empty() && !f[0].empty();
+			Bool took = FALSE;
+			if ( clicked )
+				took = TiberiumHUD::testClickPart( f[0].c_str(), f.size() > 1 ? atoi( f[1].c_str() ) : 0, f.size() > 2 && f[2] == "right" );
+			char what[640];
+			TiberiumHUD::describe( what, sizeof( what ) );
+			log( "frame %d: ui: hud%s%s%s: %s", (int)s_frame, clicked ? " click " : "", clicked ? step.arg.c_str() : "",
+				clicked ? ( took ? " (taken)" : " (missed)" ) : "", what );
 		}
 		else if ( step.action == "yard" && TheGameLogic != nullptr && ThePlayerList != nullptr )
 		{

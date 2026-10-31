@@ -190,6 +190,7 @@ set(GAMEENGINE_SRC
 #    Include/GameClient/Image.h
 #    Include/GameClient/IMEManager.h
     Include/GameClient/InGameUI.h
+    Include/GameClient/TiberiumHUD.h
     Include/GameClient/TiberiumSidebar.h
     Include/GameClient/TiberiumMusic.h
 #    Include/GameClient/Keyboard.h
@@ -812,6 +813,7 @@ set(GAMEENGINE_SRC
 #    Source/GameClient/GUI/WindowVideoManager.cpp
 #    Source/GameClient/GUI/WinInstanceData.cpp
     Source/GameClient/InGameUI.cpp
+    Source/GameClient/GUI/TiberiumHUD.cpp
     Source/GameClient/GUI/TiberiumSidebar.cpp
     Source/GameClient/TiberiumMusic.cpp
 #    Source/GameClient/Input/Keyboard.cpp

@@ -23,6 +23,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
 #include "GameClient/TiberiumSidebar.h"
+#include "GameClient/TiberiumHUD.h"
 
 #include "Common/BuildAssistant.h"
 #include "Common/GlobalData.h"
@@ -176,13 +177,18 @@ namespace
 	void computeLayout( SidebarLayout *L )
 	{
 		const Int sw = TheDisplay->getWidth(), sh = TheDisplay->getHeight();
-		L->w = max( 200, sw * 21 / 100 > 360 ? 360 : sw * 21 / 100 );
-		L->x = sw - L->w;
-		// below the game's clock line, above Zero Hour's bar, which spans the bottom
-		L->y = max( 16, sh / 40 );
-		L->h = sh * 74 / 100 - L->y;
+		// Tiberium Project @feature with the HUD up, the column below its radar and buttons (they have the
+		// money and power); else below the game's clock line, above Zero Hour's bar, which spans the bottom
+		const Bool hud = TiberiumHUD::getSidebarArea( &L->x, &L->y, &L->w, &L->h );
+		if( !hud )
+		{
+			L->w = max( 200, sw * 21 / 100 > 360 ? 360 : sw * 21 / 100 );
+			L->x = sw - L->w;
+			L->y = max( 16, sh / 40 );
+			L->h = sh * 74 / 100 - L->y;
+		}
 		L->gap = max( 3, L->w / 80 );
-		L->headerH = max( 26, sh / 32 );
+		L->headerH = hud ? 0 : max( 26, sh / 32 );
 		L->tabsY = L->y + L->headerH;
 		L->tabsH = max( 24, sh / 34 );
 		L->chipsY = L->tabsY + L->tabsH + L->gap;
@@ -479,14 +485,17 @@ namespace
 		TheDisplay->drawFillRect( L.x, L.y, 2, L.h, accent );
 		TheDisplay->drawOpenRect( L.x, L.y, L.w, L.h, 1.0f, panelEdge );
 
-		// the header: money and power
+		// the header: money and power (the HUD's column has them, when it is up)
 		Player *me = ThePlayerList->getLocalPlayer();
 		UnicodeString s;
-		s.format( L"$ %u", me->getMoney()->countMoney() );
-		drawText( s_label, s, L.x + L.gap * 3, L.y + L.gap, GameMakeColor( 255, 214, 90, 255 ) );
-		const Int produced = me->getEnergy()->getProduction(), used = me->getEnergy()->getConsumption();
-		s.format( L"Power %d / %d", used, produced );
-		drawText( s_small, s, L.x + L.w / 2, L.y + L.gap + 2, used > produced ? GameMakeColor( 255, 80, 60, 255 ) : textDim );
+		if( L.headerH > 0 )
+		{
+			s.format( L"$ %u", me->getMoney()->countMoney() );
+			drawText( s_label, s, L.x + L.gap * 3, L.y + L.gap, GameMakeColor( 255, 214, 90, 255 ) );
+			const Int produced = me->getEnergy()->getProduction(), used = me->getEnergy()->getConsumption();
+			s.format( L"Power %d / %d", used, produced );
+			drawText( s_small, s, L.x + L.w / 2, L.y + L.gap + 2, used > produced ? GameMakeColor( 255, 80, 60, 255 ) : textDim );
+		}
 
 		// the tabs
 		const Int tabW = ( L.w - L.gap ) / TAB_COUNT;
@@ -963,6 +972,9 @@ void TiberiumSidebar::update()
 			s_window->winSetSize( L.w, L.h );
 		}
 	}
+	// Tiberium Project @feature hidden with the HUD (the game hides its interface for a cinematic)
+	if( s_window->winIsHidden() != TiberiumHUD::isHidden() )
+		s_window->winHide( TiberiumHUD::isHidden() );
 	updateBuildAreas();
 	const UnsignedInt now = TheGameLogic->getFrame();
 	if( s_lastRefresh == 0 || now >= s_lastRefresh + 10 || now < s_lastRefresh )

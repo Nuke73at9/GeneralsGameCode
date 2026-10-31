@@ -30,6 +30,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
 #include "GameClient/AbramTeamMenu.h"
+#include "GameClient/TiberiumHUD.h"	// Tiberium Project
 #include "GameClient/TiberiumSidebar.h"	// Tiberium Project
 #include "GameClient/TiberiumMusic.h"	// Tiberium Project
 #include "GameLogic/Module/BaseConstructionUpdate.h"	// Tiberium Project
@@ -2140,6 +2141,10 @@ void InGameUI::update()
 
 	updateIdleWorker();
 
+	// Tiberium Project @feature the C&C3 and C&C4 HUD (with the sidebar): after the control bar's update,
+	// as it takes over some of the bar's windows
+	TiberiumHUD::update();
+
 	// update any random window layout that so requests
 	for (std::list<WindowLayout *>::iterator it = m_windowLayouts.begin(); it != m_windowLayouts.end(); ++it)
 	{
@@ -2201,7 +2206,8 @@ void InGameUI::unregisterWindowLayout( WindowLayout *layout )
 //-------------------------------------------------------------------------------------------------
 void InGameUI::reset()
 {
-	// Tiberium Project: the sidebar comes down with the game, and the music's reading of it
+	// Tiberium Project: the HUD and sidebar come down with the game, and the music's reading of it
+	TiberiumHUD::reset();
 	TiberiumSidebar::reset();
 	TiberiumMusic::reset();
 
@@ -6020,6 +6026,9 @@ void InGameUI::resetIdleWorker()
 
 void InGameUI::recreateControlBar()
 {
+	// Tiberium Project: the HUD gives the bar its windows back before the bar is made anew
+	TiberiumHUD::reset();
+
 	GameWindow *win = TheWindowManager->winGetWindowFromId(nullptr, TheNameKeyGenerator->nameToKey("ControlBar.wnd"));
 	deleteInstance(win);
 

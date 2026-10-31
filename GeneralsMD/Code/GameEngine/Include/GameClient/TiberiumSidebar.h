@@ -24,8 +24,9 @@
 // producer (no need to select it); a right click cancels the last of it. A structure is placed by a
 // builder (the selected one, else the nearest).
 //
-// On when the game's data asks for it (TiberiumGameData: TiberiumSidebar = Yes); Zero Hour's own bar
-// stays for the selected objects' commands. While a construction yard's structure is placed, the base's
+// On when the game's data asks for it (TiberiumGameData: TiberiumSidebar = Yes). Zero Hour's own bar
+// stays for the selected objects' commands, unless the HUD is up (TiberiumHUD: C&C3's column, whose
+// lower part the sidebar then is, and C&C4's selection panel). While a construction yard's structure is placed, the base's
 // build areas (BuildAreaBehavior) are drawn on the ground (TiberiumGameData: BuildAreaCursor).
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

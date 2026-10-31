@@ -94,6 +94,10 @@ public:
 	/** whether a shield takes this hit on the victim (and takes it if so): from ActiveBody */
 	static Bool absorbDamage( Object *victim, Object *source, DamageType type, Real amount );
 
+	/** Tiberium Project @feature for the interface (reads only): an object's own shield, what it can still
+		take of its most, and whether it is up; FALSE when the object has none or it is not raised yet */
+	static Bool getShieldOf( const Object *obj, Real *left, Real *most, Bool *up );
+
 protected:
 
 	virtual void upgradeImplementation() override;
