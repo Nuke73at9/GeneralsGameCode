@@ -44,8 +44,9 @@ cmake --install build/%ABRAM_PRESET% --config Release
 if errorlevel 1 goto :fail
 
 echo.
+rem (no pause under tiberium_build_all.bat, which sets TIB_ALL)
 echo === Done. Launch GeneralsXZH.exe from your Zero Hour folder (it is now 64-bit). ===
-pause
+if not defined TIB_ALL pause
 exit /b 0
 
 :novcpkg
@@ -53,11 +54,11 @@ echo.
 echo === vcpkg was not found. ===
 echo Open the Visual Studio Installer, click Modify, go to Individual components,
 echo tick "vcpkg package manager", click Modify, then run this script again.
-pause
+if not defined TIB_ALL pause
 exit /b 1
 
 :fail
 echo.
 echo === Build FAILED. Copy the error lines above and send them to Claude. ===
-pause
+if not defined TIB_ALL pause
 exit /b 1
