@@ -213,7 +213,18 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 						m_frameOfUpButton = TheGameLogic->getFrame();
 					}
 					else
+					{
+						// as a builder's failed placement: say why, keep the structure in hand, and use the
+						// click (it does not fall through to the selection: no rally point set)
 						TheInGameUI->displayCantBuildMessage( yardLbc );
+						static AudioEventRTS noCanDoSound( "NoCanDoSound" );
+						TheAudio->addAudioEvent( &noCanDoSound );
+						TheInGameUI->setPlacementStart( nullptr );
+						disp = DESTROY_MESSAGE;
+						m_frameOfUpButton = TheGameLogic->getFrame();
+					}
+					if( disp == DESTROY_MESSAGE )
+						TheInGameUI->clearAttackMoveToMode();
 					break;
 				}
 #endif

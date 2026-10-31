@@ -433,7 +433,21 @@ namespace
 	UnicodeString labelOf( const SidebarItem &item )
 	{
 		if( item.button != nullptr && item.button->getTextLabel().isNotEmpty() )
-			return TheGameText->fetch( item.button->getTextLabel() );
+		{
+			// a button's label marks its hotkey with '&' ("Cold Fusion &Reactor"; "&&" for an '&' itself):
+			// the sidebar shows the name without it
+			const UnicodeString marked = TheGameText->fetch( item.button->getTextLabel() );
+			UnicodeString plain;
+			for( const WideChar *c = marked.str(); *c != 0; ++c )
+			{
+				if( *c == L'&' && c[1] == L'&' )
+					++c;
+				else if( *c == L'&' )
+					continue;
+				plain.concat( *c );
+			}
+			return plain;
+		}
 		if( item.thing != nullptr )
 			return item.thing->getDisplayName();
 		return UnicodeString::TheEmptyString;
@@ -505,15 +519,24 @@ namespace
 			TheDisplay->drawOpenRect( cx, cy, chipW, L.chipH, 1.0f, on ? accent : panelEdge );
 			UnicodeString name = queueLabel( qs[i] );
 			// how busy it is
+			UnicodeString busy;
 			Object *producer = TheGameLogic->findObjectByID( qs[i].producer );
 			ProductionUpdateInterface *pu = producer != nullptr ? producer->getProductionUpdateInterface() : nullptr;
 			if( pu != nullptr && pu->getProductionCount() > 0 )
+				busy.format( L" (%d)", (Int)pu->getProductionCount() );
+			// a name too long for its chip is shortened ("Command Ce.."), the count always shown
+			UnicodeString shown = name;
+			shown.concat( busy );
+			s_small->setText( shown );
+			while( s_small->getWidth() > chipW - 6 && name.getLength() > 1 )
 			{
-				UnicodeString n;
-				n.format( L" (%d)", (Int)pu->getProductionCount() );
-				name.concat( n );
+				name.removeLastChar();
+				shown = name;
+				shown.concat( L".." );
+				shown.concat( busy );
+				s_small->setText( shown );
 			}
-			drawText( s_small, name, cx + 4, cy + 2, on ? text : textDim );
+			drawText( s_small, shown, cx + 4, cy + 2, on ? text : textDim );
 		}
 
 		// the items

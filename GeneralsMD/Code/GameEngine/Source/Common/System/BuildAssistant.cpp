@@ -936,6 +936,10 @@ LegalBuildCode BuildAssistant::isLocationLegalToBuild( const Coord3D *worldPos,
 			Int playerIndex = -1;
 			if (builderObject && builderObject->getControllingPlayer())
 				playerIndex = builderObject->getControllingPlayer()->getPlayerIndex();
+			// Tiberium Project @bugfix a construction yard's structure is placed without a builder (Kane's
+			// Wrath's build-then-place base): its player's shroud. Without this every spot read as unexplored.
+			else if (player != nullptr)
+				playerIndex = player->getPlayerIndex();
 			DEBUG_ASSERTCRASH(playerIndex >= 0, ("isLocationLegalToBuild() needs a builderObject with a team to check for shroud"));
 			if( ThePartitionManager->getShroudStatusForPlayer(playerIndex, x, y) != CELLSHROUD_CLEAR )
 			{

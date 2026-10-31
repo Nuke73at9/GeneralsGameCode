@@ -1208,6 +1208,19 @@ void TiberiumTest::update()
 						sent = TRUE;
 					}
 				}
+				if ( !f.empty() && f[0] == "check" && tmpl != nullptr && TheBuildAssistant != nullptr )
+				{
+					// "check,dx,dy": the placement test the player's cursor gets there (the shroud included)
+					Coord3D p = *yard->getPosition();
+					p.x += f.size() > 1 ? (Real)atof( f[1].c_str() ) : 0.0f;
+					p.y += f.size() > 2 ? (Real)atof( f[2].c_str() ) : 0.0f;
+					p.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( p.x, p.y ) : 0.0f;
+					const LegalBuildCode lbc = TheBuildAssistant->isLocationLegalToBuild( &p, tmpl, 0.0f,
+						BuildAssistant::TERRAIN_RESTRICTIONS | BuildAssistant::NO_OBJECT_OVERLAP | BuildAssistant::SHROUD_REVEALED | BuildAssistant::IGNORE_STEALTHED,
+						nullptr, me );
+					log( "frame %d: ui: yard check at %.0f %.0f: legal code %d, within the build areas %d", (int)s_frame, p.x, p.y,
+						(int)lbc, (int)base->isWithinBuildRadius( &p ) );
+				}
 				log( "frame %d: ui: yard %s: %s, %s %.0f%%%s", (int)s_frame, yard->getTemplate()->getName().str(),
 					tmpl != nullptr ? tmpl->getName().str() : "idle", base->isReady() ? "ready" : "building", base->getPercent(),
 					sent ? " (placed)" : "" );
@@ -1216,6 +1229,29 @@ void TiberiumTest::update()
 			}
 		}
 #endif
+		else if ( step.action == "ground" && TheMessageStream != nullptr && TheDisplay != nullptr )
+		{
+			// a player's left click at fx,fy (fractions of the screen), as the mouse sends it: button down, then
+			// up (the translators make the click of them; a structure in hand is placed there)
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			ICoord2D at;
+			at.x = (Int)( ( f.size() > 0 ? atof( f[0].c_str() ) : 0.5 ) * TheDisplay->getWidth() );
+			at.y = (Int)( ( f.size() > 1 ? atof( f[1].c_str() ) : 0.5 ) * TheDisplay->getHeight() );
+			if ( TheMouse != nullptr )
+				TheMouse->setPosition( at.x, at.y );
+			GameMessage *down = TheMessageStream->appendMessage( GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_DOWN );
+			down->appendPixelArgument( at );
+			down->appendIntegerArgument( 0 );
+			down->appendIntegerArgument( 0 );
+			GameMessage *up = TheMessageStream->appendMessage( GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_UP );
+			up->appendPixelArgument( at );
+			up->appendIntegerArgument( 0 );
+			up->appendIntegerArgument( 0 );
+			Coord3D world;
+			const Bool onGround = TheTacticalView != nullptr && TheTacticalView->screenToTerrain( &at, &world );
+			log( "frame %d: ui: ground click at %d,%d (world %.0f %.0f)%s", (int)s_frame, (int)at.x, (int)at.y,
+				onGround ? world.x : 0.0f, onGround ? world.y : 0.0f, onGround ? "" : " (off the ground)" );
+		}
 		else if ( step.action == "mouse" )
 		{
 			s_uiMouse = TRUE;
