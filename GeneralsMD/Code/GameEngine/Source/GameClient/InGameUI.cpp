@@ -31,6 +31,7 @@
 
 #include "GameClient/AbramTeamMenu.h"
 #include "GameClient/TiberiumSidebar.h"	// Tiberium Project
+#include "GameClient/TiberiumMusic.h"	// Tiberium Project
 #include "GameLogic/Module/BaseConstructionUpdate.h"	// Tiberium Project
 #include <stdio.h>
 
@@ -1883,6 +1884,8 @@ void InGameUI::update()
 	AbramTeamMenu::update();
 	// Tiberium Project @feature the Red Alert 3 style sidebar (when the game's data asks for it)
 	TiberiumSidebar::update();
+	// Tiberium Project @feature C&C4's dynamic music (when the game's data has it)
+	TiberiumMusic::update();
 
 	//USE_PERF_TIMER(InGameUI_update)
 	Int i;
@@ -2198,8 +2201,9 @@ void InGameUI::unregisterWindowLayout( WindowLayout *layout )
 //-------------------------------------------------------------------------------------------------
 void InGameUI::reset()
 {
-	// Tiberium Project: the sidebar comes down with the game
+	// Tiberium Project: the sidebar comes down with the game, and the music's reading of it
 	TiberiumSidebar::reset();
+	TiberiumMusic::reset();
 
 	// Abram's Personal Test @feature Close the team menu with the game.
 	AbramTeamMenu::reset();

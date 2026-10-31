@@ -82,6 +82,7 @@
 #include "GameLogic/PolygonTrigger.h"
 #include "GameLogic/ScriptActions.h"
 #include "GameLogic/ScriptEngine.h"
+#include "GameClient/TiberiumMusic.h"	// Tiberium Project
 #include "GameLogic/Weapon.h"
 #include "GameLogic/VictoryConditions.h"
 #include "GameLogic/AIPathfind.h"
@@ -3357,6 +3358,13 @@ void ScriptActions::doAmbientSoundsPause(Bool pausing)	// if true, then pause, i
 //-------------------------------------------------------------------------------------------------
 void ScriptActions::doMusicTrackChange(const AsciiString& newTrackName, Bool fadeout, Bool fadein)
 {
+	// Tiberium Project @feature with C&C4's dynamic music playing, the map's music waits (the track is
+	// still noted for the scripts)
+	if (TiberiumMusic::isActive()) {
+		TheScriptEngine->setCurrentTrackName(newTrackName);
+		return;
+	}
+
 	// Stop playing the music
 	if (fadeout) {
 		TheAudio->removeAudioEvent(AHSV_StopTheMusicFade);

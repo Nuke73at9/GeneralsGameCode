@@ -155,6 +155,8 @@ static const BlockParse theTypeTable[] =
 #if RTS_ZEROHOUR
 	// Tiberium Project @feature a mod's own game data, read after the mod's archives are in
 	{ "TiberiumGameData",               INI::parseTiberiumGameDataDefinition },
+	// Tiberium Project @feature C&C4's dynamic music (TiberiumMusic), with the music tracks
+	{ "TiberiumMusic",                  INI::parseTiberiumMusicDefinition },
 #endif
 	{ "Upgrade",                        INI::parseUpgradeDefinition },
 	{ "Video",                          INI::parseVideoDefinition },

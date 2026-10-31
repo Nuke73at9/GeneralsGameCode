@@ -23,7 +23,8 @@
 // back from nothing (W3DSupplyDraw's ScaleBySupply draws it as it grows). While it holds any, it hurts
 // what stands in it: DamagePerSecond to the DamageKindOf (infantry) within DamageRadius, of DamageType
 // (radiation by default: poison would go on hurting after, by the infantry's PoisonedBehavior) and
-// DeathType (poisoned).
+// DeathType (poisoned). A crystal is nobody's: one made on a player's team (a harvester's spill) goes to
+// the neutral player, so anyone may harvest it.
 //
 //   Behavior = TiberiumCrystalUpdate ModuleTag_Growth
 //     RegrowDelay = 15000     ; msec after the last box taken

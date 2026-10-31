@@ -26,6 +26,9 @@
 #include "GameLogic/Module/TiberiumCrystalUpdate.h"
 
 #include "Common/NameKeyGenerator.h"
+#include "Common/Player.h"
+#include "Common/PlayerList.h"
+#include "Common/Team.h"
 #include "Common/Xfer.h"
 #include "GameLogic/Damage.h"
 #include "GameLogic/GameLogic.h"
@@ -97,6 +100,15 @@ UpdateSleepTime TiberiumCrystalUpdate::update()
 	if( warehouse == nullptr )
 		return UPDATE_SLEEP_FOREVER;
 	const UnsignedInt now = TheGameLogic->getFrame();
+	if( m_lastStored < 0 )
+	{
+		// Tiberium is nobody's: a crystal a harvester spilled (made on its owner's team) can be
+		// harvested by anyone, as a field's can
+		Player *neutral = ThePlayerList != nullptr ? ThePlayerList->getNeutralPlayer() : nullptr;
+		Team *team = neutral != nullptr ? neutral->getDefaultTeam() : nullptr;
+		if( team != nullptr && getObject()->getTeam() != team )
+			getObject()->setTeam( team );
+	}
 	const Int stored = warehouse->getBoxesStored();
 	if( m_lastStored >= 0 && stored < m_lastStored )
 	{

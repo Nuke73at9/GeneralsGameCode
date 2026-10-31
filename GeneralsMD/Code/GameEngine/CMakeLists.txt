@@ -191,6 +191,7 @@ set(GAMEENGINE_SRC
 #    Include/GameClient/IMEManager.h
     Include/GameClient/InGameUI.h
     Include/GameClient/TiberiumSidebar.h
+    Include/GameClient/TiberiumMusic.h
 #    Include/GameClient/Keyboard.h
     Include/GameClient/KeyDefs.h
 #    Include/GameClient/LanguageFilter.h
@@ -412,6 +413,7 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/BuildAreaBehavior.h
     Include/GameLogic/Module/TiberiumCrystalUpdate.h
     Include/GameLogic/Module/TiberiumFieldUpdate.h
+    Include/GameLogic/Module/TiberiumPickupUpdate.h
     Include/GameLogic/Module/AttributeModifierUpgrade.h
     Include/GameLogic/Module/FireWeaponAbilityUpdate.h
     Include/GameLogic/Module/ToggleAbilityUpdate.h
@@ -811,6 +813,7 @@ set(GAMEENGINE_SRC
 #    Source/GameClient/GUI/WinInstanceData.cpp
     Source/GameClient/InGameUI.cpp
     Source/GameClient/GUI/TiberiumSidebar.cpp
+    Source/GameClient/TiberiumMusic.cpp
 #    Source/GameClient/Input/Keyboard.cpp
 #    Source/GameClient/Input/Mouse.cpp
 #    Source/GameClient/LanguageFilter.cpp
@@ -1068,6 +1071,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Update/BaseConstructionUpdate.cpp
     Source/GameLogic/Object/Update/TiberiumCrystalUpdate.cpp
     Source/GameLogic/Object/Update/TiberiumFieldUpdate.cpp
+    Source/GameLogic/Object/Update/TiberiumPickupUpdate.cpp
     Source/GameLogic/Object/Update/FireWeaponAbilityUpdate.cpp
     Source/GameLogic/Object/Update/ToggleAbilityUpdate.cpp
     Source/GameLogic/Object/Update/SlavedUpdate.cpp

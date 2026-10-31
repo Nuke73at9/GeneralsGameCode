@@ -221,6 +221,7 @@ public:
 	static void parseArmorDefinition( INI *ini );
 	static void parseAttributeModifierDefinition( INI *ini );	///< Tiberium Project (Zero Hour)
 	static void parseTiberiumGameDataDefinition( INI *ini );	///< Tiberium Project (Zero Hour)
+	static void parseTiberiumMusicDefinition( INI *ini );	///< Tiberium Project (Zero Hour): GameClient/TiberiumMusic.cpp
 	static void parseDamageFXDefinition( INI *ini );
 	static void parseDrawGroupNumberDefinition( INI *ini );
 	static void parseTerrainDefinition( INI *ini );

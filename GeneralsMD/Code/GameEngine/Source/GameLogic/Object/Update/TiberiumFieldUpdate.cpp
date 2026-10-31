@@ -41,6 +41,7 @@ TiberiumFieldUpdateModuleData::TiberiumFieldUpdateModuleData()
 	m_startCrystals = 12;
 	m_maxCrystals = 20;
 	m_spawnDelay = LOGICFRAMES_PER_SECOND * 30;
+	m_rareDelay = LOGICFRAMES_PER_SECOND * 180;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -65,6 +66,8 @@ void TiberiumFieldUpdateModuleData::buildFieldParse( MultiIniFieldParse& p )
 		{ "MaxCrystals",		INI::parseInt,									nullptr, offsetof( TiberiumFieldUpdateModuleData, m_maxCrystals ) },
 		{ "SpawnDelay",			INI::parseDurationUnsignedInt,	nullptr, offsetof( TiberiumFieldUpdateModuleData, m_spawnDelay ) },
 		{ "Crystal",				parseCrystal,										nullptr, offsetof( TiberiumFieldUpdateModuleData, m_kinds ) },
+		{ "RareObject",			INI::parseAsciiString,					nullptr, offsetof( TiberiumFieldUpdateModuleData, m_rareObject ) },
+		{ "RareDelay",			INI::parseDurationUnsignedInt,	nullptr, offsetof( TiberiumFieldUpdateModuleData, m_rareDelay ) },
 		{ nullptr, nullptr, nullptr, 0 }
 	};
 	UpdateModuleData::buildFieldParse( p );
@@ -76,6 +79,8 @@ TiberiumFieldUpdate::TiberiumFieldUpdate( Thing *thing, const ModuleData* module
 {
 	m_nextSpawnFrame = 0;
 	m_started = FALSE;
+	m_rare = INVALID_ID;
+	m_nextRareFrame = 0;
 	setWakeFrame( getObject(), UPDATE_SLEEP_NONE );
 }
 
@@ -85,10 +90,10 @@ TiberiumFieldUpdate::~TiberiumFieldUpdate()
 }
 
 //-------------------------------------------------------------------------------------------------
-Bool TiberiumFieldUpdate::spawnOne()
+Bool TiberiumFieldUpdate::findSpot( Coord3D *out ) const
 {
 	const TiberiumFieldUpdateModuleData *d = getTiberiumFieldUpdateModuleData();
-	if( d->m_kinds.empty() || d->m_spacing <= 1.0f )
+	if( d->m_spacing <= 1.0f )
 		return FALSE;
 
 	// the grid's spots within the radius, the centre's own spot left for the field's centre piece
@@ -112,11 +117,11 @@ Bool TiberiumFieldUpdate::spawnOne()
 			PathfindCell *cell = TheAI->pathfinder()->getCell( LAYER_GROUND, &p );
 			if( cell == nullptr || cell->getType() != PathfindCell::CELL_CLEAR )
 				continue;
-			// not on a crystal of its own
+			// not on a crystal of its own, nor on its rare object
 			Bool taken = FALSE;
-			for( size_t i = 0; i < m_crystals.size() && !taken; ++i )
+			for( size_t i = 0; i <= m_crystals.size() && !taken; ++i )
 			{
-				const Object *c = TheGameLogic->findObjectByID( m_crystals[i] );
+				const Object *c = TheGameLogic->findObjectByID( i < m_crystals.size() ? m_crystals[i] : m_rare );
 				if( c == nullptr )
 					continue;
 				const Real cx = c->getPosition()->x - p.x, cy = c->getPosition()->y - p.y;
@@ -129,12 +134,26 @@ Bool TiberiumFieldUpdate::spawnOne()
 	if( spots.empty() )
 		return FALSE;
 
-	// a spot, and a kind by the weights
 	Coord3D at = spots[ GameLogicRandomValue( 0, (Int)spots.size() - 1 ) ];
 	const Real jitter = d->m_spacing * 0.25f;
 	at.x += GameLogicRandomValueReal( -jitter, jitter );
 	at.y += GameLogicRandomValueReal( -jitter, jitter );
 	at.z = TheTerrainLogic->getGroundHeight( at.x, at.y );
+	*out = at;
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool TiberiumFieldUpdate::spawnOne()
+{
+	const TiberiumFieldUpdateModuleData *d = getTiberiumFieldUpdateModuleData();
+	if( d->m_kinds.empty() )
+		return FALSE;
+	Coord3D at;
+	if( !findSpot( &at ) )
+		return FALSE;
+
+	// a kind by the weights
 	Int total = 0;
 	for( size_t i = 0; i < d->m_kinds.size(); ++i )
 		total += max( 0, d->m_kinds[i].weight );
@@ -156,6 +175,35 @@ Bool TiberiumFieldUpdate::spawnOne()
 	crystal->setOrientation( GameLogicRandomValueReal( 0.0f, 2.0f * PI ) );
 	m_crystals.push_back( crystal->getID() );
 	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+void TiberiumFieldUpdate::growRare( UnsignedInt now )
+{
+	const TiberiumFieldUpdateModuleData *d = getTiberiumFieldUpdateModuleData();
+	if( d->m_rareObject.isEmpty() )
+		return;
+	if( m_rare != INVALID_ID && TheGameLogic->findObjectByID( m_rare ) != nullptr )
+		return;	// still about (on the ground or carried)
+	m_rare = INVALID_ID;
+	if( m_nextRareFrame == 0 )
+	{
+		m_nextRareFrame = now + d->m_rareDelay;
+		return;
+	}
+	if( now < m_nextRareFrame )
+		return;
+	m_nextRareFrame = 0;
+	const ThingTemplate *tmpl = TheThingFactory->findTemplate( d->m_rareObject );
+	Coord3D at;
+	if( tmpl == nullptr || !findSpot( &at ) )
+		return;
+	Object *rare = TheThingFactory->newObject( tmpl, getObject()->getTeam() );
+	if( rare == nullptr )
+		return;
+	rare->setPosition( &at );
+	rare->setOrientation( GameLogicRandomValueReal( 0.0f, 2.0f * PI ) );
+	m_rare = rare->getID();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -189,7 +237,12 @@ UpdateSleepTime TiberiumFieldUpdate::update()
 			spawnOne();
 		m_nextSpawnFrame = now + d->m_spawnDelay;
 	}
-	return UPDATE_SLEEP( max( (UnsignedInt)1, m_nextSpawnFrame > now ? m_nextSpawnFrame - now : 1 ) );
+	growRare( now );
+	// awake again for the next crystal, and every so often to see whether its rare object is gone
+	UnsignedInt next = m_nextSpawnFrame;
+	if( !d->m_rareObject.isEmpty() )
+		next = min( next, now + LOGICFRAMES_PER_SECOND * 2 );
+	return UPDATE_SLEEP( max( (UnsignedInt)1, next > now ? next - now : 1 ) );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -202,10 +255,11 @@ void TiberiumFieldUpdate::crc( Xfer *xfer )
 // Xfer method
 // Version Info:
 // 1: Initial version
+// 2: the rare object
 //-------------------------------------------------------------------------------------------------
 void TiberiumFieldUpdate::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 	UpdateModule::xfer( xfer );
@@ -217,6 +271,11 @@ void TiberiumFieldUpdate::xfer( Xfer *xfer )
 		xfer->xferObjectID( &m_crystals[i] );
 	xfer->xferUnsignedInt( &m_nextSpawnFrame );
 	xfer->xferBool( &m_started );
+	if( version >= 2 )
+	{
+		xfer->xferObjectID( &m_rare );
+		xfer->xferUnsignedInt( &m_nextRareFrame );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

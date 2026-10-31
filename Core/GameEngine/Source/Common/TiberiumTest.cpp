@@ -52,6 +52,7 @@
 #include "Common/ThingTemplate.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/BodyModule.h"
+#include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/Module/CreateModule.h"
 #include "Common/BuildAssistant.h"
 #include "GameLogic/Damage.h"
@@ -112,6 +113,7 @@ namespace
 	Bool s_spawnDrive = FALSE;		// "drive": the fight targets drive over the spawned objects (mines)
 	Bool s_spawnHarvest = FALSE;	// "harvest": harvesters go to work, as a supply center's new ones do
 	Bool s_spawnMutual = FALSE;		// "mutual": the fight targets attack the spawned objects too
+	Bool s_spawnFoeAI = FALSE;		// "foe=ai": the fight targets are the skirmish AI's (a real enemy), not the first other player's
 	Real s_spawnTargetDistance = 160.0f;	// "dist=N": how far ahead the fight targets stand
 	Real s_spawnSpacing = 70.0f;	// between the objects of a row ("space=N": structures need more)
 	Int s_spawnBuildFrames = 0;		// "build=N": structures built up over N frames, then sold over N
@@ -415,6 +417,7 @@ void TiberiumTest::setSpawn( const char *spec )
 		s_spawnDrive = parts[2].find( "drive" ) != std::string::npos;
 		s_spawnHarvest = parts[2].find( "harvest" ) != std::string::npos;
 		s_spawnMutual = parts[2].find( "mutual" ) != std::string::npos;
+		s_spawnFoeAI = parts[2].find( "foe=ai" ) != std::string::npos;
 		const size_t dist = parts[2].find( "dist=" );
 		if ( dist != std::string::npos )
 			s_spawnTargetDistance = (Real)atof( parts[2].c_str() + dist + 5 );
@@ -810,6 +813,8 @@ void TiberiumTest::update()
 				Player *candidate = ThePlayerList->getNthPlayer( n );
 				if ( candidate == nullptr || candidate == ours || candidate->getDefaultTeam() == nullptr )
 					continue;
+				if ( s_spawnFoeAI && !candidate->isSkirmishAIPlayer() )
+					continue;
 				Object *probe = TheThingFactory->newObject( tt, candidate->getDefaultTeam() );
 				if ( probe != nullptr && probe->getControllingPlayer() != ours )
 					foe = probe->getControllingPlayer();
@@ -1055,6 +1060,38 @@ void TiberiumTest::update()
 				++picked;
 			}
 			log( "frame %d: ui: selected %d", (int)s_frame, (int)picked );
+		}
+		else if ( step.action == "vet" && TheGameLogic != nullptr )
+		{
+			// the spawned objects' ranks
+			std::string ranks;
+			for ( size_t k = 0; k < s_spawned.size(); ++k )
+			{
+				Object *obj = TheGameLogic->findObjectByID( s_spawned[k] );
+				char one[64];
+				snprintf( one, sizeof( one ), " %d:%d", (int)k, obj != nullptr && obj->getExperienceTracker() != nullptr ? (int)obj->getVeterancyLevel() : -1 );
+				ranks += one;
+			}
+			log( "frame %d: ui: ranks%s", (int)s_frame, ranks.c_str() );
+		}
+		else if ( ( step.action == "moveto" || step.action == "kill" ) && TheGameLogic != nullptr )
+		{
+			// "moveto=k,x,y": the k-th spawned object told to move there; "kill=k": it is destroyed (killed)
+			Int k = -1;
+			Real x = 0.0f, y = 0.0f;
+			sscanf( step.arg.c_str(), "%d,%f,%f", &k, &x, &y );
+			Object *obj = k >= 0 && k < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[k] ) : nullptr;
+			if ( obj != nullptr && step.action == "kill" )
+				obj->kill();
+			else if ( obj != nullptr && obj->getAIUpdateInterface() != nullptr )
+			{
+				Coord3D to;
+				to.x = x;
+				to.y = y;
+				to.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( x, y ) : 0.0f;
+				obj->getAIUpdateInterface()->aiMoveToPosition( &to, CMD_FROM_PLAYER );
+			}
+			log( "frame %d: ui: %s %s%s", (int)s_frame, step.action.c_str(), step.arg.c_str(), obj != nullptr ? "" : " (no such object)" );
 		}
 		else if ( step.action == "command" && TheControlBar != nullptr && TheInGameUI != nullptr )
 		{
