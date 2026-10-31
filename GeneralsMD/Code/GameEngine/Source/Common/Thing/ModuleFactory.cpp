@@ -150,6 +150,8 @@
 #include "GameLogic/Module/StealthFieldUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/BaseConstructionUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/BuildAreaBehavior.h"	// Tiberium Project
+#include "GameLogic/Module/TiberiumCrystalUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/TiberiumFieldUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/AttributeModifierUpgrade.h"	// Tiberium Project
 #include "GameLogic/Module/OrderAbilityUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/AssembleStructureUpdate.h"	// Tiberium Project
@@ -420,6 +422,8 @@ void ModuleFactory::init()
 	addModule( StealthFieldUpdate );	// Tiberium Project
 	addModule( BaseConstructionUpdate );	// Tiberium Project
 	addModule( BuildAreaBehavior );	// Tiberium Project
+	addModule( TiberiumCrystalUpdate );	// Tiberium Project
+	addModule( TiberiumFieldUpdate );	// Tiberium Project
 	addModule( AttributeModifierUpgrade );	// Tiberium Project
 	addModule( OrderAbilityUpdate );	// Tiberium Project
 	addModule( AssembleStructureUpdate );	// Tiberium Project

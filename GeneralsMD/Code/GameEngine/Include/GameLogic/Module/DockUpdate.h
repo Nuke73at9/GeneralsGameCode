@@ -128,6 +128,8 @@ public:
 
 	virtual UpdateSleepTime update() override;	///< In charge of lifting dock restriction for one registered as Approached if all is ready
 
+	void describeForTest( char *buf, Int size ) const;	///< Tiberium Project @feature the test harness's account of the dock
+
 protected:
 
 	// These are const data read from the drawable when first asked for them

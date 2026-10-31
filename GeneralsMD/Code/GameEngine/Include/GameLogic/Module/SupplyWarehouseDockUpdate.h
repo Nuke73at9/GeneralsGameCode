@@ -46,6 +46,7 @@ public:
 
 	Int m_startingBoxesData;
 	Bool m_deleteWhenEmpty;
+	Real m_boxWorth;		///< Tiberium Project @feature what a box from here is worth, of a plain one (100%: retail)
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -65,6 +66,9 @@ public:
 	virtual Bool action( Object* docker, Object *drone = nullptr ) override;	///<For me, this means identifying who is docking and either taking Boxes away or giving them
 
 	Int getBoxesStored() const { return m_boxesStored; }
+	/// Tiberium Project @feature boxes growing back (a Tiberium crystal), up to its StartingBoxes
+	void regrowBoxes( Int count );
+	Int getMaxBoxes() const { return getSupplyWarehouseDockUpdateModuleData()->m_startingBoxesData; }
 
 	void setCashValue( Int cashValue );
 

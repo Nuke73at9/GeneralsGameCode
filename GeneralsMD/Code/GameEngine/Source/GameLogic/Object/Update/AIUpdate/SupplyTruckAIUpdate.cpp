@@ -74,6 +74,7 @@ AIStateMachine* SupplyTruckAIUpdate::makeStateMachine()
 //-------------------------------------------------------------------------------------------------
 SupplyTruckAIUpdate::SupplyTruckAIUpdate( Thing *thing, const ModuleData* moduleData ) : AIUpdateInterface( thing, moduleData )
 {
+	m_extraWorth = 0;	// Tiberium Project
 	m_supplyTruckStateMachine = nullptr;
 	m_preferredDock = INVALID_ID;
 	m_numberBoxes = 0;
@@ -260,7 +261,8 @@ void SupplyTruckAIUpdate::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void SupplyTruckAIUpdate::xfer( Xfer *xfer )
 {
-  XferVersion currentVersion = 1;
+  // 2: Tiberium Project, the boxes' extra worth
+  XferVersion currentVersion = 2;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
 
@@ -271,6 +273,8 @@ void SupplyTruckAIUpdate::xfer( Xfer *xfer )
 	xfer->xferObjectID(&m_preferredDock);
 	xfer->xferInt(&m_numberBoxes);
 	xfer->xferBool(&m_forcePending);
+	if( version >= 2 )
+		xfer->xferInt( &m_extraWorth );
 
 }
 
@@ -524,6 +528,18 @@ StateReturnType SupplyTruckWantsToPickUpOrDeliverBoxesState::update()
 	}
 
 	Int numBoxes = update->getNumberBoxes();
+	// Tiberium Project @feature a harvester not yet full fills up from another source nearby first
+	// (FillScanDistance; Kane's Wrath's harvesters work a field until full)
+	if( numBoxes > 0 && numBoxes < update->getMaxBoxes() && update->getFillScanDistance() > 0.0f )
+	{
+		Object *nextSource = manager->findBestSupplyWarehouse( owner );
+		const Real reach = update->getFillScanDistance();
+		if( nextSource != nullptr && ThePartitionManager->getDistanceSquared( owner, nextSource, FROM_CENTER_2D ) <= reach * reach )
+		{
+			ownerAI->aiDock( nextSource, CMD_FROM_AI );
+			return STATE_SUCCESS;
+		}
+	}
 	if (numBoxes > 0)
 	{
 		// want a center.

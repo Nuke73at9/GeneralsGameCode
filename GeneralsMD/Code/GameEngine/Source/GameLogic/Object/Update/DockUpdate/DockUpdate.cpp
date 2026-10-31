@@ -332,6 +332,9 @@ void DockUpdate::onEnterReached( Object* docker )
 																			MAKE_MODELCONDITION_MASK2(MODELCONDITION_DOCKING_BEGINNING, MODELCONDITION_DOCKING) );
 	docker->clearAndSetModelConditionFlags( MAKE_MODELCONDITION_MASK(MODELCONDITION_DOCKING_ENDING),
 																					MAKE_MODELCONDITION_MASK2(MODELCONDITION_DOCKING_BEGINNING, MODELCONDITION_DOCKING) );
+	// Tiberium Project @feature at a supply source (a Tiberium crystal) the harvester lowers its scoop
+	if( me->isKindOf( KINDOF_SUPPLY_SOURCE ) )
+		docker->setModelConditionState( MODELCONDITION_HARVEST_PREPARATION );
 	m_dockerInside = TRUE;
 
 	ObjectID dockerID = docker->getID();
@@ -351,6 +354,9 @@ void DockUpdate::onDockReached( Object* docker )
 	Object *me = getObject();
 	me->clearAndSetModelConditionState( MODELCONDITION_DOCKING_BEGINNING, MODELCONDITION_DOCKING_ACTIVE );
 	docker->clearAndSetModelConditionState( MODELCONDITION_DOCKING_BEGINNING, MODELCONDITION_DOCKING_ACTIVE );
+	// Tiberium Project @feature and gathers
+	if( me->isKindOf( KINDOF_SUPPLY_SOURCE ) )
+		docker->clearAndSetModelConditionState( MODELCONDITION_HARVEST_PREPARATION, MODELCONDITION_HARVEST_ACTION );
 }
 
 void DockUpdate::onExitReached( Object* docker )
@@ -360,6 +366,7 @@ void DockUpdate::onExitReached( Object* docker )
 																			MAKE_MODELCONDITION_MASK(MODELCONDITION_DOCKING_ENDING) );
 	docker->clearAndSetModelConditionFlags( MAKE_MODELCONDITION_MASK2(MODELCONDITION_DOCKING_ACTIVE, MODELCONDITION_DOCKING),
 																					MAKE_MODELCONDITION_MASK(MODELCONDITION_DOCKING_ENDING) );
+	docker->clearModelConditionFlags( MAKE_MODELCONDITION_MASK2( MODELCONDITION_HARVEST_PREPARATION, MODELCONDITION_HARVEST_ACTION ) );	// Tiberium Project
 	m_dockerInside = FALSE;
 
 	ObjectID dockerID = docker->getID();
@@ -401,9 +408,26 @@ void DockUpdate::cancelDock( Object* docker )
 		clear.set( MODELCONDITION_DOCKING_BEGINNING );
 		clear.set( MODELCONDITION_DOCKING_ACTIVE );
 		clear.set( MODELCONDITION_DOCKING );
+		clear.set( MODELCONDITION_HARVEST_PREPARATION );	// Tiberium Project
+		clear.set( MODELCONDITION_HARVEST_ACTION );
 		getObject()->clearModelConditionFlags( clear );
 		if( dockingObject )
 			dockingObject->clearModelConditionFlags( clear );
+	}
+}
+
+// Tiberium Project @feature the test harness's account of the dock: its points (the model's own space),
+// who is docking, and who holds the approach spots
+void DockUpdate::describeForTest( char *buf, Int size ) const
+{
+	Int at = snprintf( buf, size, "%s%s%s enter %.0f %.0f, dock %.0f %.0f, exit %.0f %.0f, %d approach bones, docker %u%s, approach:",
+		m_dockOpen ? "open" : "closed", m_dockCrippled ? " crippled" : "", m_positionsLoaded ? "" : " (points not loaded)",
+		m_enterPosition.x, m_enterPosition.y, m_dockPosition.x, m_dockPosition.y, m_exitPosition.x, m_exitPosition.y,
+		(int)m_numberApproachPositionBones, (unsigned)m_activeDocker, m_dockerInside ? " inside" : "" );
+	for( size_t i = 0; i < m_approachPositionOwners.size() && at > 0 && at < size; ++i )
+	{
+		if( m_approachPositionOwners[i] != INVALID_ID )
+			at += snprintf( buf + at, size - at, " %u%s", (unsigned)m_approachPositionOwners[i], m_approachPositionReached[i] ? " (there)" : "" );
 	}
 }
 

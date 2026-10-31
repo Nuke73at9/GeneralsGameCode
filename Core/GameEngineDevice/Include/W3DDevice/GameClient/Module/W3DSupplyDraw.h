@@ -37,6 +37,7 @@ class W3DSupplyDrawModuleData : public W3DModelDrawModuleData
 {
 public:
 	AsciiString m_supplyBonePrefix;
+	Real m_scaleBySupply;		///< Tiberium Project @feature drawn this small (of its size) when nearly empty, full size full, hidden empty (0: off)
 
 	W3DSupplyDrawModuleData();
 	virtual ~W3DSupplyDrawModuleData() override;

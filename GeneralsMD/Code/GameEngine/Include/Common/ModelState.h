@@ -283,6 +283,11 @@ enum ModelConditionFlagType CPP_11(: Int)
 	MODELCONDITION_BETWEEN_FIRING_SHOTS_H,
 	MODELCONDITION_RELOADING_H,
 	MODELCONDITION_USING_WEAPON_H,
+	// Tiberium Project @feature SAGE 2's harvest states: a harvester docking at a supply source (a
+	// Tiberium crystal) lowers its scoop (HARVEST_PREPARATION), then gathers (HARVEST_ACTION); its
+	// unloading at a refinery is docking only
+	MODELCONDITION_HARVEST_PREPARATION,
+	MODELCONDITION_HARVEST_ACTION,
 //
 // Note: these values are saved in save files, so you MUST NOT REMOVE OR CHANGE
 // existing values!

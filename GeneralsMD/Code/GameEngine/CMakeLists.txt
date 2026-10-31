@@ -410,6 +410,8 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/StealthFieldUpdate.h
     Include/GameLogic/Module/BaseConstructionUpdate.h
     Include/GameLogic/Module/BuildAreaBehavior.h
+    Include/GameLogic/Module/TiberiumCrystalUpdate.h
+    Include/GameLogic/Module/TiberiumFieldUpdate.h
     Include/GameLogic/Module/AttributeModifierUpgrade.h
     Include/GameLogic/Module/FireWeaponAbilityUpdate.h
     Include/GameLogic/Module/ToggleAbilityUpdate.h
@@ -1064,6 +1066,8 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Update/ShieldSphereUpdate.cpp
     Source/GameLogic/Object/Update/StealthFieldUpdate.cpp
     Source/GameLogic/Object/Update/BaseConstructionUpdate.cpp
+    Source/GameLogic/Object/Update/TiberiumCrystalUpdate.cpp
+    Source/GameLogic/Object/Update/TiberiumFieldUpdate.cpp
     Source/GameLogic/Object/Update/FireWeaponAbilityUpdate.cpp
     Source/GameLogic/Object/Update/ToggleAbilityUpdate.cpp
     Source/GameLogic/Object/Update/SlavedUpdate.cpp

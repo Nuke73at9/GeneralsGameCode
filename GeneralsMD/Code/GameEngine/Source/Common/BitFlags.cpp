@@ -215,6 +215,8 @@ const char* const ModelConditionFlags::s_bitNameList[] =
 	"BETWEEN_FIRING_SHOTS_H",
 	"RELOADING_H",
 	"USING_WEAPON_H",
+	"HARVEST_PREPARATION",	// Tiberium Project
+	"HARVEST_ACTION",
 
 
 	nullptr

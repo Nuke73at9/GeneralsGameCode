@@ -125,6 +125,7 @@ public:
 	UnsignedInt m_centerDelay;
 	UnsignedInt m_warehouseDelay;
 	Real m_warehouseScanDistance;
+	Real m_fillScanDistance;		///< Tiberium Project: see SupplyTruckAIInterface::getFillScanDistance
  	AudioEventRTS m_suppliesDepletedVoice;						///< Sound played when I take the last box.
 
 	SupplyTruckAIUpdateModuleData()
@@ -133,6 +134,7 @@ public:
 		m_centerDelay = 0;
 		m_warehouseDelay = 0;
 		m_warehouseScanDistance = 100;
+		m_fillScanDistance = 0.0f;
 	}
 
 	static void buildFieldParse(MultiIniFieldParse& p)
@@ -145,6 +147,7 @@ public:
 			{ "SupplyCenterActionDelay", INI::parseDurationUnsignedInt, nullptr, offsetof( SupplyTruckAIUpdateModuleData, m_centerDelay ) },
 			{ "SupplyWarehouseActionDelay", INI::parseDurationUnsignedInt, nullptr, offsetof( SupplyTruckAIUpdateModuleData, m_warehouseDelay ) },
 			{ "SupplyWarehouseScanDistance", INI::parseReal, nullptr, offsetof( SupplyTruckAIUpdateModuleData, m_warehouseScanDistance ) },
+			{ "FillScanDistance", INI::parseReal, nullptr, offsetof( SupplyTruckAIUpdateModuleData, m_fillScanDistance ) },	// Tiberium Project
  			{ "SuppliesDepletedVoice", INI::parseAudioEventRTS, nullptr, offsetof( SupplyTruckAIUpdateModuleData, m_suppliesDepletedVoice) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
@@ -178,6 +181,14 @@ public:
 	virtual ObjectID getPreferredDockID() const = 0;
 	virtual UnsignedInt getActionDelayForDock( Object *dock ) = 0;
 	virtual Int getUpgradedSupplyBoost() const = 0;
+
+	/// Tiberium Project @feature richer boxes (blue, red and purple Tiberium): what the boxes carried are worth
+	/// beyond plain ones, in hundredths of a box (a source's BoxWorth); the supply center pays it and clears it
+	virtual void addExtraBoxWorth( Int hundredths ) { (void)hundredths; }
+	virtual Int takeExtraBoxWorth() { return 0; }
+	/// Tiberium Project @feature how far a harvester not yet full looks for another source before it goes
+	/// back to unload (Kane's Wrath's harvesters fill up in the field); 0: it goes back with what it has
+	virtual Real getFillScanDistance() const { return 0.0f; }
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -217,6 +228,9 @@ public:
 	virtual ObjectID getPreferredDockID() const override { return m_preferredDock; }
 	virtual UnsignedInt getActionDelayForDock( Object *dock ) override;
 	virtual Int getUpgradedSupplyBoost() const override { return 0; }
+	virtual void addExtraBoxWorth( Int hundredths ) override { m_extraWorth += hundredths; }
+	virtual Int takeExtraBoxWorth() override { const Int w = m_extraWorth; m_extraWorth = 0; return w; }
+	virtual Real getFillScanDistance() const override { return getSupplyTruckAIUpdateModuleData()->m_fillScanDistance; }
 
 	virtual UpdateSleepTime update() override;
 
@@ -230,6 +244,7 @@ private:
 	SupplyTruckStateMachine*	m_supplyTruckStateMachine;
 	ObjectID									m_preferredDock;			///< Instead of searching, try this one first
 	Int												m_numberBoxes;
+	Int												m_extraWorth;					///< Tiberium Project: see addExtraBoxWorth
 	Bool											m_forcePending;				// To prevent a function from doing a setState,
 																									// forceWanting will latch into here until serviced.
 	Bool											m_forcedBusyPending;	// A supply truck can't tell the difference between Idle since

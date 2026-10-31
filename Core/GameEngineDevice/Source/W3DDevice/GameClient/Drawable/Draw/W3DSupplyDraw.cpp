@@ -27,6 +27,7 @@
 // Desc: Draw module reacts to SupplyStatus setting by hiding an equal number of the specified bone array.
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+#include "Common/ThingTemplate.h"	// Tiberium Project
 #include "Common/Xfer.h"
 #include "GameClient/Drawable.h"
 #include "W3DDevice/GameClient/Module/W3DSupplyDraw.h"
@@ -34,6 +35,7 @@
 //-------------------------------------------------------------------------------------------------
 W3DSupplyDrawModuleData::W3DSupplyDrawModuleData()
 {
+	m_scaleBySupply = 0.0f;	// Tiberium Project
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -49,6 +51,7 @@ void W3DSupplyDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 	static const FieldParse dataFieldParse[] =
 	{
 		{ "SupplyBonePrefix", INI::parseAsciiString, nullptr, offsetof(W3DSupplyDrawModuleData, m_supplyBonePrefix) },
+		{ "ScaleBySupply", INI::parseReal, nullptr, offsetof(W3DSupplyDrawModuleData, m_scaleBySupply) },	// Tiberium Project
 
 		{ nullptr, nullptr, nullptr, 0 }
 	};
@@ -72,7 +75,19 @@ void W3DSupplyDraw::updateDrawModuleSupplyStatus( Int maxSupply, Int currentSupp
 {
 	W3DModelDraw::updateDrawModuleSupplyStatus( maxSupply, currentSupply );
 
+	// Tiberium Project @feature a crystal grows and shrinks with what is left in it, gone when empty
+	const Real smallest = getW3DSupplyDrawModuleData()->m_scaleBySupply;
+	if( smallest > 0.0f && maxSupply > 0 )
+	{
+		const Real left = currentSupply <= 0 ? 0.0f : min( 1.0f, currentSupply / (Real)maxSupply );
+		getDrawable()->setDrawableHidden( currentSupply <= 0 );
+		const Real asset = getDrawable()->getTemplate()->getAssetScale();
+		getDrawable()->setInstanceScale( asset * ( smallest + ( 1.0f - smallest ) * powf( left, 1.0f / 3.0f ) ) );
+	}
+
 	AsciiString boneName = getW3DSupplyDrawModuleData()->m_supplyBonePrefix;
+	if( boneName.isEmpty() )
+		return;	// Tiberium Project: no supply bones to show and hide
 	if( m_totalBones == -1 )
 	{
 		m_totalBones = getDrawable()->getPristineBonePositions( boneName.str(), 1, nullptr, nullptr, INT_MAX );// The last arg is to guard the size of the arrays.  I am not passing any in, I am just counting bones.

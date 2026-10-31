@@ -190,6 +190,8 @@ static PoolSizeRec PoolSizes[] =
 	{ "StealthFieldUpdate", 64, 16 },
 	{ "BaseConstructionUpdate", 32, 8 },
 	{ "BuildAreaBehavior", 128, 32 },
+	{ "TiberiumCrystalUpdate", 1024, 256 },
+	{ "TiberiumFieldUpdate", 64, 16 },
 	{ "AttributeModifierUpgrade", 1024, 128 },
 	{ "OrderAbilityUpdate", 128, 32 },
 	{ "AssembleStructureUpdate", 128, 32 },

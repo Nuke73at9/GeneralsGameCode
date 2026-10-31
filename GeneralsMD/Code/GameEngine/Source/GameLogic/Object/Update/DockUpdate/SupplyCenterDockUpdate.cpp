@@ -120,6 +120,14 @@ Bool SupplyCenterDockUpdate::action( Object* docker, Object *drone )
 	while( supplyTruckAI->loseOneBox() )
 		value += ownerPlayer->getSupplyBoxValue();
 
+	// Tiberium Project @feature richer boxes (blue, red, purple Tiberium) are worth more
+	const Int extraWorth = supplyTruckAI->takeExtraBoxWorth();
+	if( extraWorth != 0 )
+	{
+		const Int extra = (Int)ownerPlayer->getSupplyBoxValue() * extraWorth / 100;
+		value = ( (Int)value + extra > 0 ) ? (UnsignedInt)( (Int)value + extra ) : 0;
+	}
+
 	// Abram's Personal Test @feature Cash multiplier match option.
 	value = AbramGameRules::scaleIncome( value );
 

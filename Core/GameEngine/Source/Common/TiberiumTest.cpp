@@ -52,6 +52,7 @@
 #include "Common/ThingTemplate.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/BodyModule.h"
+#include "GameLogic/Module/CreateModule.h"
 #include "Common/BuildAssistant.h"
 #include "GameLogic/Damage.h"
 #include "GameLogic/Module/AIUpdate.h"
@@ -64,6 +65,9 @@
 #if RTS_ZEROHOUR
 #include "GameClient/TiberiumSidebar.h"
 #include "GameLogic/Module/BaseConstructionUpdate.h"
+#include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
+#include "GameLogic/Module/SupplyTruckAIUpdate.h"
+#include "GameLogic/Module/DockUpdate.h"
 #endif
 #include "GameClient/GameWindow.h"
 #include "GameClient/Gadget.h"
@@ -106,6 +110,7 @@ namespace
 	std::string s_spawnTarget = "ChinaTankBattleMaster";	// "target=Template": the fight targets
 	Bool s_spawnBack = FALSE;		// "back": told to move to a spot close behind them (backing up)
 	Bool s_spawnDrive = FALSE;		// "drive": the fight targets drive over the spawned objects (mines)
+	Bool s_spawnHarvest = FALSE;	// "harvest": harvesters go to work, as a supply center's new ones do
 	Bool s_spawnMutual = FALSE;		// "mutual": the fight targets attack the spawned objects too
 	Real s_spawnTargetDistance = 160.0f;	// "dist=N": how far ahead the fight targets stand
 	Real s_spawnSpacing = 70.0f;	// between the objects of a row ("space=N": structures need more)
@@ -408,6 +413,7 @@ void TiberiumTest::setSpawn( const char *spec )
 		}
 		s_spawnBack = parts[2].find( "back" ) != std::string::npos;
 		s_spawnDrive = parts[2].find( "drive" ) != std::string::npos;
+		s_spawnHarvest = parts[2].find( "harvest" ) != std::string::npos;
 		s_spawnMutual = parts[2].find( "mutual" ) != std::string::npos;
 		const size_t dist = parts[2].find( "dist=" );
 		if ( dist != std::string::npos )
@@ -774,6 +780,21 @@ void TiberiumTest::update()
 			obj->setPosition( &p );
 			obj->setOrientation( PI * 0.5f );
 			s_spawned.push_back( obj->getID() );
+			// a structure that is not to be built up is as one the map placed: built (a supply center
+			// takes deliveries only once it is)
+			if ( s_spawnBuildFrames <= 0 && obj->isKindOf( KINDOF_STRUCTURE ) )
+			{
+				for ( BehaviorModule **m = obj->getBehaviorModules(); *m != nullptr; ++m )
+				{
+					CreateModuleInterface *create = (*m)->getCreate();
+					if ( create != nullptr )
+						create->onBuildComplete();
+				}
+			}
+#if RTS_ZEROHOUR
+			if ( s_spawnHarvest && obj->getAIUpdateInterface() != nullptr && obj->getAIUpdateInterface()->getSupplyTruckAIInterface() != nullptr )
+				obj->getAIUpdateInterface()->getSupplyTruckAIInterface()->setForceWantingState( TRUE );
+#endif
 		}
 		// the targets: one of Zero Hour's tanks ahead of each, for another player, enemies both ways
 		// (a test map's spawned units can fall to the neutral side, which counts its own as allies,
@@ -1333,6 +1354,83 @@ void TiberiumTest::update()
 				snprintf( where, sizeof( where ), ", the first at %.0f %.0f", first.pos.x, first.pos.y );
 			log( "frame %d: ui: %d of %s%s%s", (int)s_frame, (int)count, step.arg.c_str(), tmpl != nullptr ? "" : " (no such object)", where );
 		}
+		else if ( step.action == "cash" && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
+		{
+			log( "frame %d: ui: cash %u", (int)s_frame, (unsigned)ThePlayerList->getLocalPlayer()->getMoney()->countMoney() );
+		}
+#if RTS_ZEROHOUR
+		else if ( step.action == "census" && TheGameLogic != nullptr )
+		{
+			// every player's objects of a kind (a map's Tiberium crystals are nobody's), with the boxes
+			// left in them when they are supply sources, and what the nearest to the view holds
+			Int count = 0, boxes = 0, most = 0, empty = 0;
+			Real nearest = 1.0e9f;
+			Coord3D at;
+			at.zero();
+			const Coord3D view = TheTacticalView != nullptr ? TheTacticalView->getPosition() : Coord3D();
+			static const NameKeyType key = NAMEKEY( "SupplyWarehouseDockUpdate" );
+			for ( Object *obj = TheGameLogic->getFirstObject(); obj != nullptr; obj = obj->getNextObject() )
+			{
+				if ( obj->getTemplate()->getName().compareNoCase( step.arg.c_str() ) != 0 )
+					continue;
+				++count;
+				SupplyWarehouseDockUpdate *dock = (SupplyWarehouseDockUpdate *)obj->findUpdateModule( key );
+				if ( dock != nullptr )
+				{
+					boxes += dock->getBoxesStored();
+					most += dock->getMaxBoxes();
+					empty += dock->getBoxesStored() == 0 ? 1 : 0;
+				}
+				const Real dx = obj->getPosition()->x - view.x, dy = obj->getPosition()->y - view.y;
+				if ( dx * dx + dy * dy < nearest )
+				{
+					nearest = dx * dx + dy * dy;
+					at = *obj->getPosition();
+				}
+			}
+			log( "frame %d: ui: census %d of %s, %d of %d boxes, %d empty, the nearest at %.0f %.0f", (int)s_frame, (int)count,
+				step.arg.c_str(), (int)boxes, (int)most, (int)empty, count > 0 ? at.x : 0.0f, count > 0 ? at.y : 0.0f );
+		}
+#endif
+#if RTS_ZEROHOUR
+		else if ( step.action == "docks" && TheGameLogic != nullptr )
+		{
+			// every object of a kind with a dock (supply centers, crystals): who is docking there, and
+			// every harvester with where it stands and what it is doing
+			for ( Object *obj = TheGameLogic->getFirstObject(); obj != nullptr; obj = obj->getNextObject() )
+			{
+				const Bool mine = obj->getTemplate()->getName().compareNoCase( step.arg.c_str() ) == 0;
+				if ( mine && obj->getDockUpdateInterface() != nullptr )
+				{
+					static const NameKeyType keys[] = { NAMEKEY( "SupplyCenterDockUpdate" ), NAMEKEY( "SupplyWarehouseDockUpdate" ) };
+					for ( Int k = 0; k < 2; ++k )
+					{
+						const DockUpdate *dock = (const DockUpdate *)obj->findUpdateModule( keys[k] );
+						if ( dock == nullptr )
+							continue;
+						char text[512];
+						dock->describeForTest( text, sizeof( text ) );
+						log( "frame %d: ui: dock %s #%u at %.0f %.0f: %s", (int)s_frame, step.arg.c_str(), (unsigned)obj->getID(),
+							obj->getPosition()->x, obj->getPosition()->y, text );
+					}
+				}
+				if ( obj->isKindOf( KINDOF_HARVESTER ) && obj->getDrawable() != nullptr )
+				{
+					std::string flags;
+					const ModelConditionFlags f = obj->getDrawable()->getModelConditionFlags();
+					for ( Int bit = 0; bit < f.size(); ++bit )
+					{
+						const char *name = f.getBitNameIfSet( bit );
+						if ( name != nullptr ) { flags += " "; flags += name; }
+					}
+					AIUpdateInterface *ai = obj->getAIUpdateInterface();
+					log( "frame %d: ui: harvester %s #%u at %.0f %.0f,%s, %s", (int)s_frame, obj->getTemplate()->getName().str(),
+						(unsigned)obj->getID(), obj->getPosition()->x, obj->getPosition()->y, flags.c_str(),
+						ai != nullptr && ai->isIdle() ? "idle" : "busy" );
+				}
+			}
+		}
+#endif
 		else if ( step.action == "prod" && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
 		{
 			// what the local player's factories are making: each queue's length and its first entry's progress

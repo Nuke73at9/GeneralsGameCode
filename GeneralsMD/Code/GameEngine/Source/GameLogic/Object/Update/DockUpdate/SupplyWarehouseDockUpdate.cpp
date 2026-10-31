@@ -44,6 +44,7 @@ SupplyWarehouseDockUpdateModuleData::SupplyWarehouseDockUpdateModuleData()
 {
 	m_startingBoxesData = 1;
 	m_deleteWhenEmpty = FALSE;
+	m_boxWorth = 1.0f;	// Tiberium Project
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -57,6 +58,7 @@ SupplyWarehouseDockUpdateModuleData::SupplyWarehouseDockUpdateModuleData()
 	{
 		{ "StartingBoxes",	INI::parseInt,	nullptr, offsetof( SupplyWarehouseDockUpdateModuleData, m_startingBoxesData ) },
 		{ "DeleteWhenEmpty",	INI::parseBool,	nullptr, offsetof( SupplyWarehouseDockUpdateModuleData, m_deleteWhenEmpty ) },
+		{ "BoxWorth",	INI::parsePercentToReal,	nullptr, offsetof( SupplyWarehouseDockUpdateModuleData, m_boxWorth ) },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
 
@@ -110,6 +112,11 @@ Bool SupplyWarehouseDockUpdate::action( Object* docker, Object *drone )
 	SupplyTruckAIInterface *ai = docker->getAIUpdateInterface()->getSupplyTruckAIInterface();
 	if( ai && ai->gainOneBox( m_boxesStored ) )
 	{
+		// Tiberium Project @feature a richer source's box is worth more (paid at the supply center)
+		const Real worth = getSupplyWarehouseDockUpdateModuleData()->m_boxWorth;
+		if( worth != 1.0f )
+			ai->addExtraBoxWorth( (Int)( ( worth - 1.0f ) * 100.0f + ( worth >= 1.0f ? 0.5f : -0.5f ) ) );
+
 		if( m_boxesStored == 0 && getSupplyWarehouseDockUpdateModuleData()->m_deleteWhenEmpty )
 		{
 			TheGameLogic->destroyObject( getObject() );
@@ -167,6 +174,20 @@ void SupplyWarehouseDockUpdate::setDockCrippled( Bool setting )
 	DockUpdate::setDockCrippled( setting );
 }
 
+// ------------------------------------------------------------------------------------------------
+void SupplyWarehouseDockUpdate::regrowBoxes( Int count )
+{
+	const Int most = getSupplyWarehouseDockUpdateModuleData()->m_startingBoxesData;
+	const Int was = m_boxesStored;
+	m_boxesStored = min( most, m_boxesStored + max( 0, count ) );
+	if( m_boxesStored == was )
+		return;
+	Drawable *draw = getObject()->getDrawable();
+	if( draw )
+		draw->updateDrawableSupplyStatus( most, m_boxesStored );
+}
+
+// ------------------------------------------------------------------------------------------------
 void SupplyWarehouseDockUpdate::setCashValue( Int cashValue )
 {
 	// A script can tell us our set value, and we need to figure out the boxes needed to provide that.
