@@ -117,6 +117,7 @@ namespace
 	struct Art
 	{
 		const Image *panel, *bar, *slot, *tier, *tierFill, *emblem;
+		const Image *plateOff, *plateOn, *plateHover, *grid;	///< the sidebar's (C&C4's build panel)
 		const Image *rank[4];
 		Color accent, accentDim, text, textDim;
 	};
@@ -179,6 +180,10 @@ namespace
 		a->tier = findImage( "TibHUD_Tier", side );
 		a->tierFill = findImage( "TibHUD_TierFill", side );
 		a->emblem = findImage( "TibHUD_Emblem", side );
+		a->plateOff = findImage( "TibHUD_Plate", nod ? "NodOff" : "GDIOff" );
+		a->plateOn = findImage( "TibHUD_Plate", nod ? "NodOn" : "GDIOn" );
+		a->plateHover = findImage( "TibHUD_Plate", "Hover" );
+		a->grid = findImage( "TibHUD_Grid", side );
 		a->rank[0] = nullptr;
 		for( Int i = 1; i < 4; ++i )
 		{
@@ -198,8 +203,8 @@ namespace
 		const Int sw = TheDisplay->getWidth(), sh = TheDisplay->getHeight();
 		L->sw = sw;
 		L->sh = sh;
-		// the column: as wide as the sidebar was on its own (TiberiumSidebar), from the top to the bottom
-		L->colW = max( 200, sw * 21 / 100 > 360 ? 360 : sw * 21 / 100 );
+		// the column: as wide as the sidebar on its own (TiberiumSidebar), from the top to the bottom
+		L->colW = max( 200, min( sw * 22 / 100, sh * 40 / 100 ) );
 		L->colX = sw - L->colW;
 		L->colY = max( 16, sh / 40 );
 		L->gap = max( 3, L->colW / 80 );
@@ -420,10 +425,19 @@ namespace
 	/** a C&C4-like button: a dark plate, the faction's outline, its label */
 	void drawPlate( const Art &a, Int x, Int y, Int w, Int h, const UnicodeString &label, Bool on, Bool hover, Bool lit )
 	{
-		const Color back = lit ? a.accentDim : GameMakeColor( 8, 16, 24, 220 );
-		TheDisplay->drawFillRect( x, y, w, h, back );
-		TheDisplay->drawOpenRect( x - 1, y - 1, w + 2, h + 2, 1.0f, GameMakeColor( 0, 0, 0, 120 ) );
-		TheDisplay->drawOpenRect( x, y, w, h, hover ? 2.0f : 1.0f, on ? a.accent : GameMakeColor( 60, 70, 78, 255 ) );
+		if( a.plateOff != nullptr && a.plateOn != nullptr && a.plateHover != nullptr )
+		{
+			// C&C4's plate: lit is the bright one, the cursor's the yellow, a button Zero Hour has off dimmed
+			const Image *plate = hover ? a.plateHover : ( lit ? a.plateOn : a.plateOff );
+			TheDisplay->drawImage( plate, x, y, x + w, y + h, on ? 0xFFFFFFFF : GameMakeColor( 255, 255, 255, 90 ) );
+		}
+		else
+		{
+			const Color back = lit ? a.accentDim : GameMakeColor( 8, 16, 24, 220 );
+			TheDisplay->drawFillRect( x, y, w, h, back );
+			TheDisplay->drawOpenRect( x - 1, y - 1, w + 2, h + 2, 1.0f, GameMakeColor( 0, 0, 0, 120 ) );
+			TheDisplay->drawOpenRect( x, y, w, h, hover ? 2.0f : 1.0f, on ? a.accent : GameMakeColor( 60, 70, 78, 255 ) );
+		}
 		s_text->setText( label );
 		Int tw = 0, th = 0;
 		s_text->getSize( &tw, &th );
@@ -484,7 +498,7 @@ namespace
 						Find *f = (Find *)data;
 						ProductionUpdateInterface *pu = obj->getProductionUpdateInterface();
 						for( const ProductionEntry *e = pu != nullptr ? pu->firstProduction() : nullptr; e != nullptr; e = pu->nextProduction( e ) )
-							if( e->getProductionUpgrade() == f->up && e->getPercentComplete() > f->percent )
+							if( e->getProductionType() == PRODUCTION_UPGRADE && e->getProductionUpgrade() == f->up && e->getPercentComplete() > f->percent )
 								f->percent = e->getPercentComplete();
 					} };
 				Find f = { next, 0.0f };
@@ -697,6 +711,23 @@ namespace
 		Art a;
 		getArt( &a );
 		TheDisplay->drawFillRect( L.colX, L.colY, L.colW, L.sideY - L.colY, GameMakeColor( 6, 11, 16, 225 ) );
+		if( a.grid != nullptr )
+		{
+			// C&C4's build panel grid, as the sidebar below has it
+			const Bool wasClipping = TheDisplay->isClippingEnabled();
+			IRegion2D clip;
+			clip.lo.x = L.colX;
+			clip.lo.y = L.colY;
+			clip.hi.x = L.colX + L.colW;
+			clip.hi.y = L.sideY;
+			TheDisplay->setClipRegion( &clip );
+			TheDisplay->enableClipping( TRUE );
+			const Int tile = max( 24, L.colW / 7 );
+			for( Int ty = L.colY; ty < L.sideY; ty += tile )
+				for( Int tx = L.colX; tx < L.colX + L.colW; tx += tile )
+					TheDisplay->drawImage( a.grid, tx, ty, tx + tile, ty + tile, GameMakeColor( 255, 255, 255, 200 ) );
+			TheDisplay->enableClipping( wasClipping );
+		}
 		TheDisplay->drawFillRect( L.colX, L.colY, 2, L.sideY - L.colY, a.accent );
 		// the radar's frame; without a radar, the faction's emblem where it would be
 		TheDisplay->drawFillRect( L.radarX, L.radarY, L.radarS, L.radarS, GameMakeColor( 2, 6, 10, 240 ) );
@@ -868,10 +899,11 @@ namespace
 				const ProductionEntry *e = pu != nullptr ? pu->firstProduction() : nullptr;
 				if( e != nullptr )
 				{
+					// (the entry's unit and upgrade share their place: its type says which it has)
 					UnicodeString what;
-					if( e->getProductionObject() != nullptr )
+					if( e->getProductionType() == PRODUCTION_UNIT && e->getProductionObject() != nullptr )
 						what = nameOf( e->getProductionObject() );
-					else if( e->getProductionUpgrade() != nullptr )
+					else if( e->getProductionType() == PRODUCTION_UPGRADE && e->getProductionUpgrade() != nullptr )
 						what = TheGameText->fetch( e->getProductionUpgrade()->getDisplayNameLabel() );
 					line.format( L"Building %s  %d%%", what.str(), (Int)e->getPercentComplete() );
 					if( pu->getProductionCount() > 1 )

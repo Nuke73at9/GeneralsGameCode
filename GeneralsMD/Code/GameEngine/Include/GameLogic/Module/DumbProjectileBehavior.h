@@ -54,6 +54,7 @@ public:
 	Real m_firstPercentIndent;	///< The first point will be this percent along the target line
 	Real m_secondPercentIndent;	///< And the second, this.
 	Real m_sidewaysDrift;				///< Tiberium Project @feature the inner points move up to this far to either side (a volley weaves, as SAGE 2's)
+	const FXList *m_groundHitFX;	///< Tiberium Project @feature played where it bursts without hitting an object (SAGE 2's GroundHitFX: a miss)
 	UnsignedInt m_maxLifespan;
 	Bool m_tumbleRandomly;
 	Bool m_orientToFlightPath;
@@ -118,6 +119,7 @@ private:
 	WeaponBonusConditionFlags		m_extraBonusFlags;
 
   Bool                  m_hasDetonated;           ///<
+	Bool									m_hitObject;							///< Tiberium Project: it burst on an object it met (not saved: only the miss's effect asks)
 
 	Bool calcFlightPath(Bool recalcNumSegments);
 #if defined(RTS_DEBUG)

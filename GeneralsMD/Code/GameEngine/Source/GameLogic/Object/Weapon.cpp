@@ -196,6 +196,9 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "FireOCL",										parseAllVetLevelsAsciiString,					nullptr,							offsetof(WeaponTemplate, m_fireOCLNames) },
 	{ "TargetOCL",									INI::parseAsciiString,								nullptr,							offsetof(WeaponTemplate, m_targetOCLName) },	// Tiberium Project
 	{ "AttributeModifier",					AttributeModifierStore::parseModifierName,	nullptr,				offsetof(WeaponTemplate, m_victimModifier) },	// Tiberium Project
+	{ "VictimFX",										INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[0]) },	// Tiberium Project
+	{ "VictimFXInfantry",						INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[1]) },	// Tiberium Project
+	{ "VictimFXStructure",					INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[2]) },	// Tiberium Project
 	{ "ProjectileDetonationOCL",		parseAllVetLevelsAsciiString,					nullptr,							offsetof(WeaponTemplate, m_projectileDetonationOCLNames) },
 	{ "ProjectileExhaust",					parseAllVetLevelsPSys,								nullptr,							offsetof(WeaponTemplate, m_projectileExhausts) },
 	{ "VeterancyFireFX",										parsePerVetLevelFXList,				nullptr,							offsetof(WeaponTemplate, m_fireFXs) },
@@ -286,6 +289,7 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_projectileTmpl								= nullptr;
 	m_targetOCL										= nullptr;	// Tiberium Project
 	m_victimModifier							= NAMEKEY_INVALID;	// Tiberium Project
+	m_victimFX[0] = m_victimFX[1] = m_victimFX[2] = nullptr;	// Tiberium Project
 	for (Int i = LEVEL_FIRST; i <= LEVEL_LAST; ++i)
 	{
 		m_fireOCLNames[i].clear();
@@ -1604,6 +1608,29 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 			// (C&C4's AttributeModifierNugget: a slow, an armour debuff, an ally's damage boost)
 			if (m_victimModifier != NAMEKEY_INVALID && !curVictim->isEffectivelyDead())
 				curVictim->applyAttributeModifier(TheAttributeModifierStore->find(m_victimModifier), sourceID);
+			// Tiberium Project @feature the hit shown on what the damage reaches (C&C4's DamageFX, by what it
+			// is: a structure, a soldier, anything else): where a projectile burst on it, else at its middle
+			if (!damageInfo.out.m_noEffect && !curVictim->isKindOf(KINDOF_PROJECTILE) && curVictim->getDrawable() != nullptr)
+			{
+				const FXList *hitFX = m_victimFX[0];
+				if (curVictim->isKindOf(KINDOF_STRUCTURE) && m_victimFX[2] != nullptr)
+					hitFX = m_victimFX[2];
+				else if (curVictim->isKindOf(KINDOF_INFANTRY) && m_victimFX[1] != nullptr)
+					hitFX = m_victimFX[1];
+				if (hitFX != nullptr)
+				{
+					Coord3D at;
+					curVictim->getGeometryInfo().getCenterPosition(*curVictim->getPosition(), at);
+					if (isProjectileDetonation && pos != nullptr)
+					{
+						const Real reach = curVictim->getGeometryInfo().getBoundingSphereRadius() + 5.0f;
+						const Real dx = pos->x - at.x, dy = pos->y - at.y, dz = pos->z - at.z;
+						if (dx * dx + dy * dy + dz * dz <= reach * reach)
+							at = *pos;
+					}
+					FXList::doFXPos(hitFX, &at);
+				}
+			}
 			//DEBUG_ASSERTLOG(damageInfo.out.m_noEffect, ("WeaponTemplate::dealDamageInternal: dealt to %s %08lx: attempted %f, actual %f (%f)",
 			//	curVictim->getTemplate()->getName().str(),curVictim,
 			//	damageInfo.in.m_amount, damageInfo.out.m_actualDamageDealt, damageInfo.out.m_actualDamageClipped));

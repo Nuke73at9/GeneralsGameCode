@@ -96,6 +96,8 @@ namespace
 	const ThingTemplate *s_queueKindOf[TAB_COUNT];			///< ... and its kind, when the producer is gone
 	std::vector<SidebarQueue> s_queues[TAB_COUNT];
 	Int s_hoverItem = -1;
+	Int s_hoverTab = -1;				///< Tiberium Project @feature the tab under the cursor (its name in the info box)
+	Int s_scroll[TAB_COUNT];		///< each tab's first row shown (a list longer than the grid scrolls by the wheel)
 	UnsignedInt s_lastRefresh = 0;
 	DisplayString *s_label = nullptr;
 	DisplayString *s_small = nullptr;
@@ -182,7 +184,7 @@ namespace
 		const Bool hud = TiberiumHUD::getSidebarArea( &L->x, &L->y, &L->w, &L->h );
 		if( !hud )
 		{
-			L->w = max( 200, sw * 21 / 100 > 360 ? 360 : sw * 21 / 100 );
+			L->w = max( 200, min( sw * 22 / 100, sh * 40 / 100 ) );
 			L->x = sw - L->w;
 			L->y = max( 16, sh / 40 );
 			L->h = sh * 74 / 100 - L->y;
@@ -190,7 +192,8 @@ namespace
 		L->gap = max( 3, L->w / 80 );
 		L->headerH = hud ? 0 : max( 26, sh / 32 );
 		L->tabsY = L->y + L->headerH;
-		L->tabsH = max( 24, sh / 34 );
+		// (C&C4's tab plates are 50 by 28)
+		L->tabsH = max( 24, ( ( L->w - L->gap ) / TAB_COUNT ) * 28 / 50 );
 		L->chipsY = L->tabsY + L->tabsH + L->gap;
 		L->chipH = max( 20, sh / 44 );
 		L->chipsPerRow = 2;
@@ -212,6 +215,79 @@ namespace
 	Int gridTop( const SidebarLayout &L )
 	{
 		return L.chipsY + chipRows( L, (Int)s_queues[s_tab].size() ) * ( L.chipH + L.gap ) + L.gap;
+	}
+
+	//-----------------------------------------------------------------------------------------------
+	/** how many rows of items the grid shows */
+	Int rowsFit( const SidebarLayout &L )
+	{
+		return max( 1, ( L.infoY - gridTop( L ) - L.gap ) / ( L.cellH + L.gap ) );
+	}
+
+	//-----------------------------------------------------------------------------------------------
+	/** Tiberium Project @feature the sidebar in C&C4's art (TiberiumHUD.big's TibHUD_* pictures, made from
+		C&C4's build panel): RA3's layout, C&C4's look. Without them, plain panels. */
+	struct SidebarArt
+	{
+		const Image *plateOff, *plateOn, *plateHover;
+		const Image *tab[TAB_COUNT];
+		const Image *cameo, *cameoHover, *grid;
+	};
+
+	const Image *sidebarImage( const char *name, const char *side )
+	{
+		if( TheMappedImageCollection == nullptr )
+			return nullptr;
+		AsciiString full;
+		full.format( "TibHUD_%s%s", name, side );
+		return TheMappedImageCollection->findImageByName( full );
+	}
+
+	/// whether the art is there (all of it)
+	Bool getSidebarArt( SidebarArt *a )
+	{
+		const Player *me = ThePlayerList != nullptr ? ThePlayerList->getLocalPlayer() : nullptr;
+		const char *side = me != nullptr && me->getSide().compareNoCase( "China" ) == 0 ? "Nod" : "GDI";
+		AsciiString off, on;
+		off.format( "%sOff", side );
+		on.format( "%sOn", side );
+		a->plateOff = sidebarImage( "Plate", off.str() );
+		a->plateOn = sidebarImage( "Plate", on.str() );
+		a->plateHover = sidebarImage( "Plate", "Hover" );
+		Bool all = a->plateOff != nullptr && a->plateOn != nullptr && a->plateHover != nullptr;
+		for( Int t = 0; t < TAB_COUNT; ++t )
+		{
+			a->tab[t] = sidebarImage( "Tab", TAB_NAMES[t] );
+			all = all && a->tab[t] != nullptr;
+		}
+		a->cameo = sidebarImage( "Cameo", side );
+		a->cameoHover = sidebarImage( "Cameo", "Hover" );
+		a->grid = sidebarImage( "Grid", side );
+		return all && a->cameo != nullptr && a->cameoHover != nullptr && a->grid != nullptr;
+	}
+
+	/// the panel's grid, tiled over a rectangle
+	void drawGrid( const Image *grid, Int x, Int y, Int w, Int h, Int tile )
+	{
+		const Bool wasClipping = TheDisplay->isClippingEnabled();
+		IRegion2D clip;
+		clip.lo.x = x;
+		clip.lo.y = y;
+		clip.hi.x = x + w;
+		clip.hi.y = y + h;
+		TheDisplay->setClipRegion( &clip );
+		TheDisplay->enableClipping( TRUE );
+		for( Int ty = y; ty < y + h; ty += tile )
+			for( Int tx = x; tx < x + w; tx += tile )
+				TheDisplay->drawImage( grid, tx, ty, tx + tile, ty + tile, GameMakeColor( 255, 255, 255, 200 ) );
+		TheDisplay->enableClipping( wasClipping );
+	}
+
+	/// a C&C4 plate (a tab's, a queue's): off, on, or under the cursor
+	void drawPlate( const SidebarArt &a, Int x, Int y, Int w, Int h, Bool on, Bool hover, Bool dim )
+	{
+		const Image *plate = hover ? a.plateHover : ( on ? a.plateOn : a.plateOff );
+		TheDisplay->drawImage( plate, x, y, x + w, y + h, dim ? GameMakeColor( 255, 255, 255, 110 ) : 0xFFFFFFFF );
 	}
 
 	//-----------------------------------------------------------------------------------------------
@@ -481,9 +557,13 @@ namespace
 		const Color panel = GameMakeColor( 14, 18, 22, 225 ), panelEdge = GameMakeColor( 60, 70, 78, 255 );
 		const Color text = GameMakeColor( 230, 236, 240, 255 ), textDim = GameMakeColor( 140, 150, 158, 255 );
 
+		SidebarArt art;
+		const Bool styled = getSidebarArt( &art );
 		TheDisplay->drawFillRect( L.x, L.y, L.w, L.h, panel );
+		if( styled )
+			drawGrid( art.grid, L.x, L.y, L.w, L.h, max( 24, L.w / 7 ) );
 		TheDisplay->drawFillRect( L.x, L.y, 2, L.h, accent );
-		TheDisplay->drawOpenRect( L.x, L.y, L.w, L.h, 1.0f, panelEdge );
+		TheDisplay->drawOpenRect( L.x, L.y, L.w, L.h, 1.0f, styled ? accentDim : panelEdge );
 
 		// the header: money and power (the HUD's column has them, when it is up)
 		Player *me = ThePlayerList->getLocalPlayer();
@@ -503,6 +583,17 @@ namespace
 		{
 			const Int tx = L.x + L.gap / 2 + t * tabW;
 			const Bool on = t == s_tab;
+			if( styled )
+			{
+				// C&C4's tab plate, the tab's icon on it (light, white when on or under the cursor)
+				const Bool empty = s_queues[t].empty();
+				drawPlate( art, tx + 1, L.tabsY, tabW - 2, L.tabsH, on, t == s_hoverTab && !empty, empty );
+				const Int is = L.tabsH * 3 / 4;
+				const Color tint = empty ? GameMakeColor( 120, 126, 132, 160 ) : ( on || t == s_hoverTab ? 0xFFFFFFFF : GameMakeColor( 200, 230, 240, 230 ) );
+				TheDisplay->drawImage( art.tab[t], tx + ( tabW - is ) / 2, L.tabsY + ( L.tabsH - is ) / 2,
+					tx + ( tabW + is ) / 2, L.tabsY + ( L.tabsH + is ) / 2, tint );
+				continue;
+			}
 			TheDisplay->drawFillRect( tx + 1, L.tabsY, tabW - 2, L.tabsH, on ? accentDim : GameMakeColor( 30, 36, 42, 230 ) );
 			if( on )
 				TheDisplay->drawFillRect( tx + 1, L.tabsY + L.tabsH - 3, tabW - 2, 3, accent );
@@ -524,8 +615,13 @@ namespace
 			const Int row = (Int)i / L.chipsPerRow, col = (Int)i % L.chipsPerRow;
 			const Int cx = L.x + L.gap + col * ( chipW + L.gap ), cy = L.chipsY + row * ( L.chipH + L.gap );
 			const Bool on = &qs[i] == cur;
-			TheDisplay->drawFillRect( cx, cy, chipW, L.chipH, on ? accentDim : GameMakeColor( 26, 31, 36, 230 ) );
-			TheDisplay->drawOpenRect( cx, cy, chipW, L.chipH, 1.0f, on ? accent : panelEdge );
+			if( styled )
+				drawPlate( art, cx, cy, chipW, L.chipH, on, FALSE, FALSE );
+			else
+			{
+				TheDisplay->drawFillRect( cx, cy, chipW, L.chipH, on ? accentDim : GameMakeColor( 26, 31, 36, 230 ) );
+				TheDisplay->drawOpenRect( cx, cy, chipW, L.chipH, 1.0f, on ? accent : panelEdge );
+			}
 			UnicodeString name = queueLabel( qs[i] );
 			// how busy it is
 			UnicodeString busy;
@@ -545,25 +641,31 @@ namespace
 				shown.concat( busy );
 				s_small->setText( shown );
 			}
-			drawText( s_small, shown, cx + 4, cy + 2, on ? text : textDim );
+			drawText( s_small, shown, cx + 6, cy + ( L.chipH - s_small->getFont()->height ) / 2, on ? text : textDim );
 		}
 
 		// the items
 		const Int gy = gridTop( L );
-		const Int rowsFit = max( 1, ( L.infoY - gy - L.gap ) / ( L.cellH + L.gap ) );
+		const Int fit = rowsFit( L );
 		const Color cellBack = GameMakeColor( 22, 26, 30, 255 );
 		if( cur != nullptr )
 		{
-			for( size_t i = 0; i < cur->items.size() && (Int)i < rowsFit * L.cols; ++i )
+			// (a list longer than the grid scrolls: the wheel; arrows mark what is above and below)
+			const Int rows = ( (Int)cur->items.size() + L.cols - 1 ) / L.cols;
+			s_scroll[s_tab] = max( 0, min( s_scroll[s_tab], rows - fit ) );
+			const Int first = s_scroll[s_tab] * L.cols;
+			for( size_t i = first; i < cur->items.size() && (Int)i < first + fit * L.cols; ++i )
 			{
 				const SidebarItem &item = cur->items[i];
-				const Int row = (Int)i / L.cols, col = (Int)i % L.cols;
+				const Int row = ( (Int)i - first ) / L.cols, col = (Int)i % L.cols;
 				const Int ix = L.x + L.gap + col * ( L.cellW + L.gap ), iy = gy + row * ( L.cellH + L.gap );
 				const Bool ok = available( *cur, item );
-				TheDisplay->drawFillRect( ix, iy, L.cellW, L.cellH, cellBack );
+				// (in C&C4's art: the picture inside its build button's frame)
+				const Int inset = styled ? max( 2, L.cellW / 14 ) : 1;
+				TheDisplay->drawFillRect( ix + inset - 1, iy + inset - 1, L.cellW - 2 * inset + 2, L.cellH - 2 * inset + 2, cellBack );
 				const Image *image = item.button != nullptr ? item.button->getButtonImage() : nullptr;
 				if( image != nullptr )
-					TheDisplay->drawImage( image, ix + 1, iy + 1, ix + L.cellW - 1, iy + L.cellH - 1,
+					TheDisplay->drawImage( image, ix + inset, iy + inset, ix + L.cellW - inset, iy + L.cellH - inset,
 						ok ? 0xFFFFFFFF : GameMakeColor( 110, 110, 110, 255 ) );
 				else
 					drawText( s_small, labelOf( item ), ix + 3, iy + 3, ok ? text : textDim );
@@ -591,7 +693,21 @@ namespace
 					drawText( s_label, n, ix + L.cellW - 14, iy + 2, GameMakeColor( 255, 230, 120, 255 ) );
 				}
 				const Bool hover = (Int)i == s_hoverItem;
-				TheDisplay->drawOpenRect( ix, iy, L.cellW, L.cellH, hover ? 2.0f : 1.0f, hover ? accent : panelEdge );
+				if( styled )
+					TheDisplay->drawImage( hover ? art.cameoHover : art.cameo, ix, iy, ix + L.cellW, iy + L.cellH );
+				else
+					TheDisplay->drawOpenRect( ix, iy, L.cellW, L.cellH, hover ? 2.0f : 1.0f, hover ? accent : panelEdge );
+			}
+			// more above, more below: a small arrow at the grid's right edge
+			const Int ax = L.x + L.w - L.gap * 3, as = max( 4, L.gap * 2 );
+			if( s_scroll[s_tab] > 0 )
+				for( Int k = 0; k < as; ++k )
+					TheDisplay->drawLine( ax - k, gy - L.gap + k, ax + k, gy - L.gap + k, 1.0f, accent );
+			if( s_scroll[s_tab] + fit < rows )
+			{
+				const Int by = gy + fit * ( L.cellH + L.gap );
+				for( Int k = 0; k < as; ++k )
+					TheDisplay->drawLine( ax - k, by + as - k, ax + k, by + as - k, 1.0f, accent );
 			}
 		}
 		else
@@ -604,7 +720,14 @@ namespace
 		// what the cursor is on: its name, cost and time
 		TheDisplay->drawFillRect( L.x + L.gap, L.infoY, L.w - 2 * L.gap, L.infoH - L.gap, GameMakeColor( 24, 28, 33, 240 ) );
 		TheDisplay->drawFillRect( L.x + L.gap, L.infoY, L.w - 2 * L.gap, 2, accentDim );
-		if( cur != nullptr && s_hoverItem >= 0 && s_hoverItem < (Int)cur->items.size() )
+		if( s_hoverTab >= 0 && s_hoverTab < TAB_COUNT )
+		{
+			static const char *const TAB_TITLES[TAB_COUNT] = { "Structures", "Defenses", "Infantry", "Vehicles", "Aircraft", "Upgrades" };
+			UnicodeString title;
+			title.translate( AsciiString( TAB_TITLES[s_hoverTab] ) );
+			drawText( s_label, title, L.x + L.gap * 2, L.infoY + 4, text );
+		}
+		else if( cur != nullptr && s_hoverItem >= 0 && s_hoverItem < (Int)cur->items.size() )
 		{
 			const SidebarItem &item = cur->items[s_hoverItem];
 			drawText( s_label, labelOf( item ), L.x + L.gap * 2, L.infoY + 4, text );
@@ -652,9 +775,10 @@ namespace
 		if( cur == nullptr )
 			return -1;
 		const Int gy = gridTop( L );
-		for( size_t i = 0; i < cur->items.size(); ++i )
+		const Int first = s_scroll[s_tab] * L.cols;
+		for( size_t i = first; i < cur->items.size(); ++i )
 		{
-			const Int row = (Int)i / L.cols, col = (Int)i % L.cols;
+			const Int row = ( (Int)i - first ) / L.cols, col = (Int)i % L.cols;
 			const Int ix = L.x + L.gap + col * ( L.cellW + L.gap ), iy = gy + row * ( L.cellH + L.gap );
 			if( iy + L.cellH > L.infoY )
 				break;
@@ -820,10 +944,12 @@ namespace
 			{
 				const Int hit = hitTest( px, py );
 				s_hoverItem = hit >= 200 ? hit - 200 : -1;
+				s_hoverTab = hit >= 0 && hit < TAB_COUNT ? hit : -1;
 				return MSG_HANDLED;
 			}
 			case GWM_MOUSE_LEAVING:
 				s_hoverItem = -1;
+				s_hoverTab = -1;
 				return MSG_HANDLED;
 			case GWM_LEFT_DOWN:
 			case GWM_RIGHT_DOWN:
@@ -844,10 +970,16 @@ namespace
 				}
 				return MSG_HANDLED;
 			}
-			case GWM_LEFT_UP:
-			case GWM_RIGHT_UP:
 			case GWM_WHEEL_UP:
 			case GWM_WHEEL_DOWN:
+			{
+				// a list longer than the grid: a row at a time (the draw keeps it in range)
+				s_scroll[s_tab] = max( 0, s_scroll[s_tab] + ( msg == GWM_WHEEL_DOWN ? 1 : -1 ) );
+				s_hoverItem = -1;
+				return MSG_HANDLED;
+			}
+			case GWM_LEFT_UP:
+			case GWM_RIGHT_UP:
 				return MSG_HANDLED;
 			default:
 				return MSG_IGNORED;
@@ -902,8 +1034,14 @@ Bool TiberiumSidebar::testClickPart( const char *part, Int index, Bool right )
 		const SidebarQueue *cur = currentQueue();
 		if( cur == nullptr || index >= (Int)cur->items.size() )
 			return FALSE;
+		// (scrolled to it first, when the list is longer than the grid)
+		const Int row = index / L.cols, fit = rowsFit( L );
+		if( row < s_scroll[s_tab] )
+			s_scroll[s_tab] = row;
+		else if( row >= s_scroll[s_tab] + fit )
+			s_scroll[s_tab] = row - fit + 1;
 		x = L.x + L.gap + ( index % L.cols ) * ( L.cellW + L.gap ) + L.cellW / 2;
-		y = gridTop( L ) + ( index / L.cols ) * ( L.cellH + L.gap ) + L.cellH / 2;
+		y = gridTop( L ) + ( row - s_scroll[s_tab] ) * ( L.cellH + L.gap ) + L.cellH / 2;
 	}
 	if( x < 0 )
 		return FALSE;
@@ -951,6 +1089,7 @@ void TiberiumSidebar::update()
 		{
 			s_queueOf[t] = INVALID_ID;
 			s_queueKindOf[t] = nullptr;
+			s_scroll[t] = 0;
 		}
 		s_window = TheWindowManager->winCreate( nullptr, WIN_STATUS_ENABLED | WIN_STATUS_ABOVE | WIN_STATUS_RIGHT_CLICK,
 			L.x, L.y, L.w, L.h, nullptr, nullptr );
@@ -1006,6 +1145,7 @@ void TiberiumSidebar::reset()
 	for( Int t = 0; t < TAB_COUNT; ++t )
 		s_queues[t].clear();
 	s_hoverItem = -1;
+	s_hoverTab = -1;
 	if( s_label != nullptr && TheDisplayStringManager != nullptr )
 	{
 		TheDisplayStringManager->freeDisplayString( s_label );

@@ -65,6 +65,7 @@ DumbProjectileBehaviorModuleData::DumbProjectileBehaviorModuleData() :
 	m_firstPercentIndent(0.0f),
 	m_secondPercentIndent(0.0f),
 	m_sidewaysDrift(0.0f),
+	m_groundHitFX(nullptr),
 	m_garrisonHitKillCount(0),
 	m_garrisonHitKillFX(nullptr),
 	m_flightPathAdjustDistPerFrame(0.0f)
@@ -88,6 +89,7 @@ void DumbProjectileBehaviorModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "FirstPercentIndent",		INI::parsePercentToReal,	nullptr, offsetof( DumbProjectileBehaviorModuleData, m_firstPercentIndent ) },
 		{ "SecondPercentIndent",	INI::parsePercentToReal,	nullptr, offsetof( DumbProjectileBehaviorModuleData, m_secondPercentIndent ) },
 		{ "SidewaysDrift",				INI::parseReal,						nullptr, offsetof( DumbProjectileBehaviorModuleData, m_sidewaysDrift ) },	// Tiberium Project
+		{ "GroundHitFX",					INI::parseFXList,					nullptr, offsetof( DumbProjectileBehaviorModuleData, m_groundHitFX ) },	// Tiberium Project
 
 		{ "GarrisonHitKillRequiredKindOf", KindOfMaskType::parseFromINI, nullptr, offsetof( DumbProjectileBehaviorModuleData, m_garrisonHitKillKindof ) },
 		{ "GarrisonHitKillForbiddenKindOf", KindOfMaskType::parseFromINI, nullptr, offsetof( DumbProjectileBehaviorModuleData, m_garrisonHitKillKindofNot ) },
@@ -125,6 +127,7 @@ DumbProjectileBehavior::DumbProjectileBehavior( Thing *thing, const ModuleData* 
 	m_driftSecond = 0.0f;
 
   m_hasDetonated = FALSE;
+	m_hitObject = FALSE;	// Tiberium Project
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -546,6 +549,8 @@ Bool DumbProjectileBehavior::projectileHandleCollision( Object *other )
 	}
 
 	// collided with something... blow'd up!
+	if (other != nullptr)
+		m_hitObject = TRUE;	// Tiberium Project: not a miss (GroundHitFX)
 	detonate();
 
 	// mark ourself as "no collisions" (since we might still exist in slow death mode)
@@ -560,6 +565,9 @@ void DumbProjectileBehavior::detonate()
     return;
 
 	Object* obj = getObject();
+	// Tiberium Project @feature a miss's effect where it bursts without having met an object
+	if (!m_hitObject && getDumbProjectileBehaviorModuleData()->m_groundHitFX != nullptr)
+		FXList::doFXPos(getDumbProjectileBehaviorModuleData()->m_groundHitFX, obj->getPosition());
 	if (m_detonationWeaponTmpl)
 	{
 		TheWeaponStore->handleProjectileDetonation(m_detonationWeaponTmpl, obj, obj->getPosition(), m_extraBonusFlags);
