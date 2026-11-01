@@ -216,11 +216,13 @@ namespace
 	}
 
 	//-----------------------------------------------------------------------------------------------
-	Bool hasModule( const ThingTemplate *t, const char *name )
+	/// whether the template has a module whose name contains 'part' (BaseConstructionUpdate, or one of the
+	/// production exits: Default, Queue, SupplyCenter, SpawnPoint ProductionExitUpdate)
+	Bool hasModule( const ThingTemplate *t, const char *part )
 	{
 		const ModuleInfo &info = t->getBehaviorModuleInfo();
 		for( Int i = 0; i < info.getCount(); ++i )
-			if( info.getNthName( i ).compareNoCase( name ) == 0 )
+			if( strstr( info.getNthName( i ).str(), part ) != nullptr )
 				return TRUE;
 		return FALSE;
 	}
@@ -645,7 +647,9 @@ Bool TiberiumZones::isClaimer( const ThingTemplate *build )
 		return FALSE;
 	if( build->isKindOf( KINDOF_COMMANDCENTER ) || build->isKindOf( KINDOF_FS_FACTORY ) )
 		return TRUE;
-	return hasModule( build, "ProductionUpdate" ) || hasModule( build, "BaseConstructionUpdate" );
+	// what units come out of (a factory, a refinery, a deployed Crawler) or a base is built from; not
+	// what only researches (a power plant's Control Rods)
+	return hasModule( build, "ProductionExitUpdate" ) || hasModule( build, "BaseConstructionUpdate" );
 }
 
 //-------------------------------------------------------------------------------------------------
