@@ -125,16 +125,16 @@ UpdateSleepTime TiberiumArrivalUpdate::update()
 			return UPDATE_SLEEP_FOREVER;
 		const Player *player = me->getControllingPlayer();
 		const Object *factory = TheGameLogic->findObjectByID( me->getProducerID() );
-		const Coord3D *near = me->getPosition();
+		const Coord3D *towards = me->getPosition();
 		if( factory != nullptr )
 		{
-			near = factory->getPosition();
+			towards = factory->getPosition();
 			const ExitInterface *exit = factory->getObjectExitInterface();
 			if( exit != nullptr && exit->getRallyPoint() != nullptr )
-				near = exit->getRallyPoint();
+				towards = exit->getRallyPoint();
 		}
 		Coord3D spot;
-		if( !TiberiumZones::findArrival( player, near, &spot ) )
+		if( !TiberiumZones::findArrival( player, towards, &spot ) )
 			return UPDATE_SLEEP_FOREVER;
 		me->setPosition( &spot );
 		if( me->getAI() != nullptr )

@@ -65,8 +65,8 @@ public:
 	static Bool mayBuild( const Player *player, const ThingTemplate *build, const Coord3D *pos );
 	/// whether 'build' takes a zone that is nobody's (an outpost, a factory, a deployed Crawler)
 	static Bool isClaimer( const ThingTemplate *build );
-	/// where one of the player's Crawlers arrives: in its zone nearest 'near'; FALSE if it has none
-	static Bool findArrival( const Player *player, const Coord3D *near, Coord3D *spot );
+	/// where one of the player's Crawlers arrives: in its zone nearest 'towards'; FALSE if it has none
+	static Bool findArrival( const Player *player, const Coord3D *towards, Coord3D *spot );
 
 	// the grid, for drawing
 	static Int getGridWidth();

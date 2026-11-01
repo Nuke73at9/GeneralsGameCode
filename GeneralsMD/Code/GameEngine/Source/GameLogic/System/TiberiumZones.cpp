@@ -499,7 +499,7 @@ void TiberiumZones::build( Bool loadingSaveGame )
 				const Int c = y * s_w + x;
 				if( !s_land[c] || s_grid[c] != NO_ZONE )
 					continue;
-				Int free = 0, all = 0;
+				Int unzoned = 0, all = 0;
 				for( Int dy = -probe; dy <= probe; ++dy )
 					for( Int dx = -probe; dx <= probe; ++dx )
 					{
@@ -508,9 +508,9 @@ void TiberiumZones::build( Bool loadingSaveGame )
 						++all;
 						const Int px = x + dx, py = y + dy;
 						if( px >= 0 && py >= 0 && px < s_w && py < s_h && s_land[py * s_w + px] && s_grid[py * s_w + px] == NO_ZONE )
-							++free;
+							++unzoned;
 					}
-				if( free * 2 < all )
+				if( unzoned * 2 < all )
 					continue;
 				Zone nz;
 				cellCenter( c, &nz.center );
@@ -669,7 +669,7 @@ Bool TiberiumZones::mayBuild( const Player *player, const ThingTemplate *build, 
 }
 
 //-------------------------------------------------------------------------------------------------
-Bool TiberiumZones::findArrival( const Player *player, const Coord3D *near, Coord3D *spot )
+Bool TiberiumZones::findArrival( const Player *player, const Coord3D *towards, Coord3D *spot )
 {
 	if( s_mode == ABRAM_ZONES_OFF || player == nullptr || spot == nullptr )
 		return FALSE;
@@ -680,9 +680,9 @@ Bool TiberiumZones::findArrival( const Player *player, const Coord3D *near, Coor
 		if( !isOwnedBy( (Int)z, player ) )
 			continue;
 		Real d = 0.0f;
-		if( near != nullptr )
+		if( towards != nullptr )
 		{
-			const Real dx = s_zones[z].center.x - near->x, dy = s_zones[z].center.y - near->y;
+			const Real dx = s_zones[z].center.x - towards->x, dy = s_zones[z].center.y - towards->y;
 			d = dx * dx + dy * dy;
 		}
 		// without a place asked for, the player's start zone
@@ -697,8 +697,8 @@ Bool TiberiumZones::findArrival( const Player *player, const Coord3D *near, Coor
 	if( best < 0 )
 		return FALSE;
 	Coord3D at = s_zones[best].center;
-	if( near != nullptr && zoneAt( near ) == best )
-		at = *near;
+	if( towards != nullptr && zoneAt( towards ) == best )
+		at = *towards;
 	FindPositionOptions fpo;
 	fpo.minRadius = 0.0f;
 	fpo.maxRadius = 200.0f;
