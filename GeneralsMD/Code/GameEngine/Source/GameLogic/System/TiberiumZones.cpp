@@ -56,6 +56,7 @@ namespace
 	{
 		Coord3D center;
 		Bool home;
+		Bool node;									///< around a node the map places
 		PlayerMaskType homeOwners;	///< a start zone: its players
 		PlayerMaskType owners;			///< who holds it now
 		Int cells;
@@ -93,6 +94,7 @@ namespace
 	std::vector<UnsignedByte> s_grid;		///< each cell's zone (NO_ZONE: none)
 	std::vector<UnsignedByte> s_land;		///< each cell: ground a base could stand on
 	std::vector<Zone> s_zones;
+	Int s_mapNodes = 0;									///< the nodes the map itself places
 	Bool s_ownersStale = FALSE;					///< a loaded game: who holds what, once its objects are in
 
 	//-----------------------------------------------------------------------------------------------
@@ -208,6 +210,21 @@ namespace
 	}
 
 	//-----------------------------------------------------------------------------------------------
+	/** a node: the ZoneNode object, or anything with TiberiumZoneNodeUpdate */
+	Bool isNodeTemplate( const ThingTemplate *t )
+	{
+		if( t == nullptr )
+			return FALSE;
+		if( TheGlobalData->m_zoneNode.isNotEmpty() && t->getName().compareNoCase( TheGlobalData->m_zoneNode ) == 0 )
+			return TRUE;
+		const ModuleInfo &info = t->getBehaviorModuleInfo();
+		for( Int i = 0; i < info.getCount(); ++i )
+			if( info.getNthName( i ).compareNoCase( "TiberiumZoneNodeUpdate" ) == 0 )
+				return TRUE;
+		return FALSE;
+	}
+
+	//-----------------------------------------------------------------------------------------------
 	Bool isPlayablePlayer( const Player *player )
 	{
 		if( player == nullptr || ThePlayerList == nullptr || player == ThePlayerList->getNeutralPlayer() )
@@ -311,6 +328,7 @@ void TiberiumZones::reset()
 {
 	s_mode = ABRAM_ZONES_OFF;
 	s_ownersStale = FALSE;
+	s_mapNodes = 0;
 	s_w = s_h = 0;
 	s_grid.clear();
 	s_land.clear();
@@ -345,8 +363,14 @@ void TiberiumZones::build( Bool loadingSaveGame )
 		s_land[c] = isLandAt( &pos ) ? 1 : 0;
 	}
 
+	// a map that places its own nodes (C&C4's: five, on maps four times Zero Hour's) has a zone round each
+	// node, twice the size, and no others
+	Int nodesOnMap = 0;
+	for( MapObject *mo = MapObject::getFirstMapObject(); mo != nullptr; mo = mo->getNext() )
+		if( isNodeTemplate( mo->getThingTemplate() ) )
+			++nodesOnMap;
 	const Int homeLimit = (Int)( TheGlobalData->m_zoneHomeRadius / CELL * STEP );
-	const Int expansionLimit = (Int)( TheGlobalData->m_zoneExpansionRadius / CELL * STEP );
+	const Int expansionLimit = (Int)( TheGlobalData->m_zoneExpansionRadius * ( nodesOnMap > 0 ? 2.0f : 1.0f ) / CELL * STEP );
 	std::vector<Seed> seeds;
 
 	// the starts: one zone each, or one for allies' starts near each other (bridged along the way)
@@ -404,6 +428,7 @@ void TiberiumZones::build( Bool loadingSaveGame )
 			Zone nz;
 			nz.center = starts[i].pos;
 			nz.home = TRUE;
+			nz.node = FALSE;
 			nz.homeOwners = 0;
 			nz.owners = 0;
 			nz.cells = starts[i].group;
@@ -435,10 +460,21 @@ void TiberiumZones::build( Bool loadingSaveGame )
 		}
 	}
 
-	// the expansion zones: around the supplies and the tech buildings away from the starts
+	// the expansion zones: one around each node the map places (C&C4's maps: their TCN), then around
+	// the supplies and the tech buildings away from the starts and the nodes
 	struct Cluster { Real x, y; Int n; };
 	std::vector<Cluster> clusters;
 	const Real home2 = TheGlobalData->m_zoneHomeRadius * TheGlobalData->m_zoneHomeRadius;
+	s_mapNodes = 0;
+	for( MapObject *mo = MapObject::getFirstMapObject(); mo != nullptr; mo = mo->getNext() )
+	{
+		const ThingTemplate *t = mo->getThingTemplate();
+		if( t == nullptr || !isNodeTemplate( t ) )
+			continue;
+		Cluster c = { mo->getLocation()->x, mo->getLocation()->y, 1 };
+		clusters.push_back( c );
+		++s_mapNodes;
+	}
 	for( MapObject *mo = MapObject::getFirstMapObject(); mo != nullptr; mo = mo->getNext() )
 	{
 		const ThingTemplate *t = mo->getThingTemplate();
@@ -459,9 +495,13 @@ void TiberiumZones::build( Bool loadingSaveGame )
 			const Real cx = clusters[c].x / clusters[c].n, cy = clusters[c].y / clusters[c].n;
 			if( ( cx - p->x ) * ( cx - p->x ) + ( cy - p->y ) * ( cy - p->y ) < CLUSTER * CLUSTER )
 			{
-				clusters[c].x += p->x;
-				clusters[c].y += p->y;
-				++clusters[c].n;
+				// a node's zone stays around the node
+				if( (Int)c >= s_mapNodes )
+				{
+					clusters[c].x += p->x;
+					clusters[c].y += p->y;
+					++clusters[c].n;
+				}
 				merged = TRUE;
 			}
 		}
@@ -479,6 +519,7 @@ void TiberiumZones::build( Bool loadingSaveGame )
 		Zone nz;
 		cellCenter( cell, &nz.center );
 		nz.home = FALSE;
+		nz.node = (Int)c < s_mapNodes;
 		nz.homeOwners = nz.owners = 0;
 		nz.cells = -1;
 		s_zones.push_back( nz );
@@ -487,7 +528,8 @@ void TiberiumZones::build( Bool loadingSaveGame )
 	}
 	fill( seeds );
 
-	// the land left: zones of its own where there is room for one
+	// the land left: zones of its own where there is room for one (not on a map with its own nodes)
+	if( nodesOnMap == 0 )
 	{
 		const Int r = max( 2, (Int)( TheGlobalData->m_zoneExpansionRadius / CELL ) );
 		const Int spacing = max( 4, r * 17 / 10 );
@@ -515,6 +557,7 @@ void TiberiumZones::build( Bool loadingSaveGame )
 				Zone nz;
 				cellCenter( c, &nz.center );
 				nz.home = FALSE;
+				nz.node = FALSE;
 				nz.homeOwners = nz.owners = 0;
 				nz.cells = -1;
 				s_zones.push_back( nz );
@@ -539,12 +582,12 @@ void TiberiumZones::build( Bool loadingSaveGame )
 				sy[s_grid[c]] += (Real)( c / s_w );
 			}
 		const Real r = TheGlobalData->m_zoneExpansionRadius / CELL;
-		const Int least = max( 8, (Int)( 3.14159f * r * r * 0.15f ) );
+		const Int least = max( 8, (Int)( 3.14159f * r * r * 0.15f ) );	// (a node's zone is never dropped: see below)
 		std::vector<Int> renumber( s_zones.size(), -1 );
 		std::vector<Zone> kept;
 		for( size_t z = 0; z < s_zones.size(); ++z )
 		{
-			if( cells[z] == 0 || ( !s_zones[z].home && cells[z] < least ) )
+			if( cells[z] == 0 || ( !s_zones[z].home && !s_zones[z].node && cells[z] < least ) )
 				continue;
 			renumber[z] = (Int)kept.size();
 			Zone k = s_zones[z];
@@ -576,7 +619,8 @@ void TiberiumZones::build( Bool loadingSaveGame )
 	}
 
 	s_mode = mode;
-	if( !loadingSaveGame && ( mode == ABRAM_ZONES_EXPANSION || mode == ABRAM_ZONES_FREE ) )
+	// the nodes: the map's own (C&C4's maps), else one in each expansion zone
+	if( !loadingSaveGame && s_mapNodes == 0 && ( mode == ABRAM_ZONES_EXPANSION || mode == ABRAM_ZONES_FREE ) )
 		placeNodes();
 	updateOwners();
 	s_ownersStale = loadingSaveGame;

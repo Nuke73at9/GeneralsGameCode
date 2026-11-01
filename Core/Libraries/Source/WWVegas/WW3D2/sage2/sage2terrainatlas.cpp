@@ -77,9 +77,20 @@ namespace
 	}
 
 	// Data\TerrainCNC4.txt: "<Zero Hour terrain>=<C&C4 texture>" per line
+	bool Read_Mapping_File(const char* path, std::map<std::string, std::string>& mapping);
+
+	// Tiberium Project: Zero Hour's terrains' (TiberiumTerrain.big), and C&C4's maps' own terrains
+	// (TiberiumMaps.big: Data\TerrainCNC4Maps.txt)
 	bool Read_Mapping(std::map<std::string, std::string>& mapping)
 	{
-		file_auto_ptr file(_TheFileFactory, "Data\\TerrainCNC4.txt");
+		const bool zh = Read_Mapping_File("Data\\TerrainCNC4.txt", mapping);
+		const bool maps = Read_Mapping_File("Data\\TerrainCNC4Maps.txt", mapping);
+		return zh || maps;
+	}
+
+	bool Read_Mapping_File(const char* path, std::map<std::string, std::string>& mapping)
+	{
+		file_auto_ptr file(_TheFileFactory, path);
 		if (!file->Is_Available() || !file->Open())
 			return false;
 		std::vector<char> text((size_t)file->Size() + 1, '\0');

@@ -865,7 +865,8 @@ void GameEngine::init()
 	//			TheShell->hideShell();
 
 				// Tiberium Project @feature -testSide: the map as a skirmish, the local player on that side
-				// and an easy AI on the second start, so the command bar works as in a game (test runs)
+				// and an easy AI on the start farthest from it (the second start of a two-player map; on a map
+				// with more, as a game's random start picks it), so the command bar works as in a game (test runs)
 				const char *testSide = TiberiumTest::getSide();
 				const Int sideNum = testSide != nullptr && ThePlayerTemplateStore != nullptr
 					? ThePlayerTemplateStore->getTemplateNumByName( AsciiString( testSide ) ) : -1;
@@ -889,7 +890,7 @@ void GameEngine::init()
 					ai.setState(SLOT_EASY_AI);
 					ai.setColor(1);
 					ai.setPlayerTemplate(sideNum);
-					ai.setStartPos(1);
+					ai.setStartPos(-1);
 					TheSkirmishGameInfo->setSlot(1, ai);
 					TheSkirmishGameInfo->setMap(fname);
 					const MapMetaData *md = TheMapCache != nullptr ? TheMapCache->findMap(fname) : nullptr;

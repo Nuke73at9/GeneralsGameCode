@@ -55,7 +55,11 @@ class Shadow;
 enum WaypointID CPP_11(: Int);
 
 #define MAP_XY_FACTOR			(10.0f)	 //How wide and tall each height map square is in world space.
-#define MAP_HEIGHT_SCALE	(MAP_XY_FACTOR/16.0f)		//divide all map heights by 8.
+// Tiberium Project @feature a map's height step: Zero Hour's 0.625 (heights / 16 of a cell), or the map's own
+// (its WorldInfo's heightScale: C&C4's maps, whose ground rises further than Zero Hour's 255 steps reach)
+#define MAP_HEIGHT_SCALE_DEFAULT	(MAP_XY_FACTOR/16.0f)
+extern Real TheMapHeightScale;
+#define MAP_HEIGHT_SCALE	(TheMapHeightScale)		//divide all map heights by 8.
 
 // m_flags bit values.
 enum {

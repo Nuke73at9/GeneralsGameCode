@@ -60,6 +60,8 @@
 #include "WWMath/plane.h"
 #include "WWMath/tri.h"
 
+// Tiberium Project @feature the loaded map's height step (MapObject.h: MAP_HEIGHT_SCALE)
+Real TheMapHeightScale = MAP_HEIGHT_SCALE_DEFAULT;
 
 // GLOBALS ////////////////////////////////////////////////////////////////////////////////////////
 TerrainLogic *TheTerrainLogic = nullptr;

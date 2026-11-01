@@ -504,6 +504,7 @@ WorldHeightMap::WorldHeightMap(ChunkInputStream *pStrm, Bool logicalDataOnly):
 #endif
 
 	DataChunkInput file( pStrm );
+	TheMapHeightScale = MAP_HEIGHT_SCALE_DEFAULT;	// Tiberium Project: until the map's WorldInfo says otherwise
 
 	if (logicalDataOnly) {
 		file.registerParser( "HeightMapData", AsciiString::TheEmptyString, ParseSizeOnlyInChunk );
@@ -521,6 +522,8 @@ WorldHeightMap::WorldHeightMap(ChunkInputStream *pStrm, Bool logicalDataOnly):
 		file.registerParser( "FUNKY_TILING", AsciiString::TheEmptyString, ParseFunkyTilingDataChunk );
 #endif
 		file.registerParser( "GlobalLighting", AsciiString::TheEmptyString, ParseLightingDataChunk );
+		// Tiberium Project: the map's height step comes with its WorldInfo, for the terrain's heights too
+		file.registerParser( "WorldInfo", AsciiString::TheEmptyString, ParseWorldDictDataChunk );
 	}
 	if (!file.parse(this)) {
 
@@ -744,6 +747,10 @@ Bool WorldHeightMap::ParseWorldDictDataChunk(DataChunkInput &file, DataChunkInfo
 	if (exists) {
 		TheWritableGlobalData->m_weather = (Weather) theWeather;
 	}
+	// Tiberium Project @feature the map's own height step (C&C4's maps), else Zero Hour's
+	static const NameKeyType key_heightScale = NAMEKEY("heightScale");
+	const Real heightScale = MapObject::getWorldDict()->getReal(key_heightScale, &exists);
+	TheMapHeightScale = (exists && heightScale > 0.0f) ? heightScale : MAP_HEIGHT_SCALE_DEFAULT;
 	return true;
 }
 
@@ -1876,7 +1883,7 @@ Bool WorldHeightMap::getUVForTileIndex(Int ndx, Short tileNdx, float U[4], float
 
 		static Real TALL_STRETCH_LIMIT = 2.0f;
 		static Real DIAMOND_STRETCH_LIMIT = 2.4f;
-		static Real HEIGHT_SCALE = MAP_HEIGHT_SCALE / MAP_XY_FACTOR;
+		const Real HEIGHT_SCALE = MAP_HEIGHT_SCALE / MAP_XY_FACTOR;	// Tiberium Project: the map's own step
 
 		Real nU, nV, xU, xV;
 		nU=nV=xU=xV = 0.0f;
