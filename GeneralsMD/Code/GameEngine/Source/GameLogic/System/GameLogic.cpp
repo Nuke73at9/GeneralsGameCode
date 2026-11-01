@@ -89,6 +89,7 @@
 #include "GameClient/InGameUI.h"
 #include "GameClient/LoadScreen.h"
 #include "Common/TiberiumTest.h"	// Tiberium Project
+#include "GameLogic/TiberiumZones.h"	// Tiberium Project
 #include "GameClient/MapUtil.h"
 #include "GameClient/Mouse.h"
 #include "GameClient/ParticleSys.h"
@@ -464,6 +465,8 @@ void GameLogic::init()
 //-------------------------------------------------------------------------------------------------
 void GameLogic::reset()
 {
+	TiberiumZones::reset();	// Tiberium Project
+
 	m_thingTemplateBuildableOverrides.clear();
 	m_controlBarOverrides.clear();
 
@@ -2257,6 +2260,9 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 	DEBUG_LOG(("%s", Buf));
 	#endif
 
+
+	// Tiberium Project @feature C&C4's zones of a skirmish that has them (and their nodes, in a new game)
+	TiberiumZones::build( loadingSaveGame );
 
 	// final step, run newMap for all players
 	if( loadingSaveGame == FALSE )
@@ -4143,6 +4149,7 @@ void GameLogic::update()
 	TheWeaponStore->UPDATE();
 	TheLocomotorStore->UPDATE();
 	TheVictoryConditions->UPDATE();
+	TiberiumZones::update();	// Tiberium Project @feature who holds C&C4's zones
 
 	{
 		//Handle disabled statii (and re-enable objects once frame matches)

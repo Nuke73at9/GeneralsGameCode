@@ -193,6 +193,7 @@ set(GAMEENGINE_SRC
     Include/GameClient/TiberiumHUD.h
     Include/GameClient/TiberiumSidebar.h
     Include/GameClient/TiberiumMusic.h
+    Include/GameClient/TiberiumZoneView.h
 #    Include/GameClient/Keyboard.h
     Include/GameClient/KeyDefs.h
 #    Include/GameClient/LanguageFilter.h
@@ -415,6 +416,8 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/TiberiumCrystalUpdate.h
     Include/GameLogic/Module/TiberiumFieldUpdate.h
     Include/GameLogic/Module/TiberiumPickupUpdate.h
+    Include/GameLogic/Module/TiberiumArrivalUpdate.h
+    Include/GameLogic/Module/TiberiumZoneNodeUpdate.h
     Include/GameLogic/Module/AttributeModifierUpgrade.h
     Include/GameLogic/Module/FireWeaponAbilityUpdate.h
     Include/GameLogic/Module/ToggleAbilityUpdate.h
@@ -510,6 +513,7 @@ set(GAMEENGINE_SRC
 #    Include/GameLogic/SidesList.h
     Include/GameLogic/Squad.h
 #    Include/GameLogic/TerrainLogic.h
+    Include/GameLogic/TiberiumZones.h
     Include/GameLogic/TurretAI.h
     Include/GameLogic/VictoryConditions.h
     Include/GameLogic/Weapon.h
@@ -816,6 +820,7 @@ set(GAMEENGINE_SRC
     Source/GameClient/GUI/TiberiumHUD.cpp
     Source/GameClient/GUI/TiberiumSidebar.cpp
     Source/GameClient/TiberiumMusic.cpp
+    Source/GameClient/TiberiumZoneView.cpp
 #    Source/GameClient/Input/Keyboard.cpp
 #    Source/GameClient/Input/Mouse.cpp
 #    Source/GameClient/LanguageFilter.cpp
@@ -1074,6 +1079,8 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Update/TiberiumCrystalUpdate.cpp
     Source/GameLogic/Object/Update/TiberiumFieldUpdate.cpp
     Source/GameLogic/Object/Update/TiberiumPickupUpdate.cpp
+    Source/GameLogic/Object/Update/TiberiumArrivalUpdate.cpp
+    Source/GameLogic/Object/Update/TiberiumZoneNodeUpdate.cpp
     Source/GameLogic/Object/Update/FireWeaponAbilityUpdate.cpp
     Source/GameLogic/Object/Update/ToggleAbilityUpdate.cpp
     Source/GameLogic/Object/Update/SlavedUpdate.cpp
@@ -1128,6 +1135,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/System/GameLogic.cpp
 #    Source/GameLogic/System/GameLogicDispatch.cpp
 #    Source/GameLogic/System/RankInfo.cpp
+    Source/GameLogic/System/TiberiumZones.cpp
 #    Source/GameNetwork/Connection.cpp
 #    Source/GameNetwork/ConnectionManager.cpp
 #    Source/GameNetwork/DisconnectManager.cpp

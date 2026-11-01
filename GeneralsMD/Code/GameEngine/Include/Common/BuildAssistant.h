@@ -93,6 +93,7 @@ enum LegalBuildCode CPP_11(: Int)
 	LBC_SHROUD,
 	LBC_TOO_CLOSE_TO_SUPPLIES,
 	LBC_GENERIC_FAILURE,
+	LBC_OUTSIDE_ZONE,				///< Tiberium Project @feature outside the player's zones (TiberiumZones.h)
 };
 
 //-------------------------------------------------------------------------------------------------

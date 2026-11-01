@@ -105,3 +105,22 @@ Int AbramGameRules::scaleBuildTime( Int buildFrames )
 	const Int scaled = buildFrames / speed;
 	return scaled > 0 ? scaled : 1;
 }
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature C&C4's zones' mode, in the rules' bits 16 and 17
+AbramZoneMode AbramGameRules::getZoneModeOf( UnsignedInt rules )
+{
+	return (AbramZoneMode)((rules & ABRAM_ZONES_MASK) >> ABRAM_ZONES_SHIFT);
+}
+
+AbramZoneMode AbramGameRules::getZoneMode()
+{
+	return getZoneModeOf( currentRules() );
+}
+
+UnsignedInt AbramGameRules::setZoneMode( UnsignedInt rules, AbramZoneMode mode )
+{
+	if (mode < ABRAM_ZONES_OFF || mode >= ABRAM_ZONE_MODE_COUNT)
+		mode = ABRAM_ZONES_OFF;
+	return (rules & ~(UnsignedInt)ABRAM_ZONES_MASK) | ((UnsignedInt)mode << ABRAM_ZONES_SHIFT);
+}

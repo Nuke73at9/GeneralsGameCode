@@ -54,6 +54,7 @@
 #include "GameLogic/Module/CreateModule.h"
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Module/ParkingPlaceBehavior.h"
+#include "GameLogic/TiberiumZones.h"	// Tiberium Project
 
 // PUBLIC DATA ////////////////////////////////////////////////////////////////////////////////////
 BuildAssistant *TheBuildAssistant = nullptr;
@@ -924,6 +925,16 @@ LegalBuildCode BuildAssistant::isLocationLegalToBuild( const Coord3D *worldPos,
 	TheTerrainLogic->getMaximumPathfindExtent(&mapExtent);
 	if (!mapExtent.isInRegion(worldPos->asCoord2D())) {
 		return LBC_RESTRICTED_TERRAIN;
+	}
+
+	// Tiberium Project @feature C&C4's zones: a structure only in its player's zones (or an outpost in one
+	// that is nobody's), in a skirmish with pre-zones or expansion zones
+	{
+		const Player *zonePlayer = player;
+		if (builderObject != nullptr && builderObject->getControllingPlayer() != nullptr)
+			zonePlayer = builderObject->getControllingPlayer();
+		if (!TiberiumZones::mayBuild(zonePlayer, build, worldPos))
+			return LBC_OUTSIDE_ZONE;
 	}
 
 	// check shroud level

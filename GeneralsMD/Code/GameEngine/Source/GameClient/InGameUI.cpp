@@ -33,6 +33,8 @@
 #include "GameClient/TiberiumHUD.h"	// Tiberium Project
 #include "GameClient/TiberiumSidebar.h"	// Tiberium Project
 #include "GameClient/TiberiumMusic.h"	// Tiberium Project
+#include "GameClient/TiberiumZoneView.h"	// Tiberium Project
+#include "GameLogic/TiberiumZones.h"	// Tiberium Project
 #include "GameLogic/Module/BaseConstructionUpdate.h"	// Tiberium Project
 #include <stdio.h>
 
@@ -1860,6 +1862,8 @@ void InGameUI::handleBuildPlacements()
 //-------------------------------------------------------------------------------------------------
 void InGameUI::preDraw()
 {
+	// Tiberium Project @feature C&C4's zones' borders over the world (under everything else drawn here)
+	TiberiumZoneView::draw();
 
 	// handle any "icons" for the act of building things and placing them in the world
 	handleBuildPlacements();
@@ -2144,6 +2148,8 @@ void InGameUI::update()
 	// Tiberium Project @feature the C&C3 and C&C4 HUD (with the sidebar): after the control bar's update,
 	// as it takes over some of the bar's windows
 	TiberiumHUD::update();
+	// Tiberium Project @feature C&C4's zones on the radar (after the HUD has placed it)
+	TiberiumZoneView::update();
 
 	// update any random window layout that so requests
 	for (std::list<WindowLayout *>::iterator it = m_windowLayouts.begin(); it != m_windowLayouts.end(); ++it)
@@ -2210,6 +2216,7 @@ void InGameUI::reset()
 	TiberiumHUD::reset();
 	TiberiumSidebar::reset();
 	TiberiumMusic::reset();
+	TiberiumZoneView::reset();
 
 	// Abram's Personal Test @feature Close the team menu with the game.
 	AbramTeamMenu::reset();
@@ -4431,6 +4438,15 @@ void InGameUI::displayCantBuildMessage( LegalBuildCode lbc )
 			break;
 
 		//---------------------------------------------------------------------------------------------
+		// Tiberium Project @feature C&C4's zones
+		case LBC_OUTSIDE_ZONE:
+			if( TiberiumZones::getMode() == ABRAM_ZONES_PRE )
+				messageNoFormat( UnicodeString( L"Structures can only be built in your start zone." ) );
+			else
+				messageNoFormat( UnicodeString( L"Structures can only be built in your zones. Take more with a zone's node, an outpost or a Crawler." ) );
+			break;
+
+		//---------------------------------------------------------------------------------------------
 		case LBC_GENERIC_FAILURE:
 		default:
 
@@ -6028,6 +6044,7 @@ void InGameUI::recreateControlBar()
 {
 	// Tiberium Project: the HUD gives the bar its windows back before the bar is made anew
 	TiberiumHUD::reset();
+	TiberiumZoneView::reset();
 
 	GameWindow *win = TheWindowManager->winGetWindowFromId(nullptr, TheNameKeyGenerator->nameToKey("ControlBar.wnd"));
 	deleteInstance(win);

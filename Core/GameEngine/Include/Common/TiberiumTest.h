@@ -69,6 +69,8 @@ public:
 	static void setUI( const char *spec );	///< "frame:action[=arg];...": select, command=Button, click=slot, mouse=x,y, bar, money=amount (the command bar as a player uses it: not with -testCRC)
 	static void setSide( const char *side );	///< -testSide FactionAmerica: the test map as a skirmish, the local player on that side (an easy AI on the second start), so the command bar works as in a game
 	static const char *getSide();	///< or nullptr
+	static void setRules( unsigned int rules );	///< -testRules 0x20000: the -testSide skirmish's match options (AbramGameRules' bits)
+	static unsigned int getRules();
 	static void setReveal( Bool reveal );	///< reveal the map to the local player at the start (changes the logic's state: not with -testCRC)
 	static void setCRCFrame( Int frame );
 	static void setQuitFrame( Int frame );

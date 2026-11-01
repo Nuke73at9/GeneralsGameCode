@@ -38,6 +38,9 @@ enum Choice
 	CHOICE_LIMIT_SUPERWEAPONS,
 	CHOICE_REVEAL_MAP,
 	CHOICE_UNLOCK_ALL,
+#if RTS_ZEROHOUR
+	CHOICE_ZONES,		// Tiberium Project @feature C&C4's zones
+#endif
 	CHOICE_DONE,
 	CHOICE_COUNT
 };
@@ -79,6 +82,14 @@ UnicodeString choiceText( Int choice, const GameInfo *game )
 	case CHOICE_UNLOCK_ALL:
 		text.format( L"Unlock Everything: %ls", onOff( (rules & ABRAM_RULE_UNLOCK_ALL) != 0 ) );
 		break;
+#if RTS_ZEROHOUR
+	case CHOICE_ZONES:
+	{
+		static const wchar_t *const MODES[ABRAM_ZONE_MODE_COUNT] = { L"Off", L"Pre-zones", L"Expansion zones", L"Free zones" };
+		text.format( L"Tiberium Zones: %ls", MODES[AbramGameRules::getZoneModeOf( rules )] );
+		break;
+	}
+#endif
 	default:
 		text = L"Done";
 		break;
@@ -126,6 +137,12 @@ void onChoice( Int choice, void *userData )
 	case CHOICE_UNLOCK_ALL:
 		toggleRule( game, ABRAM_RULE_UNLOCK_ALL );
 		break;
+#if RTS_ZEROHOUR
+	case CHOICE_ZONES:
+		game->setAbramRules( AbramGameRules::setZoneMode( rules,
+			(AbramZoneMode)((AbramGameRules::getZoneModeOf( rules ) + 1) % ABRAM_ZONE_MODE_COUNT) ) );
+		break;
+#endif
 	default:
 		break;
 	}

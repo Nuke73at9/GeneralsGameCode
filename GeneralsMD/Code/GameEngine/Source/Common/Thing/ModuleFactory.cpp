@@ -153,6 +153,8 @@
 #include "GameLogic/Module/TiberiumCrystalUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/TiberiumFieldUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/TiberiumPickupUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/TiberiumZoneNodeUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/TiberiumArrivalUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/AttributeModifierUpgrade.h"	// Tiberium Project
 #include "GameLogic/Module/OrderAbilityUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/AssembleStructureUpdate.h"	// Tiberium Project
@@ -426,6 +428,8 @@ void ModuleFactory::init()
 	addModule( TiberiumCrystalUpdate );	// Tiberium Project
 	addModule( TiberiumFieldUpdate );	// Tiberium Project
 	addModule( TiberiumPickupUpdate );	// Tiberium Project
+	addModule( TiberiumZoneNodeUpdate );	// Tiberium Project
+	addModule( TiberiumArrivalUpdate );	// Tiberium Project
 	addModule( AttributeModifierUpgrade );	// Tiberium Project
 	addModule( OrderAbilityUpdate );	// Tiberium Project
 	addModule( AssembleStructureUpdate );	// Tiberium Project

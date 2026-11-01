@@ -66,6 +66,10 @@
 #if RTS_ZEROHOUR
 #include "GameClient/TiberiumHUD.h"
 #include "GameClient/TiberiumSidebar.h"
+#if RTS_ZEROHOUR
+#include "GameClient/TiberiumZoneView.h"
+#include "GameLogic/TiberiumZones.h"
+#endif
 #include "GameLogic/Module/BaseConstructionUpdate.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 #include "GameLogic/Module/SupplyTruckAIUpdate.h"
@@ -461,6 +465,9 @@ void TiberiumTest::setUI( const char *spec )
 }
 void TiberiumTest::setSide( const char *side ) { if ( side != nullptr && *side != '\0' ) { s_side = side; s_active = TRUE; } }
 const char *TiberiumTest::getSide() { return s_side.empty() ? nullptr : s_side.c_str(); }
+static unsigned int s_rules = 0;
+void TiberiumTest::setRules( unsigned int rules ) { s_rules = rules; }
+unsigned int TiberiumTest::getRules() { return s_rules; }
 void TiberiumTest::setReveal( Bool reveal ) { s_reveal = reveal; if ( reveal ) s_active = TRUE; }
 void TiberiumTest::setCRCFrame( Int frame ) { if ( frame >= 0 ) { s_crcFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setQuitFrame( Int frame ) { if ( frame > 0 ) { s_quitFrame = frame; s_active = TRUE; } }
@@ -1164,6 +1171,94 @@ void TiberiumTest::update()
 			log( "frame %d: ui: hud%s%s%s: %s", (int)s_frame, clicked ? " click " : "", clicked ? step.arg.c_str() : "",
 				clicked ? ( took ? " (taken)" : " (missed)" ) : "", what );
 		}
+#if RTS_ZEROHOUR
+		else if ( step.action == "zones" )
+		{
+			// C&C4's zones (-testRules): "show" / "hide" their borders over the world; each zone's start or not,
+			// holders (players' bits) and middle
+			if ( step.arg == "show" || step.arg == "hide" )
+				TiberiumZoneView::setShown( step.arg == "show" );
+			std::string all;
+			for ( Int z = 0; z < TiberiumZones::getCount(); ++z )
+			{
+				char one[120];
+				const Coord3D *c = TiberiumZones::getCenter( z );
+				snprintf( one, sizeof( one ), " z%d%s holders %x at %.0f %.0f;", (int)z, TiberiumZones::isHome( z ) ? " start" : "",
+					(unsigned)TiberiumZones::getOwners( z ), c->x, c->y );
+				all += one;
+			}
+			log( "frame %d: ui: zones mode %d, %d zones, shown %d:%s", (int)s_frame, (int)TiberiumZones::getMode(),
+				(int)TiberiumZones::getCount(), (int)TiberiumZoneView::isShown(), all.c_str() );
+		}
+		else if ( step.action == "zonebuild" && TheThingFactory != nullptr && TheTacticalView != nullptr && ThePlayerList != nullptr
+			&& ThePlayerList->getLocalPlayer() != nullptr && TheBuildAssistant != nullptr )
+		{
+			// whether the local player may put Template at the view's centre + dx,dy: the zones' answer and the
+			// whole check's (LBC_OUTSIDE_ZONE is 8)
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			const ThingTemplate *tmpl = f.empty() ? nullptr : TheThingFactory->findTemplate( f[0].c_str() );
+			Coord3D at = TheTacticalView->getPosition();
+			at.x += f.size() > 1 ? (Real)atof( f[1].c_str() ) : 0.0f;
+			at.y += f.size() > 2 ? (Real)atof( f[2].c_str() ) : 0.0f;
+			at.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( at.x, at.y ) : 0.0f;
+			Player *me = ThePlayerList->getLocalPlayer();
+			const Bool may = tmpl != nullptr && TiberiumZones::mayBuild( me, tmpl, &at );
+			const Int code = tmpl != nullptr ? (Int)TheBuildAssistant->isLocationLegalToBuild( &at, tmpl, 0.0f, 0, nullptr, me ) : -1;
+			log( "frame %d: ui: zonebuild %s at %.0f %.0f (zone %d): may %d, code %d", (int)s_frame, step.arg.c_str(), at.x, at.y,
+				(int)TiberiumZones::zoneAt( &at ), (int)may, (int)code );
+		}
+		else if ( step.action == "arrive" && TheThingFactory != nullptr && TheGameLogic != nullptr && ThePlayerList != nullptr
+			&& ThePlayerList->getLocalPlayer() != nullptr )
+		{
+			// Template made by the local player's first factory (its door, then its arrival in a zone);
+			// "Template,dx,dy" with the factory's rally point at the view's centre + dx,dy
+			// (a test, not a player's command: not with -testCRC)
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			const ThingTemplate *tmpl = f.empty() ? nullptr : TheThingFactory->findTemplate( f[0].c_str() );
+			Player *me = ThePlayerList->getLocalPlayer();
+			Object *factory = nullptr;
+			for ( Object *o = TheGameLogic->getFirstObject(); o != nullptr && factory == nullptr; o = o->getNextObject() )
+				if ( o->getControllingPlayer() == me && !o->isEffectivelyDead() && o->getProductionUpdateInterface() != nullptr && o->getObjectExitInterface() != nullptr )
+					factory = o;
+			if ( tmpl != nullptr && factory != nullptr )
+			{
+				if ( f.size() > 2 && TheTacticalView != nullptr )
+				{
+					Coord3D rally = TheTacticalView->getPosition();
+					rally.x += (Real)atof( f[1].c_str() );
+					rally.y += (Real)atof( f[2].c_str() );
+					rally.z = TheTerrainLogic->getGroundHeight( rally.x, rally.y );
+					factory->getObjectExitInterface()->setRallyPoint( &rally );
+				}
+				Object *made = TheThingFactory->newObject( tmpl, me->getDefaultTeam() );
+				Coord3D door = *factory->getPosition();
+				door.x += factory->getGeometryInfo().getBoundingCircleRadius() + 20.0f;
+				made->setPosition( &door );
+				made->setProducer( factory );
+				s_spawned.push_back( made->getID() );
+				log( "frame %d: ui: arrive %s from %s at %.0f %.0f", (int)s_frame, tmpl->getName().str(), factory->getTemplate()->getName().str(),
+					door.x, door.y );
+			}
+			else
+				log( "frame %d: ui: arrive %s: %s", (int)s_frame, step.arg.c_str(), tmpl == nullptr ? "no such object" : "no factory" );
+		}
+		else if ( step.action == "where" && TheGameLogic != nullptr )
+		{
+			// where the spawned objects are, and whether held
+			std::string all;
+			for ( size_t i = 0; i < s_spawned.size(); ++i )
+			{
+				const Object *o = TheGameLogic->findObjectByID( s_spawned[i] );
+				if ( o == nullptr )
+					continue;
+				char one[160];
+				snprintf( one, sizeof( one ), " %s at %.0f %.0f%s (zone %d);", o->getTemplate()->getName().str(), o->getPosition()->x,
+					o->getPosition()->y, o->isDisabled() ? " held" : "", (int)TiberiumZones::zoneAt( o->getPosition() ) );
+				all += one;
+			}
+			log( "frame %d: ui: where%s", (int)s_frame, all.c_str() );
+		}
+#endif
 		else if ( step.action == "yard" && TheGameLogic != nullptr && ThePlayerList != nullptr )
 		{
 			// the local player's construction yard (Kane's Wrath's base): its state; "place,dx,dy" places the

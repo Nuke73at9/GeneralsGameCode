@@ -43,6 +43,19 @@ enum
 	ABRAM_CASH_MULTIPLIER_MASK    = 0x00000F00,
 	ABRAM_BUILD_SPEED_SHIFT       = 12,
 	ABRAM_BUILD_SPEED_MASK        = 0x0000F000,
+	// Tiberium Project @feature C&C4's zones (Zero Hour): off, pre-zones, expansion zones, free zones
+	ABRAM_ZONES_SHIFT             = 16,
+	ABRAM_ZONES_MASK              = 0x00030000,
+};
+
+// Tiberium Project @feature how a skirmish's bases grow (C&C4's zones; TiberiumZones in Zero Hour)
+enum AbramZoneMode
+{
+	ABRAM_ZONES_OFF,          ///< Zero Hour's way: structures anywhere, no zones
+	ABRAM_ZONES_PRE,          ///< structures only in the player's own (start) zone; Crawlers make units anywhere
+	ABRAM_ZONES_EXPANSION,    ///< the start zones, and more taken (their node, an outpost, a Crawler deployed)
+	ABRAM_ZONES_FREE,         ///< structures anywhere (as Zero Hour), the zones' taking as expansion; Crawlers arrive in zones
+	ABRAM_ZONE_MODE_COUNT
 };
 
 class AbramGameRules
@@ -64,6 +77,11 @@ public:
 	static UnsignedInt getCashMultiplierChoice( Int index );
 	static Int getBuildSpeedChoiceCount();
 	static UnsignedInt getBuildSpeedChoice( Int index );
+
+	// Tiberium Project @feature the zones' mode of the game being played (off outside skirmish and replays)
+	static AbramZoneMode getZoneMode();
+	static AbramZoneMode getZoneModeOf( UnsignedInt rules );
+	static UnsignedInt setZoneMode( UnsignedInt rules, AbramZoneMode mode );
 
 	static Int getCashMultiplierIndex( UnsignedInt rules );
 	static Int getBuildSpeedIndex( UnsignedInt rules );

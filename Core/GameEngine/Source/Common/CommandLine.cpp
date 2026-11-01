@@ -948,6 +948,14 @@ Int parseTestSide(char *args[], int num)
 	return 2;
 }
 
+// Tiberium Project @feature -testRules 0x20000: the -testSide skirmish's match options (C&C4's zones: bits 16 and 17)
+Int parseTestRules(char *args[], int num)
+{
+	if (num > 1)
+		TiberiumTest::setRules((unsigned int)strtoul(args[1], nullptr, 0));
+	return 2;
+}
+
 // Tiberium Project @feature -testUI "frame:action[=arg];...": the command bar, as a player uses it
 Int parseTestUI(char *args[], int num)
 {
@@ -1390,6 +1398,7 @@ static CommandLineParam paramsForEngineInit[] =
 	{ "-testSpawn", parseTestSpawn },
 	{ "-testUI", parseTestUI },
 	{ "-testSide", parseTestSide },
+	{ "-testRules", parseTestRules },
 	{ "-testBase", parseTestBase },
 	{ "-testReveal", parseTestReveal },
 	{ "-testCRC", parseTestCRC },

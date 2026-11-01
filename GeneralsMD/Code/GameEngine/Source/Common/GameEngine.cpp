@@ -898,6 +898,7 @@ void GameEngine::init()
 					Money cash;
 					cash.deposit(20000, FALSE, FALSE);
 					TheSkirmishGameInfo->setStartingCash(cash);
+					TheSkirmishGameInfo->setAbramRules(TiberiumTest::getRules());	// -testRules
 					TheSkirmishGameInfo->setSeed(0);
 					TheWritableGlobalData->m_mapName = fname;
 					TheSkirmishGameInfo->startGame(0);

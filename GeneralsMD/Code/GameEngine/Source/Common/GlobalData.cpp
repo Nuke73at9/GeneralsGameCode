@@ -882,6 +882,10 @@ GlobalData::GlobalData()
 	m_minCameraHeight = 100.0f;
 	m_maxCameraHeight = 300.0f;
 	m_tiberiumSidebar = FALSE;
+	m_zoneHomeRadius = 700.0f;
+	m_zoneExpansionRadius = 420.0f;
+	m_zoneLinkDistance = 1500.0f;
+	m_zoneNode = "C4_GoalStructure";
 	m_terrainDrawDistanceScale = 1.0f;
 	m_terrainHeightAtEdgeOfMap = 0.0f;
 
@@ -1226,6 +1230,10 @@ void GlobalData::parseTiberiumGameData( INI* ini )
 		{ "MaxCameraHeight",		INI::parseReal,		nullptr,	offsetof( GlobalData, m_maxCameraHeight ) },
 		{ "MinCameraHeight",		INI::parseReal,		nullptr,	offsetof( GlobalData, m_minCameraHeight ) },
 		{ "BuildAreaCursor",		TiberiumSidebar::parseBuildAreaCursor,	nullptr,	0 },
+		{ "ZoneHomeRadius",			INI::parseReal,		nullptr,	offsetof( GlobalData, m_zoneHomeRadius ) },
+		{ "ZoneExpansionRadius",	INI::parseReal,		nullptr,	offsetof( GlobalData, m_zoneExpansionRadius ) },
+		{ "ZoneLinkDistance",		INI::parseReal,		nullptr,	offsetof( GlobalData, m_zoneLinkDistance ) },
+		{ "ZoneNode",						INI::parseAsciiString,	nullptr,	offsetof( GlobalData, m_zoneNode ) },
 #if PRESERVE_RETAIL_SCRIPTED_CAMERA
 		{ "CameraHeight",				INI::parseReal,		nullptr,	offsetof( GlobalData, m_cameraHeight ) },
 #endif

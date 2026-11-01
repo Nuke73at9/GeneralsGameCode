@@ -202,6 +202,11 @@ public:
 	Real m_maxCameraHeight;
 	Real m_minCameraHeight;
 	Bool m_tiberiumSidebar;		///< Tiberium Project @feature the Red Alert 3 style sidebar (TiberiumSidebar.h)
+	// Tiberium Project @feature C&C4's zones (TiberiumZones.h): their sizes and the expansion zones' node
+	Real m_zoneHomeRadius;					///< how far a start zone reaches from its start
+	Real m_zoneExpansionRadius;			///< how far an expansion zone reaches from its middle
+	Real m_zoneLinkDistance;				///< allies' starts nearer than this share one start zone
+	AsciiString m_zoneNode;					///< the object in each expansion zone that takes it (C&C4's TCN)
 
 	Real m_terrainDrawDistanceScale;
 

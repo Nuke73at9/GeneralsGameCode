@@ -31,6 +31,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
 #include "GameClient/TiberiumHUD.h"
+#include "GameClient/TiberiumZoneView.h"
 
 #include "Common/GameUtility.h"
 #include "Common/GlobalData.h"
@@ -71,15 +72,22 @@ namespace
 	enum
 	{
 		SLOT_COUNT = 3,		///< C&C4's ability slots
-		BUTTON_COUNT = 4,
+		BUTTON_COUNT = 5,
+		BUTTON_ZONES = 4,		///< C&C4's zones shown over the world (a game with zones only)
 		MAX_GROUPS = 14,
 		MAX_ROW_LINES = 2
 	};
 
 	/// the column's buttons: Zero Hour's own (their clicks are sent as if on them)
 	const char *const BUTTON_WINDOWS[BUTTON_COUNT] = { "ControlBar.wnd:ButtonOptions", "ControlBar.wnd:ButtonIdleWorker",
-		"ControlBar.wnd:ButtonPlaceBeacon", "ControlBar.wnd:ButtonGeneral" };
-	const char *const BUTTON_LABELS[BUTTON_COUNT] = { "Menu", "Idle", "Beacon", "General" };
+		"ControlBar.wnd:ButtonPlaceBeacon", "ControlBar.wnd:ButtonGeneral", nullptr };
+	const char *const BUTTON_LABELS[BUTTON_COUNT] = { "Menu", "Idle", "Beacon", "General", "Zones" };
+
+	/// the column's buttons now: the zones' only in a game with zones
+	Int buttonCount()
+	{
+		return TiberiumZoneView::isAvailable() ? BUTTON_COUNT : BUTTON_ZONES;
+	}
 
 	/// the panel's art (TibHUD_PanelGDI and Nod), in whose pixels its parts are placed
 	const Real ART_W = 470.0f;
@@ -156,7 +164,7 @@ namespace
 	Bool isNod()
 	{
 		const Player *me = localPlayer();
-		return me != nullptr && me->getSide().compareNoCase( "China" ) == 0;
+		return me != nullptr && ( me->getSide().compareNoCase( "China" ) == 0 || me->getBaseSide().compareNoCase( "China" ) == 0 );
 	}
 
 	//-----------------------------------------------------------------------------------------------
@@ -284,7 +292,8 @@ namespace
 	//-----------------------------------------------------------------------------------------------
 	void buttonRect( const HUDLayout &L, Int i, Int *x, Int *y, Int *w, Int *h )
 	{
-		const Int bw = ( L.colW - L.gap * ( BUTTON_COUNT + 3 ) ) / BUTTON_COUNT;
+		const Int n = buttonCount();
+		const Int bw = ( L.colW - L.gap * ( n + 3 ) ) / n;
 		*x = L.colX + L.gap * 2 + i * ( bw + L.gap );
 		*y = L.buttonsY;
 		*w = bw;
@@ -455,6 +464,8 @@ namespace
 	/** the column's buttons: whether Zero Hour has them up now */
 	Bool buttonUsable( Int i )
 	{
+		if( i == BUTTON_ZONES )
+			return TiberiumZoneView::isAvailable();
 		GameWindow *win = findWindow( BUTTON_WINDOWS[i] );
 		return win != nullptr && !win->winIsHidden() && win->winGetEnabled();
 	}
@@ -463,6 +474,13 @@ namespace
 	/** a click on one of Zero Hour's buttons, as if it were clicked */
 	Bool pressButton( Int i )
 	{
+		if( i == BUTTON_ZONES )
+		{
+			if( !TiberiumZoneView::isAvailable() )
+				return FALSE;
+			TiberiumZoneView::toggle();
+			return TRUE;
+		}
 		GameWindow *win = findWindow( BUTTON_WINDOWS[i] );
 		if( win == nullptr || win->winIsHidden() || !win->winGetEnabled() )
 			return FALSE;
@@ -783,7 +801,7 @@ namespace
 			used > produced ? GameMakeColor( 255, 80, 60, 255 ) : a.textDim );
 
 		// the buttons
-		for( Int i = 0; i < BUTTON_COUNT; ++i )
+		for( Int i = 0; i < buttonCount(); ++i )
 		{
 			Int x, y, w, h;
 			buttonRect( L, i, &x, &y, &w, &h );
@@ -791,7 +809,10 @@ namespace
 			// (Zero Hour enables the idle worker's while there is one)
 			const UnicodeString label = plain( BUTTON_LABELS[i] );
 			// the general's: lit while there is a promotion to spend
-			const Bool lit = i == 3 && me->getSciencePurchasePoints() > 0 && ( ( TheGameLogic->getFrame() / 15 ) & 1 );
+			Bool lit = i == 3 && me->getSciencePurchasePoints() > 0 && ( ( TheGameLogic->getFrame() / 15 ) & 1 );
+			// the zones': lit while they are shown
+			if( i == BUTTON_ZONES )
+				lit = TiberiumZoneView::isShown();
 			drawPlate( a, x, y, w, h, label, usable, usable && i == s_hoverButton, lit );
 		}
 	}
@@ -1079,7 +1100,7 @@ namespace
 		HUDLayout L;
 		computeLayout( &L );
 		Int hit = -1;
-		for( Int i = 0; i < BUTTON_COUNT && hit < 0; ++i )
+		for( Int i = 0; i < buttonCount() && hit < 0; ++i )
 		{
 			Int x, y, w, h;
 			buttonRect( L, i, &x, &y, &w, &h );
@@ -1441,7 +1462,7 @@ Bool TiberiumHUD::testClickPart( const char *part, Int index, Bool right )
 {
 	if( !s_on || part == nullptr || index < 0 )
 		return FALSE;
-	if( strcmp( part, "button" ) == 0 && index < BUTTON_COUNT )
+	if( strcmp( part, "button" ) == 0 && index < buttonCount() )
 		return pressButton( index );
 	if( strcmp( part, "row" ) == 0 || strcmp( part, "slot" ) == 0 )
 	{
