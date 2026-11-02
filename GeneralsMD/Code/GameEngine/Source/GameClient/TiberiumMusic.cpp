@@ -31,6 +31,7 @@
 #include "Common/AudioAffect.h"
 #include "Common/AudioEventRTS.h"
 #include "Common/AudioHandleSpecialValues.h"
+#include "Common/FramePacer.h"
 #include "Common/GameAudio.h"
 #include "Common/GlobalData.h"
 #include "Common/INI.h"
@@ -60,7 +61,8 @@ namespace
 		std::vector<AsciiString> tracks;
 	};
 
-	/// the TiberiumMusic block (durations in logic frames)
+	/// the TiberiumMusic block (durations in logic frames, as the INI parser gives them: msOf() makes them
+	/// the music clock's milliseconds again)
 	struct Settings
 	{
 		Bool enabled;
@@ -93,7 +95,13 @@ namespace
 	};
 	Settings s_settings;
 
-	/// the game's music as it goes
+	/// Tiberium Project @bugfix the music's own clock: real milliseconds of the game being played (it stands
+	/// still while paused). The logic's frames run at the game speed, so a faster game used to rush the
+	/// music from state to state, cutting tracks short; the music now keeps time as heard.
+	double s_clockMs = 0.0;
+	UnsignedInt msOf( UnsignedInt frames ) { return (UnsignedInt)( frames * MSEC_PER_LOGICFRAME_REAL ); }
+
+	/// the game's music as it goes (times on the music clock)
 	Int s_state = -1;
 	UnsignedInt s_stateSince = 0;
 	UnsignedInt s_lastCheck = 0;
@@ -147,20 +155,39 @@ namespace
 		return any;
 	}
 
-	void play( Int state )
+	/// the tracks of a state the game knows (another than the one playing, when there is a choice)
+	std::vector<AsciiString> knownTracks( Int state )
 	{
-		const std::vector<AsciiString> *tracks = tracksFor( state );
-		if( tracks == nullptr || TheAudio == nullptr )
-			return;	// a state without tracks of its own: the music goes on
-		// one of them (another than the one playing, when there is a choice), that the game knows
 		std::vector<AsciiString> known;
-		for( size_t i = 0; i < tracks->size(); ++i )
+		const std::vector<AsciiString> *tracks = tracksFor( state );
+		for( size_t i = 0; tracks != nullptr && TheAudio != nullptr && i < tracks->size(); ++i )
 		{
 			if( TheAudio->findAudioEventInfo( (*tracks)[i] ) != nullptr && ( tracks->size() == 1 || (*tracks)[i] != s_track ) )
 				known.push_back( (*tracks)[i] );
 		}
-		if( known.empty() )
+		return known;
+	}
+
+	Bool trackPlaying()
+	{
+		return TheAudio != nullptr && s_handle != 0 && TheAudio->isCurrentlyPlaying( s_handle );
+	}
+
+	void play( Int state )
+	{
+		if( TheAudio == nullptr )
 			return;
+		std::vector<AsciiString> known = knownTracks( state );
+		if( known.empty() )
+		{
+			// a state without tracks of its own: the music goes on, or, when the track has ended, the
+			// exploring tracks take over (the music used to stop there, for good)
+			if( trackPlaying() || state == TiberiumMusic::EXPLORE )
+				return;
+			known = knownTracks( TiberiumMusic::EXPLORE );
+			if( known.empty() )
+				return;
+		}
 		const AsciiString name = known[ GameClientRandomValue( 0, (Int)known.size() - 1 ) ];
 		TheAudio->removeAudioEvent( AHSV_StopTheMusicFade );
 		AudioEventRTS event( name );
@@ -169,18 +196,20 @@ namespace
 			event.setPlayerIndex( ThePlayerList->getLocalPlayer()->getPlayerIndex() );
 		s_handle = TheAudio->addAudioEvent( &event );
 		s_track = name;
-		s_lastPlay = TheGameLogic->getFrame();
+		s_lastPlay = (UnsignedInt)s_clockMs;
 		if( TiberiumTest::isActive() )
 			TiberiumTest::log( "frame %u: music: %s plays %s", TheGameLogic->getFrame(), STATE_NAMES[state], name.str() );
 	}
 
-	void enter( Int state, UnsignedInt now )
+	void enter( Int state, UnsignedInt now, Bool cut )
 	{
 		if( TiberiumTest::isActive() )
-			TiberiumTest::log( "frame %u: music: %s -> %s", now, s_state >= 0 ? STATE_NAMES[s_state] : "(start)", STATE_NAMES[state] );
+			TiberiumTest::log( "frame %u: music: %s -> %s%s", TheGameLogic->getFrame(), s_state >= 0 ? STATE_NAMES[s_state] : "(start)",
+				STATE_NAMES[state], cut ? "" : " (after the track)" );
 		s_state = state;
 		s_stateSince = now;
-		play( state );
+		if( cut )
+			play( state );
 	}
 
 	Bool isFightState( Int state )
@@ -336,6 +365,7 @@ void TiberiumMusic::reset()
 	s_track.clear();
 	s_handle = 0;
 	s_crawlersCounted.clear();
+	s_clockMs = 0.0;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -343,23 +373,26 @@ void TiberiumMusic::update()
 {
 	if( !isActive() )
 		return;
-	const UnsignedInt now = TheGameLogic->getFrame();
+	// the music clock: the real time of this frame, unless the game is paused (a hitch counts a moment)
+	if( TheFramePacer != nullptr && !TheGameLogic->isGamePaused() )
+		s_clockMs += min( (double)TheFramePacer->getUpdateTime() * 1000.0, 250.0 );
+	const UnsignedInt now = (UnsignedInt)s_clockMs;
 	if( s_state < 0 )
 	{
 		// the local player's side picks the tracks: wait until the game has given it one
 		const Player *me = ThePlayerList->getLocalPlayer();
 		if( me->getSide().isEmpty() && me->getBaseSide().isEmpty() )
 			return;
-		enter( EXPLORE, now );
+		enter( EXPLORE, now, TRUE );
 		s_lastCheck = now;
 		return;
 	}
-	if( now - s_lastCheck < max( (UnsignedInt)1, s_settings.checkInterval ) )
+	if( now - s_lastCheck < max( (UnsignedInt)1, msOf( s_settings.checkInterval ) ) )
 		return;
 	s_lastCheck = now;
 
 	Player *me = ThePlayerList->getLocalPlayer();
-	const Reading r = read( me, now );
+	const Reading r = read( me, TheGameLogic->getFrame() );	// the game's events: on its own frames
 	const Int engaged = r.mineEngaged + r.enemiesEngaged;
 	if( engaged > 0 )
 		s_lastFight = now;
@@ -368,7 +401,7 @@ void TiberiumMusic::update()
 	if( r.enemyCrawlerLost || r.myCrawlerLost )
 	{
 		next = r.myCrawlerLost ? PLAYER_CRAWLER_DESTROYED : ENEMY_CRAWLER_DESTROYED;
-		s_holdUntil = now + s_settings.stingerTime;
+		s_holdUntil = now + msOf( s_settings.stingerTime );
 		s_hadFight = TRUE;
 	}
 	else if( now < s_holdUntil && ( isFightState( s_state ) || s_state == FIGHT_FINISHED ) && !( engaged >= s_settings.bigFightUnits && s_state != BIG_FIGHT ) )
@@ -381,7 +414,7 @@ void TiberiumMusic::update()
 		{
 			next = FIRST_FIGHT;
 			s_hadFight = TRUE;
-			s_holdUntil = now + s_settings.minStateTime * 3;
+			s_holdUntil = now + msOf( s_settings.minStateTime ) * 3;
 		}
 		else if( engaged >= s_settings.bigFightUnits || ( s_state == BIG_FIGHT && engaged * 2 >= s_settings.bigFightUnits ) )
 			next = BIG_FIGHT;
@@ -391,13 +424,13 @@ void TiberiumMusic::update()
 	else if( isFightState( s_state ) )
 	{
 		// the fighting stops: the fight is over after a while
-		if( now - s_lastFight >= s_settings.fightOverDelay )
+		if( now - s_lastFight >= msOf( s_settings.fightOverDelay ) )
 		{
 			next = FIGHT_FINISHED;
-			s_holdUntil = now + s_settings.fightFinishedTime;
+			s_holdUntil = now + msOf( s_settings.fightFinishedTime );
 		}
 	}
-	else if( r.myWorth > 0.0f && r.strongestEnemy > 0.0f && now >= s_settings.likelyToWinAfter
+	else if( r.myWorth > 0.0f && r.strongestEnemy > 0.0f && now >= msOf( s_settings.likelyToWinAfter )
 		&& r.myWorth >= r.strongestEnemy * s_settings.likelyToWinRatio )
 		next = LIKELY_TO_WIN;
 	else if( r.enemyNear )
@@ -407,12 +440,17 @@ void TiberiumMusic::update()
 
 	if( next != s_state )
 	{
-		// a fight comes in at once; the quiet states wait their turn
-		if( isFightState( next ) || now - s_stateSince >= s_settings.minStateTime )
-			enter( next, now );
+		// a fight, a stinger and the fight's end come in at once, cutting the track. The quiet states
+		// (exploring, enemies near, likely to win, after a fight's end) wait their turn, and then let the
+		// track play out: the next track is the new state's (Tiberium Project @bugfix: a quiet change cut the
+		// track playing, every few seconds when units came and went)
+		if( isFightState( next ) || next == FIGHT_FINISHED )
+			enter( next, now, TRUE );
+		else if( now - s_stateSince >= msOf( s_settings.minStateTime ) )
+			enter( next, now, !trackPlaying() );
 	}
-	else if( TheAudio != nullptr && TheGlobalData->m_audioOn && TheAudio->isOn( AudioAffect_Music ) && !TheAudio->isCurrentlyPlaying( s_handle )
-		&& now - s_lastPlay > LOGICFRAMES_PER_SECOND * 2 )
+	else if( TheAudio != nullptr && TheGlobalData->m_audioOn && TheAudio->isOn( AudioAffect_Music ) && !trackPlaying()
+		&& now - s_lastPlay > 2000 )
 	{
 		// the track ended: another of the state's (asked by its handle: the music group plays on
 		// between tracks on some audio devices)

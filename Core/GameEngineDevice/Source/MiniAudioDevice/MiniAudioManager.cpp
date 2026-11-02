@@ -50,6 +50,7 @@
 #include "Common/GameSounds.h"
 #include "Common/CRCDebug.h"
 #include "Common/GlobalData.h"
+#include "Common/TiberiumTest.h"
 
 #include "GameClient/DebugDisplay.h"
 #include "GameClient/Drawable.h"
@@ -69,11 +70,33 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 }
 
+#include <chrono>
+
 #ifdef _INTERNAL
 //#pragma optimize("", off)
 #endif
 
 enum { INFINITE_LOOP_COUNT = 1000000 };
+
+// Tiberium Project @bugfix the audio's own clock: the real milliseconds since the last audio update. A
+// sound's delay and a fade (TimeToFadeAudio, in frames of the original game's 30 a second) used to count
+// one frame per update, and the game updates once per drawn frame: at 165 frames a second a one-second
+// fade of the music lasted a fifth of one, and a delayed voice came five times early.
+static Real s_audioUpdateMs = MSEC_PER_LOGICFRAME_REAL;
+
+static void advanceAudioClock()
+{
+	static std::chrono::steady_clock::time_point s_last;
+	static Bool s_started = FALSE;
+	const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+	Real ms = MSEC_PER_LOGICFRAME_REAL;
+	if (s_started)
+		ms = (Real)std::chrono::duration<double, std::milli>(now - s_last).count();
+	s_last = now;
+	s_started = TRUE;
+	// a hitch (a load, a breakpoint) counts as a moment, not as the whole fade gone
+	s_audioUpdateMs = ms < 0.0f ? 0.0f : (ms > 250.0f ? 250.0f : ms);
+}
 
 // Callback functions for miniaudio's virtual file system
 static ma_result vfsFileOpen(ma_vfs *pVFS, const char *filename, ma_uint32 mode, ma_vfs_file *pFile);
@@ -226,6 +249,7 @@ void MiniAudioManager::update()
 	ScopedFPUGuard fpuGuard;
 
 	AudioManager::update();
+	advanceAudioClock();
 	setDeviceListenerPosition();
 	processRequestList();
 	processPlayingList();
@@ -336,6 +360,8 @@ void MiniAudioManager::playAudioEvent(AudioRequest *req)
 
 	// Abram's Personal Test @performance The file is decoded once and then shared from the sample cache.
 	if (!createSoundForFile(fileToPlay, flags, groupToUse, audio)) {
+		if (info->m_soundType == AT_Music && TiberiumTest::isActive())
+			TiberiumTest::log("audio: music '%s' (%s) could not be played", event->getEventName().str(), fileToPlay.str());
 		releasePlayingAudio(audio);
 		return;
 	}
@@ -1102,6 +1128,16 @@ void MiniAudioManager::processPlayingList(void)
 
 		// Check if sound has finished playing
 		if (playing->m_sound && !ma_sound_is_playing(playing->m_sound)) {
+			// Tiberium Project: a test run tells how far a music track got (a track cut short shows here)
+			if (TiberiumTest::isActive() && playing->m_audioEventRTS && playing->m_audioEventRTS->getAudioEventInfo()
+				&& playing->m_audioEventRTS->getAudioEventInfo()->m_soundType == AT_Music)
+			{
+				float cursor = 0.0f, length = 0.0f;
+				ma_sound_get_cursor_in_seconds(playing->m_sound, &cursor);
+				ma_sound_get_length_in_seconds(playing->m_sound, &length);
+				TiberiumTest::log("audio: music '%s' stopped at %.1f of %.1f seconds%s", playing->m_audioEventRTS->getEventName().str(),
+					cursor, length, ma_sound_at_end(playing->m_sound) ? "" : " (not at its end)");
+			}
 			// Abram's Personal Test @bugfix Run the completion logic (looping, speech lock) like the
 			// Miles backend does from its completion callback. Looping sounds used to stop after one play.
 			if (handleFinishedAudio(playing)) {
@@ -1148,16 +1184,18 @@ void MiniAudioManager::processFadingList(void)
 			continue;
 		}
 
-		if (playing->m_framesFaded >= getAudioSettings()->m_fadeAudioFrames) {
+		// m_framesFaded counts milliseconds here (the fade's frames are the original game's, 30 a second)
+		const Real fadeMs = getAudioSettings()->m_fadeAudioFrames * MSEC_PER_LOGICFRAME_REAL;
+		if (playing->m_framesFaded >= fadeMs) {
 			playing->m_requestStop = true;
 			it = m_fadingAudio.erase(it);
 			releasePlayingAudio(playing);
 			continue;
 		}
 
-		++playing->m_framesFaded;
+		playing->m_framesFaded += max((Int)1, (Int)(s_audioUpdateMs + 0.5f));
 		Real volume = getEffectiveVolume(playing->m_audioEventRTS.Peek());
-		volume *= (1.0f - 1.0f * playing->m_framesFaded / getAudioSettings()->m_fadeAudioFrames);
+		volume *= fadeMs > 0.0f ? max(0.0f, 1.0f - playing->m_framesFaded / fadeMs) : 0.0f;
 
 		if (playing->m_sound)
 			ma_sound_set_volume(playing->m_sound, volume);
@@ -1188,7 +1226,7 @@ Bool MiniAudioManager::shouldProcessRequestThisFrame(AudioRequest *req) const
 void MiniAudioManager::adjustRequest(AudioRequest *req)
 {
 	if (!req->m_pendingEvent) return;
-	req->m_pendingEvent->decrementDelay(MSEC_PER_LOGICFRAME_REAL);
+	req->m_pendingEvent->decrementDelay(s_audioUpdateMs);	// Tiberium Project @bugfix real time, not a frame
 	req->m_requiresCheckForSample = true;
 }
 
