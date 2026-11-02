@@ -114,6 +114,10 @@ public:
 	std::vector<AsciiString> m_attackSounds;
 	std::vector<AsciiString> m_decaySounds;
 
+	// Tiberium Project @feature the events played with this one, each by its own settings (AlsoPlay: C&C4's
+	// Multisounds, a unit's voice line with the servo sound under it)
+	std::vector<AsciiString> m_alsoPlay;
+
 	Real m_lowPassFreq;			// When performing low pass filters, what is the maximum frequency heard, expressed as a percentage?
 	Real m_minDistance;			// less than this distance and the sound behaves as though it is at minDistance
 	Real m_maxDistance;			// greater than this distance and the sound behaves as though it is muted

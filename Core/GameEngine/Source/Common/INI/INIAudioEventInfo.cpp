@@ -146,6 +146,7 @@ const FieldParse AudioEventInfo::m_audioEventInfo[] =
 	{ "SoundsMorning",				INI::parseSoundsList,			nullptr,								offsetof( AudioEventInfo, m_soundsMorning ) },
 	{ "Attack",								INI::parseSoundsList,			nullptr,								offsetof( AudioEventInfo, m_attackSounds ) },
 	{ "Decay",								INI::parseSoundsList,			nullptr,								offsetof( AudioEventInfo, m_decaySounds ) },
+	{ "AlsoPlay",							INI::parseAsciiStringVector,	nullptr,							offsetof( AudioEventInfo, m_alsoPlay ) },	// Tiberium Project @feature
 	{ "MinRange",							INI::parseReal,						nullptr,								offsetof( AudioEventInfo, m_minDistance) },
 	{ "MaxRange",							INI::parseReal,						nullptr,								offsetof( AudioEventInfo, m_maxDistance) },
 	{ "LowPassCutoff",				INI::parsePercentToReal,	nullptr,								offsetof( AudioEventInfo, m_lowPassFreq) },

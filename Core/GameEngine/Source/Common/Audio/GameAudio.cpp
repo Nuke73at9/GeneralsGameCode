@@ -155,7 +155,8 @@ AudioManager::AudioManager() :
 	m_music(nullptr),
 	m_sound(nullptr),
 	m_surroundSpeakers(FALSE),
-	m_hardwareAccel(FALSE)
+	m_hardwareAccel(FALSE),
+	m_alsoPlayDepth(0)
 {
 	static_assert(ARRAY_SIZE(AudioManager::MuteAudioReasonNames) == MuteAudioReason_Count, "Incorrect array size");
 
@@ -396,6 +397,23 @@ AudioHandle AudioManager::addAudioEvent(const AudioEventRTS *eventToAdd)
 			DEBUG_CRASH(("No info for requested audio event '%s'", eventToAdd->getEventName().str()));
 			return AHSV_Error;
 		}
+	}
+
+	// Tiberium Project @feature the events this one plays with it (AlsoPlay: C&C4's Multisounds, a unit's voice
+	// line and the servo sound under it), each by its own settings, at the same object or place. Zero Hour picks
+	// one of an event's sounds; a C&C4 Multisound plays one of each of its parts together.
+	const std::vector<AsciiString> &alsoPlay = eventToAdd->getAudioEventInfo()->m_alsoPlay;
+	if (!alsoPlay.empty() && m_alsoPlayDepth < 4)
+	{
+		++m_alsoPlayDepth;
+		for (std::vector<AsciiString>::const_iterator it = alsoPlay.begin(); it != alsoPlay.end(); ++it)
+		{
+			AudioEventRTS also(*eventToAdd);
+			also.setEventName(*it);
+			also.setIsLogicalAudio(FALSE);
+			addAudioEvent(&also);
+		}
+		--m_alsoPlayDepth;
 	}
 
 	const AudioType soundType = eventToAdd->getAudioEventInfo()->m_soundType;

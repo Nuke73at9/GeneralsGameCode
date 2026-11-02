@@ -337,6 +337,7 @@ class AudioManager : public SubsystemInterface
 		AudioEventInfoHash m_allAudioEventInfo;
 		AudioHandle theAudioHandlePool;
 		std::list<std::pair<AsciiString, Real>/**/> m_adjustedVolumes;
+		Int m_alsoPlayDepth;	///< Tiberium Project @feature how deep addAudioEvent is in AlsoPlay events (a loop stops at 4)
 
 		Real m_musicVolume;
 		Real m_soundVolume;
