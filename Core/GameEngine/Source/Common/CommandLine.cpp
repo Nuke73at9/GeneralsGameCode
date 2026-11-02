@@ -956,6 +956,14 @@ Int parseTestRules(char *args[], int num)
 	return 2;
 }
 
+// Tiberium Project @feature -testPlayers 10: the -testSide skirmish's players (the local one and easy AIs)
+Int parseTestPlayers(char *args[], int num)
+{
+	if (num > 1)
+		TiberiumTest::setPlayers(atoi(args[1]));
+	return 2;
+}
+
 // Tiberium Project @feature -testUI "frame:action[=arg];...": the command bar, as a player uses it
 Int parseTestUI(char *args[], int num)
 {
@@ -1399,6 +1407,7 @@ static CommandLineParam paramsForEngineInit[] =
 	{ "-testUI", parseTestUI },
 	{ "-testSide", parseTestSide },
 	{ "-testRules", parseTestRules },
+	{ "-testPlayers", parseTestPlayers },
 	{ "-testBase", parseTestBase },
 	{ "-testReveal", parseTestReveal },
 	{ "-testCRC", parseTestCRC },

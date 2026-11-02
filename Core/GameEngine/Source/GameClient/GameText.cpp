@@ -452,9 +452,10 @@ void GameTextManager::init()
 	// Tiberium Project @feature data/tiberium.str, the Tiberium mod's strings (shipped in its .big),
 	// is merged the same way, after the patch overlay, and data/c4units.str, the names of the units
 	// converted from the user's C&C4 install (written by the converter into its archive), and
-	// data/tiberiumeco.str, the Tiberium economy's (its fields, crystals and harvesters).
+	// data/tiberiumeco.str, the Tiberium economy's (its fields, crystals and harvesters), and
+	// data/tiberiummaps.str, games of up to 16 players' (their colours and teams; tiberium_build_maps.bat).
 	{
-		const Char *OVERLAY_FILES[] = { "data/patch.str", "data/tiberium.str", "data/c4units.str", "data/tiberiumeco.str" };
+		const Char *OVERLAY_FILES[] = { "data/patch.str", "data/tiberium.str", "data/c4units.str", "data/tiberiumeco.str", "data/tiberiummaps.str" };
 		const Int OVERLAY_COUNT = ARRAY_SIZE(OVERLAY_FILES);
 
 		// GeneralsX @bugfix UnicodeApocalypse 10/09/2026 getStringCount() pads by 500; the parsed count below is the real check.

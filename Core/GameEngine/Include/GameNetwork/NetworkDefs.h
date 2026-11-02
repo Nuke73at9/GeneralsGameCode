@@ -43,7 +43,13 @@ extern Int FRAMES_TO_KEEP;
 // This is the connection numbering: 1-8 are for players
 enum ConnectionNumbers CPP_11(: Int)
 {
+	// Tiberium Project @feature 16 slots in Zero Hour (C&C4's maps start ten). A network game keeps to the
+	// first MAX_NETWORK_SLOTS: its messages carry a slot mask of 8 bits.
+#if RTS_ZEROHOUR
+	MAX_PLAYER = 15,			// The index of the highest possible player number.  This is 0 based, so the most players allowed in a game is MAX_PLAYER+1.
+#else
 	MAX_PLAYER = 7,			// The index of the highest possible player number.  This is 0 based, so the most players allowed in a game is MAX_PLAYER+1.
+#endif
 };
 
 #pragma pack(push, 1)
@@ -57,6 +63,10 @@ struct TransportMessageHeader
 #pragma pack(pop)
 
 static constexpr const Int MAX_SLOTS = MAX_PLAYER+1;
+// Tiberium Project @feature the slots a network game (LAN, online) uses, and a replay's or save's slot list
+// as the original game writes it
+static constexpr const Int MAX_NETWORK_SLOTS = 8;
+static constexpr const Int MAX_SLOTS_LEGACY = 8;
 
 // TheSuperHackers @info As we are not detecting for network fragmentation and dynamically adjusting payload sizes, we set an 1100 bytes UDP payload as a safe upper limit for various networks
 // We chose 1100 bytes as when taking mobile networks into account, maximum transmission unit sizes can vary from 1340 - 1500 bytes

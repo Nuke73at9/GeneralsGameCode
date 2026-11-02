@@ -161,7 +161,7 @@ static LadderInfo *parseLadder(AsciiString raw)
 				lad->name.str(), lad->address.str(), lad->port, lad->playersPerTeam, lad->playersPerTeam, lad->cryptedPassword.str(),
 				lad->submitReplay, lad->homepageURL.str()));
 			// end of a ladder
-			if (lad->playersPerTeam >= 1 && lad->playersPerTeam <= MAX_SLOTS/2)
+			if (lad->playersPerTeam >= 1 && lad->playersPerTeam <= MAX_NETWORK_SLOTS/2)	// Tiberium Project: an online game's 8
 			{
 				if (lad->validFactions.empty())
 				{

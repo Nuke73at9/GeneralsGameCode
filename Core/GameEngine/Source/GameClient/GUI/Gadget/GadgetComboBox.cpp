@@ -1098,6 +1098,8 @@ void *GadgetComboBoxGetItemData( GameWindow *comboBox, Int index )
 //=============================================================================
 Int GadgetComboBoxGetLength( GameWindow *combobox )
 {
+	if( combobox == nullptr )	// Tiberium Project @bugfix a layout without this slot's control (16 slots)
+		return 0;
 	ComboBoxData *comboboxData = (ComboBoxData *)combobox->winGetUserData();
 	if (comboboxData)
 		return comboboxData->entryCount;

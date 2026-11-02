@@ -1645,7 +1645,8 @@ void PeerThreadClass::Thread_Function()
 					compositeGame.append(WideCharStringToMultiByte(incomingRequest.text.c_str()));
 					m_localStagingServerName = incomingRequest.text;
 					m_playerNames[0] = m_loginName;
-					peerCreateStagingRoomWithSocket(peer, compositeGame.c_str(), MAX_SLOTS, incomingRequest.password.c_str(), qr2Sock, preferredQRPort, createRoomCallback, (void *)&res, PEERTrue);
+					// Tiberium Project @feature 16 slots: an online game has the original game's 8
+					peerCreateStagingRoomWithSocket(peer, compositeGame.c_str(), MAX_NETWORK_SLOTS, incomingRequest.password.c_str(), qr2Sock, preferredQRPort, createRoomCallback, (void *)&res, PEERTrue);
 					//peerCreateStagingRoomWithSocket(peer, WideCharStringToMultiByte(incomingRequest.text.c_str()).c_str(), MAX_SLOTS, incomingRequest.password.c_str(), qr2Sock, preferredQRPort, createRoomCallback, (void *)&res, PEERTrue);
 					DEBUG_LOG(("PEERREQUEST_CREATESTAGINGROOM - creating staging room, name is %ls, passwd is %s, result = %d",
 						incomingRequest.text.c_str(), incomingRequest.password.c_str(), res));

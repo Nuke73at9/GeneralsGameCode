@@ -128,6 +128,7 @@ static void mapListTooltipFunc(GameWindow *window,
 void positionStartSpots( AsciiString mapName, GameWindow *buttonMapStartPositions[], GameWindow *mapWindow);
 void skirmishPositionStartSpots();
 void skirmishUpdateSlotList();
+void skirmishShowSlotRows( Bool show );
 void showSkirmishGameOptionsUnderlyingGUIElements( Bool show )
 {
 	NameKeyType parentID = TheNameKeyGenerator->nameToKey( "SkirmishGameOptionsMenu.wnd:SkirmishGameOptionsMenuParent" );
@@ -234,6 +235,9 @@ void showSkirmishGameOptionsUnderlyingGUIElements( Bool show )
 	win	= TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey("SkirmishGameOptionsMenu.wnd:ButtonStart") );
 	win->winHide( !show );
 
+	// Tiberium Project @feature 16 slots: rows past the eighth, and the first eight when the other page is shown
+	skirmishShowSlotRows( show );
+
 	win	= TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey("SkirmishGameOptionsMenu.wnd:StaticTextMapPreview") );
 	win->winHide( !show );
 
@@ -288,7 +292,10 @@ void SkirmishMapSelectMenuInit( WindowLayout *layout, void *userData )
 		tmpString.format("SkirmishMapSelectMenu.wnd:ButtonMapStartPosition%d", i);
 		buttonMapStartPositionID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		buttonMapStartPosition[i] = TheWindowManager->winGetWindowFromId( winMapPreview, buttonMapStartPositionID[i] );
-		DEBUG_ASSERTCRASH(buttonMapStartPosition[i], ("Could not find the ButtonMapStartPosition[%d]",i ));
+		// Tiberium Project @bugfix the original game's layout has buttons for 8 start positions
+		DEBUG_ASSERTCRASH(buttonMapStartPosition[i] || i >= MAX_SLOTS_LEGACY, ("Could not find the ButtonMapStartPosition[%d]",i ));
+		if (buttonMapStartPosition[i] == nullptr)
+			continue;
 		buttonMapStartPosition[i]->winHide(TRUE);
 		buttonMapStartPosition[i]->winEnable(FALSE);
 	}

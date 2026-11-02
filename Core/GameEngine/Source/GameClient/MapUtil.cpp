@@ -349,6 +349,19 @@ void WaypointMap::update()
 
 const char *const MapCache::m_mapCacheName = "MapCache.ini";
 
+// Tiberium Project @feature 16 slots: the user maps' cache file is the Tiberium Project's own. Its maps
+// have up to 16 starts (Player_9_Start and on in the cache), which the original game's cache reader does
+// not know, and the original game's cache counts no more than 8 (a cached map would keep 8): so neither
+// game reads the other's. The game's own maps' cache (in its archives) is the original.
+static const char *mapCacheFileName( const AsciiString &mapDir, const AsciiString &userMapDir, const char *original )
+{
+#if RTS_ZEROHOUR
+	if (mapDir.compareNoCase(userMapDir) == 0)
+		return "MapCacheTiberium.ini";
+#endif
+	return original;
+}
+
 AsciiString MapCache::getMapDir() const
 {
 	return "Maps";
@@ -374,7 +387,7 @@ void MapCache::writeCacheINI( const AsciiString &mapDir )
 
 	TheFileSystem->createDirectory(mapDir);
 
-	filepath.concat(m_mapCacheName);
+	filepath.concat(mapCacheFileName(mapDir, getUserMapDir(), m_mapCacheName));
 	FILE *fp = fopen(filepath.str(), "w");
 	DEBUG_ASSERTCRASH(fp != nullptr, ("Failed to create %s", filepath.str()));
 	if (fp == nullptr) {
@@ -562,7 +575,7 @@ void MapCache::loadMapsFromMapCacheINI( const AsciiString &mapDir )
 	INI ini;
 	AsciiString fname;
 	// GeneralsX @bugfix fbraz 06/05/2026 Keep MapCache INI path consistent with writeCacheINI() on POSIX hosts.
-	fname.format("%s/%s", mapDir.str(), m_mapCacheName);
+	fname.format("%s/%s", mapDir.str(), mapCacheFileName(mapDir, getUserMapDir(), m_mapCacheName));
 
 	if (TheFileSystem->doesFileExist(fname.str()))
 	{

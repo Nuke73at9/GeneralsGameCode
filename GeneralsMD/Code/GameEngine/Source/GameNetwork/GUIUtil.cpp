@@ -184,6 +184,8 @@ void ShowUnderlyingGUIElements( Bool show, const char *layoutFilename, const cha
 
 void PopulateColorComboBox(Int comboBox, GameWindow *comboArray[], GameInfo *myGame, Bool isObserver)
 {
+	if (comboArray[comboBox] == nullptr)	// Tiberium Project @bugfix a layout without this slot's row (16 slots)
+		return;
 	Int numColors = TheMultiplayerSettings->getNumColors();
 	UnicodeString colorName;
 	std::vector<bool> availableColors;
@@ -234,6 +236,8 @@ void PopulateColorComboBox(Int comboBox, GameWindow *comboArray[], GameInfo *myG
 
 void PopulatePlayerTemplateComboBox(Int comboBox, GameWindow *comboArray[], GameInfo *myGame, Bool allowObservers)
 {
+	if (comboArray[comboBox] == nullptr)	// Tiberium Project @bugfix a layout without this slot's row (16 slots)
+		return;
 	Int numPlayerTemplates = ThePlayerTemplateStore->getPlayerTemplateCount();
 	UnicodeString playerTemplateName;
 
@@ -296,6 +300,8 @@ void PopulatePlayerTemplateComboBox(Int comboBox, GameWindow *comboArray[], Game
 
 void PopulateTeamComboBox(Int comboBox, GameWindow *comboArray[], GameInfo *myGame, Bool isObserver)
 {
+	if (comboArray[comboBox] == nullptr)	// Tiberium Project @bugfix a layout without this slot's row (16 slots)
+		return;
 	Int numTeams = MAX_SLOTS/2;
 	UnicodeString teamName;
 
@@ -315,7 +321,10 @@ void PopulateTeamComboBox(Int comboBox, GameWindow *comboArray[], GameInfo *myGa
 	{
 		AsciiString teamStr;
 		teamStr.format("Team:%d", c + 1);
-		teamName = TheGameText->fetch(teamStr.str());
+		// Tiberium Project @feature 16 slots have 8 teams; the game's strings name 4
+		UnicodeString substitute;
+		substitute.format(L"Team %d", c + 1);
+		teamName = TheGameText->fetchOrSubstitute(teamStr.str(), substitute.str());
 		newIndex = GadgetComboBoxAddEntry(comboArray[comboBox], teamName, def->getColor());
 		GadgetComboBoxSetItemData(comboArray[comboBox], newIndex, (void *)c);
 	}
@@ -396,6 +405,11 @@ void UpdateSlotList( GameInfo *myGame, GameWindow *comboPlayer[],
 		for( int i =0; i < MAX_SLOTS; i++ )
 		{
 			GameSlot * slot = myGame->getSlot(i);
+
+			// Tiberium Project @feature 16 slots: a slot the layout has no row for (a layout of the original
+			// game's 8) has nothing to show
+			if (comboPlayer[i] == nullptr && comboColor[i] == nullptr)
+				continue;
 
 			// if i'm host, enable the controls for AI
 			if(myGame->amIHost() && slot->isAI())

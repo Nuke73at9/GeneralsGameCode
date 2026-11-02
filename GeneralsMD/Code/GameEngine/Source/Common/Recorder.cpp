@@ -155,7 +155,9 @@ void RecorderClass::logPlayerDisconnect(UnicodeString player, Int slot)
 		return;
 
 	DEBUG_ASSERTCRASH((slot >= 0) && (slot < MAX_SLOTS), ("Attempting to disconnect an invalid slot number"));
-	if ((slot < 0) || (slot >= (MAX_SLOTS)))
+	// Tiberium Project @feature the header keeps the original game's 8 disconnect flags (a network game,
+	// the only one with disconnects, uses the first 8 slots)
+	if ((slot < 0) || (slot >= (MAX_SLOTS_LEGACY)))
 	{
 		return;
 	}
@@ -542,7 +544,7 @@ void RecorderClass::startRecording(GameDifficulty diff, GameMode originalGameMod
 	Bool flag = FALSE;
 	m_file->write(&flag, sizeof(flag));	// reserve space for flag (true if we desync)
 	m_file->write(&flag, sizeof(flag));	// reserve space for flag (true if we quit early)
-	for (Int i=0; i<MAX_SLOTS; ++i)
+	for (Int i=0; i<MAX_SLOTS_LEGACY; ++i)	// Tiberium Project: the original game's 8, as replays have them
 	{
 		m_file->write(&flag, sizeof(flag));	// reserve space for flag (true if player i disconnects)
 	}
@@ -881,9 +883,11 @@ Bool RecorderClass::readReplayHeader(ReplayHeader& header, const AsciiString& fi
 
 	m_file->read(&header.desyncGame, sizeof(header.desyncGame));
 	m_file->read(&header.quitEarly, sizeof(header.quitEarly));
-	for (Int i=0; i<MAX_SLOTS; ++i)
+	for (Int i=0; i<MAX_SLOTS; ++i)	// Tiberium Project: the original game's 8 are in the file, the rest stay clear
 	{
-		m_file->read(&(header.playerDiscons[i]), sizeof(Bool));
+		header.playerDiscons[i] = FALSE;
+		if (i < MAX_SLOTS_LEGACY)
+			m_file->read(&(header.playerDiscons[i]), sizeof(Bool));
 	}
 
 	// GeneralsX @bugfix GitHubCopilot 16/08/2026 Read legacy Unix UTF-32 replays while using fixed UTF-16 for new cross-platform replays.

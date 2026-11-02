@@ -30,6 +30,7 @@
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"
 #include "Common/Xfer.h"
+#include "Common/PlayerXfer.h"	// Tiberium Project @feature 32 players
 #include "GameLogic/Damage.h"
 #include "Common/BitFlagsIO.h"
 #include "Common/ThingFactory.h"
@@ -126,6 +127,8 @@ void DamageInfoInput::xfer( Xfer *xfer )
 	// version
 #if RTS_GENERALS && RETAIL_COMPATIBLE_XFER_SAVE
 	XferVersion currentVersion = 1;
+#elif RTS_ZEROHOUR
+	XferVersion currentVersion = 4;	// Tiberium Project @feature 4: the source player mask has 32 bits
 #else
 	XferVersion currentVersion = 3;
 #endif
@@ -137,7 +140,11 @@ void DamageInfoInput::xfer( Xfer *xfer )
 	xfer->xferObjectID( &m_sourceID );
 
 	// source player mask
+#if RTS_ZEROHOUR
+	xferPlayerMask( xfer, &m_sourcePlayerMask, version < 4 );
+#else
 	xfer->xferUser( &m_sourcePlayerMask, sizeof( PlayerMaskType ) );
+#endif
 
 	// damage type
 	xfer->xferUser( &m_damageType, sizeof( DamageType ) );

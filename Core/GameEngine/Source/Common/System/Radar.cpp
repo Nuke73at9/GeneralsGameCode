@@ -35,6 +35,7 @@
 #include "Common/GameUtility.h"
 #include "Common/MiscAudio.h"
 #include "Common/Radar.h"
+#include "Common/PlayerXfer.h"	// Tiberium Project @feature 32 players
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/ThingTemplate.h"
@@ -1363,7 +1364,7 @@ void Radar::xfer( Xfer *xfer )
 #if RETAIL_COMPATIBLE_XFER_SAVE
 	XferVersion currentVersion = 1;
 #else
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 3;	// Tiberium Project @feature 3: one value for each of MAX_PLAYER_COUNT players
 #endif
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
@@ -1386,11 +1387,12 @@ void Radar::xfer( Xfer *xfer )
 	}
 	else
 	{
-		static_assert(sizeof(m_radarHidden) == 16, "Increase version if size changes");
-		xfer->xferUser(&m_radarHidden, sizeof(m_radarHidden));
+		// Tiberium Project @feature version 2 held 16 players' (MAX_PLAYER_COUNT_LEGACY)
+		static_assert(sizeof(m_radarHidden) == sizeof(Bool) * MAX_PLAYER_COUNT, "Increase version if size changes");
+		xferPerPlayer(xfer, m_radarHidden, sizeof(Bool), version < 3);
 
-		static_assert(sizeof(m_radarForceOn) == 16, "Increase version if size changes");
-		xfer->xferUser(&m_radarForceOn, sizeof(m_radarForceOn));
+		static_assert(sizeof(m_radarForceOn) == sizeof(Bool) * MAX_PLAYER_COUNT, "Increase version if size changes");
+		xferPerPlayer(xfer, m_radarForceOn, sizeof(Bool), version < 3);
 	}
 
 	// save our local object list

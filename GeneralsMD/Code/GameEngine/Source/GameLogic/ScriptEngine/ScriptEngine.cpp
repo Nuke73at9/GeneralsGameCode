@@ -9088,7 +9088,7 @@ void ScriptEngine::xfer( Xfer *xfer )
 	// triggered special powers
 	UnsignedShort triggeredSpecialPowersSize = MAX_PLAYER_COUNT;
 	xfer->xferUnsignedShort( &triggeredSpecialPowersSize );
-	if( triggeredSpecialPowersSize != MAX_PLAYER_COUNT )
+	if( triggeredSpecialPowersSize > MAX_PLAYER_COUNT )	// Tiberium Project @feature a save made before holds 16 players'
 	{
 
 		DEBUG_CRASH(( "ScriptEngine::xfer - MAX_PLAYER_COUNT has changed, m_triggeredSpecialPowers size is now different and we must version this" ));
@@ -9101,7 +9101,7 @@ void ScriptEngine::xfer( Xfer *xfer )
 	// midway special powers
 	UnsignedShort midwaySpecialPowersSize = MAX_PLAYER_COUNT;
 	xfer->xferUnsignedShort( &midwaySpecialPowersSize );
-	if( midwaySpecialPowersSize != MAX_PLAYER_COUNT )
+	if( midwaySpecialPowersSize > MAX_PLAYER_COUNT )	// Tiberium Project @feature a save made before holds 16 players'
 	{
 
 		DEBUG_CRASH(( "ScriptEngine::xfer - MAX_PLAYER_COUNT has changed, m_midwaySpecialPowers size is now different and we must version this" ));
@@ -9114,7 +9114,7 @@ void ScriptEngine::xfer( Xfer *xfer )
 	// finished special powers
 	UnsignedShort finishedSpecialPowersSize = MAX_PLAYER_COUNT;
 	xfer->xferUnsignedShort( &finishedSpecialPowersSize );
-	if( finishedSpecialPowersSize != MAX_PLAYER_COUNT )
+	if( finishedSpecialPowersSize > MAX_PLAYER_COUNT )	// Tiberium Project @feature a save made before holds 16 players'
 	{
 
 		DEBUG_CRASH(( "ScriptEngine::xfer - MAX_PLAYER_COUNT has changed, m_finishedSpecialPowers size is now different and we must version this" ));
@@ -9127,7 +9127,7 @@ void ScriptEngine::xfer( Xfer *xfer )
 	// completed upgrades
 	UnsignedShort completedUpgradesSize = MAX_PLAYER_COUNT;
 	xfer->xferUnsignedShort( &completedUpgradesSize );
-	if( completedUpgradesSize != MAX_PLAYER_COUNT )
+	if( completedUpgradesSize > MAX_PLAYER_COUNT )	// Tiberium Project @feature a save made before holds 16 players'
 	{
 
 		DEBUG_CRASH(( "ScriptEngine::xfer - MAX_PLAYER_COUNT has changed, m_completedUpgrades size is now different and we must version this" ));
@@ -9140,7 +9140,7 @@ void ScriptEngine::xfer( Xfer *xfer )
 	// acquired sciences
 	UnsignedShort acquiredSciencesSize = MAX_PLAYER_COUNT;
 	xfer->xferUnsignedShort( &acquiredSciencesSize );
-	if( acquiredSciencesSize != MAX_PLAYER_COUNT )
+	if( acquiredSciencesSize > MAX_PLAYER_COUNT )	// Tiberium Project @feature a save made before holds 16 players'
 	{
 
 		DEBUG_CRASH(( "ScriptEngine::xfer - MAX_PLAYER_COUNT has changed, m_acquiredSciences size is now different and we must version this" ));

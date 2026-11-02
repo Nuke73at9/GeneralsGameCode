@@ -62,6 +62,7 @@
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
+#include "Common/PlayerXfer.h"	// Tiberium Project @feature 32 players
 
 #include "GameLogic/Object.h"
 #include "GameLogic/GameLogic.h"
@@ -486,8 +487,8 @@ void ScoreKeeper::xferObjectCountMap( Xfer *xfer, ObjectCountMap *map )
 void ScoreKeeper::xfer( Xfer *xfer )
 {
 
-	// version
-	XferVersion currentVersion = 1;
+	// version (Tiberium Project @feature 2: 32 players)
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -498,7 +499,7 @@ void ScoreKeeper::xfer( Xfer *xfer )
 	xfer->xferInt( &m_totalMoneySpent );
 
 	// units destroyed
-	xfer->xferUser( m_totalUnitsDestroyed, sizeof( Int ) * MAX_PLAYER_COUNT );
+	xferPerPlayer( xfer, m_totalUnitsDestroyed, sizeof( Int ), version < 2 );
 
 	// units built
 	xfer->xferInt( &m_totalUnitsBuilt );
@@ -507,7 +508,7 @@ void ScoreKeeper::xfer( Xfer *xfer )
 	xfer->xferInt( &m_totalUnitsLost );
 
 	// buildings destroyed
-	xfer->xferUser( m_totalBuildingsDestroyed, sizeof( Int ) * MAX_PLAYER_COUNT );
+	xferPerPlayer( xfer, m_totalBuildingsDestroyed, sizeof( Int ), version < 2 );
 
 	// buildings built
 	xfer->xferInt( &m_totalBuildingsBuilt );
@@ -533,7 +534,8 @@ void ScoreKeeper::xfer( Xfer *xfer )
 	// objects destroyed
 	UnsignedShort destroyedArraySize = MAX_PLAYER_COUNT;
 	xfer->xferUnsignedShort( &destroyedArraySize );
-	if( destroyedArraySize != MAX_PLAYER_COUNT )
+	// Tiberium Project @feature a save made before holds 16 players' (the rest stay empty)
+	if( destroyedArraySize > MAX_PLAYER_COUNT )
 	{
 
 		DEBUG_CRASH(( "ScoreKeeper::xfer - size of objects destroyed array has changed" ));

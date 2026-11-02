@@ -171,6 +171,8 @@ inline GameWindow *GadgetComboBoxGetDropDownButton( GameWindow *g )
 }
 inline GameWindow *GadgetComboBoxGetListBox( GameWindow *g )
 {
+	if( g == nullptr )	// Tiberium Project @bugfix a layout without this slot's control (16 slots)
+		return nullptr;
 	ComboBoxData *comboBoxData = (ComboBoxData *)g->winGetUserData();
 
 	if( comboBoxData && comboBoxData->listBox)
@@ -181,6 +183,8 @@ inline GameWindow *GadgetComboBoxGetListBox( GameWindow *g )
 
 inline GameWindow *GadgetComboBoxGetEditBox( GameWindow *g )
 {
+	if( g == nullptr )	// Tiberium Project @bugfix a layout without this slot's control (16 slots)
+		return nullptr;
 	ComboBoxData *comboBoxData = (ComboBoxData *)g->winGetUserData();
 
 	if( comboBoxData && comboBoxData->editBox)

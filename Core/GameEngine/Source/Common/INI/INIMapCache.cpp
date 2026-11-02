@@ -125,6 +125,17 @@ const FieldParse MapMetaDataReader::m_mapFieldParseTable[] =
 	{ "Player_6_Start",					INI::parseCoord3D,	nullptr,	offsetof( MapMetaDataReader, m_waypoints ) + sizeof(Coord3D) * 5 },
 	{ "Player_7_Start",					INI::parseCoord3D,	nullptr,	offsetof( MapMetaDataReader, m_waypoints ) + sizeof(Coord3D) * 6 },
 	{ "Player_8_Start",					INI::parseCoord3D,	nullptr,	offsetof( MapMetaDataReader, m_waypoints ) + sizeof(Coord3D) * 7 },
+#if RTS_ZEROHOUR
+	// Tiberium Project @feature 16 slots: the starts of maps with more than 8 (C&C4's have ten)
+	{ "Player_9_Start",					INI::parseCoord3D,	nullptr,	offsetof( MapMetaDataReader, m_waypoints ) + sizeof(Coord3D) * 8 },
+	{ "Player_10_Start",				INI::parseCoord3D,	nullptr,	offsetof( MapMetaDataReader, m_waypoints ) + sizeof(Coord3D) * 9 },
+	{ "Player_11_Start",				INI::parseCoord3D,	nullptr,	offsetof( MapMetaDataReader, m_waypoints ) + sizeof(Coord3D) * 10 },
+	{ "Player_12_Start",				INI::parseCoord3D,	nullptr,	offsetof( MapMetaDataReader, m_waypoints ) + sizeof(Coord3D) * 11 },
+	{ "Player_13_Start",				INI::parseCoord3D,	nullptr,	offsetof( MapMetaDataReader, m_waypoints ) + sizeof(Coord3D) * 12 },
+	{ "Player_14_Start",				INI::parseCoord3D,	nullptr,	offsetof( MapMetaDataReader, m_waypoints ) + sizeof(Coord3D) * 13 },
+	{ "Player_15_Start",				INI::parseCoord3D,	nullptr,	offsetof( MapMetaDataReader, m_waypoints ) + sizeof(Coord3D) * 14 },
+	{ "Player_16_Start",				INI::parseCoord3D,	nullptr,	offsetof( MapMetaDataReader, m_waypoints ) + sizeof(Coord3D) * 15 },
+#endif
 
 	{ "InitialCameraPosition",	INI::parseCoord3D,	nullptr,	offsetof( MapMetaDataReader, m_initialCameraPosition ) },
 

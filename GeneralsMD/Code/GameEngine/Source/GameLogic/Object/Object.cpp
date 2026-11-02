@@ -48,6 +48,7 @@
 #include "Common/Upgrade.h"
 #include "Common/WellKnownKeys.h"
 #include "Common/Xfer.h"
+#include "Common/PlayerXfer.h"	// Tiberium Project @feature 32 players
 #include "Common/XferCRC.h"
 #include "Common/PerfTimer.h"
 
@@ -4163,7 +4164,7 @@ void Object::xfer( Xfer *xfer )
 	// version
 	// Tiberium Project @feature version 10: the attribute modifiers; 11: eight weapon slots' last
 	// conditions (three before)
-	const XferVersion currentVersion = 11;
+	const XferVersion currentVersion = 12;	// Tiberium Project @feature 12: 32 players (vision spied by)
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -4265,10 +4266,10 @@ void Object::xfer( Xfer *xfer )
 	xfer->xferSnapshot( m_partitionLastShroud );
 
 	// vision spied by
-	xfer->xferUser( m_visionSpiedBy, sizeof( Int ) * MAX_PLAYER_COUNT );
+	xferPerPlayer( xfer, m_visionSpiedBy, sizeof( Int ), version < 12 );
 
 	// vision spied by mask
-	xfer->xferUser( &m_visionSpiedMask, sizeof( PlayerMaskType ) );
+	xferPlayerMask( xfer, &m_visionSpiedMask, version < 12 );
 
 	// sighting info, last threat
 	// John M says we don't need to save this (CBD)
@@ -5619,9 +5620,9 @@ void Object::setVisionSpied(Bool setting, Int byWhom)
 		for (Int i = 0; i < MAX_PLAYER_COUNT; ++i)
 		{
 			if( m_visionSpiedBy[i] > 0 )
-				BitSet( workingMask, ( 1 << i ) );
+				BitSet( workingMask, ( (PlayerMaskType)1 << i ) );
 			else
-				BitClear( workingMask, ( 1 << i ) );
+				BitClear( workingMask, ( (PlayerMaskType)1 << i ) );
 		}
 
 		m_visionSpiedMask = workingMask;

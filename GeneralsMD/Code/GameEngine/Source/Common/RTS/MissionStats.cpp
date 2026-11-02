@@ -47,6 +47,7 @@
 #include "Common/MissionStats.h"
 #include "Common/Player.h"
 #include "Common/Xfer.h"
+#include "Common/PlayerXfer.h"	// Tiberium Project @feature 32 players
 
 //-----------------------------------------------------------------------------
 MissionStats::MissionStats()
@@ -85,19 +86,19 @@ void MissionStats::crc( Xfer *xfer )
 void MissionStats::xfer( Xfer *xfer )
 {
 
-	// version
-	XferVersion currentVersion = 1;
+	// version (Tiberium Project @feature 2: 32 players)
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
 	// units killed
-	xfer->xferUser( m_unitsKilled, sizeof( Int ) * MAX_PLAYER_COUNT );
+	xferPerPlayer( xfer, m_unitsKilled, sizeof( Int ), version < 2 );
 
 	// units lost
 	xfer->xferInt( &m_unitsLost );
 
 	// buildings killed
-	xfer->xferUser( m_buildingsKilled, sizeof( Int ) * MAX_PLAYER_COUNT );
+	xferPerPlayer( xfer, m_buildingsKilled, sizeof( Int ), version < 2 );
 
 	// buildings lost
 	xfer->xferInt( &m_buildingsLost );

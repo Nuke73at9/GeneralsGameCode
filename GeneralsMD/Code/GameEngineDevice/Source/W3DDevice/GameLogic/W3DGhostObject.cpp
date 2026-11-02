@@ -605,8 +605,8 @@ void W3DGhostObject::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void W3DGhostObject::xfer( Xfer *xfer )
 {
-	// version
-	XferVersion currentVersion = 1;
+	// version (Tiberium Project @feature 2: a snapshot list for each of MAX_PLAYER_COUNT players; 1 had 16)
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -640,7 +640,8 @@ void W3DGhostObject::xfer( Xfer *xfer )
 
 	// xfer snapshot array
 	UnsignedByte snapshotCount;
-	for( Int i = 0; i < MAX_PLAYER_COUNT; ++i )
+	const Int snapshotPlayers = version >= 2 ? MAX_PLAYER_COUNT : MAX_PLAYER_COUNT_LEGACY;
+	for( Int i = 0; i < snapshotPlayers; ++i )
 	{
 		// count the snapshots at this index
 		snapshotCount = 0;

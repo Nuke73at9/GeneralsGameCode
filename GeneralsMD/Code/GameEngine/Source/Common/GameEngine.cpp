@@ -886,12 +886,18 @@ void GameEngine::init()
 					human.setPlayerTemplate(sideNum);
 					human.setStartPos(0);
 					TheSkirmishGameInfo->setSlot(0, human);
-					GameSlot ai;
-					ai.setState(SLOT_EASY_AI);
-					ai.setColor(1);
-					ai.setPlayerTemplate(sideNum);
-					ai.setStartPos(-1);
-					TheSkirmishGameInfo->setSlot(1, ai);
+					// -testPlayers: more easy AIs, each on a start of its own (as many as the map has)
+					const Int numColors = TheMultiplayerSettings != nullptr ? TheMultiplayerSettings->getNumColors() : 8;
+					const Int players = min( (Int)TiberiumTest::getPlayers(), (Int)MAX_SLOTS );
+					for (Int s = 1; s < players; ++s)
+					{
+						GameSlot ai;
+						ai.setState(SLOT_EASY_AI);
+						ai.setColor(numColors > 0 ? s % numColors : s);
+						ai.setPlayerTemplate(sideNum);
+						ai.setStartPos(-1);
+						TheSkirmishGameInfo->setSlot(s, ai);
+					}
 					TheSkirmishGameInfo->setMap(fname);
 					const MapMetaData *md = TheMapCache != nullptr ? TheMapCache->findMap(fname) : nullptr;
 					TheSkirmishGameInfo->setMapCRC(md != nullptr ? md->m_CRC : 0);

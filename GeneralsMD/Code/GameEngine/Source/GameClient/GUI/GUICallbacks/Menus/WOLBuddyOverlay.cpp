@@ -64,6 +64,9 @@ extern NGMPGame* TheNGMPGame;
 #include "GameNetwork/GameSpy/PersistentStorageDefs.h"
 #include "GameNetwork/GameSpy/ThreadUtils.h"
 
+// Tiberium Project @feature 16 slots: a network game (LAN, online) has the original game's 8, so this menu
+// goes through those (its layout has rows for them)
+
 // PRIVATE DATA ///////////////////////////////////////////////////////////////////////////////////
 
 
@@ -294,7 +297,7 @@ WindowMsgHandledType BuddyControlSystem( GameWindow *window, UnsignedInt msg,
 					if (TheNGMPGame && TheNGMPGame->isGameInProgress() &&
 						!ThePlayerList->getLocalPlayer()->isPlayerActive())
 					{
-						for (Int i=0; i<MAX_SLOTS; ++i)
+						for (Int i=0; i<MAX_NETWORK_SLOTS; ++i)
 						{
 							NGMPGameSlot* slot = TheNGMPGame->getGameSpySlot(i);
 							if (slot && slot->isOccupied() && slot->getProfileID() == selectedProfile)
@@ -313,7 +316,7 @@ WindowMsgHandledType BuddyControlSystem( GameWindow *window, UnsignedInt msg,
 						!ThePlayerList->getLocalPlayer()->isPlayerActive())
 					{
 						DEBUG_LOG(("I'm dead - gotta look for cheats."));
-						for (Int i=0; i<MAX_SLOTS; ++i)
+						for (Int i=0; i<MAX_NETWORK_SLOTS; ++i)
 						{
 							DEBUG_LOG(("Slot[%d] profile is %d", i, TheGameSpyGame->getGameSpySlot(i)->getProfileID()));
 							if (TheGameSpyGame->getGameSpySlot(i)->getProfileID() == selectedProfile)

@@ -69,6 +69,7 @@
 #include "Common/Upgrade.h"
 #include "Common/WellKnownKeys.h"
 #include "Common/Xfer.h"
+#include "Common/PlayerXfer.h"	// Tiberium Project @feature 32 players
 #include "Common/BitFlagsIO.h"
 #include "Common/SpecialPower.h"
 
@@ -4053,7 +4054,7 @@ void Player::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 8;
+	const XferVersion currentVersion = 9;	// Tiberium Project @feature 9: 32 players (attacked by)
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -4393,7 +4394,7 @@ void Player::xfer( Xfer *xfer )
 		m_listInScoreScreen = TRUE;
 	}
 	// attacked by
-	xfer->xferUser( m_attackedBy, sizeof( Bool ) * MAX_PLAYER_COUNT );
+	xferPerPlayer( xfer, m_attackedBy, sizeof( Bool ), version < 9 );
 
 	// cash bounty percent
 	xfer->xferReal( &m_cashBountyPercent );

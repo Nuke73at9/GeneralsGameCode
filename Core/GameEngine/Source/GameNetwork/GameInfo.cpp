@@ -1011,9 +1011,18 @@ static AsciiString buildGameInfoAsciiString(const GameInfo& game, const AsciiStr
 	}
 
 	//add player info for each slot
+	// Tiberium Project @feature 16 slots: the slots up to the last one in use, and at least the original
+	// game's 8, so the string of a game in the first 8 (every network game) is what other builds expect
+	Int slotsWritten = MAX_SLOTS_LEGACY;
+	for (Int i = MAX_SLOTS_LEGACY; i < MAX_SLOTS; ++i)
+	{
+		const GameSlot *slot = game.getConstSlot(i);
+		if (slot && slot->getState() != SLOT_CLOSED)
+			slotsWritten = i + 1;
+	}
 	optionsString.concat(slotListID);
 	optionsString.concat('=');
-	for (Int i=0; i<MAX_SLOTS; ++i)
+	for (Int i=0; i<slotsWritten; ++i)
 	{
 		const GameSlot *slot = game.getConstSlot(i);
 
@@ -1341,6 +1350,13 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
 					if( rawSlotBuf )
 						freeMe = rawSlotBuf;
 					rawSlotBuf = nullptr;
+					// Tiberium Project @feature a list of the original game's 8 slots (or up to the last one
+					// in use): the slots it does not name are closed
+					if (rawSlot.isEmpty() && i >= MAX_SLOTS_LEGACY)
+					{
+						newSlot[i].setState( SLOT_CLOSED );
+						continue;
+					}
 					switch (*rawSlot.str())
 					{
 						case 'H':
@@ -1774,11 +1790,28 @@ void SkirmishGameInfo::xfer( Xfer *xfer )
 	xfer->xferBool(&m_surrendered);
 	xfer->xferInt(&m_gameID);
 
-	Int slot = MAX_SLOTS;
-	xfer->xferInt(&slot);
-	DEBUG_ASSERTCRASH(slot==MAX_SLOTS, ("MAX_SLOTS changed, need to change version. jba."));
+	// Tiberium Project @feature 16 slots: the slots the save holds. A game that uses only the first 8 is
+	// saved with 8, as the original game saves it (so it can still load it); a save holding fewer than
+	// MAX_SLOTS leaves the rest closed.
+	Int slotCount = MAX_SLOTS;
+	if( xfer->getXferMode() == XFER_SAVE )
+	{
+		slotCount = MAX_SLOTS_LEGACY;
+		for( Int s = MAX_SLOTS_LEGACY; s < MAX_SLOTS; ++s )
+			if( m_slot[s]->getState() != SLOT_CLOSED )
+				slotCount = MAX_SLOTS;
+	}
+	xfer->xferInt(&slotCount);
+	if( slotCount < 0 || slotCount > MAX_SLOTS )
+	{
+		DEBUG_CRASH(("SkirmishGameInfo::xfer - %d slots, more than MAX_SLOTS", slotCount));
+		throw XFER_READ_ERROR;
+	}
+	if( xfer->getXferMode() == XFER_LOAD )
+		for( Int s = slotCount; s < MAX_SLOTS; ++s )
+			m_slot[s]->setState(SLOT_CLOSED);
 
-	for (slot = 0; slot < MAX_SLOTS; slot++)
+	for (Int slot = 0; slot < slotCount; slot++)
 	{
 		Int state = m_slot[slot]->getState();
 		xfer->xferInt(&state);

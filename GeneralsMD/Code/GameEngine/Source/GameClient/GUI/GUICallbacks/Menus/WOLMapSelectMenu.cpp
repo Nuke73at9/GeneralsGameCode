@@ -69,6 +69,9 @@ static GameWindow *winMapWindow = nullptr;
 
 #include "GameNetwork/GeneralsOnline/NGMP_interfaces.h"
 
+// Tiberium Project @feature 16 slots: a network game (LAN, online) has the original game's 8, so this menu
+// goes through those (its layout has rows for them)
+
 static void NullifyControls(void)
 {
 	parent = nullptr;
@@ -78,7 +81,7 @@ static void NullifyControls(void)
 		winMapPreview->winSetUserData(nullptr);
 		winMapPreview = nullptr;
 	}
-	for (Int i=0; i<MAX_SLOTS; ++i)
+	for (Int i=0; i<MAX_NETWORK_SLOTS; ++i)
 	{
 		buttonMapStartPosition[i] = nullptr;
 	}
@@ -174,7 +177,7 @@ void WOLMapSelectMenuInit( WindowLayout *layout, void *userData )
 		GadgetRadioSetSelection( radioButtonUserMaps, FALSE );
 #endif
 	AsciiString tmpString;
-	for (Int i = 0; i < MAX_SLOTS; i++)
+	for (Int i = 0; i < MAX_NETWORK_SLOTS; i++)
 	{
 		tmpString.format("WOLMapSelectMenu.wnd:ButtonMapStartPosition%d", i);
 		buttonMapStartPositionID[i] = TheNameKeyGenerator->nameToKey( tmpString );

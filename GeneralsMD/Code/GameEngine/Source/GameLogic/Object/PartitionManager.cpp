@@ -63,6 +63,7 @@
 #include "Common/ThingFactory.h"	// for bullet type hack
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
+#include "Common/PlayerXfer.h"	// Tiberium Project @feature 32 players
 
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/GameLogic.h"
@@ -1507,7 +1508,11 @@ void PartitionCell::validateCoiList()
 void PartitionCell::crc( Xfer *xfer )
 {
 
-	xfer->xferUser(&m_shroudLevel, sizeof(ShroudLevel) * MAX_PLAYER_COUNT);
+	// Tiberium Project @feature the first 16 players' shroud, as the original game's CRC (its replays still
+	// check); with more players in a game, theirs too
+	const Int players = ThePlayerList != nullptr && ThePlayerList->getPlayerCount() > MAX_PLAYER_COUNT_LEGACY
+		? MAX_PLAYER_COUNT : MAX_PLAYER_COUNT_LEGACY;
+	xfer->xferUser(&m_shroudLevel, sizeof(ShroudLevel) * players);
 	xfer->xferUser(&m_cellX, sizeof(m_cellX));
 	xfer->xferUser(&m_cellY, sizeof(m_cellY));
 
@@ -1519,13 +1524,13 @@ void PartitionCell::crc( Xfer *xfer )
 void PartitionCell::xfer( Xfer *xfer )
 {
 
-	// version
-	XferVersion currentVersion = 1;
+	// version (Tiberium Project @feature 2: 32 players)
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
 	// xfer shroud data
-	xfer->xferUser( &m_shroudLevel, sizeof( ShroudLevel ) * MAX_PLAYER_COUNT );
+	xferPerPlayer( xfer, &m_shroudLevel, sizeof( ShroudLevel ), version < 2 );
 
 }
 
@@ -5903,8 +5908,8 @@ void SightingInfo::crc( Xfer *xfer )
 void SightingInfo::xfer( Xfer *xfer )
 {
 
-	// version
-	XferVersion currentVersion = 1;
+	// version (Tiberium Project @feature 2: the player mask has 32 bits)
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -5915,7 +5920,7 @@ void SightingInfo::xfer( Xfer *xfer )
 	xfer->xferReal( &m_howFar );
 
 	// for whom
-	xfer->xferUser( &m_forWhom, sizeof( PlayerMaskType ) );
+	xferPlayerMask( xfer, &m_forWhom, version < 2 );
 
 	// how much
 	xfer->xferUnsignedInt( &m_data );

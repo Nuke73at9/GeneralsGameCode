@@ -1249,6 +1249,53 @@ void ShellGameLoadScreen::update( Int percent )
 	LoadScreen::update( percent );
 }
 
+// Tiberium Project @feature 16 slots: the rows of a layout past the original game's 8 sit over the first 8
+// (tiberium_build_maps.bat's layouts). With more players than 8, the rows in use share the room of the 8:
+// closer together and shorter, each column keeping its place in the row. grid holds numColumns columns of
+// MAX_SLOTS rows each (column c's row r at c * MAX_SLOTS + r); the first column decides how many rows the
+// layout has. Nothing changes for 8 players or fewer, for the original game's layout, or a second time.
+void SpreadWindowRows( GameWindow *grid[], Int numColumns, Int rowsUsed )
+{
+	if (MAX_SLOTS <= MAX_SLOTS_LEGACY || rowsUsed <= MAX_SLOTS_LEGACY || numColumns <= 0)
+		return;
+	Int rows = 0;
+	while (rows < MAX_SLOTS && grid[rows] != nullptr)
+		++rows;
+	if (rows <= MAX_SLOTS_LEGACY)
+		return;
+	rowsUsed = min(rowsUsed, rows);
+
+	Int x, top, nextTop, lastTop, extraTop;
+	grid[0]->winGetPosition(&x, &top);
+	grid[1]->winGetPosition(&x, &nextTop);
+	grid[MAX_SLOTS_LEGACY - 1]->winGetPosition(&x, &lastTop);
+	grid[MAX_SLOTS_LEGACY]->winGetPosition(&x, &extraTop);
+	const Int oldPitch = nextTop - top;
+	if (oldPitch <= 0 || extraTop != top)
+		return;	// not laid out as expected, or spread already
+	const Int pitch = (lastTop - top + oldPitch) / rowsUsed;
+
+	for (Int c = 0; c < numColumns; ++c)
+	{
+		GameWindow *first = grid[c * MAX_SLOTS];
+		if (first == nullptr)
+			continue;
+		Int columnX, columnTop;
+		first->winGetPosition(&columnX, &columnTop);
+		for (Int r = 0; r < rowsUsed; ++r)
+		{
+			GameWindow *win = grid[c * MAX_SLOTS + r];
+			if (win == nullptr)
+				continue;
+			Int wx, wy, width, height;
+			win->winGetPosition(&wx, &wy);
+			win->winGetSize(&width, &height);
+			win->winSetPosition(wx, columnTop + r * pitch);
+			win->winSetSize(width, max((Int)1, height * pitch / oldPitch));
+		}
+	}
+}
+
 // MultiPlayerLoadScreen Class //////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
 MultiPlayerLoadScreen::MultiPlayerLoadScreen()
@@ -1367,25 +1414,25 @@ void MultiPlayerLoadScreen::init( GameInfo *game )
 		AsciiString winName;
 		winName.format( "MultiplayerLoadScreen.wnd:ProgressLoad%d",i);
 		m_progressBars[i] = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
-		DEBUG_ASSERTCRASH(m_progressBars[i], ("Can't initialize the progressbars for the Multiplayer loadscreen"));
+		DEBUG_ASSERTCRASH(m_progressBars[i] || i >= MAX_SLOTS_LEGACY, ("Can't initialize the progressbars for the Multiplayer loadscreen"));
 		// set the progressbar to zero
 		GadgetProgressBarSetProgress(m_progressBars[i], 0 );
 
 		// Load MapStart Positions
 		winName.format( "MultiplayerLoadScreen.wnd:ButtonMapStartPosition%d",i);
 		m_buttonMapStartPosition[i] = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
-		DEBUG_ASSERTCRASH(m_buttonMapStartPosition[i], ("Can't initialize the MapStart Positions for the MultiplayerLoadScreen loadscreen"));
+		DEBUG_ASSERTCRASH(m_buttonMapStartPosition[i] || i >= MAX_SLOTS_LEGACY, ("Can't initialize the MapStart Positions for the MultiplayerLoadScreen loadscreen"));
 
 
 		// Load the Player's name
 		winName.format( "MultiplayerLoadScreen.wnd:StaticTextPlayer%d",i);
 		m_playerNames[i] = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
-		DEBUG_ASSERTCRASH(m_playerNames[i], ("Can't initialize the Names for the Multiplayer loadscreen"));
+		DEBUG_ASSERTCRASH(m_playerNames[i] || i >= MAX_SLOTS_LEGACY, ("Can't initialize the Names for the Multiplayer loadscreen"));
 
 		// Load the Player's Side
 		winName.format( "MultiplayerLoadScreen.wnd:StaticTextSide%d",i);
 		m_playerSide[i] = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
-		DEBUG_ASSERTCRASH(m_playerSide[i], ("Can't initialize the Sides for the Multiplayer loadscreen"));
+		DEBUG_ASSERTCRASH(m_playerSide[i] || i >= MAX_SLOTS_LEGACY, ("Can't initialize the Sides for the Multiplayer loadscreen"));
 
 		winName.format( "MultiplayerLoadScreen.wnd:StaticTextTeam%d",i);
 		teamWin[i] = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
@@ -1394,6 +1441,15 @@ void MultiPlayerLoadScreen::init( GameInfo *game )
 		GameSlot *slot = game->getSlot(i);
 		if (!slot || !slot->isOccupied())
 			continue;
+
+		// Tiberium Project @bugfix more players than the layout has rows for (the original game's has 8): the
+		// rest load without one
+		if (m_progressBars[netSlot] == nullptr || m_playerNames[netSlot] == nullptr || m_playerSide[netSlot] == nullptr)
+		{
+			m_playerLookup[i] = netSlot;
+			netSlot++;
+			continue;
+		}
 
 		Color houseColor = TheMultiplayerSettings->getColor(slot->getApparentColor())->getColor();
 #if RTS_GENERALS
@@ -1433,10 +1489,24 @@ void MultiPlayerLoadScreen::init( GameInfo *game )
 
 	for(i = netSlot; i < MAX_SLOTS; ++i)
 	{
-		m_progressBars[i]->winHide(TRUE);
-		m_playerNames[i]->winHide(TRUE);
-		m_playerSide[i]->winHide(TRUE);
-		teamWin[i]->winHide(TRUE);
+		// Tiberium Project @bugfix a layout may have fewer rows than the game has slots
+		GameWindow *rowWindows[] = { m_progressBars[i], m_playerNames[i], m_playerSide[i], teamWin[i] };
+		for (Int w = 0; w < (Int)ARRAY_SIZE(rowWindows); ++w)
+			if (rowWindows[w])
+				rowWindows[w]->winHide(TRUE);
+	}
+
+	// Tiberium Project @feature more than 8 players, in a layout with rows for them
+	{
+		GameWindow *grid[4 * MAX_SLOTS];
+		for (i = 0; i < MAX_SLOTS; ++i)
+		{
+			grid[i] = m_playerNames[i];
+			grid[MAX_SLOTS + i] = m_playerSide[i];
+			grid[2 * MAX_SLOTS + i] = teamWin[i];
+			grid[3 * MAX_SLOTS + i] = m_progressBars[i];
+		}
+		SpreadWindowRows(grid, 4, netSlot);
 	}
 
 	if(m_mapPreview)
@@ -1622,55 +1692,55 @@ GameSlot *lSlot = game->getSlot(game->getLocalSlotNum());
 		AsciiString winName;
 		winName.format( "GameSpyLoadScreen.wnd:ProgressLoad%d",i);
 		m_progressBars[i] = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
-		DEBUG_ASSERTCRASH(m_progressBars[i], ("Can't initialize the progressbars for the GameSpyLoadScreen loadscreen"));
+		DEBUG_ASSERTCRASH(m_progressBars[i] || i >= MAX_SLOTS_LEGACY, ("Can't initialize the progressbars for the GameSpyLoadScreen loadscreen"));
 		// set the progressbar to zero
 		GadgetProgressBarSetProgress(m_progressBars[i], 0 );
 
 		// Load the Player's name
 		winName.format( "GameSpyLoadScreen.wnd:StaticTextPlayer%d",i);
 		m_playerNames[i] = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
-		DEBUG_ASSERTCRASH(m_playerNames[i], ("Can't initialize the Names for the GameSpyLoadScreen loadscreen"));
+		DEBUG_ASSERTCRASH(m_playerNames[i] || i >= MAX_SLOTS_LEGACY, ("Can't initialize the Names for the GameSpyLoadScreen loadscreen"));
 
 		// Load MapStart Positions
 		winName.format( "GameSpyLoadScreen.wnd:ButtonMapStartPosition%d",i);
 		m_buttonMapStartPosition[i] = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
-		DEBUG_ASSERTCRASH(m_buttonMapStartPosition[i], ("Can't initialize the MapStart Positions for the GameSpyLoadScreen loadscreen"));
+		DEBUG_ASSERTCRASH(m_buttonMapStartPosition[i] || i >= MAX_SLOTS_LEGACY, ("Can't initialize the MapStart Positions for the GameSpyLoadScreen loadscreen"));
 
 
 		// Load the Player's Side
 		winName.format( "GameSpyLoadScreen.wnd:StaticTextSide%d",i);
 		m_playerSide[i] = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
-		DEBUG_ASSERTCRASH(m_playerSide[i], ("Can't initialize the Sides for the GameSpyLoadScreen loadscreen"));
+		DEBUG_ASSERTCRASH(m_playerSide[i] || i >= MAX_SLOTS_LEGACY, ("Can't initialize the Sides for the GameSpyLoadScreen loadscreen"));
 
 		// Load the Player's window
 		winName.format( "GameSpyLoadScreen.wnd:WinPlayer%d",i);
 		m_playerWin[i] = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
-		DEBUG_ASSERTCRASH(m_playerWin[i], ("Can't initialize the WinPlayer for the GameSpyLoadScreen loadscreen"));
+		DEBUG_ASSERTCRASH(m_playerWin[i] || i >= MAX_SLOTS_LEGACY, ("Can't initialize the WinPlayer for the GameSpyLoadScreen loadscreen"));
 
 		// Load the Player's m_playerTotalDisconnects
 		winName.format( "GameSpyLoadScreen.wnd:StaticTextTotalDisconnects%d",i);
 		m_playerTotalDisconnects[i] = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
-		DEBUG_ASSERTCRASH(m_playerTotalDisconnects[i], ("Can't initialize the m_playerTotalDisconnects for the GameSpyLoadScreen loadscreen"));
+		DEBUG_ASSERTCRASH(m_playerTotalDisconnects[i] || i >= MAX_SLOTS_LEGACY, ("Can't initialize the m_playerTotalDisconnects for the GameSpyLoadScreen loadscreen"));
 
 //		// Load the Player's m_playerFavoriteFactions
 //		winName.format( "GameSpyLoadScreen.wnd:StaticTextFavoriteFaction%d",i);
 //		m_playerFavoriteFactions[i] = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
-//		DEBUG_ASSERTCRASH(m_playerFavoriteFactions[i], ("Can't initialize the StaticTextFavoriteFaction for the GameSpyLoadScreen loadscreen"));
+//		DEBUG_ASSERTCRASH(m_playerFavoriteFactions[i] || i >= MAX_SLOTS_LEGACY, ("Can't initialize the StaticTextFavoriteFaction for the GameSpyLoadScreen loadscreen"));
 
 		// Load the Player's m_playerWinLosses
 		winName.format( "GameSpyLoadScreen.wnd:StaticTextWinLoss%d",i);
 		m_playerWinLosses[i] = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
-		DEBUG_ASSERTCRASH(m_playerWinLosses[i], ("Can't initialize the m_playerWinLosses for the GameSpyLoadScreen loadscreen"));
+		DEBUG_ASSERTCRASH(m_playerWinLosses[i] || i >= MAX_SLOTS_LEGACY, ("Can't initialize the m_playerWinLosses for the GameSpyLoadScreen loadscreen"));
 
 		// Load the Player's m_playerWinLosses
 		winName.format( "GameSpyLoadScreen.wnd:WinRank%d",i);
 		m_playerRank[i] = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
-		DEBUG_ASSERTCRASH(m_playerRank[i], ("Can't initialize the m_playerRank for the GameSpyLoadScreen loadscreen"));
+		DEBUG_ASSERTCRASH(m_playerRank[i] || i >= MAX_SLOTS_LEGACY, ("Can't initialize the m_playerRank for the GameSpyLoadScreen loadscreen"));
 
 		// Load the Player's m_playerOfficerMedal
 		winName.format( "GameSpyLoadScreen.wnd:WinOfficer%d",i);
 		m_playerOfficerMedal[i] = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
-		DEBUG_ASSERTCRASH(m_playerOfficerMedal[i], ("Can't initialize the m_playerOfficerMedal for the GameSpyLoadScreen loadscreen"));
+		DEBUG_ASSERTCRASH(m_playerOfficerMedal[i] || i >= MAX_SLOTS_LEGACY, ("Can't initialize the m_playerOfficerMedal for the GameSpyLoadScreen loadscreen"));
 
 		winName.format( "MultiplayerLoadScreen.wnd:StaticTextTeam%d",i);
 		teamWin[i] = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
@@ -1807,7 +1877,8 @@ GameSlot *lSlot = game->getSlot(game->getLocalSlotNum());
 
 	for(i = netSlot; i < MAX_SLOTS; ++i)
 	{
-		m_playerWin[i]->winHide(TRUE);
+		if (m_playerWin[i])	// Tiberium Project @bugfix the layout has rows for the 8 an online game can have
+			m_playerWin[i]->winHide(TRUE);
 		//m_playerNames[i]->winHide(TRUE);
 		//m_playerSide[i]->winHide(TRUE);
 	}

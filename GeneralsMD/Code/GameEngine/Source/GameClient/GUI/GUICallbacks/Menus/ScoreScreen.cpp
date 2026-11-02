@@ -198,6 +198,34 @@ struct ScoreGather
 	const Image *m_sideImage;
 };
 void populateSideInfo( UnicodeString side,ScoreGather *sg, Int pos, Color color);
+
+// Tiberium Project @bugfix 16 slots: the layout may have fewer rows than the game has players (the original
+// game's has 8); the players past them go unlisted
+static Bool scoreScreenHasRow( Int pos )
+{
+	AsciiString winName;
+	winName.format("ScoreScreen.wnd:StaticTextPlayer%d", pos);
+	return parent != nullptr && TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey( winName ) ) != nullptr;
+}
+
+// Tiberium Project @feature more than 8 players, in a layout with rows for them (LoadScreen.cpp)
+void SpreadWindowRows( GameWindow *grid[], Int numColumns, Int rowsUsed );
+static void spreadScoreRows( Int rowsUsed )
+{
+	static const char *const columns[] = { "StaticTextPlayer", "StaticTextObserver", "StaticTextUnitsBuilt",
+		"StaticTextUnitsLost", "StaticTextUnitsDestroyed", "StaticTextBuildingsBuilt", "StaticTextBuildingsLost",
+		"StaticTextBuildingsDestroyed", "StaticTextResources", "StaticTextScore", "GameWindowWinner", "ButtonAdd" };
+	const Int numColumns = (Int)ARRAY_SIZE(columns);
+	GameWindow *grid[numColumns * MAX_SLOTS];
+	for (Int c = 0; c < numColumns; ++c)
+		for (Int r = 0; r < MAX_SLOTS; ++r)
+		{
+			AsciiString winName;
+			winName.format("ScoreScreen.wnd:%s%d", columns[c], r);
+			grid[c * MAX_SLOTS + r] = parent ? TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey( winName ) ) : nullptr;
+		}
+	SpreadWindowRows(grid, numColumns, rowsUsed);
+}
 //-----------------------------------------------------------------------------
 // PUBLIC FUNCTIONS ///////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
@@ -1523,7 +1551,7 @@ static inline int CheckForApocalypse( ScoreKeeper *s, const char* szWeapon )
 //-------------------------------------------------------------------------------------------------
 void populatePlayerInfo( Player *player, Int pos)
 {
-	if(!player || pos < 0 || pos >= MAX_SLOTS)
+	if(!player || pos < 0 || pos >= MAX_SLOTS || !scoreScreenHasRow(pos))
 		return;
 	Color color = player->getPlayerColor();
 	ScoreKeeper *scoreKpr = player->getScoreKeeper();
@@ -2358,12 +2386,15 @@ void grabSinglePlayerInfo()
 //-------------------------------------------------------------------------------------------------
 void hideWindows( Int pos )
 {
+	spreadScoreRows(pos);
 	if(pos < 0 || pos >= MAX_SLOTS)
 		return;
 	AsciiString winName;
 	GameWindow *win;
 	for( Int i = pos; i < MAX_SLOTS; ++i)
 	{
+		if (!scoreScreenHasRow(i))
+			continue;
 
 		// set the player name
 		winName.format("ScoreScreen.wnd:StaticTextPlayer%d", i);
@@ -2446,7 +2477,7 @@ winName.format("ScoreScreen.wnd:StaticTextScore%d", i);
 //-------------------------------------------------------------------------------------------------
 void setObserverWindows( Player *player, Int i )
 {
-	if(!player || i < 0 || i >= MAX_SLOTS)
+	if(!player || i < 0 || i >= MAX_SLOTS || !scoreScreenHasRow(i))
 		return;
 	AsciiString winName;
 	GameWindow *win;
@@ -2579,7 +2610,7 @@ winName.format("ScoreScreen.wnd:StaticTextScore%d", i);
 //-------------------------------------------------------------------------------------------------
 void populateSideInfo( UnicodeString side,ScoreGather *sg, Int pos, Color color)
 {
-	if(pos < 0 || pos > MAX_SLOTS)
+	if(pos < 0 || pos >= MAX_SLOTS || !scoreScreenHasRow(pos))
 		return;
 
 	AsciiString winName;

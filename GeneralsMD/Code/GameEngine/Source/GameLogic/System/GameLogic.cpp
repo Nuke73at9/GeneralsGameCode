@@ -192,7 +192,9 @@ enum
 	LOAD_PROGRESS_POST_PATHFINDER_NEW_MAP = LOAD_PROGRESS_POST_BRIDGE_LOAD + 1,
 
 	LOAD_PROGRESS_LOOP_ALL_THE_FREAKN_OBJECTS = LOAD_PROGRESS_POST_BRIDGE_LOAD + 1,
-	LOAD_PROGRESS_MAX_ALL_THE_FREAKN_OBJECTS = 80,// THE END OF THE BIG ASS PROGRESS PAUSE
+	// Tiberium Project @feature 80 with the original 8 slots: the slots' steps that follow (one a slot) end the
+	// load at 100 however many slots there are
+	LOAD_PROGRESS_MAX_ALL_THE_FREAKN_OBJECTS = 88 - MAX_SLOTS,// THE END OF THE BIG ASS PROGRESS PAUSE
 
 	LOAD_PROGRESS_LOOP_INITIAL_NETWORK_BUILDINGS = LOAD_PROGRESS_MAX_ALL_THE_FREAKN_OBJECTS + 1,  // Increment the next one by at least MAX_SLOTS
 	LOAD_PROGRESS_POST_INITIAL_NETWORK_BUILDINGS = LOAD_PROGRESS_LOOP_INITIAL_NETWORK_BUILDINGS + MAX_SLOTS + 1,
@@ -202,6 +204,7 @@ enum
 	LOAD_PROGRESS_POST_STARTING_CAMERA_2 = LOAD_PROGRESS_POST_STARTING_CAMERA + 1,
 	LOAD_PROGRESS_END = 100,
 };
+static_assert(LOAD_PROGRESS_POST_STARTING_CAMERA_2 <= LOAD_PROGRESS_END, "the load's steps go past 100 percent");
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
@@ -852,10 +855,15 @@ static void populateRandomSideAndColor( GameInfo *game )
 		if (colorIdx < 0 || colorIdx >= TheMultiplayerSettings->getNumColors())
 		{
 			DEBUG_ASSERTCRASH(colorIdx == -1, ("Non-random bad color %d in slot %d", colorIdx, i));
-			while (colorIdx == -1)
+			// Tiberium Project @bugfix more players than colours (16 slots): when every colour is taken, one
+			// is shared rather than searched for forever
+			Bool anyFree = FALSE;
+			for (Int c = 0; c < TheMultiplayerSettings->getNumColors() && !anyFree; ++c)
+				anyFree = !game->isColorTaken(c);
+			while (colorIdx == -1 && TheMultiplayerSettings->getNumColors() > 0)
 			{
 				colorIdx = GameLogicRandomValue(0, TheMultiplayerSettings->getNumColors()-1);
-				if (game->isColorTaken(colorIdx))
+				if (anyFree && game->isColorTaken(colorIdx))
 					colorIdx = -1;
 			}
 			DEBUG_LOG(("Setting color %d to %d", i, colorIdx));

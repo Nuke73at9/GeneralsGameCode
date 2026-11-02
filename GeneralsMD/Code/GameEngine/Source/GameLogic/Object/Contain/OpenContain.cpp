@@ -41,6 +41,7 @@
 #include "Common/RandomValue.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
+#include "Common/PlayerXfer.h"	// Tiberium Project @feature 32 players
 
 #include "GameClient/Drawable.h"
 #include "GameClient/InGameUI.h"
@@ -1770,8 +1771,8 @@ void OpenContain::crc( Xfer *xfer )
 void OpenContain::xfer( Xfer *xfer )
 {
 
-	// version
-	XferVersion currentVersion = 2;
+	// version (Tiberium Project @feature 3: the player entered mask has 32 bits)
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1838,7 +1839,7 @@ void OpenContain::xfer( Xfer *xfer )
 	}
 
 	// player entered mask
-	xfer->xferUser( &m_playerEnteredMask, sizeof( PlayerMaskType ) );
+	xferPlayerMask( xfer, &m_playerEnteredMask, version < 3 );
 
 	// last unload sound frame
 	xfer->xferUnsignedInt( &m_lastUnloadSoundFrame );

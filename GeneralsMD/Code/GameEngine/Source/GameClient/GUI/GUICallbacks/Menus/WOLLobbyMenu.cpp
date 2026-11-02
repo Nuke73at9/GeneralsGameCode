@@ -71,6 +71,9 @@
 #include "GameNetwork/RankPointValue.h"
 #include "GameNetwork/GeneralsOnline/NGMP_interfaces.h"
 
+// Tiberium Project @feature 16 slots: a network game (LAN, online) has the original game's 8, so this menu
+// goes through those (its layout has rows for them)
+
 void refreshGameList( Bool forceRefresh = FALSE );
 void refreshPlayerList( Bool forceRefresh = FALSE );
 
@@ -1696,7 +1699,7 @@ void WOLLobbyMenuUpdate( WindowLayout * layout, void *userData)
 						else
 						{
 							isHostPresent = FALSE;
-							for (Int i=0; i<MAX_SLOTS; ++i)
+							for (Int i=0; i<MAX_NETWORK_SLOTS; ++i)
 							{
 								AsciiString hostName;
 								hostName.translate(room->getConstSlot(0)->getName());
@@ -1829,7 +1832,7 @@ void WOLLobbyMenuUpdate( WindowLayout * layout, void *userData)
 							room.setMap(TheGameState->portableMapPathToRealMapPath(mapName));
 
 							Int numPlayers = 0;
-							for (i=0; i<MAX_SLOTS; ++i)
+							for (i=0; i<MAX_NETWORK_SLOTS; ++i)
 							{
 								GameSpyGameSlot *slot = room.getGameSpySlot(i);
 								if (slot)
@@ -2244,7 +2247,7 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 									GSMessageBoxOk(TheGameText->fetch("GUI:JoinFailedDefault"), TheGameText->fetch("GUI:JoinFailedUnknownLadder"));
 									break;
 								}
-								if (roomToJoin->getNumPlayers() == MAX_SLOTS)
+								if (roomToJoin->getNumPlayers() == MAX_NETWORK_SLOTS)
 								{
 									GSMessageBoxOk(TheGameText->fetch("GUI:JoinFailedDefault"), TheGameText->fetch("GUI:JoinFailedRoomFull"));
 									break;

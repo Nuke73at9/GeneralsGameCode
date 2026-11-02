@@ -44,6 +44,9 @@
 #include "GameClient/MapUtil.h"
 #include "GameNetwork/GUIUtil.h"
 
+// Tiberium Project @feature 16 slots: a network game (LAN, online) has the original game's 8, so this menu
+// goes through those (its layout has rows for them)
+
 
 // PRIVATE DATA ///////////////////////////////////////////////////////////////////////////////////
 static NameKeyType buttonBack = NAMEKEY_INVALID;
@@ -107,7 +110,7 @@ static void NullifyControls()
 		winMapPreview->winSetUserData(nullptr);
 		winMapPreview = nullptr;
 	}
-	for (Int i=0; i<MAX_SLOTS; ++i)
+	for (Int i=0; i<MAX_NETWORK_SLOTS; ++i)
 	{
 		buttonMapStartPosition[i] = nullptr;
 	}
@@ -152,7 +155,7 @@ void LanMapSelectMenuInit( WindowLayout *layout, void *userData )
 		GadgetRadioSetSelection( radioButtonUserMaps, FALSE );
 
 	AsciiString tmpString;
-	for (Int i = 0; i < MAX_SLOTS; i++)
+	for (Int i = 0; i < MAX_NETWORK_SLOTS; i++)
 	{
 		tmpString.format("LanMapSelectMenu.wnd:ButtonMapStartPosition%d", i);
 		buttonMapStartPositionID[i] = TheNameKeyGenerator->nameToKey( tmpString );

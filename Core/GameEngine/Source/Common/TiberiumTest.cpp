@@ -78,6 +78,8 @@
 #include "GameClient/GameWindow.h"
 #include "GameClient/Gadget.h"
 #include "GameClient/GadgetPushButton.h"
+#include "GameClient/GameWindowManager.h"
+#include "GameNetwork/GameInfo.h"
 #include "Common/MessageStream.h"
 #include "Common/Money.h"
 #include "Common/NameKeyGenerator.h"
@@ -468,6 +470,9 @@ const char *TiberiumTest::getSide() { return s_side.empty() ? nullptr : s_side.c
 static unsigned int s_rules = 0;
 void TiberiumTest::setRules( unsigned int rules ) { s_rules = rules; }
 unsigned int TiberiumTest::getRules() { return s_rules; }
+static Int s_players = 2;
+void TiberiumTest::setPlayers( Int players ) { if ( players >= 2 ) s_players = players; }
+Int TiberiumTest::getPlayers() { return s_players; }
 void TiberiumTest::setReveal( Bool reveal ) { s_reveal = reveal; if ( reveal ) s_active = TRUE; }
 void TiberiumTest::setCRCFrame( Int frame ) { if ( frame >= 0 ) { s_crcFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setQuitFrame( Int frame ) { if ( frame > 0 ) { s_quitFrame = frame; s_active = TRUE; } }
@@ -620,6 +625,26 @@ void TiberiumTest::update()
 			TheDisplay->createLightPulse( &p, &colors[k % 3], 30.0f, 60.0f, 0, 0 );
 		}
 		log( "frame %d: 9 light pulses around %.0f %.0f", (int)s_frame, center.x, center.y );
+	}
+
+	// the game's slots and their starts, once (read only: a check of a test skirmish's players)
+	static Bool s_slotsLogged = FALSE;
+	if ( !s_slotsLogged && inGame && s_frame >= 2 && ThePlayerList != nullptr && TheGameInfo != nullptr )
+	{
+		s_slotsLogged = TRUE;
+		std::string starts;
+		Int players = 0;
+		for ( Int i = 0; i < MAX_SLOTS; ++i )
+		{
+			const GameSlot *slot = TheGameInfo->getConstSlot( i );
+			if ( slot == nullptr || !slot->isOccupied() || ThePlayerList->getPlayerFromSlotIndex( i ) == nullptr )
+				continue;
+			++players;
+			char buf[32];
+			snprintf( buf, sizeof(buf), " %d:%d", i, slot->getStartPos() );
+			starts += buf;
+		}
+		log( "frame %d: %d players in slots (slot:start)%s; %d players in all", (int)s_frame, players, starts.c_str(), ThePlayerList->getPlayerCount() );
 	}
 
 	// the map revealed to the local player (particle systems do not emit under the shroud)
@@ -1046,6 +1071,21 @@ void TiberiumTest::update()
 	// commands go to the logic like a player's: not with -testCRC)
 	if ( s_uiMouse && TheMouse != nullptr && TheDisplay != nullptr )
 		TheMouse->setPosition( (Int)( s_uiMouseX * TheDisplay->getWidth() ), (Int)( s_uiMouseY * TheDisplay->getHeight() ) );
+	// press=Layout.wnd:ButtonName: a window's button pressed as a click presses it, in a shell screen too
+	for ( size_t n = 0; n < s_uiSteps.size() && TheWindowManager != nullptr; ++n )
+	{
+		const UIStep &step = s_uiSteps[n];
+		if ( step.frame != s_frame || step.action != "press" )
+			continue;
+		GameWindow *win = TheWindowManager->winGetWindowFromId( nullptr, TheNameKeyGenerator->nameToKey( step.arg.c_str() ) );
+		if ( win != nullptr && win->winGetOwner() != nullptr )
+		{
+			TheWindowManager->winSendSystemMsg( win->winGetOwner(), GBM_SELECTED, (WindowMsgData)win, win->winGetWindowId() );
+			log( "frame %d: pressed %s", (int)s_frame, step.arg.c_str() );
+		}
+		else
+			log( "frame %d: no window %s to press", (int)s_frame, step.arg.c_str() );
+	}
 	for ( size_t n = 0; n < s_uiSteps.size() && inGame; ++n )
 	{
 		const UIStep &step = s_uiSteps[n];

@@ -68,7 +68,9 @@
 //-----------------------------------------------------------------------------
 // DEFINES ////////////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
-enum { MAX_BUTTONS = 8};
+// Tiberium Project @bugfix a button for each of the game's slots, of the ones the layout has (the original
+// game's has 8): a player past them goes unlisted rather than written past the end
+enum { MAX_BUTTONS = MAX_SLOTS};
 static NameKeyType buttonPlayerID[MAX_BUTTONS] = { NAMEKEY_INVALID,NAMEKEY_INVALID,
 																										NAMEKEY_INVALID,NAMEKEY_INVALID,
 																										NAMEKEY_INVALID,NAMEKEY_INVALID,
@@ -260,7 +262,8 @@ void ControlBar::populateObserverList()
 			{
 				if(p->isPlayerObserver())
 					continue;
-				DEBUG_ASSERTCRASH(currentButton < MAX_BUTTONS, ("ControlBar::populateObserverList trying to populate more buttons then we have"));
+				if (currentButton >= MAX_BUTTONS || buttonPlayer[currentButton] == nullptr || staticTextPlayer[currentButton] == nullptr)
+					break;
 				GadgetButtonSetData(buttonPlayer[currentButton], (void *)p);
 				GadgetButtonSetEnabledImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getEnabledImage() );
 				//GadgetButtonSetHiliteImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getHiliteImage() );
@@ -289,10 +292,12 @@ void ControlBar::populateObserverList()
 				++currentButton;
 			}
 		}
-		for(currentButton; currentButton<MAX_BUTTONS; ++currentButton)
+		for(; currentButton<MAX_BUTTONS; ++currentButton)
 		{
-			buttonPlayer[currentButton]->winHide(TRUE);
-			staticTextPlayer[currentButton]->winHide(TRUE);
+			if (buttonPlayer[currentButton])
+				buttonPlayer[currentButton]->winHide(TRUE);
+			if (staticTextPlayer[currentButton])
+				staticTextPlayer[currentButton]->winHide(TRUE);
 		}
 	}
 	else
@@ -302,7 +307,8 @@ void ControlBar::populateObserverList()
 			Player *p = ThePlayerList->getNthPlayer(i);
 			if(p && !p->isPlayerObserver() && p->getPlayerType() == PLAYER_HUMAN)
 			{
-				DEBUG_ASSERTCRASH(currentButton < MAX_BUTTONS, ("ControlBar::populateObserverList trying to populate more buttons then we have"));
+				if (currentButton >= MAX_BUTTONS || buttonPlayer[currentButton] == nullptr || staticTextPlayer[currentButton] == nullptr)
+					break;
 				GadgetButtonSetData(buttonPlayer[currentButton], (void *)p);
 				GadgetButtonSetEnabledImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getEnabledImage() );
 				//GadgetButtonSetHiliteImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getHiliteImage() );
@@ -322,10 +328,12 @@ void ControlBar::populateObserverList()
 				break;
 			}
 		}
-		for(currentButton; currentButton<MAX_BUTTONS; ++currentButton)
+		for(; currentButton<MAX_BUTTONS; ++currentButton)
 		{
-			buttonPlayer[currentButton]->winHide(TRUE);
-			staticTextPlayer[currentButton]->winHide(TRUE);
+			if (buttonPlayer[currentButton])
+				buttonPlayer[currentButton]->winHide(TRUE);
+			if (staticTextPlayer[currentButton])
+				staticTextPlayer[currentButton]->winHide(TRUE);
 		}
 	}
 }

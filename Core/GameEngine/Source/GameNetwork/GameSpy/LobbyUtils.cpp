@@ -526,8 +526,8 @@ struct GameSortStruct
 		}
 
 		// sort full games to the bottom
-		Bool g1Full = (g1->getNumNonObserverPlayers() == g1->getMaxPlayers() || g1->getNumPlayers() == MAX_SLOTS);
-		Bool g2Full = (g2->getNumNonObserverPlayers() == g2->getMaxPlayers() || g2->getNumPlayers() == MAX_SLOTS);
+		Bool g1Full = (g1->getNumNonObserverPlayers() == g1->getMaxPlayers() || g1->getNumPlayers() == MAX_NETWORK_SLOTS);	// Tiberium Project: an online game's 8
+		Bool g2Full = (g2->getNumNonObserverPlayers() == g2->getMaxPlayers() || g2->getNumPlayers() == MAX_NETWORK_SLOTS);
 		if ( g1Full ^ g2Full )
 		{
 			return g2Full;
@@ -566,7 +566,7 @@ static Int insertGame( GameWindow *win, GameSpyStagingRoom *game, Bool showMap )
 {
 	game->cleanUpSlotPointers();
 	Color gameColor = GameSpyColor[GSCOLOR_GAME];
-	if (game->getNumNonObserverPlayers() == game->getMaxPlayers() || game->getNumPlayers() == MAX_SLOTS)
+	if (game->getNumNonObserverPlayers() == game->getMaxPlayers() || game->getNumPlayers() == MAX_NETWORK_SLOTS)	// Tiberium Project: an online game's 8
 	{
 		gameColor = GameSpyColor[GSCOLOR_GAME_FULL];
 	}

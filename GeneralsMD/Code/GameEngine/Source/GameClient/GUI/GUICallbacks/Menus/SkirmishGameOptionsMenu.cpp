@@ -141,6 +141,68 @@ static GameWindow *comboBoxTeam[MAX_SLOTS] = {0};
 //static GameWindow *buttonStartPosition[MAX_SLOTS] = {0};
 //
 static GameWindow *buttonMapStartPosition[MAX_SLOTS] = {0};
+
+// Tiberium Project @feature 16 slots. The original game's layout has rows for 8; the Tiberium Project's
+// (tiberium_build_maps.bat's) has 16, the second 8 over the first, a page each, and ButtonSlotPage to turn
+// them. A slot the layout has no row for stays closed.
+static Int s_slotRows = MAX_SLOTS_LEGACY;
+static Int s_slotPage = 0;
+static GameWindow *buttonSlotPage = nullptr;
+static NameKeyType buttonSlotPageID = NAMEKEY_INVALID;
+static const Int SLOTS_PER_PAGE = 8;
+
+static void showSlotPage( Int page )
+{
+	s_slotPage = page;
+	for (Int i = 0; i < s_slotRows; ++i)
+	{
+		const Bool hide = s_slotRows > SLOTS_PER_PAGE && (i / SLOTS_PER_PAGE) != page;
+		GameWindow *rowWindows[] = { comboBoxPlayer[i], comboBoxColor[i], comboBoxPlayerTemplate[i], comboBoxTeam[i] };
+		for (Int w = 0; w < (Int)ARRAY_SIZE(rowWindows); ++w)
+			if (rowWindows[w])
+				rowWindows[w]->winHide(hide);
+	}
+	if (textEntryPlayerName)	// the local player's row has a name box for a player combo box
+		textEntryPlayerName->winHide(s_slotRows > SLOTS_PER_PAGE && page != 0);
+	if (buttonSlotPage)
+	{
+		UnicodeString text;
+		text.format(L"Slots %d-%d", page == 0 ? SLOTS_PER_PAGE + 1 : 1, page == 0 ? s_slotRows : SLOTS_PER_PAGE);
+		GadgetButtonSetText(buttonSlotPage, text);
+		buttonSlotPage->winHide(s_slotRows <= SLOTS_PER_PAGE);
+	}
+}
+
+// Tiberium Project @feature for the map select popup: the slot rows of the page shown, or none of them
+void skirmishShowSlotRows( Bool show )
+{
+	if (show)
+	{
+		showSlotPage(s_slotPage);
+		return;
+	}
+	for (Int i = 0; i < s_slotRows; ++i)
+	{
+		GameWindow *rowWindows[] = { comboBoxPlayer[i], comboBoxColor[i], comboBoxPlayerTemplate[i], comboBoxTeam[i] };
+		for (Int w = 0; w < (Int)ARRAY_SIZE(rowWindows); ++w)
+			if (rowWindows[w])
+				rowWindows[w]->winHide(TRUE);
+	}
+	if (buttonSlotPage)
+		buttonSlotPage->winHide(TRUE);
+	if (textEntryPlayerName && s_slotRows > SLOTS_PER_PAGE && s_slotPage != 0)
+		textEntryPlayerName->winHide(TRUE);
+}
+
+/// the start position's number on the map ("NUMBER:n" up to the game's 8, the number itself after)
+static UnicodeString slotNumberText( Int slotNumber )
+{
+	AsciiString label;
+	label.format("NUMBER:%d", slotNumber);
+	UnicodeString substitute;
+	substitute.format(L"%d", slotNumber);
+	return TheGameText->fetchOrSubstitute(label.str(), substitute.str());
+}
 //external declarations of the Gadgets the callbacks can use
 
 WindowLayout *skirmishMapSelectLayout = nullptr;
@@ -619,6 +681,8 @@ void positionStartSpotControls( GameWindow *win, GameWindow *mapWindow, Coord3D 
 	{
 		if(buttonMapStartPositions[i] == win)
 			break;
+		if(buttonMapStartPositions[i] == nullptr)	// Tiberium Project @bugfix a layout with fewer start buttons
+			continue;
 		ICoord2D tempPos;
 		buttonMapStartPositions[i]->winGetScreenPosition(&tempPos.x, &tempPos.y);
 		// we're inside the other gadget
@@ -849,26 +913,22 @@ void updateMapStartSpots( GameInfo *myGame, GameWindow *buttonMapStartPositions[
 	}
 	for( i = 0; i < MAX_SLOTS; ++i)
 	{
-    if ( buttonMapStartPositions[i] == nullptr )
-      continue;
-
+		// Tiberium Project @bugfix the button labelled is the slot's start's (a layout may lack some)
 		GameSlot *gs =myGame->getSlot(i);
 		if(onLoadScreen)
 		{
-			if(gs->getApparentStartPos() >=0 && gs->getApparentStartPos() < mmd.m_numPlayers && gs->getPlayerTemplate() > PLAYERTEMPLATE_MIN )
+			if(gs->getApparentStartPos() >=0 && gs->getApparentStartPos() < mmd.m_numPlayers && gs->getPlayerTemplate() > PLAYERTEMPLATE_MIN
+				&& buttonMapStartPositions[gs->getApparentStartPos()] != nullptr )
 			{
-				AsciiString displayNumber;
-				displayNumber.format("NUMBER:%d",i + 1);
-				GadgetButtonSetText(buttonMapStartPositions[gs->getApparentStartPos()], TheGameText->fetch(displayNumber));
+				GadgetButtonSetText(buttonMapStartPositions[gs->getApparentStartPos()], slotNumberText(i + 1));
 			}
 		}
 		else
 		{
-			if(gs->getStartPos() >=0 && gs->getStartPos() < mmd.m_numPlayers && gs->getPlayerTemplate() > PLAYERTEMPLATE_MIN )
+			if(gs->getStartPos() >=0 && gs->getStartPos() < mmd.m_numPlayers && gs->getPlayerTemplate() > PLAYERTEMPLATE_MIN
+				&& buttonMapStartPositions[gs->getStartPos()] != nullptr )
 			{
-				AsciiString displayNumber;
-				displayNumber.format("NUMBER:%d",i + 1);
-				GadgetButtonSetText(buttonMapStartPositions[gs->getStartPos()], TheGameText->fetch(displayNumber));
+				GadgetButtonSetText(buttonMapStartPositions[gs->getStartPos()], slotNumberText(i + 1));
 				//added start position tooltip
 				//Fixed again to show the right number , ie "i + 1"
 				UnicodeString temp;
@@ -1123,7 +1183,7 @@ void InitSkirmishGameGadgets()
     {
       comboBoxPlayerID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		  comboBoxPlayer[i] = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, comboBoxPlayerID[i] );
-		  GadgetComboBoxReset(comboBoxPlayer[i]);
+		  GadgetComboBoxReset(comboBoxPlayer[i]);	// (Tiberium Project: no row for this slot: the helpers do nothing)
 		  //GadgetComboBoxGetEditBox(comboBoxPlayer[i])->winSetTooltipFunc(playerTooltip);
     }
 		Color white = GameMakeColor( 255, 255, 255, 255 );
@@ -1161,8 +1221,12 @@ void InitSkirmishGameGadgets()
 		DEBUG_ASSERTCRASH(comboBoxPlayerTemplate[i], ("Could not find the comboBoxPlayerTemplate[%d]",i ));
 
 		// add tooltips to the player template combobox and listbox
-		comboBoxPlayerTemplate[i]->winSetTooltipFunc(playerTemplateComboBoxTooltip);
-		GadgetComboBoxGetListBox(comboBoxPlayerTemplate[i])->winSetTooltipFunc(playerTemplateListBoxTooltip);
+		if (comboBoxPlayerTemplate[i])	// Tiberium Project @feature a layout without this slot's row (16 slots)
+		{
+			comboBoxPlayerTemplate[i]->winSetTooltipFunc(playerTemplateComboBoxTooltip);
+			if (GadgetComboBoxGetListBox(comboBoxPlayerTemplate[i]))
+				GadgetComboBoxGetListBox(comboBoxPlayerTemplate[i])->winSetTooltipFunc(playerTemplateListBoxTooltip);
+		}
 
 		tmpString.format("SkirmishGameOptionsMenu.wnd:ComboBoxTeam%d", i);
 		comboBoxTeamID[i] = TheNameKeyGenerator->nameToKey( tmpString );
@@ -1180,6 +1244,15 @@ void InitSkirmishGameGadgets()
 		buttonMapStartPosition[i] = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, buttonMapStartPositionID[i] );
 		DEBUG_ASSERTCRASH(buttonMapStartPosition[i], ("Could not find the ButtonMapStartPosition[%d]",i ));
 	}
+
+	// Tiberium Project @feature the slot rows the layout has (8, or 16 with the Tiberium Project's), and the
+	// button that turns between their pages
+	s_slotRows = 1;
+	while (s_slotRows < MAX_SLOTS && comboBoxPlayer[s_slotRows] && comboBoxColor[s_slotRows] && comboBoxPlayerTemplate[s_slotRows] && comboBoxTeam[s_slotRows])
+		++s_slotRows;
+	buttonSlotPageID = TheNameKeyGenerator->nameToKey( "SkirmishGameOptionsMenu.wnd:ButtonSlotPage" );
+	buttonSlotPage = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, buttonSlotPageID );
+	showSlotPage(0);
 
 	for (i = 0; i < MAX_SLOTS; ++i)
 	{
@@ -1273,6 +1346,7 @@ void updateSkirmishGameOptions()
 	if (isSkirmish)
 	{
 		ShowUnderlyingGUIElements(TRUE, layoutFilename, parentName, gadgetsToHide, perPlayerGadgetsToHide );
+		showSlotPage(s_slotPage);	// Tiberium Project: the page of slot rows shown, not both
 	}
 	else
 	{
@@ -1358,6 +1432,9 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
 	TheSkirmishGameInfo->setSlot(1, gSlot);
 
 	ParseAsciiStringToGameInfo(TheSkirmishGameInfo, prefs.getSlotList());
+	// Tiberium Project @feature the slots the layout has no row for stay closed
+	for (Int s = s_slotRows; s < MAX_SLOTS; ++s)
+		TheSkirmishGameInfo->getSlot(s)->setState(SLOT_CLOSED);
 	TheSkirmishGameInfo->setSeed(GetTickCount());
 
 	UnsignedInt isPreorder = 0;
@@ -1410,12 +1487,13 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
 	//buttonSelectMap->winEnable( TRUE );
 	//updateSkirmishGameOptions();
 
-	for (Int i = 0; i < MAX_SLOTS; ++i)
+	for (Int i = 0; i < s_slotRows; ++i)	// Tiberium Project: the rows the layout has
 	{
 		comboBoxColor[i]->winEnable(TRUE);
 		comboBoxPlayerTemplate[i]->winEnable(TRUE);
 		comboBoxTeam[i]->winEnable(TRUE);
 	}
+	showSlotPage(s_slotPage);
 
 	// Show the Menu
 	layout->hide( FALSE );
@@ -1693,6 +1771,11 @@ WindowMsgHandledType SkirmishGameOptionsMenuSystem( GameWindow *window, Unsigned
           SkirmishPreferences prefs;
           prefs.write();
 					startPressed();
+				}
+				else if ( controlID == buttonSlotPageID && buttonSlotPageID != NAMEKEY_INVALID )
+				{
+					// Tiberium Project @feature the other page of slots
+					showSlotPage(s_slotPage == 0 ? 1 : 0);
 				}
 				else if ( controlID == buttonResetID )
 				{

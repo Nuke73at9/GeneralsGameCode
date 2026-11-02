@@ -103,22 +103,33 @@ inline Real ConvertAngularVelocityInDegreesPerSecToRadsPerFrame(Real degPerSec)
 }
 
 // ----------------------------------------------------------------------------------------------
+// Tiberium Project @feature Zero Hour holds 16 slots (C&C4's maps start ten): with the neutral player and
+// a map's own (civilians and the like) that is more than 16 players, so it holds 32 and a player mask is
+// 32 bits. Saves made before kept 16 (MAX_PLAYER_COUNT_LEGACY: Common/PlayerXfer.h reads them).
 enum
 {
-	MAX_PLAYER_COUNT = 16											///< max number of Players.
+#if RTS_ZEROHOUR
+	MAX_PLAYER_COUNT = 32,											///< max number of Players.
+#else
+	MAX_PLAYER_COUNT = 16,											///< max number of Players.
+#endif
+	MAX_PLAYER_COUNT_LEGACY = 16									///< the players a save made before kept
 };
 
 // ----------------------------------------------------------------------------------------------
 /**
 	a bitmask that can uniquely represent each player.
 */
-#if MAX_PLAYER_COUNT <= 16
+#if RTS_ZEROHOUR
+	typedef UnsignedInt PlayerMaskType;
+	const PlayerMaskType PLAYERMASK_ALL = 0xffffffff;
+	const PlayerMaskType PLAYERMASK_NONE = 0x0;
+#else
 	typedef UnsignedShort PlayerMaskType;
 	const PlayerMaskType PLAYERMASK_ALL = 0xffff;
 	const PlayerMaskType PLAYERMASK_NONE = 0x0;
-#else
-	#error "this is the wrong size"
 #endif
+static_assert(MAX_PLAYER_COUNT <= sizeof(PlayerMaskType) * 8, "a player mask must have a bit for each player");
 
 // ----------------------------------------------------------------------------------------------
 enum
