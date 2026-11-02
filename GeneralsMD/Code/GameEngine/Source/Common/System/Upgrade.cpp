@@ -125,6 +125,7 @@ const FieldParse UpgradeTemplate::m_upgradeFieldParseTable[] =
 	{ "UnitSpecificSound",	INI::parseAudioEventRTS,	nullptr, offsetof( UpgradeTemplate, m_unitSpecificSound ) },
 	{ "AcademyClassify",		INI::parseIndexList,			TheAcademyClassificationTypeNames, offsetof( UpgradeTemplate, m_academyClassificationType ) },
 	{ "NeededUpgrade",			INI::parseAsciiString,		nullptr, offsetof( UpgradeTemplate, m_neededUpgradeName ) },	// Tiberium Project
+	{ "SideResearchSound",	UpgradeTemplate::parseSideResearchSound,	nullptr, 0 },	// Tiberium Project
 	{ nullptr,						nullptr,												 nullptr, 0 }
 
 };
@@ -149,6 +150,48 @@ UpgradeTemplate::UpgradeTemplate()
 UpgradeTemplate::~UpgradeTemplate()
 {
 
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature "SideResearchSound = <side> <sound>": the sound that announces the upgrade to
+// that side (a side named again takes the newer sound)
+//-------------------------------------------------------------------------------------------------
+void UpgradeTemplate::parseSideResearchSound( INI *ini, void *instance, void * /*store*/, const void * /*userData*/ )
+{
+	UpgradeTemplate *self = (UpgradeTemplate *)instance;
+	const AsciiString side( ini->getNextToken() );
+	AudioEventRTS sound;
+	INI::parseAudioEventRTS( ini, nullptr, &sound, nullptr );
+	for( size_t i = 0; i < self->m_researchSoundSides.size(); ++i )
+	{
+		if( self->m_researchSoundSides[ i ].compareNoCase( side ) == 0 )
+		{
+			self->m_researchSideSounds[ i ] = sound;
+			return;
+		}
+	}
+	self->m_researchSoundSides.push_back( side );
+	self->m_researchSideSounds.push_back( sound );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the sound that announces the upgrade to a side: the side's own, the one of the
+// side it comes from, else the ResearchSound
+//-------------------------------------------------------------------------------------------------
+const AudioEventRTS* UpgradeTemplate::getResearchCompleteSound( const AsciiString& side, const AsciiString& baseSide ) const
+{
+	for( Int pass = 0; pass < 2; ++pass )
+	{
+		const AsciiString& want = pass == 0 ? side : baseSide;
+		if( want.isEmpty() )
+			continue;
+		for( size_t i = 0; i < m_researchSoundSides.size(); ++i )
+		{
+			if( m_researchSoundSides[ i ].compareNoCase( want ) == 0 )
+				return &m_researchSideSounds[ i ];
+		}
+	}
+	return &m_researchSound;
 }
 
 //-------------------------------------------------------------------------------------------------

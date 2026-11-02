@@ -182,6 +182,11 @@ public:
 	AcademyClassificationType getAcademyClassificationType() const { return m_academyClassificationType; }
 	/// Tiberium Project @feature the upgrade the player must have first (NeededUpgrade; empty: none)
 	const AsciiString& getNeededUpgradeName() const { return m_neededUpgradeName; }
+	/// Tiberium Project @feature the sound that announces the upgrade to a side: its SideResearchSound for
+	/// the side, or for the side it comes from (America for AmericaAirForceGeneral), else its ResearchSound
+	const AudioEventRTS* getResearchCompleteSound( const AsciiString& side, const AsciiString& baseSide ) const;
+	/// Tiberium Project @feature "SideResearchSound = <side> <sound>" (C&C4's upgrades: each side's engineer)
+	static void parseSideResearchSound( INI *ini, void *instance, void *store, const void *userData );
 
 	/// inventory pictures
 	void cacheButtonImage();
@@ -213,6 +218,8 @@ protected:
 	AudioEventRTS	m_unitSpecificSound;	///< Secondary sound played when upgrade researched.
 	AcademyClassificationType m_academyClassificationType; ///< A value used by the academy to evaluate advice based on what players do.
 	AsciiString m_neededUpgradeName;		///< Tiberium Project @feature the upgrade the player must have first (C&C4's tech tiers)
+	std::vector<AsciiString> m_researchSoundSides;		///< Tiberium Project @feature SideResearchSound's sides
+	std::vector<AudioEventRTS> m_researchSideSounds;	///< Tiberium Project @feature and their sounds
 
 	UpgradeTemplate *m_next;						///< next
 	UpgradeTemplate *m_prev;						///< prev

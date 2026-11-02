@@ -894,7 +894,8 @@ UpdateSleepTime ProductionUpdate::update()
 				TheRadar->createEvent( us->getPosition(), RADAR_EVENT_UPGRADE );
 
 				//Play the sound for the upgrade, because we just built it!
-				AudioEventRTS sound = *upgrade->getResearchCompleteSound();
+				// Tiberium Project @feature the one for the player's side if it has one (C&C4's engineers)
+				AudioEventRTS sound = *upgrade->getResearchCompleteSound( player->getSide(), player->getBaseSide() );
 				if( TheAudio->isValidAudioEvent( &sound ) )
 				{
 					//We have a custom upgrade complete sound.
