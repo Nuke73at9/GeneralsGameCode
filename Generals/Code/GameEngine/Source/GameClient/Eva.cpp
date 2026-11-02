@@ -71,6 +71,13 @@ void INI::parseEvaEvent( INI* ini )
 	EvaCheckInfo *check = TheEva->newEvaCheckInfo( name );
 	if (!check) {
 		// could be null because it already exists.
+		// Tiberium Project @bugfix @feature an event defined again (a mod's Data\INI\Eva\*.ini, read after
+		// Eva.ini) stopped here with its block unread, and the reader then took its fields for new blocks;
+		// the block is read now, and its sides' sounds are put ahead of the event's own (a side's announcer)
+		EvaCheckInfo *again = newInstance(EvaCheckInfo);
+		ini->initFromINI( again, again->getFieldParse() );
+		TheEva->addSideSounds( name, again->m_evaSideSounds );
+		deleteInstance(again);
 		return;
 	}
 
@@ -279,6 +286,20 @@ EvaCheckInfo *Eva::newEvaCheckInfo(AsciiString name)
 	m_allCheckInfos.push_back(checkInfo);
 	checkInfo->m_message = mesg;
 	return checkInfo;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the sides' sounds of an event defined again, ahead of the ones it had (the
+// first of an event's sounds for the listener's side is the one played)
+void Eva::addSideSounds(AsciiString name, const std::vector<EvaSideSounds> &sounds)
+{
+	const EvaMessage mesg = nameToMessage(name);
+	for (EvaCheckInfoPtrVecIt it = m_allCheckInfos.begin(); it != m_allCheckInfos.end(); ++it) {
+		if (*it && (*it)->m_message == mesg) {
+			(*it)->m_evaSideSounds.insert((*it)->m_evaSideSounds.begin(), sounds.begin(), sounds.end());
+			return;
+		}
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

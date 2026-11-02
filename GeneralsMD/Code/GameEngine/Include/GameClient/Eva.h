@@ -190,6 +190,9 @@ class Eva : public SubsystemInterface
 
 		EvaCheckInfo *newEvaCheckInfo(AsciiString name);
 		const EvaCheckInfo *getEvaCheckInfo(AsciiString name);
+		// Tiberium Project @feature the sides' sounds of an event defined again (a mod's Data\INI\Eva\*.ini),
+		// put ahead of the ones it had so they are the ones played
+		void addSideSounds(AsciiString name, const std::vector<EvaSideSounds> &sounds);
 
 		void setShouldPlay(EvaMessage messageToPlay);
 
