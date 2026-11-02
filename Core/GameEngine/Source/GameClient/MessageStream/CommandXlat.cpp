@@ -423,6 +423,43 @@ static CanAttackResult canAnyForceAttack(const DrawableList *allSelected, const 
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature C&C4's selection voices: a unit hit by an enemy a moment ago answers with its
+	under-fire voice, one that fired a moment ago with its battle voice (its per-unit VoiceSelectUnderFire and
+	VoiceSelectBattle, when it has them), any other with its selection voice. Read only: a voice, chosen on
+	the client. */
+static const AudioEventRTS *selectVoiceOf( const Object *obj, const ThingTemplate *templ )
+{
+#if RTS_ZEROHOUR
+	if (obj != nullptr && TheGameLogic != nullptr)
+	{
+		const UnsignedInt now = TheGameLogic->getFrame();
+		const UnsignedInt WINDOW = LOGICFRAMES_PER_SECOND * 4;
+		const BodyModuleInterface *body = obj->getBodyModule();
+		const UnsignedInt *hit = body != nullptr ? body->getLastDamageTimestamp() : nullptr;
+		if (hit != nullptr && *hit != 0 && now - *hit <= WINDOW)
+		{
+			const DamageInfo *damage = body->getLastDamageInfo();
+			const Object *source = damage != nullptr ? TheGameLogic->findObjectByID(damage->in.m_sourceID) : nullptr;
+			if (source == nullptr || obj->getRelationship(source) == ENEMIES)
+			{
+				const AudioEventRTS *voice = templ->getPerUnitSound("VoiceSelectUnderFire");
+				if (voice != nullptr && !voice->getEventName().isEmpty())
+					return voice;
+			}
+		}
+		const UnsignedInt shot = obj->getLastShotFiredFrame();
+		if (shot != 0 && now - shot <= WINDOW)
+		{
+			const AudioEventRTS *voice = templ->getPerUnitSound("VoiceSelectBattle");
+			if (voice != nullptr && !voice->getEventName().isEmpty())
+				return voice;
+		}
+	}
+#endif
+	return templ->getVoiceSelect();
+}
+
+//-------------------------------------------------------------------------------------------------
 void pickAndPlayUnitVoiceResponse( const DrawableList *list, GameMessage::Type msgType, PickAndPlayInfo *info )
 {
 	if (!list)
@@ -479,7 +516,7 @@ void pickAndPlayUnitVoiceResponse( const DrawableList *list, GameMessage::Type m
 			case GameMessage::MSG_SELECT_TEAM8:
 			case GameMessage::MSG_SELECT_TEAM9:
 			case GameMessage::MSG_CREATE_SELECTED_GROUP:
-				soundToPlayPtr = templ->getVoiceSelect();
+				soundToPlayPtr = selectVoiceOf(obj, templ);
 				objectWithSound = obj;
 				skip = true;
 				break;
@@ -563,6 +600,13 @@ void pickAndPlayUnitVoiceResponse( const DrawableList *list, GameMessage::Type m
 					if( !soundToPlayPtr )
 					{
 						soundToPlayPtr = templ->getVoiceMove();
+						// Tiberium Project @feature an attack-move has its own voice when the unit has one (C&C4's)
+						if( msgType == GameMessage::MSG_DO_ATTACKMOVETO )
+						{
+							const AudioEventRTS *attackMove = templ->getPerUnitSound( "VoiceAttackMove" );
+							if( attackMove != nullptr && !attackMove->getEventName().isEmpty() )
+								soundToPlayPtr = attackMove;
+						}
 						objectWithSound = obj;
 					}
 					if( TheInGameUI->isInForceMoveToMode() && target )
@@ -3678,7 +3722,7 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 						TheInGameUI->selectDrawable( temp );
 
 						// play the units sound
-						AudioEventRTS soundEvent = *temp->getTemplate()->getVoiceSelect();
+						AudioEventRTS soundEvent = *selectVoiceOf( object, temp->getTemplate() );
 						soundEvent.setObjectID(object->getID());
 						TheAudio->addAudioEvent( &soundEvent );
 
