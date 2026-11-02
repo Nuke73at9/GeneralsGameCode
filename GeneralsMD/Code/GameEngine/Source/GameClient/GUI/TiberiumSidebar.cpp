@@ -166,11 +166,20 @@ namespace
 	}
 
 	//-----------------------------------------------------------------------------------------------
+	/** whether the local player is Nod: on China's slots, its generals' too (the Black Hand, the Marked of
+	Kane, C&C4's Nod), as the HUD has it */
+	Bool isNod()
+	{
+		const Player *me = ThePlayerList != nullptr ? ThePlayerList->getLocalPlayer() : nullptr;
+		// Tiberium Project @bugfix the generals' sides (ChinaTankGeneral...) took GDI's sidebar under Nod's panel
+		return me != nullptr && ( me->getSide().compareNoCase( "China" ) == 0 || me->getBaseSide().compareNoCase( "China" ) == 0 );
+	}
+
+	//-----------------------------------------------------------------------------------------------
 	/** the side's colours: GDI's (America's slots) steel blue, Nod's (China's) red, C&C4's */
 	void sideColors( Color *accent, Color *accentDim )
 	{
-		const Player *me = ThePlayerList != nullptr ? ThePlayerList->getLocalPlayer() : nullptr;
-		const Bool nod = me != nullptr && me->getSide().compareNoCase( "China" ) == 0;
+		const Bool nod = isNod();
 		*accent = nod ? GameMakeColor( 214, 40, 40, 255 ) : GameMakeColor( 74, 160, 220, 255 );
 		*accentDim = nod ? GameMakeColor( 110, 20, 20, 200 ) : GameMakeColor( 30, 80, 120, 200 );
 	}
@@ -246,8 +255,7 @@ namespace
 	/// whether the art is there (all of it)
 	Bool getSidebarArt( SidebarArt *a )
 	{
-		const Player *me = ThePlayerList != nullptr ? ThePlayerList->getLocalPlayer() : nullptr;
-		const char *side = me != nullptr && me->getSide().compareNoCase( "China" ) == 0 ? "Nod" : "GDI";
+		const char *side = isNod() ? "Nod" : "GDI";
 		AsciiString off, on;
 		off.format( "%sOff", side );
 		on.format( "%sOn", side );
