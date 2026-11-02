@@ -275,7 +275,7 @@ bool Sage2EffectClass::Read_Value(const unsigned char* base, size_t baseLen, uns
 			}
 		}
 	}
-	else	// struct: members; values are not used by the renderer (PointLight, Shroud)
+	else	// struct: members, one register each (PointLight's are not used; Shroud's is, Set_Float)
 	{
 		if ((size_t)(t - base) + 4 > baseLen)
 			return false;
@@ -740,6 +740,15 @@ void Sage2EffectClass::Set_Float(int index, const float* values, unsigned count)
 	if (index < 0 || index >= (int)m_params.size())
 		return;
 	Param& p = m_params[index];
+	if (p.paramClass == CLASS_STRUCT)
+	{
+		// Tiberium Project @feature a struct of vectors (C&C4's ShroudSetup): the floats in its register
+		// layout, one register a member
+		unsigned n = count < p.values.size() ? count : (unsigned)p.values.size();
+		for (unsigned i = 0; i < n; ++i)
+			p.values[i] = values[i];
+		return;
+	}
 	if (p.paramClass > CLASS_MATRIX_COLS)
 		return;
 	if ((p.paramClass == CLASS_SCALAR || p.paramClass == CLASS_VECTOR) && p.elements <= 1)

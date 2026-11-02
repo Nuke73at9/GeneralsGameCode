@@ -130,8 +130,10 @@ protected:
 	virtual void loadPostProcess() override;
 
 protected:
-	enum { MAX_PROPS=4000};
-	enum {MAX_TYPES = 64};
+	// Tiberium Project @tweak C&C4's maps set down up to about 6000 props of up to about 300 models (their
+	// scenery: rocks, foliage, ruins); Zero Hour's own maps stay well within the old 4000 and 64
+	enum { MAX_PROPS=16384};
+	enum {MAX_TYPES = 512};
 
 	TProp	m_props[MAX_PROPS];			///< The prop buffer.  All props are stored here.
 	Int			m_numProps;						///< Number of props in m_props.

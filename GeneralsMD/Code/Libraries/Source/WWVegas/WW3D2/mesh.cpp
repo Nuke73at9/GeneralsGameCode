@@ -121,6 +121,7 @@
 #include <WWDebug/wwprofile.h>
 #ifdef RTS_RENDERER_D3D9
 #include "sage2/sage2raytracing.h"	// Tiberium Project @feature ray-traced scene
+#include "sage2/sage2material.h"	// Tiberium Project @bugfix the shroud the C&C4 effects take themselves
 #endif
 
 static unsigned MeshDebugIdCount;
@@ -830,6 +831,12 @@ void MeshClass::Render(RenderInfoClass & rinfo)
  *=============================================================================================*/
 void MeshClass::Render_Material_Pass(MaterialPassClass * pass,IndexBufferClass * ib)
 {
+#ifdef RTS_RENDERER_D3D9
+	// Tiberium Project @bugfix a mesh a C&C4 effect draws took the map's shroud in its own pass
+	if (pass->Is_Shroud_Pass() && Sage2MaterialClass::Shrouds_Itself(this))
+		return;
+#endif
+
 	//Added to allow dynamic opacity on additional render passed
 	//without having to create a new material pass per object instance. -MW
 	float oldOpacity=-1.0f;

@@ -46,6 +46,7 @@ namespace
 	float s_bumpSign = 1.0f;			// -1 reads the normal maps' green channel flipped
 	bool s_drew = false, s_drewDeferred = false;	// the last Draw()
 	Sage2TerrainClass::Shroud s_shroud = { nullptr, 0.0f, 0.0f, 0.0f, 0.0f };
+	Sage2TerrainClass::Shroud s_objectShroud = { nullptr, 0.0f, 0.0f, 0.0f, 0.0f };	// Tiberium Project: for the meshes
 	float s_bumpScale = 0.75f;			// C&C4's terrain, High
 	float s_fillSpecular = 1.0f;		// the fills' share of the ground's highlight
 	IDirect3DTexture9* s_cellMap = nullptr;		// the map's cells, one texel each (Set_Cell_Map)
@@ -436,7 +437,9 @@ bool Sage2TerrainClass::Draw_Extra_Blend(TextureClass* tiles, unsigned vertexCou
 bool Sage2TerrainClass::Drew_This_Frame() { return s_drew; }
 bool Sage2TerrainClass::Drew_Deferred() { return s_drew && s_drewDeferred; }
 const Sage2TerrainClass::Shroud& Sage2TerrainClass::Get_Shroud() { return s_shroud; }
-void Sage2TerrainClass::Reset_Draw() { s_drew = false; s_drewDeferred = false; s_shroud.texture = nullptr; }
+void Sage2TerrainClass::Reset_Draw() { s_drew = false; s_drewDeferred = false; s_shroud.texture = nullptr; s_objectShroud.texture = nullptr; }
+void Sage2TerrainClass::Set_Object_Shroud(const Shroud& shroud) { s_objectShroud = shroud; }
+const Sage2TerrainClass::Shroud& Sage2TerrainClass::Get_Object_Shroud() { return s_objectShroud; }
 
 //-------------------------------------------------------------------------------------------------
 bool Sage2TerrainClass::Draw_Shadow(DX8IndexBufferClass* indexBuffer, const Tile* tiles, int tileCount, unsigned vertexCount, unsigned polygonCount)

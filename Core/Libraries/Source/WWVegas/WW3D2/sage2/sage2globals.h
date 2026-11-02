@@ -86,6 +86,7 @@ enum Sage2Binding
 	SAGE2_BIND_SOFT_SHADOW_PARMS,		// SoftShadowParms: kernel size, jitter
 	SAGE2_BIND_SCORCH_UV,				// ScorchMarkUVOffsetMultiplier: world xy -> the terrain top view's texel
 	SAGE2_BIND_GROUND_LIGHT,			// Terrain.GroundLight: the share of the light the ground takes (Sage2LightingClass)
+	SAGE2_BIND_SHROUD_UV,				// Terrain.Shroud: world xy -> the shroud's texel, (world.xy + zw) * xy
 
 	// textures the scene provides (stand-ins until the matching passes exist)
 	SAGE2_BIND_TEXTURE_WHITE,			// shadow map, cloud, macro, shroud: "no effect"
@@ -98,6 +99,7 @@ enum Sage2Binding
 	SAGE2_BIND_TEXTURE_MACRO,			// the terrain's macro texture (large-scale variation; white for none)
 	SAGE2_BIND_TEXTURE_SHADOW_MAP,		// the sun's shadow map (white while there is none)
 	SAGE2_BIND_TEXTURE_TOP_VIEW,		// the terrain top view: scorch marks (transparent while there is none)
+	SAGE2_BIND_TEXTURE_SHROUD,			// the map's shroud (Sage2TerrainClass::Get_Object_Shroud; white while there is none)
 	SAGE2_BIND_TEXTURE_DEFERRED_DIFFUSE,
 	SAGE2_BIND_TEXTURE_DEFERRED_SPECULAR,
 	SAGE2_BIND_TEXTURE_DEPTH,

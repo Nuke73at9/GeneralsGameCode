@@ -22,6 +22,7 @@
 #include "sage2lighting.h"
 #include "sage2scene.h"
 #include "sage2shadow.h"
+#include "sage2terrain.h"
 #include "sage2texture.h"
 #include "sage2topview.h"
 
@@ -32,6 +33,8 @@
 #include <string>
 
 #include "dx8wrapper.h"
+#include "texture.h"
+#include "textureloader.h"
 #include "WWMath/quat.h"
 #include "ww3d.h"
 
@@ -110,7 +113,7 @@ namespace
 		{ "Cloud_WorldPositionMultiplier_XYZZ", SAGE2_BIND_CLOUD_MULTIPLIER },
 		{ "Cloud_CurrentOffsetUV", SAGE2_BIND_CLOUD_OFFSET },
 		{ "MacroSampler", SAGE2_BIND_TEXTURE_MACRO },
-		{ "ShroudTexture", SAGE2_BIND_TEXTURE_WHITE },
+		{ "ShroudTexture", SAGE2_BIND_TEXTURE_SHROUD },
 		{ "Noise", SAGE2_BIND_TEXTURE_GREY },
 		{ "FilteredNoise", SAGE2_BIND_TEXTURE_GREY },
 		{ "RecolorScrollTexture", SAGE2_BIND_TEXTURE_GREY },
@@ -160,8 +163,9 @@ namespace
 		{ "Water.LightSpaceEnvironmentMap", SAGE2_BIND_TEXTURE_ENVIRONMENT },
 		{ "Terrain.Macro.Texture", SAGE2_BIND_TEXTURE_MACRO },
 		{ "Terrain.MacroTexture", SAGE2_BIND_TEXTURE_MACRO },
-		{ "WW3D.Shroud", SAGE2_BIND_TEXTURE_WHITE },
-		{ "Terrain.Shroud.Texture", SAGE2_BIND_TEXTURE_WHITE },	// the terrain effect sets the map's shroud over it
+		{ "WW3D.Shroud", SAGE2_BIND_TEXTURE_SHROUD },
+		{ "Terrain.Shroud.Texture", SAGE2_BIND_TEXTURE_SHROUD },	// the terrain effect sets the map's shroud over it
+		{ "Terrain.Shroud", SAGE2_BIND_SHROUD_UV },
 		{ "WW3D.EnvironmentTexture", SAGE2_BIND_TEXTURE_ENVIRONMENT },
 		{ "WW3D.FactionEnvCube", SAGE2_BIND_TEXTURE_ENVIRONMENT },
 	};
@@ -212,6 +216,16 @@ namespace
 			case SAGE2_BIND_TEXTURE_MACRO: effect.Set_Texture(i, s_macroName.empty() ? s_white : Texture_Or(s_macroName.c_str(), s_white)); return true;
 			case SAGE2_BIND_TEXTURE_SHADOW_MAP: effect.Set_Texture(i, Sage2ShadowClass::Is_Available() ? Sage2ShadowClass::Get_Texture() : s_white); return true;
 			case SAGE2_BIND_TEXTURE_TOP_VIEW: effect.Set_Texture(i, Sage2TopViewClass::Is_Available() ? Sage2TopViewClass::Get_Texture() : s_clear); return true;
+			case SAGE2_BIND_TEXTURE_SHROUD:
+			{
+				// Tiberium Project @bugfix the map's shroud, for the meshes to take it in their own pass
+				TextureClass* shroud = Sage2TerrainClass::Get_Object_Shroud().texture;
+				if (shroud != nullptr && !shroud->Is_Initialized())
+					TextureLoader::Request_Foreground_Loading(shroud);
+				IDirect3DBaseTexture9* t = shroud != nullptr ? shroud->Peek_D3D_Base_Texture() : nullptr;
+				effect.Set_Texture(i, t != nullptr ? t : s_white);
+				return true;
+			}
 			case SAGE2_BIND_TEXTURE_DEFERRED_DIFFUSE: effect.Set_Texture(i, s_deferredDiffuse ? s_deferredDiffuse : s_grey); return true;
 			case SAGE2_BIND_TEXTURE_DEFERRED_SPECULAR: effect.Set_Texture(i, s_deferredSpecular ? s_deferredSpecular : s_black); return true;
 			case SAGE2_BIND_TEXTURE_DEPTH: effect.Set_Texture(i, s_depth ? s_depth : s_white); return true;
@@ -707,6 +721,18 @@ void Sage2GlobalsClass::Apply(Sage2EffectClass& effect, const Sage2DrawState& dr
 				v[0] = Sage2LightingClass::Get_Ground_Light();
 				effect.Set_Float(i, v, 1);
 				break;
+			case SAGE2_BIND_SHROUD_UV:
+			{
+				// Tiberium Project @bugfix C&C4's ShroudSetup: (world.xy + zw) * xy reaches the shroud's texel
+				// (with no shroud: the white stand-in, read anywhere)
+				const Sage2TerrainClass::Shroud& shroud = Sage2TerrainClass::Get_Object_Shroud();
+				v[0] = shroud.texture != nullptr ? shroud.scaleX : 1.0f;
+				v[1] = shroud.texture != nullptr ? shroud.scaleY : 1.0f;
+				v[2] = shroud.texture != nullptr ? shroud.offsetX : 0.0f;
+				v[3] = shroud.texture != nullptr ? shroud.offsetY : 0.0f;
+				effect.Set_Float(i, v, 4);
+				break;
+			}
 			case SAGE2_BIND_SCORCH_UV:
 				if (Sage2TopViewClass::Is_Available())
 					Sage2TopViewClass::Get_Mapping(v[0], v[1], v[2], v[3]);

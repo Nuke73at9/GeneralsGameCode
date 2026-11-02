@@ -104,6 +104,15 @@ public:
 	static const Shroud& Get_Shroud();
 	static void Reset_Draw();
 
+	/// Tiberium Project @bugfix The map's shroud for everything else the C&C4 effects draw this frame
+	/// (their ShroudTexture and Terrain.Shroud): set with the main view's terrain whichever way it is
+	/// drawn, cleared by Reset_Draw(). The meshes an effect draws take the shroud in their own pass, as
+	/// the terrain does, and Zero Hour's extra shroud pass is left out for them (Shrouds_Itself):
+	/// that pass needs a depth equal to the mesh's, which the effect's vertex shader does not give
+	/// bit for bit, and it left them speckled black wherever they reached shrouded ground.
+	static void Set_Object_Shroud(const Shroud& shroud);
+	static const Shroud& Get_Object_Shroud();
+
 	/// Tiberium Project @bugfix Zero Hour's three-way blend cells (a third terrain over the base and
 	/// blend ones) the C&C4 way: the quads its extra blend pass just put in the current (dynamic)
 	/// vertex and index buffers, XYZNDUV2 with the tile coordinates in the first set and the third

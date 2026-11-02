@@ -69,6 +69,12 @@ public:
 	static bool Render(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const VertexMaterialClass* material,
 		DX8PolygonRendererClass* renderer);
 
+	/// Tiberium Project @bugfix Whether the mesh's effect takes the map's shroud in its own pass this
+	/// frame (Sage2TerrainClass::Get_Object_Shroud), so Zero Hour's extra shroud pass must be left out:
+	/// that pass needs a depth equal to the mesh's, which the effect's vertex shader does not reproduce
+	/// bit for bit (the mesh came out speckled black over shrouded ground).
+	static bool Shrouds_Itself(MeshClass* mesh);
+
 	/// The effect Art\Shaders\<name>.fxo, loaded once; nullptr when missing or broken.
 	static Sage2EffectClass* Get_Effect(const char* name);
 

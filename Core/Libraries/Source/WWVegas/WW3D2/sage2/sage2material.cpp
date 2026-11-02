@@ -41,6 +41,7 @@
 #include "sage2globals.h"
 #include "sage2scene.h"
 #include "sage2shadow.h"
+#include "sage2terrain.h"
 #include "texture.h"
 #include "textureloader.h"
 #include "vertmaterial.h"
@@ -695,6 +696,27 @@ Sage2EffectClass* Sage2MaterialClass::Get_Effect(const char* name)
 }
 
 //-------------------------------------------------------------------------------------------------
+bool Sage2MaterialClass::Shrouds_Itself(MeshClass* mesh)
+{
+	if (mesh == nullptr || s_state != READY || Sage2TerrainClass::Get_Object_Shroud().texture == nullptr)
+		return false;
+	MeshModelClass* model = mesh->Peek_Model();
+	if (model == nullptr)
+		return false;
+	const MeshMaterial& mat = Find_Material(model);
+	if (mat.effect == nullptr)
+		return false;
+	// as Begin(): a skin that cannot be posed falls back to the built-in look, which has no shroud
+	if (model->Get_Flag(MeshGeometryClass::SKIN) != 0
+		&& (mesh->Get_Container() == nullptr || mesh->Get_Container()->Get_HTree() == nullptr
+			|| (unsigned)mesh->Get_Base_Vertex_Offset() == VERTEX_BUFFER_OVERFLOW_OFFSET))
+		return false;
+	for (int i = 0; i < mat.effect->Get_Param_Count(); ++i)
+		if (mat.effect->Get_Param(i).binding == SAGE2_BIND_TEXTURE_SHROUD)
+			return true;
+	return false;
+}
+
 bool Sage2MaterialClass::Render(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const VertexMaterialClass* material,
 	DX8PolygonRendererClass* renderer)
 {

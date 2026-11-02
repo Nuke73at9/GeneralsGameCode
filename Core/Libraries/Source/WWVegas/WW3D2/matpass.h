@@ -70,6 +70,9 @@ public:
 	/// MW: Had to make this virtual so app can perform direct/custom D3D setup.
 	virtual void	Install_Materials() const;
 	virtual void	UnInstall_Materials() const { };	///< reset/cleanup D3D states
+	/// Tiberium Project @bugfix the game's shroud pass (multiplies the map's shroud over the mesh), which a
+	/// mesh drawn by a C&C4 effect takes in its own pass instead
+	virtual bool	Is_Shroud_Pass() const { return false; }
 
 	void							Set_Texture(TextureClass * Texture,int stage = 0);
 	void							Set_Shader(ShaderClass shader);

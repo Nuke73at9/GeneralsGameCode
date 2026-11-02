@@ -2136,6 +2136,9 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 				shroud.scaleX = 1.0f / (m_shroud->getCellWidth() * m_shroud->getTextureWidth());
 				shroud.scaleY = 1.0f / (m_shroud->getCellHeight() * m_shroud->getTextureHeight());
 			}
+			// Tiberium Project @bugfix and for the meshes the C&C4 effects draw this frame, which take it in
+			// their own pass too, whichever way the terrain is drawn
+			Sage2TerrainClass::Set_Object_Shroud(shroud);
 			if (Sage2TerrainClass::Draw(m_stageZeroTexture, m_indexBuffer, &tiles[0], m_numVertexBufferTiles, HEIGHTMAP_VERTEX_NUM, HEIGHTMAP_POLYGON_NUM, shroud))
 			{
 				devicePasses = 0;	// drawn, shroud included; the shoreline, blend and road passes below still run
