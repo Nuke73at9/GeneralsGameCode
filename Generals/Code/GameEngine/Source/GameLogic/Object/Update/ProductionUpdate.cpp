@@ -419,15 +419,21 @@ Bool ProductionUpdate::queueCreateUnit( const ThingTemplate *unitType, Productio
 	// builds four for that price!
 	production->m_productionQuantityTotal = 1;
 	production->m_productionQuantityProduced = 0;
+	Bool factoryQuantity = FALSE;
 	for( std::vector<QuantityModifier>::const_iterator it = data->m_quantityModifiers.begin(); it != data->m_quantityModifiers.end(); ++it )
   {
 		const ThingTemplate* productionTemplate = TheThingFactory->findTemplate( it->m_templateName );
 		if( productionTemplate && productionTemplate->isEquivalentTo( unitType ) )
 		{
 			production->m_productionQuantityTotal = it->m_quantity;
+			factoryQuantity = TRUE;
 			break;
 		}
 	}
+	// Tiberium Project @feature A unit can say how many one purchase makes (BuildQuantity: a Kane's Wrath
+	// squad's soldiers, built as Zero Hour builds the Red Guard). A factory's own QuantityModifier comes first.
+	if( !factoryQuantity && unitType->getBuildQuantity() > 1 )
+		production->m_productionQuantityTotal = unitType->getBuildQuantity();
 
 	// assign production entry data
 	production->m_type = PRODUCTION_UNIT;

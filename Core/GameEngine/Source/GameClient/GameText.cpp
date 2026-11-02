@@ -453,9 +453,10 @@ void GameTextManager::init()
 	// is merged the same way, after the patch overlay, and data/c4units.str, the names of the units
 	// converted from the user's C&C4 install (written by the converter into its archive), and
 	// data/tiberiumeco.str, the Tiberium economy's (its fields, crystals and harvesters), and
-	// data/tiberiummaps.str, games of up to 16 players' (their colours and teams; tiberium_build_maps.bat).
+	// data/tiberiummaps.str, games of up to 16 players' (their colours and teams; tiberium_build_maps.bat),
+	// and data/kwunits.str, the Kane's Wrath units' names (tiberium_build_kwunits.bat).
 	{
-		const Char *OVERLAY_FILES[] = { "data/patch.str", "data/tiberium.str", "data/c4units.str", "data/tiberiumeco.str", "data/tiberiummaps.str" };
+		const Char *OVERLAY_FILES[] = { "data/patch.str", "data/tiberium.str", "data/c4units.str", "data/tiberiumeco.str", "data/tiberiummaps.str", "data/kwunits.str" };
 		const Int OVERLAY_COUNT = ARRAY_SIZE(OVERLAY_FILES);
 
 		// GeneralsX @bugfix UnicodeApocalypse 10/09/2026 getStringCount() pads by 500; the parsed count below is the real check.
