@@ -91,6 +91,9 @@
 #include "WWSaveLoad/saveload.h"
 #include "ww3dids.h"
 #include "intersec.h"
+#include <ctype.h>	// Tiberium Project: the shortened sub-object names
+#include <stdio.h>
+#include <string.h>
 
 
 
@@ -520,6 +523,58 @@ Vector3 RenderObjClass::Get_Position() const
  * HISTORY:                                                                                    *
  *   3/4/99     GTH : Created.                                                                 *
  *=============================================================================================*/
+/*
+** Tiberium Project @bugfix A W3D name holds 15 characters. The models converted from SAGE 2 games (C&C4,
+** Kane's Wrath) shorten a longer mesh name the way the converter's writer does (w3d_write.py, Names.short):
+** the name in upper case with underscores dropped from the left until it fits, or, where that would clash,
+** its first 10 characters, an underscore and the low 16 bits of its CRC-32 in hex. The game's data names the
+** mesh in full (an upgrade's parts: HideSubObject = GUL_VEHICLED_UPG), so a name not found is looked for in
+** those two forms too.
+*/
+static unsigned int sub_object_name_crc32(const char *s)
+{
+	unsigned int crc = 0xFFFFFFFFu;
+	for (; *s; ++s) {
+		crc ^= (unsigned char)*s;
+		for (int k = 0; k < 8; ++k)
+			crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
+	}
+	return ~crc;
+}
+
+static bool shortened_sub_object_names(const char *name, char crc_form[16], char underscore_form[16])
+{
+	const int LIMIT = 15;
+	char upper[256];
+	int len = 0;
+	for (; name[len] != 0 && len < (int)sizeof(upper) - 1; ++len)
+		upper[len] = (char)toupper((unsigned char)name[len]);
+	upper[len] = 0;
+	if (len <= LIMIT)
+		return false;
+	// the CRC form: the first 10 characters, "_", and 4 hex digits
+	sprintf(crc_form, "%.10s_%04X", upper, sub_object_name_crc32(upper) & 0xFFFFu);
+	// the underscore form: underscores dropped from the left (none of the last 4 characters)
+	char work[256];
+	strcpy(work, upper);
+	int wlen = len;
+	while (wlen > LIMIT) {
+		char *u = nullptr;
+		for (int i = 0; i < wlen - 4; ++i) {
+			if (work[i] == '_') { u = work + i; break; }
+		}
+		if (u == nullptr)
+			break;
+		memmove(u, u + 1, strlen(u + 1) + 1);
+		--wlen;
+	}
+	if (wlen <= LIMIT)
+		strcpy(underscore_form, work);
+	else
+		underscore_form[0] = 0;
+	return true;
+}
+
 RenderObjClass * RenderObjClass::Get_Sub_Object_By_Name(const char * name, int *index) const
 {
 	int i;
@@ -554,6 +609,28 @@ RenderObjClass * RenderObjClass::Get_Sub_Object_By_Name(const char * name, int *
 				return robj;
 			} else {
 				robj->Release_Ref();
+			}
+		}
+	}
+
+	// Tiberium Project @bugfix the name as a converted SAGE 2 model shortens it (see above), the CRC form first
+	char crc_form[16], underscore_form[16];
+	if (name != nullptr && shortened_sub_object_names(name, crc_form, underscore_form)) {
+		const char *forms[2] = { crc_form, underscore_form };
+		for (int f = 0; f < 2; ++f) {
+			if (forms[f][0] == 0)
+				continue;
+			for (i=0; i<Get_Num_Sub_Objects(); i++) {
+				RenderObjClass * robj = Get_Sub_Object(i);
+				if (robj) {
+					const char * subobjname = strchr(robj->Get_Name(),'.');
+					subobjname = subobjname == nullptr ? robj->Get_Name() : subobjname + 1;
+					if (stricmp(subobjname,forms[f]) == 0) {
+						if (index) *index=i;
+						return robj;
+					}
+					robj->Release_Ref();
+				}
 			}
 		}
 	}
