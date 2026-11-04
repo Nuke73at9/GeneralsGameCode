@@ -1084,6 +1084,9 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 
 	sliderParticleCapID = TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:ParticleCapSlider" );
   sliderParticleCap = TheWindowManager->winGetWindowFromId( nullptr, sliderParticleCapID );
+	// Tiberium Project @tweak the cap goes to four times C&C4's highest (3000: 12000), not the menu's 5000
+	if( sliderParticleCap )
+		GadgetSliderSetMinMax( sliderParticleCap, 100, 12000 );
 
 	WinAdvancedDisplay->winHide(TRUE);
 

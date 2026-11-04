@@ -274,7 +274,8 @@ void GameLODManager::initStaticLODLevels()
 	veryhigh.m_sampleCount2D = 6;
 	veryhigh.m_sampleCount3D = 24;
 	veryhigh.m_streamCount = 2;
-	veryhigh.m_maxParticleCount = 5000;
+	// Tiberium Project @tweak four times C&C4's highest (3000): its and Kane's Wrath's effects are dense
+	veryhigh.m_maxParticleCount = 12000;
 	veryhigh.m_useShadowVolumes = TRUE;
 	veryhigh.m_useShadowDecals = TRUE;
 	veryhigh.m_useCloudMap = TRUE;
@@ -420,6 +421,9 @@ void GameLODManager::init()
 		TheWritableGlobalData->m_useShadowDecals = optionPref.get2DShadowsEnabled();
 		TheWritableGlobalData->m_enableBehindBuildingMarkers = optionPref.getBuildingOcclusionEnabled();
 		TheWritableGlobalData->m_maxParticleCount = optionPref.getParticleCap();
+		// Tiberium Project @tweak the old menu's top (5000) is the new top (12000: four times C&C4's highest)
+		if( TheWritableGlobalData->m_maxParticleCount == 5000 )
+			TheWritableGlobalData->m_maxParticleCount = 12000;
 		TheWritableGlobalData->m_enableDynamicLOD = optionPref.getDynamicLODEnabled();
 		TheWritableGlobalData->m_useFpsLimit = optionPref.getFPSLimitEnabled();
 		TheWritableGlobalData->m_useLightMap = optionPref.getLightmapEnabled();
