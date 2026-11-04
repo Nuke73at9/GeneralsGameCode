@@ -980,6 +980,14 @@ Int parseTestBase(char *args[], int num)
 	return 2;
 }
 
+// Tiberium Project @feature -testNoDraw: the game is not drawn after its first frame (the logic runs as fast
+// as it goes: long AI test runs)
+Int parseTestNoDraw(char *args[], int num)
+{
+	TiberiumTest::setNoDraw(TRUE);
+	return 1;
+}
+
 Int parseTestReveal(char *args[], int num)
 {
 	if (num > 1)
@@ -1410,6 +1418,7 @@ static CommandLineParam paramsForEngineInit[] =
 	{ "-testPlayers", parseTestPlayers },
 	{ "-testBase", parseTestBase },
 	{ "-testReveal", parseTestReveal },
+	{ "-testNoDraw", parseTestNoDraw },
 	{ "-testCRC", parseTestCRC },
 	{ "-testQuit", parseTestQuit },
 	{ "-noShellAnim", parseNoWindowAnimation }, // TheSuperHackers @tweak Is now available in Release builds.

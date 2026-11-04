@@ -474,6 +474,9 @@ static Int s_players = 2;
 void TiberiumTest::setPlayers( Int players ) { if ( players >= 2 ) s_players = players; }
 Int TiberiumTest::getPlayers() { return s_players; }
 void TiberiumTest::setReveal( Bool reveal ) { s_reveal = reveal; if ( reveal ) s_active = TRUE; }
+static Bool s_noDraw = FALSE;
+void TiberiumTest::setNoDraw( Bool noDraw ) { s_noDraw = noDraw; if ( noDraw ) s_active = TRUE; }
+Bool TiberiumTest::isNoDraw() { return s_noDraw; }
 void TiberiumTest::setCRCFrame( Int frame ) { if ( frame >= 0 ) { s_crcFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setQuitFrame( Int frame ) { if ( frame > 0 ) { s_quitFrame = frame; s_active = TRUE; } }
 void TiberiumTest::setMenu( const char *layout ) { if ( layout != nullptr && *layout != '\0' ) { s_menu = layout; s_active = TRUE; } }
@@ -1188,11 +1191,17 @@ void TiberiumTest::update()
 			// (or on a part by what it is: "tab,N", "queue,N", "item,N", each with ",right" too)
 			std::vector<std::string> f = split( step.arg.c_str(), ',' );
 			Bool took = FALSE;
+			// (",shift" last: as with shift held)
+			const Bool shift = !f.empty() && f.back() == "shift";
+			if ( shift )
+				f.pop_back();
+			TiberiumSidebar::setTestShift( shift );
 			if ( f.size() >= 2 && ( f[0] == "tab" || f[0] == "queue" || f[0] == "item" ) )
 				took = TiberiumSidebar::testClickPart( f[0].c_str(), atoi( f[1].c_str() ), f.size() > 2 && f[2] == "right" );
 			else if ( f.size() >= 2 )
 				took = TiberiumSidebar::testClick( (Real)atof( f[0].c_str() ), (Real)atof( f[1].c_str() ), f.size() > 2 && f[2] == "right" );
-			char what[256];
+			TiberiumSidebar::setTestShift( FALSE );
+			char what[768];
 			TiberiumSidebar::describe( what, sizeof( what ) );
 			log( "frame %d: ui: sidebar click %s: %s; %s", (int)s_frame, step.arg.c_str(), took ? "taken" : "missed", what );
 		}
@@ -1509,19 +1518,37 @@ void TiberiumTest::update()
 				Player *player = ThePlayerList->getNthPlayer( n );
 				if ( player == nullptr || player == ThePlayerList->getNeutralPlayer() )
 					continue;
-				struct Tally { std::map<std::string, Int> kinds; Int total; static void each( Object *obj, void *data )
+				// (and where its base is, and how many of its units are away from it: an AI's attacks)
+				struct Tally { std::map<std::string, Int> kinds; Int total; Real sx, sy; Int structures; std::vector<Coord3D> units;
+					static void each( Object *obj, void *data )
 				{
 					Tally *me = (Tally *)data;
 					if ( obj->isEffectivelyDead() || obj->isKindOf( KINDOF_PROJECTILE ) )
 						return;
 					++me->kinds[ obj->getTemplate()->getName().str() ];
 					++me->total;
+					if ( obj->isKindOf( KINDOF_STRUCTURE ) )
+					{
+						me->sx += obj->getPosition()->x;
+						me->sy += obj->getPosition()->y;
+						++me->structures;
+					}
+					else if ( obj->getAIUpdateInterface() != nullptr && !obj->isKindOf( KINDOF_DOZER ) && !obj->isKindOf( KINDOF_HARVESTER ) )
+						me->units.push_back( *obj->getPosition() );
 				} };
 				Tally tally;
 				tally.total = 0;
+				tally.sx = tally.sy = 0.0f;
+				tally.structures = 0;
 				player->iterateObjects( Tally::each, &tally );
 				if ( tally.total == 0 )
 					continue;
+				const Real bx = tally.structures > 0 ? tally.sx / tally.structures : 0.0f;
+				const Real by = tally.structures > 0 ? tally.sy / tally.structures : 0.0f;
+				Int away = 0;
+				for ( size_t u = 0; u < tally.units.size(); ++u )
+					if ( tally.structures > 0 && ( tally.units[u].x - bx ) * ( tally.units[u].x - bx ) + ( tally.units[u].y - by ) * ( tally.units[u].y - by ) > 800.0f * 800.0f )
+						++away;
 				std::vector< std::pair<Int, std::string> > sorted;
 				for ( std::map<std::string, Int>::const_iterator it = tally.kinds.begin(); it != tally.kinds.end(); ++it )
 					sorted.push_back( std::make_pair( -it->second, it->first ) );
@@ -1535,9 +1562,9 @@ void TiberiumTest::update()
 				}
 				AsciiString playerName;
 				playerName.translate( player->getPlayerDisplayName() );
-				log( "frame %d: ui: player %d (%s, %s) $%u, %d objects:%s", (int)s_frame, (int)n,
+				log( "frame %d: ui: player %d (%s, %s) $%u, base at %.0f %.0f, %d units (%d away), %d objects:%s", (int)s_frame, (int)n,
 					playerName.str(), player->getPlayerType() == PLAYER_COMPUTER ? "AI" : "human",
-					player->getMoney()->countMoney(), (int)tally.total, all.c_str() );
+					player->getMoney()->countMoney(), bx, by, (int)tally.units.size(), away, (int)tally.total, all.c_str() );
 			}
 		}
 		else if ( step.action == "sell" )

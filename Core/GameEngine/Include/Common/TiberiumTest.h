@@ -74,6 +74,8 @@ public:
 	static void setPlayers( Int players );	///< -testPlayers 10: the -testSide skirmish's players, the local one and easy AIs (2 by default)
 	static Int getPlayers();
 	static void setReveal( Bool reveal );	///< reveal the map to the local player at the start (changes the logic's state: not with -testCRC)
+	static void setNoDraw( Bool noDraw );	///< -testNoDraw: the game is not drawn after its first frame (the logic only, as fast as it goes: AI test runs)
+	static Bool isNoDraw();
 	static void setCRCFrame( Int frame );
 	static void setQuitFrame( Int frame );
 	static void setMenu( const char *layout );	///< a shell screen (a .wnd) pushed at frame 60, before a game

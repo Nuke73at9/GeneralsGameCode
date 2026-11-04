@@ -31,6 +31,7 @@
 #include <stdexcept>
 #include <cstdio>
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
+#include "Common/TiberiumTest.h"	// Tiberium Project
 #include "GameClient/GameClient.h"
 
 // USER INCLUDES //////////////////////////////////////////////////////////////
@@ -713,6 +714,11 @@ void GameClient::update()
 		return;
 	}
 #endif
+	// Tiberium Project @feature -testNoDraw: test runs of the logic alone (long AI games)
+	if (TiberiumTest::isNoDraw() && TheGameLogic->getFrame() > 0)
+	{
+		return;
+	}
 
 	// update the terrain visuals
 	{
