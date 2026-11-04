@@ -113,6 +113,10 @@ public:
 	/// we were just made in place of another object: show our arrival (the transition conditions)
 	void beginArrival();
 
+	/// Tiberium Project: the power that replaces us, and what with (the skirmish AI deploys a Crawler by them)
+	const SpecialPowerTemplate *getReplacePower() const { return getReplaceSelfUpdateModuleData()->m_specialPowerTemplate; }
+	const AsciiString &getReplacementName() const { return getReplaceSelfUpdateModuleData()->m_replacementName; }
+
 private:
 
 	enum Stage CPP_11(: Int)

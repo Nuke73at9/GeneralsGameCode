@@ -31,6 +31,8 @@
 #include "Common/GameMemory.h"
 #include "GameLogic/AIPlayer.h"
 
+#include <map>
+
 class BuildListInfo;
 class SpecialPowerTemplate;
 
@@ -100,6 +102,20 @@ protected:
 	void adjustBuildList(BuildListInfo *list);
 	Int getMyEnemyPlayerIndex();
 	void acquireEnemy();
+
+	// Tiberium Project @feature the AI's own command of its army and factories (AISkirmishCommander.cpp):
+	// it defends its base, sends what its scripts leave idle at its enemy in waves and keeps them pushing,
+	// keeps idle factories building, and deploys C&C4's Crawlers
+	void commandArmy();
+	void commandProduction();
+	Bool getCommandBase( Coord3D *pos ) const;
+
+	std::map<ObjectID, UnsignedInt> m_idleSince;			///< when each of its fighting units fell idle
+	std::map<ObjectID, UnsignedInt> m_factoryIdleSince;	///< when each of its factories ran out of work
+	UnsignedInt m_nextArmyFrame;		///< when it next looks over its army
+	UnsignedInt m_nextProductionFrame;	///< when it next looks over its factories
+	UnsignedInt m_lastWaveFrame;		///< when it last sent a wave at its enemy
+	Int m_wavesSent;					///< how many it has sent (each wants more strength)
 
 protected:
 	Int m_curFrontBaseDefense; // First is 0.

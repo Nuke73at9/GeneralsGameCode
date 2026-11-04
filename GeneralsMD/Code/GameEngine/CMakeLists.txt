@@ -861,6 +861,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/AI/AIGuardRetaliate.cpp
 #    Source/GameLogic/AI/AIPathfind.cpp
     Source/GameLogic/AI/AIPlayer.cpp
+    Source/GameLogic/AI/AISkirmishCommander.cpp
     Source/GameLogic/AI/AISkirmishPlayer.cpp
     Source/GameLogic/AI/AIStates.cpp
     Source/GameLogic/AI/AITNGuard.cpp

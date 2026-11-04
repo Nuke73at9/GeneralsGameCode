@@ -75,11 +75,19 @@ m_curLeftFlankRightDefenseAngle(0),
 m_curRightFlankLeftDefenseAngle(0),
 m_curRightFlankRightDefenseAngle(0),
 m_frameToCheckEnemy(0),
-m_currentEnemy(nullptr)
+m_currentEnemy(nullptr),
+m_nextArmyFrame(0),
+m_nextProductionFrame(0),
+m_lastWaveFrame(0),
+m_wavesSent(0)
 
 {
 	m_frameLastBuildingBuilt = TheGameLogic->getFrame();
 	p->setCanBuildUnits(true); // turn on ai production by default.
+	// Tiberium Project: each AI looks over its army and factories on frames of its own
+	m_nextArmyFrame = TheGameLogic->getFrame() + 150 + 7 * p->getPlayerIndex();
+	m_nextProductionFrame = TheGameLogic->getFrame() + 120 + 11 * p->getPlayerIndex();
+	m_lastWaveFrame = TheGameLogic->getFrame();
 }
 
 AISkirmishPlayer::~AISkirmishPlayer()
@@ -955,6 +963,9 @@ void AISkirmishPlayer::doTeamBuilding()
 void AISkirmishPlayer::update()
 {
 	AIPlayer::update();
+	// Tiberium Project @feature its own command of its army and factories (AISkirmishCommander.cpp)
+	commandArmy();
+	commandProduction();
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -1188,13 +1199,14 @@ void AISkirmishPlayer::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer method
 	* Version Info;
-	* 1: Initial version */
+	* 1: Initial version
+	* 2: Tiberium Project: its own command of its army and factories */
 // ------------------------------------------------------------------------------------------------
 void AISkirmishPlayer::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1224,6 +1236,43 @@ void AISkirmishPlayer::xfer( Xfer *xfer )
 
 	// right flank right defense angle
 	xfer->xferReal( &m_curRightFlankRightDefenseAngle );
+
+	// Tiberium Project: its own command of its army and factories
+	if( version >= 2 )
+	{
+		xfer->xferUnsignedInt( &m_nextArmyFrame );
+		xfer->xferUnsignedInt( &m_nextProductionFrame );
+		xfer->xferUnsignedInt( &m_lastWaveFrame );
+		xfer->xferInt( &m_wavesSent );
+		std::map<ObjectID, UnsignedInt> *maps[2] = { &m_idleSince, &m_factoryIdleSince };
+		for( Int m = 0; m < 2; ++m )
+		{
+			UnsignedInt count = (UnsignedInt)maps[m]->size();
+			xfer->xferUnsignedInt( &count );
+			if( xfer->getXferMode() == XFER_LOAD )
+			{
+				maps[m]->clear();
+				for( UnsignedInt i = 0; i < count; ++i )
+				{
+					ObjectID id = INVALID_ID;
+					UnsignedInt frame = 0;
+					xfer->xferObjectID( &id );
+					xfer->xferUnsignedInt( &frame );
+					(*maps[m])[id] = frame;
+				}
+			}
+			else
+			{
+				for( std::map<ObjectID, UnsignedInt>::iterator it = maps[m]->begin(); it != maps[m]->end(); ++it )
+				{
+					ObjectID id = it->first;
+					UnsignedInt frame = it->second;
+					xfer->xferObjectID( &id );
+					xfer->xferUnsignedInt( &frame );
+				}
+			}
+		}
+	}
 
 }
 
