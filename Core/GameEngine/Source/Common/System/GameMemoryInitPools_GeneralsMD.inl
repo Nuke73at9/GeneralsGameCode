@@ -307,6 +307,8 @@ static PoolSizeRec PoolSizes[] =
 	{ "ChinookAIStateMachine", 32, 32 },
 	{ "DeployStyleAIUpdate", 32, 32 },
 	{ "DeployToggleSpecialPower", 32, 32 },	// Tiberium Project @feature manual deploy toggle
+	{ "MoveAndEvacuateSpecialPower", 64, 32 },	// Tiberium Project @feature a transport's move and unload (Kane's Wrath)
+	{ "CreateAndEnterObjectSpecialPower", 256, 64 },	// Tiberium Project @feature call for transport, dig-in (a squad's soldiers each)
 	{ "AssaultTransportAIUpdate", 64, 32 },
 	{ "StreamingArchiveFile", 8, 8 },
 
