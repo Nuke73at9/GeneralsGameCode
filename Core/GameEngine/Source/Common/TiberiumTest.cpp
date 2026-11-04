@@ -51,6 +51,7 @@
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "GameLogic/Object.h"
+#include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/Module/CreateModule.h"
@@ -1017,6 +1018,17 @@ void TiberiumTest::update()
 							strlcat( modifiers, shots.c_str(), sizeof( modifiers ) );
 						}
 					}
+					// (what its AI is doing, and what holds it)
+					if ( obj->getAI() != nullptr )
+					{
+						snprintf( facing, sizeof( facing ), ", ai state %d", (int)obj->getAI()->getCurrentStateID() );
+						strlcat( modifiers, facing, sizeof( modifiers ) );
+					}
+					if ( obj->getContainedBy() != nullptr )
+					{
+						snprintf( facing, sizeof( facing ), ", inside %s", obj->getContainedBy()->getTemplate()->getName().str() );
+						strlcat( modifiers, facing, sizeof( modifiers ) );
+					}
 					const DamageInfo *own = body->getLastDamageInfo();
 					if ( own != nullptr && own->in.m_sourceID != INVALID_ID )
 					{
@@ -1101,7 +1113,21 @@ void TiberiumTest::update()
 			msg->appendBooleanArgument( TRUE );
 			const Int only = step.arg.empty() ? -1 : atoi( step.arg.c_str() );
 			Int picked = 0;
-			for ( size_t k = 0; k < s_spawned.size(); ++k )
+			if ( step.arg.compare( 0, 5, "name:" ) == 0 )
+			{
+				// "select=name:Template": every one of the local player's objects of that kind (what an ability made)
+				const std::string kind = step.arg.substr( 5 );
+				for ( Object *obj = TheGameLogic->getFirstObject(); obj != nullptr; obj = obj->getNextObject() )
+				{
+					if ( obj->getDrawable() == nullptr || obj->getControllingPlayer() != ThePlayerList->getLocalPlayer()
+						|| obj->getTemplate()->getName().compareNoCase( kind.c_str() ) != 0 )
+						continue;
+					TheInGameUI->selectDrawable( obj->getDrawable() );
+					msg->appendObjectIDArgument( obj->getID() );
+					++picked;
+				}
+			}
+			for ( size_t k = 0; k < s_spawned.size() && step.arg.compare( 0, 5, "name:" ) != 0; ++k )
 			{
 				Object *obj = TheGameLogic->findObjectByID( s_spawned[k] );
 				if ( obj == nullptr || obj->getDrawable() == nullptr || ( only >= 0 && (Int)k != only ) )
@@ -1124,6 +1150,17 @@ void TiberiumTest::update()
 				ranks += one;
 			}
 			log( "frame %d: ui: ranks%s", (int)s_frame, ranks.c_str() );
+		}
+		else if ( step.action == "enter" && TheGameLogic != nullptr )
+		{
+			// "enter=k,j": the k-th spawned object told to get into the j-th (a transport, a building)
+			Int k = -1, j = -1;
+			sscanf( step.arg.c_str(), "%d,%d", &k, &j );
+			Object *obj = k >= 0 && k < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[k] ) : nullptr;
+			Object *into = j >= 0 && j < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[j] ) : nullptr;
+			if ( obj != nullptr && into != nullptr && obj->getAIUpdateInterface() != nullptr )
+				obj->getAIUpdateInterface()->aiEnter( into, CMD_FROM_PLAYER );
+			log( "frame %d: ui: enter %s%s", (int)s_frame, step.arg.c_str(), obj != nullptr && into != nullptr ? "" : " (no such object)" );
 		}
 		else if ( ( step.action == "moveto" || step.action == "kill" ) && TheGameLogic != nullptr )
 		{
@@ -1476,7 +1513,16 @@ void TiberiumTest::update()
 			std::vector<std::string> f = split( step.arg.c_str(), ',' );
 			const CommandButton *button = f.empty() ? nullptr : TheControlBar->findCommandButton( AsciiString( f[0].c_str() ) );
 			Object *from = !s_spawned.empty() ? TheGameLogic->findObjectByID( s_spawned[0] ) : nullptr;
-			if ( button != nullptr && button->getSpecialPowerTemplate() != nullptr && from != nullptr )
+			if ( button != nullptr && button->getSpecialPowerTemplate() != nullptr && f.size() > 1 && f[1] == "here" )
+			{
+				// "power=Button,here": a power with no target, used by the selection (as its button's click does)
+				GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_DO_SPECIAL_POWER );
+				msg->appendIntegerArgument( button->getSpecialPowerTemplate()->getID() );
+				msg->appendIntegerArgument( button->getOptions() );
+				msg->appendObjectIDArgument( INVALID_ID );
+				log( "frame %d: ui: power %s (no target)", (int)s_frame, f[0].c_str() );
+			}
+			else if ( button != nullptr && button->getSpecialPowerTemplate() != nullptr && from != nullptr )
 			{
 				Coord3D at = *from->getPosition();
 				at.x += f.size() > 1 ? (Real)atof( f[1].c_str() ) : 0.0f;
@@ -1614,7 +1660,7 @@ void TiberiumTest::update()
 		{
 			// every player's objects of a kind (a map's Tiberium crystals are nobody's), with the boxes
 			// left in them when they are supply sources, and what the nearest to the view holds
-			Int count = 0, boxes = 0, most = 0, empty = 0;
+			Int count = 0, boxes = 0, most = 0, empty = 0, riders = 0, waiting = 0, aiState = -1;
 			Real nearest = 1.0e9f;
 			Coord3D at;
 			at.zero();
@@ -1638,9 +1684,18 @@ void TiberiumTest::update()
 					nearest = dx * dx + dy * dy;
 					at = *obj->getPosition();
 				}
+				// (and who is inside, for a transport, who wants in or out, and what its AI is doing)
+				if ( obj->getContain() != nullptr )
+				{
+					riders += obj->getContain()->getContainCount();
+					waiting += obj->getContain()->hasObjectsWantingToEnterOrExit() ? 1 : 0;
+				}
+				if ( obj->getAI() != nullptr )
+					aiState = (Int)obj->getAI()->getCurrentStateID();
 			}
-			log( "frame %d: ui: census %d of %s, %d of %d boxes, %d empty, the nearest at %.0f %.0f", (int)s_frame, (int)count,
-				step.arg.c_str(), (int)boxes, (int)most, (int)empty, count > 0 ? at.x : 0.0f, count > 0 ? at.y : 0.0f );
+			log( "frame %d: ui: census %d of %s, %d of %d boxes, %d empty, %d inside (%d with some on the way, ai state %d), the nearest at %.0f %.0f %.0f",
+				(int)s_frame, (int)count, step.arg.c_str(), (int)boxes, (int)most, (int)empty, (int)riders, (int)waiting, (int)aiState,
+				count > 0 ? at.x : 0.0f, count > 0 ? at.y : 0.0f, count > 0 ? at.z : 0.0f );
 		}
 #endif
 #if RTS_ZEROHOUR
