@@ -28,6 +28,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
 #if RTS_ZEROHOUR
+#include "GameClient/AbramSpawnMenu.h"	// Abram's Personal Test
 #include "GameLogic/Module/BaseConstructionUpdate.h"	// Tiberium Project
 #endif
 #include "Common/BuildAssistant.h"
@@ -88,6 +89,17 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 					TheInGameUI->placeBuildAvailable( nullptr, nullptr );
 					break;
 				}
+
+#if RTS_ZEROHOUR
+				// Abram's Personal Test @feature the spawn menu's unit or structure (a cheat) has no builder: the
+				// click is its spot (a drag from there turns it)
+				if( AbramSpawnMenu::isPlacing() )
+				{
+					TheInGameUI->setPlacementStart( &mouse );
+					disp = DESTROY_MESSAGE;
+					break;
+				}
+#endif
 
 				//
 				// placing things causes a dozer to go over and build it ... get the dozer in question
@@ -191,6 +203,18 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 				Object *builderObj = TheGameLogic->findObjectByID( TheInGameUI->getPendingPlaceSourceObjectID() );
 
 #if RTS_ZEROHOUR
+				// Abram's Personal Test @feature the spawn menu's unit or structure (a cheat): spawned there, and the
+				// next one is in hand at once (a right click puts it away)
+				if( AbramSpawnMenu::isPlacing() )
+				{
+					AbramSpawnMenu::spawnAt( &worldStart, angle );
+					TheInGameUI->setPlacementStart( nullptr );
+					TheInGameUI->clearAttackMoveToMode();
+					disp = DESTROY_MESSAGE;
+					m_frameOfUpButton = TheGameLogic->getFrame();
+					break;
+				}
+
 				// Tiberium Project @feature a construction yard's ready structure (Kane's Wrath's build-then-place
 				// base): paid for already, placed where it may stand, no builder walking there
 				BaseConstructionUpdate *yardBase = BaseConstructionUpdate::find( builderObj );

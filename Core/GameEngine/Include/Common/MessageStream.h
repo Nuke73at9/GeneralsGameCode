@@ -612,6 +612,8 @@ public:
 		MSG_ABRAM_OFFER_RESPONSE,										///< (Int offerID, Bool accept)
 		MSG_ABRAM_TAKE_AI_CONTROL,									///< (Int aiPlayerIndex)
 		MSG_ABRAM_RELEASE_AI_CONTROL,								///< () sent as the controlled AI player
+		MSG_ABRAM_CHEAT,														///< (Int cheat, Int on) a cheat of the match's (GameLogic/AbramCheats.h)
+		MSG_ABRAM_CHEAT_SPAWN,											///< (Int templateID, Location where, Real angle) the spawn menu's unit or structure
 
 		// Tiberium Project @feature Kane's Wrath's build-then-place base (BaseConstructionUpdate); fixed values,
 		// as the team menu's, so later upstream messages cannot shift them

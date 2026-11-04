@@ -3,8 +3,9 @@
 Abram's Personal Test: generates resources/abram/Window/Menus/AbramPopup.wnd
 
 A small dialog used by the Match Options screen and the in-game team menu: a title, a message line and
-up to eight buttons. The code (AbramPopup.cpp) fills in the texts, hides the unused buttons and handles
-the clicks. Reuses the window writers of gen_mod_select_menu_wnd.py so it looks like the other menus.
+up to twelve buttons. The code (AbramPopup.cpp) fills in the texts, hides the unused buttons, makes the
+panel as tall as the buttons in use need and handles the clicks. Reuses the window writers of
+gen_mod_select_menu_wnd.py so it looks like the other menus.
 
 Run from the repository root:
     python3 scripts/abram/gen_abram_popup_wnd.py
@@ -18,7 +19,13 @@ import gen_mod_select_menu_wnd as wnd  # noqa: E402
 
 wnd.PREFIX = "AbramPopup.wnd:"
 
-MAX_CHOICES = 8
+MAX_CHOICES = 12
+
+# Layout (800x600 design units): the panel, its title and message, then the buttons one under another.
+PANEL_TOP = 40
+BUTTONS_TOP = 132
+BUTTON_STEP = 32
+BUTTON_HEIGHT = 28
 
 
 def build():
@@ -34,8 +41,9 @@ def build():
     ])
 
     panel = "IMAGE: NoImage, COLOR: 2 2 2 220, BORDERCOLOR: 47 55 168 255"
+    panel_bottom = BUTTONS_TOP + (MAX_CHOICES - 1) * BUTTON_STEP + BUTTON_HEIGHT + 8
     sub_body = "\n".join([
-        wnd.header("USER", ((240, 110), (560, 486)), "SubParent", "ENABLED", "USER", 4,
+        wnd.header("USER", ((240, PANEL_TOP), (560, panel_bottom)), "SubParent", "ENABLED", "USER", 4,
                    system="PassMessagesToParentSystem"),
         wnd.text_color(4),
         wnd.draw_data("ENABLEDDRAWDATA", [panel], 4),
@@ -44,12 +52,12 @@ def build():
     ])
 
     children = [
-        wnd.window(wnd.static_text("StaticTextTitle", ((250, 118), (550, 148)), ("Generals", 18), "Title", True), [], 4),
-        wnd.window(wnd.static_text("StaticTextMessage", ((256, 152), (544, 196)), ("Arial", 11), "LabelRegular", True), [], 4),
+        wnd.window(wnd.static_text("StaticTextTitle", ((250, PANEL_TOP + 8), (550, PANEL_TOP + 38)), ("Generals", 18), "Title", True), [], 4),
+        wnd.window(wnd.static_text("StaticTextMessage", ((256, PANEL_TOP + 42), (544, PANEL_TOP + 86)), ("Arial", 11), "LabelRegular", True), [], 4),
     ]
     for i in range(MAX_CHOICES):
-        top = 202 + i * 34
-        children.append(wnd.window(wnd.push_button(f"ButtonChoice{i}", ((262, top), (538, top + 28))), [], 4))
+        top = BUTTONS_TOP + i * BUTTON_STEP
+        children.append(wnd.window(wnd.push_button(f"ButtonChoice{i}", ((262, top), (538, top + BUTTON_HEIGHT))), [], 4))
 
     sub = wnd.window(sub_body, children, 2)
     root = wnd.window(parent_body, [sub], 0)

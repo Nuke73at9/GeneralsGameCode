@@ -90,6 +90,7 @@
 #include "GameClient/LoadScreen.h"
 #include "Common/TiberiumTest.h"	// Tiberium Project
 #include "GameLogic/TiberiumZones.h"	// Tiberium Project
+#include "GameLogic/AbramCheats.h"	// Abram's Personal Test
 #include "GameClient/MapUtil.h"
 #include "GameClient/Mouse.h"
 #include "GameClient/ParticleSys.h"
@@ -470,6 +471,7 @@ void GameLogic::init()
 void GameLogic::reset()
 {
 	TiberiumZones::reset();	// Tiberium Project
+	AbramCheats::reset();	// Abram's Personal Test
 
 	m_thingTemplateBuildableOverrides.clear();
 	m_controlBarOverrides.clear();
@@ -733,6 +735,39 @@ void handleNameChange( MapObject *mapObj )
 		const ThingTemplate *thingTemplate = TheThingFactory->findTemplate( mapObj->getName() );
 		mapObj->setThingTemplate( thingTemplate );
 	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// Abram's Personal Test @feature an AI player's name says what it is: its level, its faction (or general)
+// and its team, as "[AI MED | USA Air Force General | Team 1]" (the menus show it in the player's colour)
+// ------------------------------------------------------------------------------------------------
+static UnicodeString makeAIDisplayName( const GameSlot *slot, const PlayerTemplate *pt )
+{
+	const wchar_t *level = L"MED";
+	if (slot->getState() == SLOT_EASY_AI)
+		level = L"EAS";
+	else if (slot->getState() == SLOT_BRUTAL_AI)
+		level = L"HAR";
+
+	UnicodeString faction;
+	if (pt != nullptr)
+	{
+		faction = pt->getDisplayName();
+		if (faction.isEmpty())
+			faction.translate( pt->getSide() );
+	}
+	if (faction.isEmpty())
+		faction = L"?";
+
+	UnicodeString team;
+	if (slot->getTeamNumber() >= 0)
+		team.format( L"Team %d", slot->getTeamNumber() + 1 );
+	else
+		team = L"No Team";
+
+	UnicodeString name;
+	name.format( L"[AI %ls | %ls | %ls]", level, faction.str(), team.str() );
+	return name;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -1494,12 +1529,13 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 			playerName.format("player%d", i);
 			d.setAsciiString(TheKey_playerName, playerName);
 			d.setBool(TheKey_playerIsHuman, slot->isHuman());
-			d.setUnicodeString(TheKey_playerDisplayName, slot->getName());
 			const PlayerTemplate* pt;
 			if (slot->getPlayerTemplate() >= 0)
 				pt = ThePlayerTemplateStore->getNthPlayerTemplate(slot->getPlayerTemplate());
 			else
 				pt = ThePlayerTemplateStore->findPlayerTemplate( TheNameKeyGenerator->nameToKey("FactionObserver") );
+			// Abram's Personal Test @feature an AI's name: [AI MED | its faction | its team]
+			d.setUnicodeString(TheKey_playerDisplayName, slot->isAI() ? makeAIDisplayName( slot, pt ) : slot->getName());
 			if (pt)
 			{
 				d.setAsciiString(TheKey_playerFaction, KEYNAME(pt->getNameKey()));
@@ -4050,6 +4086,10 @@ void GameLogic::update()
 	{
 		processCommandList( TheCommandList );
 	}
+
+	// Abram's Personal Test @feature the match's cheats: a frozen AI stays frozen (its new objects too),
+	// from the frame the command came in
+	AbramCheats::update();
 
 #ifdef ALLOW_NONSLEEPY_UPDATES
 	{

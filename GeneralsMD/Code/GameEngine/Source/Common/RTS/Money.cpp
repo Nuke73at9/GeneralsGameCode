@@ -51,7 +51,30 @@
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/Xfer.h"
+#include "GameLogic/AbramCheats.h"	// Abram's Personal Test
 #include "GameLogic/GameLogic.h"
+
+// ------------------------------------------------------------------------------------------------
+// Abram's Personal Test @feature the Unlimited Money cheat (AbramCheats): a player's own purse (not a
+// template's or the match's starting cash, which have no player) reads full, and spending takes nothing
+// from it, so the player's own amount is there again when the cheat is turned off
+Bool Money::isUnlimited() const
+{
+	if (!AbramCheats::hasUnlimitedMoney(m_playerIndex) || ThePlayerList == nullptr)
+		return FALSE;
+	if (m_playerIndex < 0 || m_playerIndex >= ThePlayerList->getPlayerCount())
+		return FALSE;
+	const Player* player = ThePlayerList->getNthPlayer(m_playerIndex);
+	return player != nullptr && player->getMoney() == this;
+}
+
+// ------------------------------------------------------------------------------------------------
+UnsignedInt Money::countMoney() const
+{
+	if (m_money < AbramCheats::UNLIMITED_MONEY_AMOUNT && isUnlimited())
+		return AbramCheats::UNLIMITED_MONEY_AMOUNT;
+	return m_money;
+}
 
 // ------------------------------------------------------------------------------------------------
 UnsignedInt Money::withdraw(UnsignedInt amountToWithdraw, Bool playSound)
@@ -61,6 +84,16 @@ UnsignedInt Money::withdraw(UnsignedInt amountToWithdraw, Bool playSound)
 	if (player != nullptr && player->buildsForFree())
 		return 0;
 #endif
+
+	// Abram's Personal Test @feature Unlimited Money: paid in full, the purse as it was
+	if (amountToWithdraw > 0 && isUnlimited())
+	{
+		if (playSound)
+		{
+			triggerAudioEvent(TheAudio->getMiscAudio()->m_moneyWithdrawSound);
+		}
+		return amountToWithdraw;
+	}
 
 	if (amountToWithdraw > m_money)
 		amountToWithdraw = m_money;

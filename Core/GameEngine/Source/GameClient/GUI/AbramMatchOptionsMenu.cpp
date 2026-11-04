@@ -40,6 +40,7 @@ enum Choice
 	CHOICE_UNLOCK_ALL,
 #if RTS_ZEROHOUR
 	CHOICE_ZONES,		// Tiberium Project @feature C&C4's zones
+	CHOICE_CHEATS,	// Abram's Personal Test @feature the team menu's cheats (GameLogic/AbramCheats.h)
 #endif
 	CHOICE_DONE,
 	CHOICE_COUNT
@@ -89,6 +90,9 @@ UnicodeString choiceText( Int choice, const GameInfo *game )
 		text.format( L"Tiberium Zones: %ls", MODES[AbramGameRules::getZoneModeOf( rules )] );
 		break;
 	}
+	case CHOICE_CHEATS:
+		text.format( L"Enable Cheats: %ls", onOff( (rules & ABRAM_RULE_CHEATS) != 0 ) );
+		break;
 #endif
 	default:
 		text = L"Done";
@@ -141,6 +145,9 @@ void onChoice( Int choice, void *userData )
 	case CHOICE_ZONES:
 		game->setAbramRules( AbramGameRules::setZoneMode( rules,
 			(AbramZoneMode)((AbramGameRules::getZoneModeOf( rules ) + 1) % ABRAM_ZONE_MODE_COUNT) ) );
+		break;
+	case CHOICE_CHEATS:
+		toggleRule( game, ABRAM_RULE_CHEATS );
 		break;
 #endif
 	default:

@@ -31,6 +31,7 @@ enum AbramGameRule
 	ABRAM_RULE_LARGE_BUILD_QUEUE = 0x0001, ///< production buildings queue up to ABRAM_LARGE_BUILD_QUEUE_SIZE entries
 	ABRAM_RULE_REVEAL_MAP        = 0x0002, ///< no shroud or fog of war for anyone, from the start of the game
 	ABRAM_RULE_UNLOCK_ALL        = 0x0004, ///< units, buildings and generals powers ignore their prerequisites
+	ABRAM_RULE_CHEATS            = 0x0008, ///< the team menu (Ctrl+G) has the cheats (Zero Hour: GameLogic/AbramCheats.h)
 };
 
 enum

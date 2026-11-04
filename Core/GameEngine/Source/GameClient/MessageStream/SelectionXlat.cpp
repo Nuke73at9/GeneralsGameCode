@@ -55,6 +55,9 @@
 #include "GameClient/SelectionInfo.h"
 #include "GameClient/SelectionXlat.h"
 #include "GameClient/TerrainVisual.h"
+#if RTS_ZEROHOUR
+#include "GameClient/AbramSpawnMenu.h"	// Abram's Personal Test
+#endif
 
 
 //-----------------------------------------------------------------------------
@@ -64,6 +67,17 @@
 static Bool TheHurtSelectionMode = false;
 static Bool TheDebugSelectionMode = false;
 #endif
+
+//-----------------------------------------------------------------------------
+// Abram's Personal Test @feature the spawn menu's unit or structure is in hand (a cheat, Zero Hour)
+static Bool isSpawnPlacing()
+{
+#if RTS_ZEROHOUR
+	return AbramSpawnMenu::isPlacing();
+#else
+	return FALSE;
+#endif
+}
 
 //-----------------------------------------------------------------------------
 static Bool currentlyLookingForSelection( )
@@ -1109,7 +1123,8 @@ GameMessageDisposition SelectionTranslator::onRawMouseRightButtonUp(MAYBE_UNUSED
 		{
 			//In alternate mouse mode, right click still cancels building placement.
 			// TheSuperHackers @tweak Stubbjax 08/08/2025 Canceling building placement no longer deselects the builder.
-			if (TheInGameUI->getPendingPlaceSourceObjectID() != INVALID_ID)
+			// Abram's Personal Test @feature so does it the spawn menu's (a cheat: no builder), keeping the selection
+			if (TheInGameUI->getPendingPlaceSourceObjectID() != INVALID_ID || isSpawnPlacing())
 			{
 				TheInGameUI->placeBuildAvailable(nullptr, nullptr);
 				TheInGameUI->setPreventLeftClickDeselectionInAlternateMouseModeForOneClick(FALSE);

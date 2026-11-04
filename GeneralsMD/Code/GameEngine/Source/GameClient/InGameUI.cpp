@@ -29,6 +29,7 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include "GameClient/AbramSpawnMenu.h"	// Abram's Personal Test
 #include "GameClient/AbramTeamMenu.h"
 #include "GameClient/TiberiumHUD.h"	// Tiberium Project
 #include "GameClient/TiberiumSidebar.h"	// Tiberium Project
@@ -1731,9 +1732,12 @@ void InGameUI::handleBuildPlacements()
 				Object *builderObject = TheGameLogic->findObjectByID( getPendingPlaceSourceObjectID() );
 
 				LegalBuildCode lbc;
+				// Abram's Personal Test @feature the spawn menu's unit or structure (a cheat): where it may be spawned
+				if( AbramSpawnMenu::isPlacing() )
+					lbc = AbramSpawnMenu::checkPlacement( &world, angle );
 				// Tiberium Project: a construction yard's structure is placed, not walked to (no path, no builder)
 				// (and within the base's build areas)
-				if( BaseConstructionUpdate::find( builderObject ) != nullptr )
+				else if( BaseConstructionUpdate::find( builderObject ) != nullptr )
 				{
 					lbc = TheBuildAssistant->isLocationLegalToBuild( &world, m_pendingPlaceType, angle,
 						BuildAssistant::TERRAIN_RESTRICTIONS | BuildAssistant::NO_OBJECT_OVERLAP | BuildAssistant::SHROUD_REVEALED | BuildAssistant::IGNORE_STEALTHED,
@@ -1887,6 +1891,8 @@ void InGameUI::update()
 {
 	// Abram's Personal Test @feature Show gifts and requests from allies (team menu, Ctrl+G).
 	AbramTeamMenu::update();
+	// Abram's Personal Test @feature the cheats' spawn menu (team menu, Ctrl+G)
+	AbramSpawnMenu::update();
 	// Tiberium Project @feature the Red Alert 3 style sidebar (when the game's data asks for it)
 	TiberiumSidebar::update();
 	// Tiberium Project @feature C&C4's dynamic music (when the game's data has it)
@@ -2220,6 +2226,7 @@ void InGameUI::reset()
 
 	// Abram's Personal Test @feature Close the team menu with the game.
 	AbramTeamMenu::reset();
+	AbramSpawnMenu::reset();
 
 	m_isQuitMenuVisible = FALSE;
 	m_inputEnabled = true;

@@ -70,10 +70,9 @@ public:
 		setStartingCash(0);
 	}
 
-	UnsignedInt countMoney() const
-	{
-		return m_money;
-	}
+	/// Abram's Personal Test @feature a player's purse with the Unlimited Money cheat on reads full
+	/// (AbramCheats); otherwise the amount
+	UnsignedInt countMoney() const;
 
 	/// returns the actual amount withdrawn, which may be less than you want. (sorry, can't go into debt...)
 	UnsignedInt withdraw(UnsignedInt amountToWithdraw, Bool playSound = TRUE);
@@ -96,6 +95,7 @@ public:
 protected:
 
 	void triggerAudioEvent(const AudioEventRTS& audioEvent);
+	Bool isUnlimited() const;	///< Abram's Personal Test: the player's own purse, with the Unlimited Money cheat on
 
 	// snapshot methods
 	virtual void crc( Xfer *xfer ) override;

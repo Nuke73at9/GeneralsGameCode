@@ -86,6 +86,7 @@
 
 #include "GameNetwork/NetworkInterface.h"
 #if RTS_ZEROHOUR
+#include "GameLogic/AbramCheats.h"	// Abram's Personal Test
 #include "GameLogic/Module/BaseConstructionUpdate.h"	// Tiberium Project
 #endif
 
@@ -456,6 +457,9 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, void *userData )
 		{
 			// Abram's Personal Test @feature Forget the team actions of the previous game.
 			AbramTeamActions::reset();
+#if RTS_ZEROHOUR
+			AbramCheats::reset();	// and its cheats
+#endif
 			onNewGame(msg);
 			break;
 		}
@@ -521,6 +525,15 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, void *userData )
 		case GameMessage::MSG_ABRAM_RELEASE_AI_CONTROL:
 		{
 			AbramTeamActions::processMessage(msg);
+			break;
+		}
+		// Abram's Personal Test @feature The match's cheats (Enable Cheats in the match options).
+		case GameMessage::MSG_ABRAM_CHEAT:
+		case GameMessage::MSG_ABRAM_CHEAT_SPAWN:
+		{
+#if RTS_ZEROHOUR
+			AbramCheats::processMessage(msg);
+#endif
 			break;
 		}
 		// Tiberium Project @feature Kane's Wrath's build-then-place base (BaseConstructionUpdate)

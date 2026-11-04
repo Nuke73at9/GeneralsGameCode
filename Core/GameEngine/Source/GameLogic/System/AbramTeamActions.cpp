@@ -301,6 +301,9 @@ Bool AbramTeamActions::canTakeControl( const Player *player, const Player *ai )
 		return false;
 	if (!ai->isPlayerActive() || ai == ThePlayerList->getNeutralPlayer())
 		return false;
+	// Abram's Personal Test @tweak only a match's AI players (a playable faction), not the map's civilians
+	if (!ai->isPlayableSide())
+		return false;
 	const Int aiIndex = ai->getPlayerIndex();
 	return isValidPlayerIndex( aiIndex ) && AIControllers.index[aiIndex] < 0;
 }

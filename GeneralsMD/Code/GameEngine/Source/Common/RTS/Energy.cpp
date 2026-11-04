@@ -49,6 +49,7 @@
 #include "Common/PlayerList.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
+#include "GameLogic/AbramCheats.h"	// Abram's Personal Test
 
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
@@ -64,8 +65,19 @@ Energy::Energy()
 }
 
 //-----------------------------------------------------------------------------
+// Abram's Personal Test @feature the Unlimited Power cheat (AbramCheats): the owner's base never lacks
+// power, sabotaged or not; its plants are shown making at least what the base uses
+static Bool hasUnlimitedPower( const Player *owner )
+{
+	return owner != nullptr && AbramCheats::hasUnlimitedPower( owner->getPlayerIndex() );
+}
+
+//-----------------------------------------------------------------------------
 Int Energy::getProduction() const
 {
+	if( hasUnlimitedPower( m_owner ) )
+		return m_energyProduction > m_energyConsumption ? m_energyProduction : m_energyConsumption;
+
 	if( TheGameLogic->getFrame() < m_powerSabotagedTillFrame )
 	{
 		//Power sabotaged, therefore no power.
@@ -78,6 +90,16 @@ Int Energy::getProduction() const
 Real Energy::getEnergySupplyRatio() const
 {
 	DEBUG_ASSERTCRASH(m_energyProduction >= 0 && m_energyConsumption >= 0, ("neg Energy numbers"));
+
+	if( hasUnlimitedPower( m_owner ) )
+	{
+		// (never short: 1 at least, more when the plants make more)
+		if( m_energyConsumption == 0 )
+			return m_energyProduction > 1 ? (Real)m_energyProduction : 1.0f;
+		if( m_energyProduction <= m_energyConsumption )
+			return 1.0f;
+		return (Real)m_energyProduction / (Real)m_energyConsumption;
+	}
 
 	if( TheGameLogic->getFrame() < m_powerSabotagedTillFrame )
 	{
@@ -94,6 +116,9 @@ Real Energy::getEnergySupplyRatio() const
 //-------------------------------------------------------------------------------------------------
 Bool Energy::hasSufficientPower() const
 {
+	if( hasUnlimitedPower( m_owner ) )
+		return TRUE;
+
 	if( TheGameLogic->getFrame() < m_powerSabotagedTillFrame )
 	{
 		//Power sabotaged, therefore no power.

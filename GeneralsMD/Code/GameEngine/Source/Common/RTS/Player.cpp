@@ -79,6 +79,7 @@
 #include "GameClient/GameClient.h"
 #include "GameClient/GameText.h"
 
+#include "GameLogic/AbramCheats.h"	// Abram's Personal Test
 #include "GameLogic/AI.h"
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/AISkirmishPlayer.h"
@@ -670,11 +671,15 @@ void Player::addToPriorityBuildList(AsciiString templateName, Coord3D *pos, Real
 //=============================================================================
 void Player::update()
 {
-	if (m_ai)
+	// Abram's Personal Test @feature the Freeze AI cheat (AbramCheats): a frozen computer player does not
+	// think, nor do its teams' scripts run
+	const Bool frozen = AbramCheats::isFrozenPlayer( this );
+
+	if (m_ai && !frozen)
 		m_ai->update();
 
 	// Allow the teams this player owns to update themselves.
-	for( PlayerTeamList::iterator it = m_playerTeamPrototypes.begin(); it != m_playerTeamPrototypes.end(); ++it )
+	for( PlayerTeamList::iterator it = m_playerTeamPrototypes.begin(); it != m_playerTeamPrototypes.end() && !frozen; ++it )
 	{
 		for( DLINK_ITERATOR<Team> iter = (*it)->iterate_TeamInstanceList(); !iter.done(); iter.advance() )
 		{

@@ -26,15 +26,21 @@
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/KeyDefs.h"
 #include "GameClient/WindowLayout.h"
+#include "GameLogic/GameLogic.h"
 
 namespace
 {
 
 WindowLayout *popupLayout = nullptr;
 GameWindow *popupParent = nullptr;
+GameWindow *popupPanel = nullptr;
 GameWindow *staticTextTitle = nullptr;
 GameWindow *staticTextMessage = nullptr;
 GameWindow *buttonChoices[AbramPopup::MAX_CHOICES] = { nullptr };
+
+// The buttons' own text colours (from the layout), to put back on each open.
+Color choiceTextColor = 0;
+Color choiceTextBorderColor = 0;
 
 AbramPopup::ChoiceFunc choiceFunc = nullptr;
 void *choiceUserData = nullptr;
@@ -43,6 +49,8 @@ void findWindows()
 {
 	popupParent = TheWindowManager->winGetWindowFromId( nullptr,
 		TheNameKeyGenerator->nameToKey( "AbramPopup.wnd:AbramPopupParent" ) );
+	popupPanel = TheWindowManager->winGetWindowFromId( popupParent,
+		TheNameKeyGenerator->nameToKey( "AbramPopup.wnd:SubParent" ) );
 	staticTextTitle = TheWindowManager->winGetWindowFromId( popupParent,
 		TheNameKeyGenerator->nameToKey( "AbramPopup.wnd:StaticTextTitle" ) );
 	staticTextMessage = TheWindowManager->winGetWindowFromId( popupParent,
@@ -54,18 +62,81 @@ void findWindows()
 		name.format( "AbramPopup.wnd:ButtonChoice%d", i );
 		buttonChoices[i] = TheWindowManager->winGetWindowFromId( popupParent, TheNameKeyGenerator->nameToKey( name ) );
 	}
+
+	if (buttonChoices[0] != nullptr)
+	{
+		choiceTextColor = buttonChoices[0]->winGetEnabledTextColor();
+		choiceTextBorderColor = buttonChoices[0]->winGetEnabledTextBorderColor();
+	}
 }
 
 void clearWindows()
 {
 	popupLayout = nullptr;
 	popupParent = nullptr;
+	popupPanel = nullptr;
 	staticTextTitle = nullptr;
 	staticTextMessage = nullptr;
 	for (Int i = 0; i < AbramPopup::MAX_CHOICES; ++i)
 		buttonChoices[i] = nullptr;
 	choiceFunc = nullptr;
 	choiceUserData = nullptr;
+}
+
+// The panel as tall as the buttons in use need (the space under the last one as above the title), in the
+// middle of the screen. Its texts and buttons move with it.
+void fitPanel( Int choiceCount )
+{
+	if (popupPanel == nullptr || popupParent == nullptr)
+		return;
+
+	GameWindow *last = staticTextMessage;
+	for (Int i = choiceCount - 1; i >= 0; --i)
+	{
+		if (i < AbramPopup::MAX_CHOICES && buttonChoices[i] != nullptr)
+		{
+			last = buttonChoices[i];
+			break;
+		}
+	}
+	if (last == nullptr)
+		return;
+
+	Int panelX = 0, panelY = 0, panelW = 0, panelH = 0;
+	popupPanel->winGetScreenPosition( &panelX, &panelY );
+	popupPanel->winGetSize( &panelW, &panelH );
+	Int lastX = 0, lastY = 0, lastW = 0, lastH = 0;
+	last->winGetScreenPosition( &lastX, &lastY );
+	last->winGetSize( &lastW, &lastH );
+
+	Int margin = 0;
+	if (staticTextTitle != nullptr)
+	{
+		Int titleX = 0, titleY = 0;
+		staticTextTitle->winGetScreenPosition( &titleX, &titleY );
+		margin = titleY - panelY;
+	}
+	if (margin < 4)
+		margin = 4;
+
+	const Int height = (lastY + lastH - panelY) + margin;
+	if (height <= 0)
+		return;
+
+	Int parentX = 0, parentY = 0, parentW = 0, parentH = 0;
+	popupParent->winGetScreenPosition( &parentX, &parentY );
+	popupParent->winGetSize( &parentW, &parentH );
+
+	popupPanel->winSetSize( panelW, height );
+	Int relX = 0, relY = 0;
+	popupPanel->winGetPosition( &relX, &relY );
+	// in a game, in the middle of the view above the command bar (which draws over the screen's bottom)
+	const Bool inGame = TheGameLogic != nullptr && TheGameLogic->isInGame() && !TheGameLogic->isInShellGame();
+	const Int space = inGame ? parentH * 78 / 100 : parentH;
+	Int top = (space - height) / 2;
+	if (top < margin)
+		top = (parentH - height) / 2;
+	popupPanel->winSetPosition( relX, top > 0 ? top : 0 );
 }
 
 // Calls the owner. The owner may close or reopen the dialog from inside, so copy what it needs first.
@@ -110,9 +181,12 @@ Bool AbramPopup::open( const UnicodeString &title, const UnicodeString &message,
 			continue;
 		const Bool used = (choices != nullptr && i < choiceCount);
 		buttonChoices[i]->winHide( !used );
+		buttonChoices[i]->winEnable( TRUE );
+		buttonChoices[i]->winSetEnabledTextColors( choiceTextColor, choiceTextBorderColor );
 		if (used)
 			GadgetButtonSetText( buttonChoices[i], choices[i] );
 	}
+	fitPanel( choices != nullptr ? choiceCount : 0 );
 
 	popupLayout->hide( FALSE );
 	popupLayout->bringForward();
@@ -130,6 +204,18 @@ void AbramPopup::setChoiceText( Int index, const UnicodeString &text )
 {
 	if (index >= 0 && index < MAX_CHOICES && buttonChoices[index])
 		GadgetButtonSetText( buttonChoices[index], text );
+}
+
+void AbramPopup::setChoiceColor( Int index, Color color )
+{
+	if (index >= 0 && index < MAX_CHOICES && buttonChoices[index])
+		buttonChoices[index]->winSetEnabledTextColors( color, choiceTextBorderColor );
+}
+
+void AbramPopup::setChoiceEnabled( Int index, Bool enabled )
+{
+	if (index >= 0 && index < MAX_CHOICES && buttonChoices[index] && buttonChoices[index]->winGetEnabled() != enabled)
+		buttonChoices[index]->winEnable( enabled );
 }
 
 void AbramPopup::close()

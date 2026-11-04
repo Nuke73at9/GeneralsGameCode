@@ -30,6 +30,10 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameNetwork/GameInfo.h"
+#if RTS_ZEROHOUR
+#include "GameClient/AbramSpawnMenu.h"
+#include "GameLogic/AbramCheats.h"
+#endif
 
 #include <set>
 #include <vector>
@@ -53,11 +57,23 @@ enum MainChoice
 	MAIN_GIVE_UNITS,
 	MAIN_GIVE_BUILDING,
 	MAIN_REQUEST,
+#if RTS_ZEROHOUR
+	// Abram's Personal Test @feature the match's cheats (Enable Cheats in the match options)
+	MAIN_FREEZE_AI,
+	MAIN_SPAWN,
+	MAIN_UNLOCK_POWERS,
+	MAIN_UNLIMITED_POWER,
+	MAIN_UNLIMITED_MONEY,
+#endif
 	MAIN_CLOSE,
 	MAIN_CHOICE_COUNT
 };
 
 MenuState state = STATE_CLOSED;
+
+// The main menu's buttons in order (the cheats only in a match that has them), and their texts shown.
+std::vector<Int> mainChoices;
+std::vector<UnicodeString> mainTexts;
 
 // What the current step is about.
 std::vector<ObjectID> pendingObjects;
@@ -139,6 +155,14 @@ void showPlayerChoice( MenuState newState, const UnicodeString &title, const Uni
 	choices[count++] = UnicodeString( L"Back" );
 
 	AbramPopup::open( title, message, choices, count, onChoice, nullptr );
+
+	// Abram's Personal Test @feature each player in its own colour
+	for (Int i = 0; i < count - 1 && i < (Int)players.size(); ++i)
+	{
+		const Player *player = ThePlayerList->getNthPlayer( players[i] );
+		if (player != nullptr)
+			AbramPopup::setChoiceColor( i, player->getPlayerColor() );
+	}
 }
 
 void startGive( Bool buildings )
@@ -250,16 +274,90 @@ void startControl()
 		UnicodeString( L"Which AI do you want to control? Press Ctrl+G again to release it." ), ais );
 }
 
+#if RTS_ZEROHOUR
+// Abram's Personal Test @feature the match's cheats: whether the local player's (or everyone's) is on
+Bool isCheatOn( Int what )
+{
+	const Player *local = ThePlayerList->getLocalPlayer();
+	const Int index = local != nullptr ? local->getPlayerIndex() : -1;
+	switch (what)
+	{
+	case MAIN_FREEZE_AI: return AbramCheats::isAIFrozen();
+	case MAIN_UNLOCK_POWERS: return AbramCheats::hasUnlockedPowers( index );
+	case MAIN_UNLIMITED_POWER: return AbramCheats::hasUnlimitedPower( index );
+	case MAIN_UNLIMITED_MONEY: return AbramCheats::hasUnlimitedMoney( index );
+	default: return FALSE;
+	}
+}
+
+void sendCheat( AbramCheat cheat, Bool on )
+{
+	GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_ABRAM_CHEAT );
+	msg->appendIntegerArgument( (Int)cheat );
+	msg->appendIntegerArgument( on ? 1 : 0 );
+}
+#endif
+
+UnicodeString mainChoiceText( Int what )
+{
+	switch (what)
+	{
+	case MAIN_CONTROL_AI: return UnicodeString( isControllingAI() ? L"Release Control of AI" : L"Take Control of AI" );
+	case MAIN_GIVE_UNITS: return UnicodeString( L"Give Unit(s)" );
+	case MAIN_GIVE_BUILDING: return UnicodeString( L"Give Building" );
+	case MAIN_REQUEST: return UnicodeString( L"Request Unit(s)/Building" );
+#if RTS_ZEROHOUR
+	case MAIN_FREEZE_AI: return UnicodeString( isCheatOn( what ) ? L"Freeze AI: On" : L"Freeze AI: Off" );
+	case MAIN_SPAWN: return UnicodeString( L"Spawn Menu" );
+	case MAIN_UNLOCK_POWERS: return UnicodeString( isCheatOn( what ) ? L"Generals Powers: Unlocked" : L"Unlock Generals Powers" );
+	case MAIN_UNLIMITED_POWER: return UnicodeString( isCheatOn( what ) ? L"Unlimited Power: On" : L"Unlimited Power: Off" );
+	case MAIN_UNLIMITED_MONEY: return UnicodeString( isCheatOn( what ) ? L"Unlimited Money: On" : L"Unlimited Money: Off" );
+#endif
+	default: return UnicodeString( L"Close" );
+	}
+}
+
+// The texts that follow the game (a cheat turned on comes back from the logic a frame or more later).
+void refreshMain()
+{
+	for (size_t i = 0; i < mainChoices.size() && i < mainTexts.size(); ++i)
+	{
+		const UnicodeString text = mainChoiceText( mainChoices[i] );
+		if (text.compare( mainTexts[i] ) != 0)
+		{
+			mainTexts[i] = text;
+			AbramPopup::setChoiceText( (Int)i, text );
+		}
+#if RTS_ZEROHOUR
+		if (mainChoices[i] == MAIN_UNLOCK_POWERS)
+			AbramPopup::setChoiceEnabled( (Int)i, !isCheatOn( MAIN_UNLOCK_POWERS ) );
+#endif
+	}
+}
+
 void showMain( const UnicodeString &message )
 {
 	state = STATE_MAIN;
-	UnicodeString choices[MAIN_CHOICE_COUNT];
-	choices[MAIN_CONTROL_AI] = UnicodeString( isControllingAI() ? L"Release Control of AI" : L"Take Control of AI" );
-	choices[MAIN_GIVE_UNITS] = UnicodeString( L"Give Unit(s)" );
-	choices[MAIN_GIVE_BUILDING] = UnicodeString( L"Give Building" );
-	choices[MAIN_REQUEST] = UnicodeString( L"Request Unit(s)/Building" );
-	choices[MAIN_CLOSE] = UnicodeString( L"Close" );
-	AbramPopup::open( UnicodeString( L"TEAM" ), message, choices, MAIN_CHOICE_COUNT, onChoice, nullptr );
+	mainChoices.clear();
+	for (Int what = 0; what < MAIN_CHOICE_COUNT; ++what)
+	{
+#if RTS_ZEROHOUR
+		if (what >= MAIN_FREEZE_AI && what <= MAIN_UNLIMITED_MONEY && !AbramCheats::isEnabled())
+			continue;
+#endif
+		mainChoices.push_back( what );
+	}
+
+	UnicodeString choices[AbramPopup::MAX_CHOICES];
+	mainTexts.clear();
+	Int count = 0;
+	for (size_t i = 0; i < mainChoices.size() && count < AbramPopup::MAX_CHOICES; ++i)
+	{
+		choices[count++] = mainChoiceText( mainChoices[i] );
+		mainTexts.push_back( choices[count - 1] );
+	}
+	AbramPopup::open( UnicodeString( L"TEAM" ), message, choices, count, onChoice, nullptr );
+	refreshMain();
 }
 
 void showOffer( const AbramTransferOffer *offer )
@@ -293,12 +391,28 @@ void onChoice( Int choice, void *userData )
 	switch (state)
 	{
 	case STATE_MAIN:
-		switch (choice)
+		switch (choice >= 0 && choice < (Int)mainChoices.size() ? mainChoices[choice] : (Int)MAIN_CLOSE)
 		{
 		case MAIN_CONTROL_AI: startControl(); break;
 		case MAIN_GIVE_UNITS: startGive( FALSE ); break;
 		case MAIN_GIVE_BUILDING: startGive( TRUE ); break;
 		case MAIN_REQUEST: startRequest(); break;
+#if RTS_ZEROHOUR
+		// Abram's Personal Test @feature the cheats: a toggle keeps the menu open (its text follows the game)
+		case MAIN_FREEZE_AI: sendCheat( ABRAM_CHEAT_FREEZE_AI, !isCheatOn( MAIN_FREEZE_AI ) ); break;
+		case MAIN_UNLIMITED_POWER: sendCheat( ABRAM_CHEAT_UNLIMITED_POWER, !isCheatOn( MAIN_UNLIMITED_POWER ) ); break;
+		case MAIN_UNLIMITED_MONEY: sendCheat( ABRAM_CHEAT_UNLIMITED_MONEY, !isCheatOn( MAIN_UNLIMITED_MONEY ) ); break;
+		case MAIN_UNLOCK_POWERS:
+			if (!isCheatOn( MAIN_UNLOCK_POWERS ))
+				sendCheat( ABRAM_CHEAT_UNLOCK_POWERS, TRUE );
+			break;
+		case MAIN_SPAWN:
+			closeMenu();
+			AbramSpawnMenu::open();
+			if (!AbramSpawnMenu::isOpen())
+				showMain( UnicodeString( L"There is nothing to spawn." ) );
+			break;
+#endif
 		default: closeMenu(); break;
 		}
 		break;
@@ -377,6 +491,8 @@ void AbramTeamMenu::update()
 		// A request we are showing may have been taken back by the game, for example after its objects died.
 		else if (state == STATE_OFFER && AbramTeamActions::findPendingOffer( shownOfferId ) == nullptr)
 			closeMenu();
+		else if (state == STATE_MAIN)
+			refreshMain();
 		return;
 	}
 

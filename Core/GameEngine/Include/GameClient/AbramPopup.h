@@ -23,7 +23,8 @@
 //
 // Clicking a button calls the owner's function with the button's index; Escape calls it with
 // CHOICE_CANCEL. The dialog stays open until the owner closes it or opens it again with new texts, so
-// an owner can update a button in place (for options that change on each click).
+// an owner can update a button in place (for options that change on each click). The dialog is as tall
+// as its buttons need, in the middle of the screen.
 
 #include "Common/UnicodeString.h"
 #include "GameClient/GameWindow.h"
@@ -37,18 +38,21 @@ class AbramPopup
 public:
 	enum
 	{
-		MAX_CHOICES = 8,
+		MAX_CHOICES = 12,
 		CHOICE_CANCEL = -1,
 	};
 
 	typedef void (*ChoiceFunc)( Int choice, void *userData );
 
 	// Shows the dialog (or replaces the texts of the open one). Returns FALSE if it could not be created.
+	// Every button is enabled and in its usual colour again.
 	static Bool open( const UnicodeString &title, const UnicodeString &message,
 		const UnicodeString *choices, Int choiceCount, ChoiceFunc func, void *userData );
 
 	static void setMessage( const UnicodeString &message );
 	static void setChoiceText( Int index, const UnicodeString &text );
+	static void setChoiceColor( Int index, Color color );		///< the button's text in that colour (a player's)
+	static void setChoiceEnabled( Int index, Bool enabled );	///< a disabled button is shown greyed and cannot be clicked
 
 	static void close();
 	static Bool isOpen();

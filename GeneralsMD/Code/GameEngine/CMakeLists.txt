@@ -190,6 +190,7 @@ set(GAMEENGINE_SRC
 #    Include/GameClient/Image.h
 #    Include/GameClient/IMEManager.h
     Include/GameClient/InGameUI.h
+    Include/GameClient/AbramSpawnMenu.h
     Include/GameClient/TiberiumHUD.h
     Include/GameClient/TiberiumSidebar.h
     Include/GameClient/TiberiumMusic.h
@@ -515,6 +516,7 @@ set(GAMEENGINE_SRC
 #    Include/GameLogic/SidesList.h
     Include/GameLogic/Squad.h
 #    Include/GameLogic/TerrainLogic.h
+    Include/GameLogic/AbramCheats.h
     Include/GameLogic/TiberiumZones.h
     Include/GameLogic/TurretAI.h
     Include/GameLogic/VictoryConditions.h
@@ -819,6 +821,7 @@ set(GAMEENGINE_SRC
 #    Source/GameClient/GUI/WindowVideoManager.cpp
 #    Source/GameClient/GUI/WinInstanceData.cpp
     Source/GameClient/InGameUI.cpp
+    Source/GameClient/GUI/AbramSpawnMenu.cpp
     Source/GameClient/GUI/TiberiumHUD.cpp
     Source/GameClient/GUI/TiberiumSidebar.cpp
     Source/GameClient/TiberiumMusic.cpp
@@ -1140,6 +1143,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/System/GameLogic.cpp
 #    Source/GameLogic/System/GameLogicDispatch.cpp
 #    Source/GameLogic/System/RankInfo.cpp
+    Source/GameLogic/System/AbramCheats.cpp
     Source/GameLogic/System/TiberiumZones.cpp
 #    Source/GameNetwork/Connection.cpp
 #    Source/GameNetwork/ConnectionManager.cpp
