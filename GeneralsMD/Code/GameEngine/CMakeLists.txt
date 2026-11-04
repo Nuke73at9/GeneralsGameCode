@@ -306,6 +306,8 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/DemoTrapUpdate.h
     Include/GameLogic/Module/DeployStyleAIUpdate.h
     Include/GameLogic/Module/DeployToggleSpecialPower.h
+    Include/GameLogic/Module/MoveAndEvacuateSpecialPower.h
+    Include/GameLogic/Module/CreateAndEnterObjectSpecialPower.h
     Include/GameLogic/Module/DestroyDie.h
     Include/GameLogic/Module/DestroyModule.h
     Include/GameLogic/Module/DieModule.h
@@ -990,6 +992,8 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/SpecialPower/CashHackSpecialPower.cpp
     Source/GameLogic/Object/SpecialPower/CleanupAreaPower.cpp
     Source/GameLogic/Object/SpecialPower/DeployToggleSpecialPower.cpp
+    Source/GameLogic/Object/SpecialPower/MoveAndEvacuateSpecialPower.cpp
+    Source/GameLogic/Object/SpecialPower/CreateAndEnterObjectSpecialPower.cpp
     Source/GameLogic/Object/SpecialPower/ReloadAmmoSpecialPower.cpp
     Source/GameLogic/Object/SpecialPower/DefectorSpecialPower.cpp
     Source/GameLogic/Object/SpecialPower/DemoralizeSpecialPower.cpp

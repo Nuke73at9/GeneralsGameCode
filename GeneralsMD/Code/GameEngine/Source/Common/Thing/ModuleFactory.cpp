@@ -290,6 +290,8 @@
 #include "GameLogic/Module/CashBountyPower.h"
 #include "GameLogic/Module/CleanupAreaPower.h"
 #include "GameLogic/Module/DeployToggleSpecialPower.h"
+#include "GameLogic/Module/MoveAndEvacuateSpecialPower.h"
+#include "GameLogic/Module/CreateAndEnterObjectSpecialPower.h"
 #include "GameLogic/Module/FireWeaponPower.h"
 
 // destroy includes
@@ -590,6 +592,8 @@ void ModuleFactory::init()
 	addModule( CashBountyPower );
 	addModule( CleanupAreaPower );
 	addModule( DeployToggleSpecialPower );	// Tiberium Project
+	addModule( MoveAndEvacuateSpecialPower );	// Tiberium Project
+	addModule( CreateAndEnterObjectSpecialPower );	// Tiberium Project
 
 	// destroy modules
 	// (none)
