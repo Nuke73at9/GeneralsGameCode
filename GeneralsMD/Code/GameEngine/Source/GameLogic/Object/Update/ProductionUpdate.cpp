@@ -161,6 +161,7 @@ ProductionEntry::ProductionEntry()
 	m_prev = nullptr;
 	m_productionQuantityProduced = 0;
 	m_productionQuantityTotal = 0;
+	m_held = FALSE;	// Tiberium Project
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -470,6 +471,19 @@ Bool ProductionUpdate::cancelUnitCreate( ProductionID productionID )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature every one of a unit in the queue put on hold (C&C3's: the one being made
+	stops where it is, and those after it wait), or let get on again */
+//-------------------------------------------------------------------------------------------------
+void ProductionUpdate::holdAllUnitsOfType( const ThingTemplate *unitType, Bool hold )
+{
+	for( ProductionEntry *production = m_productionQueue; production; production = production->m_next )
+	{
+		if( production->getProductionType() == PRODUCTION_UNIT && production->getProductionObject() == unitType )
+			production->m_held = hold;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Cancel all production of type unitType */
 //-------------------------------------------------------------------------------------------------
 void ProductionUpdate::cancelAllUnitsOfType( const ThingTemplate *unitType)
@@ -678,6 +692,10 @@ UpdateSleepTime ProductionUpdate::update()
 		}
 
 	}
+
+	// Tiberium Project @feature on hold: it does not get on (nor do those after it)
+	if( production->m_held )
+		return UPDATE_SLEEP_NONE;
 
 	// increase the frames we've been under production for
 	production->m_framesUnderConstruction++;
@@ -1277,11 +1295,12 @@ void ProductionUpdate::crc( Xfer *xfer )
 	* Version Info:
 	* 1: Initial version */
 // ------------------------------------------------------------------------------------------------
+// Tiberium Project: 2: an entry's hold
 void ProductionUpdate::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1331,6 +1350,10 @@ void ProductionUpdate::xfer( Xfer *xfer )
 
 			// exit door
 			xfer->xferInt( (Int*)&production->m_exitDoor );
+
+			// on hold (Tiberium Project)
+			if( version >= 2 )
+				xfer->xferBool( &production->m_held );
 
 		}
 
@@ -1420,6 +1443,10 @@ void ProductionUpdate::xfer( Xfer *xfer )
 
 			// exit door
 			xfer->xferInt( (Int*)&production->m_exitDoor );
+
+			// on hold (Tiberium Project)
+			if( version >= 2 )
+				xfer->xferBool( &production->m_held );
 
 		}
 

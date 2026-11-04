@@ -542,6 +542,26 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, void *userData )
 #endif
 			break;
 		}
+		// Tiberium Project @feature a unit's queue at a producer held, let go on, or cancelled whole (the sidebar's
+		// shift and right clicks); the sender's own producer only
+		case GameMessage::MSG_TIBERIUM_PRODUCTION_HOLD:
+		{
+			Object *producer = msg->getArgumentCount() >= 3 ? findObjectByID( msg->getArgument( 0 )->objectID ) : nullptr;
+			ProductionUpdateInterface *pu = producer != nullptr && producer->getControllingPlayer() == getMessagePlayer( msg )
+				? producer->getProductionUpdateInterface() : nullptr;
+			const ThingTemplate *unit = pu != nullptr ? TheThingFactory->findByTemplateID( msg->getArgument( 1 )->integer ) : nullptr;
+			if( unit == nullptr )
+				break;
+			const Int what = msg->getArgument( 2 )->integer;
+#if RTS_ZEROHOUR
+			if( what == 0 || what == 1 )
+				pu->holdAllUnitsOfType( unit, what == 1 );
+			else
+#endif
+			if( what == 2 )
+				pu->cancelAllUnitsOfType( unit );
+			break;
+		}
 		case GameMessage::MSG_DO_WEAPON_AT_LOCATION:
 		{
 			onDoWeaponAtLocation(msg, currentlySelectedGroup);

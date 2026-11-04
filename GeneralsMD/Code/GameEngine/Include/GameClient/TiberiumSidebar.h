@@ -50,6 +50,8 @@ public:
 	static Bool testClickPart( const char *part, Int index, Bool right );
 	/// test runs: the tab shown and its queues' and items' counts, for the log
 	static void describe( char *buffer, Int size );
+	/// test runs: the clicks that follow are as with shift held (five at a time, hold and cancel)
+	static void setTestShift( Bool shift );
 	/// TiberiumGameData's BuildAreaCursor: how the base's build areas are drawn on the ground while a
 	/// construction yard's structure is placed (a radius cursor's fields: Texture, Style, Color, ...)
 	static void parseBuildAreaCursor( INI *ini, void *instance, void *store, const void *userData );

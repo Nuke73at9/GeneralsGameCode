@@ -91,6 +91,9 @@ public:
 	ExitDoorType getExitDoor() const { return m_exitDoor; }
 	void setExitDoor(ExitDoorType exitDoor) { m_exitDoor = exitDoor; }
 
+	/// Tiberium Project @feature on hold (C&C3's): it does not get on while held
+	Bool isHeld() const { return m_held; }
+
 protected:
 
 	ProductionType m_type;														///< production type
@@ -105,6 +108,7 @@ protected:
 	Int m_productionQuantityTotal;										///< it is now possible to construct multiple units simultaneously.
 	Int m_productionQuantityProduced;									///< And we need to allow pausing within an entry, so we keep track of number of sub-successes
 	ExitDoorType m_exitDoor;
+	Bool m_held;																			///< Tiberium Project: on hold
 
 	ProductionEntry *m_next;													///< next in list
 	ProductionEntry *m_prev;													///< prev in list
@@ -160,6 +164,8 @@ public:
 	virtual Bool queueCreateUnit( const ThingTemplate *unitType, ProductionID productionID ) = 0;
 	virtual Bool cancelUnitCreate( ProductionID productionID ) = 0;
 	virtual void cancelAllUnitsOfType( const ThingTemplate *unitType) = 0;
+	/// Tiberium Project @feature every one of a unit in the queue put on hold, or let get on again
+	virtual void holdAllUnitsOfType( const ThingTemplate *unitType, Bool hold ) = 0;
 
 	virtual void cancelAndRefundAllProduction() = 0;
 
@@ -217,6 +223,7 @@ public:
 	virtual Bool queueCreateUnit( const ThingTemplate *unitType, ProductionID productionID ) override;					///< queue unit to be produced
 	virtual Bool cancelUnitCreate( ProductionID productionID ) override;		      ///< cancel construction of unit with matching production ID
 	virtual void cancelAllUnitsOfType( const ThingTemplate *unitType) override;	///< cancel all production of type unitType
+	virtual void holdAllUnitsOfType( const ThingTemplate *unitType, Bool hold ) override;	///< Tiberium Project: put on hold, or let go on
 
 	virtual void cancelAndRefundAllProduction() override;									///< cancel and refund anything in the production queue
 

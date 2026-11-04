@@ -42,6 +42,7 @@
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/InGameUI.h"
+#include "GameClient/Keyboard.h"
 #include "GameClient/Image.h"
 #include "GameClient/RadiusDecal.h"
 #include "GameClient/View.h"
@@ -99,6 +100,8 @@ namespace
 	Int s_hoverTab = -1;				///< Tiberium Project @feature the tab under the cursor (its name in the info box)
 	Int s_scroll[TAB_COUNT];		///< each tab's first row shown (a list longer than the grid scrolls by the wheel)
 	UnsignedInt s_lastRefresh = 0;
+	ObjectID s_lastSelected = INVALID_ID;	///< Tiberium Project: the producer last selected (the tab follows it)
+	Bool s_testShift = FALSE;				///< test runs: a click as with shift held
 	DisplayString *s_label = nullptr;
 	DisplayString *s_small = nullptr;
 	DisplayString *s_info = nullptr;
@@ -442,10 +445,12 @@ namespace
 
 	//-----------------------------------------------------------------------------------------------
 	/** how many of the item the queue's producer has queued, and the first one's progress (or -1) */
-	void queued( const SidebarQueue &q, const SidebarItem &item, Int *count, Real *percent )
+	void queued( const SidebarQueue &q, const SidebarItem &item, Int *count, Real *percent, Bool *held = nullptr )
 	{
 		*count = 0;
 		*percent = -1.0f;
+		if( held != nullptr )
+			*held = FALSE;
 		Object *producer = TheGameLogic->findObjectByID( q.producer );
 		BaseConstructionUpdate *base = BaseConstructionUpdate::find( producer );
 		if( base != nullptr && item.thing != nullptr && base->builds( item.thing ) )
@@ -469,6 +474,8 @@ namespace
 				++*count;
 				if( first )
 					*percent = e->getPercentComplete();
+				if( held != nullptr && e->isHeld() )
+					*held = TRUE;
 			}
 			first = FALSE;
 		}
@@ -679,7 +686,8 @@ namespace
 					drawText( s_small, labelOf( item ), ix + 3, iy + 3, ok ? text : textDim );
 				Int count = 0;
 				Real percent = -1.0f;
-				queued( *cur, item, &count, &percent );
+				Bool held = FALSE;
+				queued( *cur, item, &count, &percent, &held );
 				if( percent >= 0.0f )
 				{
 					// the time left, a clock over what is still to come
@@ -699,6 +707,15 @@ namespace
 					UnicodeString n;
 					n.format( L"%d", count );
 					drawText( s_label, n, ix + L.cellW - 14, iy + 2, GameMakeColor( 255, 230, 120, 255 ) );
+					if( held )
+					{
+						// Tiberium Project @feature on hold (C&C3's label): a click lets it go on, shift and a right
+						// click cancels it all
+						UnicodeString hold;
+						hold.translate( AsciiString( "HOLD" ) );
+						TheDisplay->drawFillRect( ix + 1, iy + L.cellH / 2 - 9, L.cellW - 2, 16, GameMakeColor( 0, 0, 0, 170 ) );
+						drawText( s_label, hold, ix + 4, iy + L.cellH / 2 - 8, GameMakeColor( 255, 200, 80, 255 ) );
+					}
 				}
 				const Bool hover = (Int)i == s_hoverItem;
 				if( styled )
@@ -943,6 +960,30 @@ namespace
 	}
 
 	//-----------------------------------------------------------------------------------------------
+	/** Tiberium Project @feature a unit's queue at its producer held, as C&C3 holds: shift and a right click
+		puts it on hold, shift and a right click again cancels it all, and a click lets it go on. Whether the
+		click was taken for that. */
+	Bool holdItem( const SidebarQueue &q, const SidebarItem &item, Bool right, Bool shift )
+	{
+		if( item.thing == nullptr || item.upgrade != nullptr || ( right && !shift ) )
+			return FALSE;
+		Object *producer = TheGameLogic->findObjectByID( q.producer );
+		if( producer == nullptr || producer->getProductionUpdateInterface() == nullptr || BaseConstructionUpdate::find( producer ) != nullptr )
+			return FALSE;
+		Int count = 0;
+		Real percent = -1.0f;
+		Bool held = FALSE;
+		queued( q, item, &count, &percent, &held );
+		if( count == 0 || ( !right && !held ) )
+			return FALSE;		// (a plain click queues one more)
+		GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_TIBERIUM_PRODUCTION_HOLD );
+		msg->appendObjectIDArgument( producer->getID() );
+		msg->appendIntegerArgument( item.thing->getTemplateID() );
+		msg->appendIntegerArgument( !right ? 0 : held ? 2 : 1 );
+		return TRUE;
+	}
+
+	//-----------------------------------------------------------------------------------------------
 	WindowMsgHandledType inputSidebar( GameWindow *, UnsignedInt msg, WindowMsgData mData1, WindowMsgData )
 	{
 		const Int px = (Short)( mData1 & 0xFFFF ), py = (Short)( ( mData1 >> 16 ) & 0xFFFF );
@@ -974,7 +1015,17 @@ namespace
 				{
 					SidebarQueue *q = currentQueue();
 					if( q != nullptr && hit - 200 < (Int)q->items.size() )
-						clickItem( *q, q->items[hit - 200], msg == GWM_RIGHT_DOWN );
+					{
+						const SidebarItem item = q->items[hit - 200];
+						const Bool shift = s_testShift || ( TheKeyboard != nullptr && TheKeyboard->isShift() );
+						if( !holdItem( *q, item, msg == GWM_RIGHT_DOWN, shift ) )
+						{
+							// Tiberium Project @feature shift and a click: five (a unit's: C&C3's)
+							const Int times = shift && msg == GWM_LEFT_DOWN && item.thing != nullptr && item.upgrade == nullptr ? 5 : 1;
+							for( Int n = 0; n < times; ++n )
+								clickItem( *q, item, msg == GWM_RIGHT_DOWN );
+						}
+					}
 				}
 				return MSG_HANDLED;
 			}
@@ -1066,6 +1117,23 @@ void TiberiumSidebar::describe( char *buffer, Int size )
 		s_window == nullptr ? ( TheGlobalData != nullptr && TheGlobalData->m_tiberiumSidebar ? " (off: not made)" : " (off: GameData does not ask for it)" ) : "",
 		TheGlobalData != nullptr ? TheGlobalData->m_maxCameraHeight : 0.0f, placing != nullptr ? placing->getName().str() : "nothing",
 		(Int)s_areaDecals.size() );
+	// (and what its producer is making: each entry, how far on, and whether it is on hold)
+	Object *producer = cur != nullptr && TheGameLogic != nullptr ? TheGameLogic->findObjectByID( cur->producer ) : nullptr;
+	ProductionUpdateInterface *pu = producer != nullptr ? producer->getProductionUpdateInterface() : nullptr;
+	for( const ProductionEntry *e = pu != nullptr ? pu->firstProduction() : nullptr; e != nullptr; e = pu->nextProduction( e ) )
+	{
+		const size_t used = strlen( buffer );
+		if( used + 48 >= (size_t)size )
+			break;
+		snprintf( buffer + used, size - used, "%s %s %.0f%%%s", e == pu->firstProduction() ? "; making" : ",",
+			e->getProductionObject() != nullptr ? e->getProductionObject()->getName().str() : "an upgrade", e->getPercentComplete(),
+			e->isHeld() ? " held" : "" );
+	}
+}
+
+void TiberiumSidebar::setTestShift( Bool shift )
+{
+	s_testShift = shift;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1124,6 +1192,43 @@ void TiberiumSidebar::update()
 		s_window->winHide( TiberiumHUD::isHidden() );
 	updateBuildAreas();
 	const UnsignedInt now = TheGameLogic->getFrame();
+	// Tiberium Project @feature selecting a producer (a factory, a deployed Crawler, a tech building) turns the
+	// sidebar to its tab and its queue: its units' tab, else its upgrades'
+	Object *selected = nullptr;
+	if( TheInGameUI != nullptr && TheInGameUI->getSelectCount() > 0 )
+	{
+		const DrawableList *list = TheInGameUI->getAllSelectedDrawables();
+		Drawable *first = list != nullptr && !list->empty() ? list->front() : nullptr;
+		selected = first != nullptr ? first->getObject() : nullptr;
+	}
+	const ObjectID selectedID = selected != nullptr ? selected->getID() : INVALID_ID;
+	if( selectedID != s_lastSelected )
+	{
+		s_lastSelected = selectedID;
+		if( selected != nullptr && selected->getProductionUpdateInterface() != nullptr )
+		{
+			refresh();
+			s_lastRefresh = now == 0 ? 1 : now;
+			Int found = -1;
+			for( Int t = 0; t < TAB_COUNT && found < 0; ++t )
+			{
+				if( t == TAB_UPGRADES )
+					continue;		// (its units first)
+				for( size_t i = 0; i < s_queues[t].size() && found < 0; ++i )
+					if( s_queues[t][i].producer == selectedID )
+						found = t;
+			}
+			for( size_t i = 0; i < s_queues[TAB_UPGRADES].size() && found < 0; ++i )
+				if( s_queues[TAB_UPGRADES][i].producer == selectedID )
+					found = TAB_UPGRADES;
+			if( found >= 0 )
+			{
+				s_tab = found;
+				s_queueOf[found] = selectedID;
+				s_queueKindOf[found] = selected->getTemplate();
+			}
+		}
+	}
 	if( s_lastRefresh == 0 || now >= s_lastRefresh + 10 || now < s_lastRefresh )
 	{
 		refresh();
@@ -1146,6 +1251,7 @@ void TiberiumSidebar::update()
 //-------------------------------------------------------------------------------------------------
 void TiberiumSidebar::reset()
 {
+	s_lastSelected = INVALID_ID;
 	clearBuildAreas();
 	if( s_window != nullptr && TheWindowManager != nullptr )
 		TheWindowManager->winDestroy( s_window );
