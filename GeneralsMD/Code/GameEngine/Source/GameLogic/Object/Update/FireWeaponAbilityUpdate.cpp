@@ -24,11 +24,19 @@
 
 #include "GameLogic/Module/FireWeaponAbilityUpdate.h"
 
+#include "Common/BezierSegment.h"
+#include "Common/GameAudio.h"
 #include "Common/Xfer.h"
+#include "GameClient/FXList.h"
+#include "GameLogic/AI.h"
+#include "GameLogic/AIPathfind.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
+#include "GameLogic/PartitionManager.h"
+#include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Weapon.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "GameLogic/Module/PhysicsUpdate.h"
 
 //-------------------------------------------------------------------------------------------------
 // Shot = Weapon:<name> Delay:<ms> OffsetX:<ahead> OffsetY:<left>
@@ -55,6 +63,12 @@ FireWeaponAbilityUpdate::FireWeaponAbilityUpdate( Thing *thing, const ModuleData
 	m_hasTarget = FALSE;
 	m_nextShot = 0;
 	m_moveIssued = FALSE;
+	for( Int i = 0; i < 4; ++i )
+		m_leapPoints[i].zero();
+	m_leapSegments = 0;
+	m_leapSegment = 0;
+	m_leapLook = 0;
+	m_leapNoAttack = FALSE;
 	setWakeFrame( getObject(), UPDATE_SLEEP_FOREVER );
 }
 
@@ -67,10 +81,11 @@ FireWeaponAbilityUpdate::~FireWeaponAbilityUpdate()
 Bool FireWeaponAbilityUpdate::initiateIntentToDoSpecialPower( const SpecialPowerTemplate *specialPowerTemplate, const Object *targetObj, const Coord3D *targetPos, const Waypoint *way, UnsignedInt commandOptions )
 {
 	const FireWeaponAbilityUpdateModuleData *data = getFireWeaponAbilityUpdateModuleData();
-	if( specialPowerTemplate != data->m_specialPowerTemplate || data->m_shots.empty() )
+	// (a leap needs no shots: Tiberium Project)
+	if( specialPowerTemplate != data->m_specialPowerTemplate || ( data->m_shots.empty() && data->m_leapSpeed <= 0.0f ) )
 		return FALSE;
 	Object *me = getObject();
-	if( me->isDisabled() || me->isEffectivelyDead() )
+	if( me->isDisabled() || me->isEffectivelyDead() || m_stage == STAGE_LEAP )
 		return FALSE;
 
 	m_targetID = targetObj != nullptr ? targetObj->getID() : INVALID_ID;
@@ -83,6 +98,8 @@ Bool FireWeaponAbilityUpdate::initiateIntentToDoSpecialPower( const SpecialPower
 		m_targetPos = *me->getPosition();
 	m_nextShot = 0;
 	m_moveIssued = FALSE;
+	m_leapSegments = 0;
+	m_leapSegment = 0;
 	enterStage( data->m_startAbilityRange > 0.0f && m_hasTarget ? STAGE_APPROACH : STAGE_UNPACK );
 	return TRUE;
 }
@@ -127,8 +144,14 @@ void FireWeaponAbilityUpdate::enterStage( Stage stage )
 			}
 			if( data->m_unpackTime > 0 )
 				me->setModelConditionState( MODELCONDITION_UNPACKING );
+			playSound( data->m_unpackSound );	// Tiberium Project
 			break;
 		}
+		case STAGE_FIRE:
+			// Tiberium Project: as it fires, or takes off (not again as it fires on landing)
+			if( m_leapSegments == 0 )
+				playSound( data->m_triggerSound );
+			break;
 		case STAGE_PACK:
 			if( data->m_packTime > 0 )
 				me->setModelConditionState( MODELCONDITION_PACKING );
@@ -142,9 +165,122 @@ void FireWeaponAbilityUpdate::enterStage( Stage stage )
 //-------------------------------------------------------------------------------------------------
 void FireWeaponAbilityUpdate::finish()
 {
-	getObject()->clearModelConditionFlags( MAKE_MODELCONDITION_MASK2( MODELCONDITION_UNPACKING, MODELCONDITION_PACKING ) );
+	Object *me = getObject();
+	if( m_stage == STAGE_LEAP )
+	{
+		// stopped in the air (it died there): down on the ground, as it was
+		Coord3D pos = *me->getPosition();
+		pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+		me->setPosition( &pos );
+		endLeap();
+	}
+	me->clearModelConditionFlags( MAKE_MODELCONDITION_MASK2( MODELCONDITION_UNPACKING, MODELCONDITION_PACKING ) );
 	m_stage = STAGE_IDLE;
 	m_targetID = INVALID_ID;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature
+void FireWeaponAbilityUpdate::playSound( const AudioEventRTS &sound ) const
+{
+	if( sound.getEventName().isEmpty() )
+		return;
+	AudioEventRTS play = sound;
+	play.setObjectID( getObject()->getID() );
+	TheAudio->addAudioEvent( &play );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the leap: an arc from the unit to the target spot (as a DumbProjectileBehavior's,
+// its inner points above the highest ground on the way), and up it goes, held (no physics, no orders, no
+// shots) until it is down again
+void FireWeaponAbilityUpdate::startLeap()
+{
+	const FireWeaponAbilityUpdateModuleData *data = getFireWeaponAbilityUpdateModuleData();
+	Object *me = getObject();
+	Coord3D dest;
+	if( !targetPosition( &dest ) )
+		dest = m_targetPos;		// (the target died: where it was)
+	AIUpdateInterface *ai = me->getAI();
+	if( ai != nullptr )
+	{
+		ai->aiIdle( CMD_FROM_AI );
+		// where it can stand, clear of the others
+		TheAI->pathfinder()->adjustDestination( me, ai->getLocomotorSet(), &dest );
+	}
+	dest.z = TheTerrainLogic->getGroundHeight( dest.x, dest.y );
+
+	m_leapPoints[0] = *me->getPosition();
+	m_leapPoints[3] = dest;
+	Real highest = max( m_leapPoints[0].z, dest.z );
+	Real terrain;
+	if( ThePartitionManager->estimateTerrainExtremesAlongLine( m_leapPoints[0], m_leapPoints[3], nullptr, &terrain, nullptr, nullptr ) )
+		highest = max( highest, terrain );
+	const Real dx = dest.x - m_leapPoints[0].x;
+	const Real dy = dest.y - m_leapPoints[0].y;
+	m_leapPoints[1].x = m_leapPoints[0].x + dx * data->m_leapFirstIndent;
+	m_leapPoints[1].y = m_leapPoints[0].y + dy * data->m_leapFirstIndent;
+	m_leapPoints[1].z = highest + data->m_leapFirstHeight;
+	m_leapPoints[2].x = m_leapPoints[0].x + dx * data->m_leapSecondIndent;
+	m_leapPoints[2].y = m_leapPoints[0].y + dy * data->m_leapSecondIndent;
+	m_leapPoints[2].z = highest + data->m_leapSecondHeight;
+	BezierSegment arc( m_leapPoints );
+	m_leapSegments = max( 1, (Int)WWMath::Ceil( WWMath::Div_FixNaN( arc.getApproximateLength(), data->m_leapSpeed, 1.0f ) ) );
+	m_leapSegment = 0;
+	if( dx != 0.0f || dy != 0.0f )
+		me->setOrientation( WWMath::Atan2Origin( dy, dx ) );
+
+	me->setDisabled( DISABLED_HELD );
+	m_leapNoAttack = !me->testStatus( OBJECT_STATUS_NO_ATTACK );
+	if( m_leapNoAttack )
+		me->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_NO_ATTACK ) );
+	m_stage = STAGE_LEAP;
+	m_stageStartFrame = TheGameLogic->getFrame();
+	setLeapLook( data->m_leapPackInFlight && data->m_packTime > 0 ? 3 : 1 );
+	setWakeFrame( me, UPDATE_SLEEP_NONE );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature down on the ground: not held, nor still in the air
+void FireWeaponAbilityUpdate::endLeap()
+{
+	Object *me = getObject();
+	setLeapLook( 0 );
+	me->clearDisabled( DISABLED_HELD );
+	if( m_leapNoAttack )
+		me->clearStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_NO_ATTACK ) );
+	m_leapNoAttack = FALSE;
+	PhysicsBehavior *physics = me->getPhysics();
+	if( physics != nullptr )
+		physics->resetDynamicPhysics();
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the leap's looks: 0 none, 1 in the air, 2 in the air and about to land, 3 packing
+// as it takes off (LeapPackInFlight)
+ModelConditionFlags FireWeaponAbilityUpdate::leapLook( Int look ) const
+{
+	const FireWeaponAbilityUpdateModuleData *data = getFireWeaponAbilityUpdateModuleData();
+	ModelConditionFlags flags;
+	if( look == 1 || look == 2 )
+		flags.set( data->m_leapFlightConditions );
+	if( look == 2 )
+		flags.set( data->m_leapLandingConditions );
+	if( look == 3 )
+		flags.set( MODELCONDITION_PACKING );
+	return flags;
+}
+
+//-------------------------------------------------------------------------------------------------
+void FireWeaponAbilityUpdate::setLeapLook( Int look )
+{
+	if( look == m_leapLook )
+		return;
+	const ModelConditionFlags clr = leapLook( m_leapLook );
+	const ModelConditionFlags set = leapLook( look );
+	m_leapLook = look;
+	if( clr.any() || set.any() )
+		getObject()->clearAndSetModelConditionFlags( clr, set );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -207,6 +343,12 @@ UpdateSleepTime FireWeaponAbilityUpdate::update()
 			return UPDATE_SLEEP_NONE;
 		case STAGE_FIRE:
 		{
+			// Tiberium Project: a leap first (its shots, if it has any, as it lands)
+			if( data->m_leapSpeed > 0.0f && m_leapSegments == 0 )
+			{
+				startLeap();
+				return UPDATE_SLEEP_NONE;
+			}
 			while( m_nextShot < (Int)data->m_shots.size() && since >= data->m_shots[m_nextShot].m_delay )
 			{
 				const FireWeaponAbilityShot &shot = data->m_shots[m_nextShot++];
@@ -228,7 +370,8 @@ UpdateSleepTime FireWeaponAbilityUpdate::update()
 			}
 			if( m_nextShot >= (Int)data->m_shots.size() )
 			{
-				if( data->m_packTime > 0 )
+				// (a leap that packed as it took off is done once it is down: Tiberium Project)
+				if( data->m_packTime > 0 && !( data->m_leapPackInFlight && m_leapSegments > 0 ) )
 					enterStage( STAGE_PACK );
 				else
 				{
@@ -245,6 +388,33 @@ UpdateSleepTime FireWeaponAbilityUpdate::update()
 				return UPDATE_SLEEP_FOREVER;
 			}
 			return UPDATE_SLEEP_NONE;
+		case STAGE_LEAP:
+		{
+			// Tiberium Project @feature along the arc, a step a frame
+			++m_leapSegment;
+			if( m_leapSegment >= m_leapSegments )
+			{
+				Coord3D down = m_leapPoints[3];
+				down.z = TheTerrainLogic->getGroundHeight( down.x, down.y );
+				me->setPosition( &down );
+				endLeap();
+				FXList::doFXPos( data->m_leapLandingFX, &down );
+				// then its shots, if any, and its landing (PACKING)
+				enterStage( STAGE_FIRE );
+				return UPDATE_SLEEP_NONE;
+			}
+			BezierSegment arc( m_leapPoints );
+			Coord3D at;
+			arc.evaluateBezSegmentAtT( (Real)m_leapSegment / (Real)m_leapSegments, &at );
+			me->setPosition( &at );
+			if( data->m_leapPackInFlight && (UnsignedInt)m_leapSegment < data->m_packTime )
+				setLeapLook( 3 );
+			else if( data->m_leapLandingTime > 0 && (UnsignedInt)( m_leapSegments - m_leapSegment ) <= data->m_leapLandingTime )
+				setLeapLook( 2 );
+			else
+				setLeapLook( 1 );
+			return UPDATE_SLEEP_NONE;
+		}
 		default:
 			break;
 	}
@@ -261,10 +431,11 @@ void FireWeaponAbilityUpdate::crc( Xfer *xfer )
 // Xfer method
 // Version Info:
 // 1: Initial version
+// 2: Tiberium Project: the leap
 //-------------------------------------------------------------------------------------------------
 void FireWeaponAbilityUpdate::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -279,6 +450,15 @@ void FireWeaponAbilityUpdate::xfer( Xfer *xfer )
 	xfer->xferBool( &m_hasTarget );
 	xfer->xferInt( &m_nextShot );
 	xfer->xferBool( &m_moveIssued );
+	if( version >= 2 )
+	{
+		for( Int i = 0; i < 4; ++i )
+			xfer->xferCoord3D( &m_leapPoints[i] );
+		xfer->xferInt( &m_leapSegments );
+		xfer->xferInt( &m_leapSegment );
+		xfer->xferInt( &m_leapLook );
+		xfer->xferBool( &m_leapNoAttack );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

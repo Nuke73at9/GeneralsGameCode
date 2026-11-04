@@ -23,6 +23,15 @@
 // unpacks (UNPACKING for UnpackTime), waits PreparationTime, fires each Shot after its delay (at an
 // offset from the target, turned with the unit), then packs up (PACKING for PackTime).
 //
+// Tiberium Project @feature a leap: C&C4's jump jets, a weapon that fires the unit itself (ProjectileSelf).
+// With LeapSpeed > 0 the unit flies to the target spot instead of firing its shots, on an arc whose two
+// inner points stand LeapFirstHeight and LeapSecondHeight above the highest ground on the way, at
+// LeapFirstPercentIndent and LeapSecondPercentIndent along it (as a DumbProjectileBehavior's), with
+// LeapFlightConditions while it is in the air and LeapLandingConditions for its last LeapLandingTime;
+// UNPACKING (UnpackTime) is its takeoff and PACKING (PackTime) its landing, LeapLandingFX where it lands.
+// With LeapPackInFlight it packs as it takes off instead (Kane's Wrath's jump jets: PACKING is the jump),
+// for PackTime of its flight. UnpackSound plays as the unit unpacks, TriggerSound as it fires (or takes off).
+//
 //   Behavior = SpecialAbility ModuleTag_SatchelPower
 //     SpecialPowerTemplate = C4SP_SatchelCharge
 //   End
@@ -39,10 +48,13 @@
 
 #include <vector>
 
+#include "Common/AudioEventRTS.h"
 #include "Common/INI.h"
+#include "Common/ModelState.h"
 #include "GameLogic/Module/UpdateModule.h"
 
 class CommandButton;
+class FXList;
 class SpecialPowerTemplate;
 class Waypoint;
 
@@ -67,6 +79,19 @@ public:
 	UnsignedInt m_preparationTime;	///< frames
 	UnsignedInt m_packTime;			///< frames
 	Bool m_faceTarget;
+	// Tiberium Project @feature the leap
+	Real m_leapSpeed;					///< distance per frame (0: no leap, the shots are fired)
+	Real m_leapFirstHeight;
+	Real m_leapSecondHeight;
+	Real m_leapFirstIndent;
+	Real m_leapSecondIndent;
+	UnsignedInt m_leapLandingTime;		///< frames before it lands
+	ModelConditionFlags m_leapFlightConditions;
+	ModelConditionFlags m_leapLandingConditions;
+	const FXList *m_leapLandingFX;
+	Bool m_leapPackInFlight;
+	AudioEventRTS m_unpackSound;
+	AudioEventRTS m_triggerSound;
 
 	FireWeaponAbilityUpdateModuleData()
 	{
@@ -74,6 +99,13 @@ public:
 		m_startAbilityRange = 0.0f;
 		m_unpackTime = m_preparationTime = m_packTime = 0;
 		m_faceTarget = FALSE;
+		m_leapSpeed = 0.0f;
+		m_leapFirstHeight = m_leapSecondHeight = 0.0f;
+		m_leapFirstIndent = 0.33f;
+		m_leapSecondIndent = 0.66f;
+		m_leapLandingTime = 0;
+		m_leapLandingFX = nullptr;
+		m_leapPackInFlight = FALSE;
 	}
 
 	static void parseShot( INI *ini, void *instance, void *store, const void *userData );
@@ -90,6 +122,18 @@ public:
 			{ "PreparationTime",		INI::parseDurationUnsignedInt,	nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_preparationTime ) },
 			{ "PackTime",				INI::parseDurationUnsignedInt,	nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_packTime ) },
 			{ "FaceTarget",				INI::parseBool,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_faceTarget ) },
+			{ "LeapSpeed",				INI::parseVelocityReal,			nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_leapSpeed ) },
+			{ "LeapFirstHeight",			INI::parseReal,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_leapFirstHeight ) },
+			{ "LeapSecondHeight",			INI::parseReal,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_leapSecondHeight ) },
+			{ "LeapFirstPercentIndent",	INI::parsePercentToReal,		nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_leapFirstIndent ) },
+			{ "LeapSecondPercentIndent",	INI::parsePercentToReal,		nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_leapSecondIndent ) },
+			{ "LeapLandingTime",			INI::parseDurationUnsignedInt,	nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_leapLandingTime ) },
+			{ "LeapFlightConditions",		ModelConditionFlags::parseFromINI,	nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_leapFlightConditions ) },
+			{ "LeapLandingConditions",	ModelConditionFlags::parseFromINI,	nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_leapLandingConditions ) },
+			{ "LeapLandingFX",			INI::parseFXList,				nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_leapLandingFX ) },
+			{ "LeapPackInFlight",			INI::parseBool,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_leapPackInFlight ) },
+			{ "UnpackSound",				INI::parseAudioEventRTS,		nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_unpackSound ) },
+			{ "TriggerSound",			INI::parseAudioEventRTS,		nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_triggerSound ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 		p.add( dataFieldParse );
@@ -122,6 +166,8 @@ public:
 	virtual Bool isPowerCurrentlyInUse( const CommandButton *command = nullptr ) const override { return m_stage != STAGE_IDLE; }
 
 	virtual UpdateSleepTime update() override;
+	// Tiberium Project: in the air the unit is held (and may be disabled on the way), and still flies on
+	virtual DisabledMaskType getDisabledTypesToProcess() const override { return m_stage == STAGE_LEAP ? DISABLEDMASK_ALL : DISABLEDMASK_NONE; }
 
 private:
 
@@ -133,11 +179,17 @@ private:
 		STAGE_PREPARE,
 		STAGE_FIRE,
 		STAGE_PACK,
+		STAGE_LEAP,		///< Tiberium Project: in the air, to the target spot
 	};
 
 	Bool targetPosition( Coord3D *pos ) const;	///< where the target is now (false: it is gone)
 	void enterStage( Stage stage );
 	void finish();
+	void startLeap();						///< Tiberium Project: the arc to the target spot, and off
+	void endLeap();							///< Tiberium Project: not held, nor in the air, any more
+	void playSound( const AudioEventRTS &sound ) const;	///< Tiberium Project
+	void setLeapLook( Int look );			///< Tiberium Project: 0 none, 1 in flight, 2 landing, 3 packing in flight
+	ModelConditionFlags leapLook( Int look ) const;
 
 	Stage m_stage;
 	UnsignedInt m_stageStartFrame;
@@ -146,5 +198,11 @@ private:
 	Bool m_hasTarget;		///< an object or a spot (else the unit's own position)
 	Int m_nextShot;
 	Bool m_moveIssued;
+	// Tiberium Project @feature the leap: its arc, how far along it the unit is, and how it looks
+	Coord3D m_leapPoints[4];
+	Int m_leapSegments;
+	Int m_leapSegment;
+	Int m_leapLook;
+	Bool m_leapNoAttack;	///< it set NO_ATTACK for the flight (so clears it on landing)
 
 };

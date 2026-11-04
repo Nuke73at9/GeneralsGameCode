@@ -288,6 +288,14 @@ enum ModelConditionFlagType CPP_11(: Int)
 	// unloading at a refinery is docking only
 	MODELCONDITION_HARVEST_PREPARATION,
 	MODELCONDITION_HARVEST_ACTION,
+	// Tiberium Project @feature SAGE 2's leap states: a unit that flies itself to a spot (C&C4's jump jets,
+	// FireWeaponAbilityUpdate's leap) is a THROWN_PROJECTILE in the air and ABOUT_TO_HIT just before it
+	// lands (its landing sound); a cliff jump takes off, flies and lands in the CLIFF_TRANSITION states
+	MODELCONDITION_THROWN_PROJECTILE,
+	MODELCONDITION_CLIFF_TRANSITION_STARTUP,
+	MODELCONDITION_CLIFF_TRANSITION_MID,
+	MODELCONDITION_CLIFF_TRANSITION_LAND,
+	MODELCONDITION_ABOUT_TO_HIT,
 //
 // Note: these values are saved in save files, so you MUST NOT REMOVE OR CHANGE
 // existing values!

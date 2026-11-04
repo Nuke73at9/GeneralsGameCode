@@ -217,6 +217,11 @@ const char* const ModelConditionFlags::s_bitNameList[] =
 	"USING_WEAPON_H",
 	"HARVEST_PREPARATION",	// Tiberium Project
 	"HARVEST_ACTION",
+	"THROWN_PROJECTILE",	// Tiberium Project
+	"CLIFF_TRANSITION_STARTUP",
+	"CLIFF_TRANSITION_MID",
+	"CLIFF_TRANSITION_LAND",
+	"ABOUT_TO_HIT",
 
 
 	nullptr
