@@ -897,6 +897,7 @@ ChinookAIUpdateModuleData::ChinookAIUpdateModuleData()
 	m_ropeWobbleRate = 0.1f;
   m_rotorWashParticleSystem.clear();
 	m_upgradedSupplyBoost = 0;
+	m_transportOnly = FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -922,6 +923,7 @@ ChinookAIUpdateModuleData::ChinookAIUpdateModuleData()
 		{ "WaitForRopesToDrop", INI::parseBool, 0, offsetof(ChinookAIUpdateModuleData, m_waitForRopesToDrop) },
 		{ "RotorWashParticleSystem", INI::parseAsciiString,	nullptr, offsetof( ChinookAIUpdateModuleData, m_rotorWashParticleSystem ) },
 		{ "UpgradedSupplyBoost", INI::parseInt, nullptr, offsetof( ChinookAIUpdateModuleData, m_upgradedSupplyBoost) },
+		{ "TransportOnly", INI::parseBool, nullptr, offsetof( ChinookAIUpdateModuleData, m_transportOnly ) },	// Tiberium Project
 
 		{ nullptr, nullptr, nullptr, 0 }
 	};
@@ -1015,6 +1017,10 @@ Bool ChinookAIUpdate::isCurrentlyFerryingSupplies() const
 //-------------------------------------------------------------------------------------------------
 Bool ChinookAIUpdate::isAvailableForSupplying() const
 {
+	// Tiberium Project: a transport only (Kane's Wrath's Ox and Carryalls) never ferries supplies
+	if (getChinookAIUpdateModuleData()->m_transportOnly)
+		return false;
+
 	if (!SupplyTruckAIUpdate::isAvailableForSupplying())
 		return false;
 

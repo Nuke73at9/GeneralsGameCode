@@ -56,6 +56,7 @@ public:
 	Bool							m_resetMoodCheckTimeOnExit;
 	Bool							m_destroyRidersWhoAreNotFreeToExit;
 	Bool							m_isDelayExitInAir;
+	Bool							m_leaveMapWhenEmpty;	///< Tiberium Project @feature once it has carried someone and is empty again, it leaves the map (Kane's Wrath's summoned transports)
 
 	TransportContainModuleData();
 
@@ -104,6 +105,7 @@ protected:
 
 	virtual void createPayload();
 	void letRidersUpgradeWeaponSet();
+	void leaveMapWhenEmpty();	///< Tiberium Project (LeaveMapWhenEmpty)
 
 	Bool m_payloadCreated;
 
@@ -111,5 +113,7 @@ private:
 
 	Int m_extraSlotsInUse;
 	UnsignedInt m_frameExitNotBusy;
+	Bool m_hasCarried;		///< Tiberium Project: someone has been inside (LeaveMapWhenEmpty)
+	Bool m_leavingMap;		///< Tiberium Project: on its way off the map
 
 };

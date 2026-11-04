@@ -37,6 +37,8 @@
 #include "GameClient/Drawable.h"
 #include "GameLogic/AI.h"
 #include "GameLogic/AIPathfind.h"
+#include "GameLogic/GameLogic.h"
+#include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
@@ -65,6 +67,7 @@ TransportContainModuleData::TransportContainModuleData()
 	m_healthRegen = 0.0f;
 	m_exitDelay = 0;
 	m_isDelayExitInAir = FALSE;
+	m_leaveMapWhenEmpty = FALSE;
 
 	//
 	// by default we say that transports can have infantry inside them, this will be totally
@@ -109,6 +112,7 @@ void TransportContainModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "ExitDelay",	INI::parseDurationUnsignedInt,		nullptr, offsetof( TransportContainModuleData, m_exitDelay ) },
 		{ "ArmedRidersUpgradeMyWeaponSet",	INI::parseBool,		nullptr, offsetof( TransportContainModuleData, m_armedRidersUpgradeWeaponSet ) },
 		{ "DelayExitInAir",	INI::parseBool,		nullptr, offsetof( TransportContainModuleData, m_isDelayExitInAir ) },
+		{ "LeaveMapWhenEmpty",	INI::parseBool,		nullptr, offsetof( TransportContainModuleData, m_leaveMapWhenEmpty ) },	// Tiberium Project
 
     { nullptr, nullptr, nullptr, 0 }
   };
@@ -137,6 +141,8 @@ TransportContain::TransportContain( Thing *thing, const ModuleData *moduleData )
 {
 	m_extraSlotsInUse = 0;
 	m_frameExitNotBusy = 0;
+	m_hasCarried = FALSE;
+	m_leavingMap = FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -281,6 +287,7 @@ void TransportContain::onContaining( Object *rider, Bool wasSelected )
 
 	// objects inside a transport are held
 	rider->setDisabled( DISABLED_HELD );
+	m_hasCarried = TRUE;	// Tiberium Project (LeaveMapWhenEmpty)
 
 	Int transportSlotCount = rider->getTransportSlotCount();
 
@@ -522,7 +529,69 @@ UpdateSleepTime TransportContain::update()
 			}
 		}
 	}
+	// Tiberium Project @feature empty again after carrying someone: off the map
+	if( moduleData && moduleData->m_leaveMapWhenEmpty )
+		leaveMapWhenEmpty();
+
 	return OpenContain::update(); //extend
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature LeaveMapWhenEmpty: once it has carried someone and is empty, with no one on
+	the way in or out, it heads for the nearest edge of the map and past it (as a cargo plane leaves), no
+	longer selectable, and is gone once it is off the map (Kane's Wrath's summoned transports, its
+	FlyOffMapOnEmpty). */
+//-------------------------------------------------------------------------------------------------
+void TransportContain::leaveMapWhenEmpty()
+{
+	Object *me = getObject();
+	AIUpdateInterface *ai = me->getAI();
+	if( ai == nullptr || me->isEffectivelyDead() || me->isDestroyed() )
+		return;
+	Bool start = FALSE;
+	if( !m_leavingMap )
+	{
+		if( !m_hasCarried || getContainCount() > 0 || hasObjectsWantingToEnterOrExit() )
+			return;
+		m_leavingMap = TRUE;
+		start = TRUE;
+		// (no one picks it to order it about: it is on its way)
+		me->setSelectable( FALSE );
+	}
+
+	// gone, once past the map's edge
+	Region3D map;
+	TheTerrainLogic->getExtentIncludingBorder( &map );
+	if( !map.isInRegion( me->getPosition()->asCoord2D() ) )
+	{
+		TheGameLogic->destroyObject( me );
+		return;
+	}
+
+	// (again each frame: a Chinook takes off on a locomotor of its own)
+	if( ai->getCurLocomotor() != nullptr )
+	{
+		ai->getCurLocomotor()->setAllowInvalidPosition( true );
+		ai->getCurLocomotor()->setUltraAccurate( true );
+	}
+	if( start || ai->isIdle() )
+	{
+		// to the nearest edge, and a little past the border
+		const Coord3D *pos = me->getPosition();
+		Coord3D to = *pos;
+		const Real PAST = 200.0f;
+		const Real toLoX = pos->x - map.lo.x, toHiX = map.hi.x - pos->x, toLoY = pos->y - map.lo.y, toHiY = map.hi.y - pos->y;
+		const Real nearest = min( min( toLoX, toHiX ), min( toLoY, toHiY ) );
+		if( nearest == toLoX )
+			to.x = map.lo.x - PAST;
+		else if( nearest == toHiX )
+			to.x = map.hi.x + PAST;
+		else if( nearest == toLoY )
+			to.y = map.lo.y - PAST;
+		else
+			to.y = map.hi.y + PAST;
+		ai->aiMoveToPosition( &to, CMD_FROM_AI );
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -703,7 +772,8 @@ void TransportContain::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	// Tiberium Project: 2: carried someone, leaving the map (LeaveMapWhenEmpty)
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -718,6 +788,13 @@ void TransportContain::xfer( Xfer *xfer )
 
 	// frame exit not busy
 	xfer->xferUnsignedInt( &m_frameExitNotBusy );
+
+	// Tiberium Project: LeaveMapWhenEmpty
+	if( version >= 2 )
+	{
+		xfer->xferBool( &m_hasCarried );
+		xfer->xferBool( &m_leavingMap );
+	}
 
 }
 

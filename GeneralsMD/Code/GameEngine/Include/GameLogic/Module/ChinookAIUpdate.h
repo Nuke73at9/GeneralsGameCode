@@ -58,6 +58,7 @@ public:
 	Real					m_minDropHeight;
 	Bool					m_waitForRopesToDrop;
 	Int						m_upgradedSupplyBoost;
+	Bool					m_transportOnly;	///< Tiberium Project @feature a transport only (Kane's Wrath's Ox and Carryalls): no supply runs, no supply cursor
 
 	ChinookAIUpdateModuleData();
 	static void buildFieldParse(MultiIniFieldParse& p);
@@ -100,6 +101,10 @@ public:
 	virtual Bool isCurrentlyFerryingSupplies() const override;
 
 	virtual Bool isIdle() const override;
+
+	// Tiberium Project @feature a transport only is no supply truck to anyone (docks, the cursor, the AI's count)
+	virtual SupplyTruckAIInterface* getSupplyTruckAIInterface() override { return getChinookAIUpdateModuleData()->m_transportOnly ? nullptr : SupplyTruckAIUpdate::getSupplyTruckAIInterface(); }
+	virtual const SupplyTruckAIInterface* getSupplyTruckAIInterface() const override { return getChinookAIUpdateModuleData()->m_transportOnly ? nullptr : SupplyTruckAIUpdate::getSupplyTruckAIInterface(); }
 
 	const ChinookAIUpdateModuleData* friend_getData() const { return getChinookAIUpdateModuleData(); }
 	void friend_setFlightStatus(ChinookFlightStatus a) { m_flightStatus = a; }
