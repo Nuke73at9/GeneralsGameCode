@@ -38,6 +38,7 @@ ToggleAbilityUpdate::ToggleAbilityUpdate( Thing *thing, const ModuleData* module
 	m_switching = FALSE;
 	m_switchEndFrame = 0;
 	m_revertFrame = 0;
+	m_heldNoAttack = FALSE;
 	setWakeFrame( getObject(), UPDATE_SLEEP_NONE );	// the first state's looks, once drawn
 }
 
@@ -74,6 +75,23 @@ void ToggleAbilityUpdate::beginSwitch()
 		if( ai != nullptr )
 			ai->aiIdle( CMD_FROM_AI );
 		me->clearAndSetModelConditionFlags( ModelConditionFlags(), switchingConditions( !m_toggled ) );
+		// Tiberium Project @bugfix and is held: no orders, no shots (C&C4's Zone Lancer fired its rifle all through
+		// its two seconds of deploying)
+		me->setDisabled( DISABLED_HELD );
+		// (its weapons' wind-up, cut short, shows no longer)
+		ModelConditionFlags windUp;
+		windUp.set( MODELCONDITION_PREATTACK_A );
+		windUp.set( MODELCONDITION_PREATTACK_B );
+		windUp.set( MODELCONDITION_PREATTACK_C );
+		windUp.set( MODELCONDITION_PREATTACK_D );
+		windUp.set( MODELCONDITION_PREATTACK_E );
+		windUp.set( MODELCONDITION_PREATTACK_F );
+		windUp.set( MODELCONDITION_PREATTACK_G );
+		windUp.set( MODELCONDITION_PREATTACK_H );
+		me->clearModelConditionFlags( windUp );
+		m_heldNoAttack = !me->testStatus( OBJECT_STATUS_NO_ATTACK );
+		if( m_heldNoAttack )
+			me->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_NO_ATTACK ) );
 	}
 	setWakeFrame( me, UPDATE_SLEEP_NONE );
 }
@@ -134,6 +152,12 @@ UpdateSleepTime ToggleAbilityUpdate::update()
 			return UPDATE_SLEEP( m_switchEndFrame - now );
 		me->clearAndSetModelConditionFlags( switchingConditions( !m_toggled ), ModelConditionFlags() );
 		m_switching = FALSE;
+		// (free again: Tiberium Project)
+		if( me->isDisabledByType( DISABLED_HELD ) )
+			me->clearDisabled( DISABLED_HELD );
+		if( m_heldNoAttack )
+			me->clearStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_NO_ATTACK ) );
+		m_heldNoAttack = FALSE;
 		m_toggled = !m_toggled;
 		applyState( m_toggled );
 		if( m_toggled && data->m_autoRevertTime > 0 )
@@ -161,10 +185,11 @@ void ToggleAbilityUpdate::crc( Xfer *xfer )
 // Xfer method
 // Version Info:
 // 1: Initial version
+// 2: Tiberium Project: whether it set NO_ATTACK for the switch
 //-------------------------------------------------------------------------------------------------
 void ToggleAbilityUpdate::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -175,6 +200,8 @@ void ToggleAbilityUpdate::xfer( Xfer *xfer )
 	xfer->xferBool( &m_switching );
 	xfer->xferUnsignedInt( &m_switchEndFrame );
 	xfer->xferUnsignedInt( &m_revertFrame );
+	if( version >= 2 )
+		xfer->xferBool( &m_heldNoAttack );
 }
 
 //-------------------------------------------------------------------------------------------------

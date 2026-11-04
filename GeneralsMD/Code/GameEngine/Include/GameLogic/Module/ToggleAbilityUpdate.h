@@ -137,6 +137,8 @@ public:
 	virtual SpecialPowerUpdateInterface* getSpecialPowerUpdateInterface() override { return this; }
 	virtual CommandOption getCommandOption() const override { return (CommandOption)0; }
 	virtual Bool isPowerCurrentlyInUse( const CommandButton *command = nullptr ) const override { return m_switching; }
+	// Tiberium Project: held while it switches (it neither moves nor fires), and still switching on
+	virtual DisabledMaskType getDisabledTypesToProcess() const override { return m_switching ? DISABLEDMASK_ALL : DISABLEDMASK_NONE; }
 
 	virtual UpdateSleepTime update() override;
 
@@ -151,5 +153,6 @@ private:
 	Bool m_switching;
 	UnsignedInt m_switchEndFrame;
 	UnsignedInt m_revertFrame;	///< when an auto-reverting second state ends (0: none)
+	Bool m_heldNoAttack;		///< Tiberium Project: it set NO_ATTACK for the switch (so clears it after)
 
 };
