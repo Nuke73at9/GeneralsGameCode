@@ -123,9 +123,11 @@ private:
 
 	Real getMaxDamage() const;
 	Bool takeHit( Object *victim, Object *source, DamageType type, Real amount );
+	void showDome();	///< Tiberium Project: SPHERE_MODULE_ACTIVE while it is up
 
 	Real m_damage;			///< what it has taken and not yet mended
 	Bool m_down;				///< brought down: back up once mended to RaiseAtPercent
+	Bool m_domeShown;		///< Tiberium Project: SPHERE_MODULE_ACTIVE set (the looks only, not saved)
 
 	static std::vector<ShieldSphereUpdate *> s_shields;		///< every one there is, in the order made
 

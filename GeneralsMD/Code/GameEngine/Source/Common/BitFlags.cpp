@@ -222,6 +222,7 @@ const char* const ModelConditionFlags::s_bitNameList[] =
 	"CLIFF_TRANSITION_MID",
 	"CLIFF_TRANSITION_LAND",
 	"ABOUT_TO_HIT",
+	"SPHERE_MODULE_ACTIVE",	// Tiberium Project
 
 
 	nullptr

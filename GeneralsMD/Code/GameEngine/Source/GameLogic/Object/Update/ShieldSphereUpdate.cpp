@@ -88,7 +88,8 @@ void ShieldSphereUpdateModuleData::buildFieldParse( MultiIniFieldParse& p )
 ShieldSphereUpdate::ShieldSphereUpdate( Thing *thing, const ModuleData* moduleData ) :
 	UpdateModule( thing, moduleData ),
 	m_damage( 0.0f ),
-	m_down( FALSE )
+	m_down( FALSE ),
+	m_domeShown( FALSE )
 {
 	s_shields.push_back( this );
 	if( getShieldSphereUpdateModuleData()->m_initiallyActive )
@@ -114,6 +115,7 @@ void ShieldSphereUpdate::upgradeImplementation()
 {
 	m_damage = 0.0f;
 	m_down = FALSE;
+	showDome();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -170,7 +172,25 @@ UpdateSleepTime ShieldSphereUpdate::update()
 	const Real most = getMaxDamage();
 	if( m_down && ( most <= 0.0f || m_damage <= most * ( 1.0f - d->m_raiseAtPercent ) ) )
 		m_down = FALSE;
+	showDome();
 	return UPDATE_SLEEP( SHIELD_MEND_FRAMES );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature the dome is drawn while the shield is up (SPHERE_MODULE_ACTIVE: C&C4's
+	Crawlers draw their bubble in it) */
+void ShieldSphereUpdate::showDome()
+{
+	Object *me = getObject();
+	const Bool up = isAlreadyUpgraded() && !m_down && !me->isEffectivelyDead();
+	if( up == m_domeShown || me->getDrawable() == nullptr )
+		return;	// (not drawn yet, as it is being made: its next update shows it)
+	m_domeShown = up;
+	// (the drawable's looks only: nothing in the logic reads it)
+	if( up )
+		me->setModelConditionState( MODELCONDITION_SPHERE_MODULE_ACTIVE );
+	else
+		me->clearModelConditionState( MODELCONDITION_SPHERE_MODULE_ACTIVE );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -229,6 +249,7 @@ Bool ShieldSphereUpdate::takeHit( Object *victim, Object *source, DamageType typ
 		{
 			m_down = TRUE;
 			m_damage = most;
+			showDome();
 			if( !d->m_absorbKillingBlow )
 				return FALSE;
 		}
@@ -289,4 +310,6 @@ void ShieldSphereUpdate::loadPostProcess()
 {
 	UpdateModule::loadPostProcess();
 	UpgradeMux::upgradeMuxLoadPostProcess();
+	m_domeShown = FALSE;	// (shown again as it is: Tiberium Project)
+	showDome();
 }

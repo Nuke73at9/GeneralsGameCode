@@ -296,6 +296,9 @@ enum ModelConditionFlagType CPP_11(: Int)
 	MODELCONDITION_CLIFF_TRANSITION_MID,
 	MODELCONDITION_CLIFF_TRANSITION_LAND,
 	MODELCONDITION_ABOUT_TO_HIT,
+	// Tiberium Project @feature SAGE 2's shield sphere is up (ShieldSphereUpdate): C&C4's Crawlers and
+	// structures show their dome
+	MODELCONDITION_SPHERE_MODULE_ACTIVE,
 //
 // Note: these values are saved in save files, so you MUST NOT REMOVE OR CHANGE
 // existing values!
