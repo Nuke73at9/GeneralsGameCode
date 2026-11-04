@@ -106,6 +106,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Object.h"
+#include "GameLogic/Module/CreateAndEnterObjectSpecialPower.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/CreateModule.h"
@@ -1912,6 +1913,9 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 	// Tiberium Project @feature a map without the skirmish AI's approach paths and base perimeters (C&C4's)
 	// gets them, from its starts and the ground the pathfinder now has (before the scripts and AIs start)
 	TheAI->prepareSkirmishMap();
+
+	// Tiberium Project: a squad's shared call for transport or dig-in starts afresh with each game
+	CreateAndEnterObjectSpecialPower::resetLastMade();
 
 	// update the loadscreen
 	updateLoadProgress(LOAD_PROGRESS_POST_PATHFINDER_NEW_MAP);
@@ -4147,6 +4151,10 @@ void GameLogic::update()
 	{
 		ThePartitionManager->UPDATE();
 	}
+
+	// Tiberium Project: the units sent into what a call for transport or a dig-in made this frame (placed in its
+	// cells now, so seen)
+	CreateAndEnterObjectSpecialPower::sendPendingRiders();
 
 	//
 	// End of frame clean-up

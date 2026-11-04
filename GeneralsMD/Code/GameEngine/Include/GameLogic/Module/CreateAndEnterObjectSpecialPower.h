@@ -19,8 +19,10 @@
 // FILE: CreateAndEnterObjectSpecialPower.h //////////////////////////////////
 // Tiberium Project @feature SAGE's CreateAndEnterObjectSpecialPower: the unit calls up an object and gets
 // into it. Kane's Wrath's call for transport makes an Ox or a Carryall above the unit, which lands and
-// picks it up (ChinookAIUpdate lands for whoever wants in); its infantry's dig in makes a foxhole where it
-// stands. The object is the OCL's first, its owner's.
+// picks it up (ChinookAIUpdate lands for whoever wants in); its infantry's dig in (a location power) makes a
+// foxhole at the spot, which they walk into. The object is the OCL's first, its owner's. In Zero Hour a
+// squad is its soldiers, each with the power: those told together (the same frame, player and power) share
+// what the first made while it has room, as Kane's Wrath's squad calls one transport.
 //
 //   Behavior = CreateAndEnterObjectSpecialPower ModuleTag_CallForTransport
 //     SpecialPowerTemplate = C4SP_SpecialPowerCallForTransportGDI
@@ -60,4 +62,14 @@ public:
 	// virtual destructor prototype defined by MemoryPoolObject
 
 	virtual void doSpecialPower( UnsignedInt commandOptions ) override;
+	virtual void doSpecialPowerAtLocation( const Coord3D *loc, Real angle, UnsignedInt commandOptions ) override;
+
+	/// a new game starts (GameLogic): forget the last squad's object
+	static void resetLastMade();
+	/// after the partition manager's update (GameLogic): the units sent into what was made this frame
+	static void sendPendingRiders();
+
+private:
+
+	void createAndEnter( const Coord3D *at, Bool atUnit, UnsignedInt commandOptions );
 };
