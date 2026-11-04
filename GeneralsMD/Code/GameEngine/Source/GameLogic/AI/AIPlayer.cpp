@@ -1007,6 +1007,23 @@ Bool AIPlayer::isSupplySourceSafe( Int minSupplies )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Tiberium Project @tweak an enemy's building that cannot fire (a power plant, a factory) does not make a
+	site unsafe: with bases side by side the AIs saw each other's and never built at all. Its defences and
+	any of its units still do. */
+//-------------------------------------------------------------------------------------------------
+class PartitionFilterRejectHarmlessStructures : public PartitionFilter
+{
+public:
+	virtual Bool allow( Object *objOther ) override
+	{
+		return !objOther->isKindOf( KINDOF_STRUCTURE ) || objOther->isAbleToAttack();
+	}
+#if defined(RTS_DEBUG)
+	virtual const char* debugGetName() override { return "PartitionFilterRejectHarmlessStructures"; }
+#endif
+};
+
+//-------------------------------------------------------------------------------------------------
 /** Is this location safe for building this thing? */
 //-------------------------------------------------------------------------------------------------
 Bool AIPlayer::isLocationSafe(const Coord3D *pos, const ThingTemplate *tthing )
@@ -1035,6 +1052,8 @@ Bool AIPlayer::isLocationSafe(const Coord3D *pos, const ThingTemplate *tthing )
 
 	PartitionFilterRejectByKindOf	filterDozer(MAKE_KINDOF_MASK(KINDOF_DOZER), KINDOFMASK_NONE);
 
+	PartitionFilterRejectHarmlessStructures filterHarmless;	// Tiberium Project
+
 	PartitionFilter *filters[16];
 	Int numFilters = 0;
 
@@ -1045,6 +1064,7 @@ Bool AIPlayer::isLocationSafe(const Coord3D *pos, const ThingTemplate *tthing )
 	filters[numFilters++] = &filterInsignificant;
 	filters[numFilters++] = &filterHarvesters;
 	filters[numFilters++] = &filterDozer;
+	filters[numFilters++] = &filterHarmless;
 	filters[numFilters] = nullptr;
 
 	Object *enemy = ThePartitionManager->getClosestObject(  pos, radius, FROM_BOUNDINGSPHERE_2D, filters );

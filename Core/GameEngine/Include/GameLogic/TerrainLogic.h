@@ -111,6 +111,8 @@ public:
 	WaypointID getID() const {return m_id; }
 	/// Get the waypoint's position
 	const Coord3D *getLocation() const { return &m_location;  }
+	/// Tiberium Project @feature a waypoint moved (a start spread from its neighbours, before anything is placed at it)
+	void setLocation( const Coord3D *loc ) { m_location = *loc; }
 	/// Get the waypoint's first path label
 	const AsciiString& getPathLabel1() const { return m_pathLabel1;  }
 	/// Get the waypoint's second path label
@@ -267,6 +269,12 @@ public:
 
 	/// Return true if the waypoint path containing pWay is labeled with the label.
 	virtual Bool isPurposeOfPath( Waypoint *pWay, AsciiString label );
+
+	/// Tiberium Project @feature a waypoint the engine makes for a map that lacks one (the skirmish AI's approach
+	/// paths): on the ground at loc, its path labelled label, its id after the map's own
+	Waypoint *addMadeWaypoint( const AsciiString &name, const Coord3D *loc, const AsciiString &label );
+	/// Tiberium Project @feature a one-way link between two made waypoints (from comes first on the path)
+	void linkMadeWaypoints( Waypoint *from, Waypoint *to );
 
 	/// Return the trigger area with the given name
 	virtual PolygonTrigger *getTriggerAreaByName( AsciiString name );

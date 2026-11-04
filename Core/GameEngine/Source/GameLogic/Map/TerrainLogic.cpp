@@ -1331,6 +1331,41 @@ void TerrainLogic::addWaypoint(MapObject *pMapObj)
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature a waypoint the engine makes (see TerrainLogic.h); the map's own come first, so
+	its id follows theirs and is the same each time the map loads (a saved game finds it again). */
+//-------------------------------------------------------------------------------------------------
+Waypoint *TerrainLogic::addMadeWaypoint( const AsciiString &name, const Coord3D *loc, const AsciiString &label )
+{
+	UnsignedInt id = 1;
+	for( Waypoint *way = getFirstWaypoint(); way; way = way->getNext() )
+	{
+		if( (UnsignedInt)way->getID() >= id )
+			id = (UnsignedInt)way->getID() + 1;
+	}
+	Coord3D at = *loc;
+	at.z = getGroundHeight( at.x, at.y );
+	Waypoint *made = newInstance(Waypoint)( (WaypointID)id, name, &at, label, AsciiString::TheEmptyString, AsciiString::TheEmptyString, FALSE );
+	made->setNext( m_waypointListHead );
+	m_waypointListHead = made;
+	return made;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature a one-way link between two made waypoints */
+//-------------------------------------------------------------------------------------------------
+void TerrainLogic::linkMadeWaypoints( Waypoint *from, Waypoint *to )
+{
+	if( from == nullptr || to == nullptr || from == to )
+		return;
+	for( Int i = 0; i < from->getNumLinks(); ++i )
+	{
+		if( from->getLink( i ) == to )
+			return;
+	}
+	from->addLink( to );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Links 2 waypoints. */
 //-------------------------------------------------------------------------------------------------
 void TerrainLogic::addWaypointLink(Int id1, Int id2)

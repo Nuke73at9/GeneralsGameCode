@@ -44,6 +44,11 @@
 #include "GameLogic/SidesList.h"
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/Weapon.h"
+#include "GameLogic/PolygonTrigger.h"	// Tiberium Project
+#include "GameLogic/Scripts.h"
+#include "GameLogic/TerrainLogic.h"
+#include "GameNetwork/NetworkDefs.h"
+#include "Common/TiberiumTest.h"
 
 extern void addIcon(const Coord3D *pos, Real width, Int numFramesDuration, RGBColor color);
 
@@ -435,6 +440,331 @@ AsciiString AI::getUnitStandIn( const AsciiString &name, Int slot ) const
 	if( it == m_aiData->m_unitStandIns.end() || it->second.empty() )
 		return name;
 	return it->second[ (size_t)( slot < 0 ? 0 : slot ) % it->second.size() ];
+}
+
+//--------------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the skirmish AI on a map that was not made for it
+//--------------------------------------------------------------------------------------------------------
+namespace
+{
+	/// the clear ground nearest pos within the map (the pathfinder's cells, in rings outward from it)
+	Bool nearestClearGround( Pathfinder *pathfinder, const Region3D &extent, Coord3D *pos )
+	{
+		const Real margin = PATHFIND_CELL_SIZE_F * 4.0f;
+		Coord3D at = *pos;
+		at.x = clamp( extent.lo.x + margin, at.x, extent.hi.x - margin );
+		at.y = clamp( extent.lo.y + margin, at.y, extent.hi.y - margin );
+		for( Int ring = 0; ring <= 40; ++ring )
+		{
+			for( Int dy = -ring; dy <= ring; ++dy )
+			{
+				for( Int dx = -ring; dx <= ring; ++dx )
+				{
+					if( ring > 0 && abs( dx ) != ring && abs( dy ) != ring )
+						continue;	// (the ring's edge only)
+					Coord3D p = at;
+					p.x += dx * PATHFIND_CELL_SIZE_F;
+					p.y += dy * PATHFIND_CELL_SIZE_F;
+					PathfindCell *cell = pathfinder->getCell( LAYER_GROUND, &p );
+					if( cell != nullptr && cell->getType() == PathfindCell::CELL_CLEAR && !TheTerrainLogic->isUnderwater( p.x, p.y ) )
+					{
+						*pos = p;
+						return TRUE;
+					}
+				}
+			}
+		}
+		return FALSE;
+	}
+
+	/// a point round the start: the way from it to the map's middle turned by degrees, at fraction of its length
+	Coord3D roundStart( const Coord3D &start, const Coord3D &middle, Real degrees, Real fraction )
+	{
+		const Real dx = middle.x - start.x, dy = middle.y - start.y;
+		const Real a = degrees * PI / 180.0f;
+		const Real c = WWMath::CosTrig( a ), s = WWMath::SinTrig( a );
+		Coord3D p = start;
+		p.x += ( dx * c - dy * s ) * fraction;
+		p.y += ( dx * s + dy * c ) * fraction;
+		return p;
+	}
+
+	/// the clear ground a ground unit reaches from a spot, within reach of it (the pathfinder's cells, flooded
+	/// outward through clear ones: a plateau the ramps do not reach is left out)
+	struct Reach
+	{
+		ICoord2D origin;			///< the window's first cell
+		Int size;					///< cells across it
+		std::vector<UnsignedByte> reached;
+
+		Bool has( Pathfinder *pathfinder, const Coord3D &pos ) const
+		{
+			ICoord2D c;
+			if( pathfinder->worldToCell( &pos, &c ) )
+				return FALSE;
+			const Int x = c.x - origin.x, y = c.y - origin.y;
+			return x >= 0 && y >= 0 && x < size && y < size && reached[ y * size + x ] != 0;
+		}
+
+		void flood( Pathfinder *pathfinder, const Coord3D &from, Real reach )
+		{
+			ICoord2D c;
+			pathfinder->worldToCell( &from, &c );
+			const Int half = (Int)( reach / PATHFIND_CELL_SIZE_F );
+			size = 2 * half + 1;
+			origin.x = c.x - half;
+			origin.y = c.y - half;
+			reached.assign( (size_t)size * size, 0 );
+			PathfindCell *first = pathfinder->getCell( LAYER_GROUND, c.x, c.y );
+			if( first == nullptr || first->getType() != PathfindCell::CELL_CLEAR )
+				return;
+			std::vector<Int> queue;
+			queue.push_back( half * size + half );
+			reached[ half * size + half ] = 1;
+			static const Int STEPS[4][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
+			for( size_t q = 0; q < queue.size(); ++q )
+			{
+				const Int x = queue[q] % size, y = queue[q] / size;
+				for( Int d = 0; d < 4; ++d )
+				{
+					const Int nx = x + STEPS[d][0], ny = y + STEPS[d][1];
+					if( nx < 0 || ny < 0 || nx >= size || ny >= size || reached[ ny * size + nx ] != 0 )
+						continue;
+					PathfindCell *cell = pathfinder->getCell( LAYER_GROUND, origin.x + nx, origin.y + ny );
+					if( cell == nullptr || cell->getType() != PathfindCell::CELL_CLEAR )
+						continue;
+					reached[ ny * size + nx ] = 1;
+					queue.push_back( ny * size + nx );
+				}
+			}
+		}
+	};
+
+	/// room for a base at pos: the ground within radius all clear and reached (sampled every two cells), and
+	/// within the map by margin
+	Bool roomForBase( Pathfinder *pathfinder, const Region3D &extent, const Coord3D &pos, Real radius, Real margin, const Reach &reach )
+	{
+		if( pos.x < extent.lo.x + margin || pos.x > extent.hi.x - margin || pos.y < extent.lo.y + margin || pos.y > extent.hi.y - margin )
+			return FALSE;
+		const Real step = PATHFIND_CELL_SIZE_F * 2.0f;
+		for( Real dy = -radius; dy <= radius; dy += step )
+		{
+			for( Real dx = -radius; dx <= radius; dx += step )
+			{
+				if( dx * dx + dy * dy > radius * radius )
+					continue;
+				Coord3D p = pos;
+				p.x += dx;
+				p.y += dy;
+				if( !reach.has( pathfinder, p ) || TheTerrainLogic->isUnderwater( p.x, p.y ) )
+					return FALSE;
+			}
+		}
+		return TRUE;
+	}
+}
+
+//--------------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature The skirmish scripts' teams go to an enemy's base along its approach paths
+	(Center, Flank and Backdoor, numbered for the base's start) and watch two areas round each base
+	(InnerPerimeter and OuterPerimeter); a team whose path is not on the map does nothing. C&C4's maps have
+	only their starts, so the AI built and never attacked. A start without them gets them here: the Center
+	path from the map's middle to it, the Flank and Backdoor paths round either side of it, and two rings
+	round it (a third and a half of the way to the nearest other start, within limits). Each point is moved
+	to the clear ground nearest it. Made from the map alone (its starts, extent and ground), the same each
+	time it loads; a map that has them keeps its own. */
+//--------------------------------------------------------------------------------------------------------
+void AI::prepareSkirmishMap()
+{
+	if( TheTerrainLogic == nullptr || m_pathfinder == nullptr || TheGameLogic == nullptr )
+		return;
+	// a campaign's (and a Challenge's) maps and the shell map are played by their own scripts
+	if( TheGameLogic->getGameMode() == GAME_SINGLE_PLAYER || TheGameLogic->getGameMode() == GAME_SHELL )
+		return;
+
+	// the starts (Player_1_Start ...: numbered from 1, as the paths are)
+	struct Start { Int number; Coord3D pos; Waypoint *way; };
+	std::vector<Start> starts;
+	for( Int i = 1; i <= MAX_SLOTS; ++i )
+	{
+		AsciiString name;
+		name.format( "Player_%d_Start", i );
+		Waypoint *way = TheTerrainLogic->getWaypointByName( name );
+		if( way == nullptr )
+			continue;
+		Start s;
+		s.number = i;
+		s.pos = *way->getLocation();
+		s.way = way;
+		starts.push_back( s );
+	}
+	if( starts.size() < 2 )
+		return;
+
+	Region3D extent;
+	TheTerrainLogic->getMaximumPathfindExtent( &extent );
+	if( extent.hi.x <= extent.lo.x || extent.hi.y <= extent.lo.y )
+		return;
+	Coord3D middle;
+	middle.x = ( extent.lo.x + extent.hi.x ) * 0.5f;
+	middle.y = ( extent.lo.y + extent.hi.y ) * 0.5f;
+	middle.z = 0.0f;
+
+	// Starts too close for a base each (C&C4's maps: five side by side in two corners, for its Crawlers) are
+	// spread before anything is placed at them. A Zero Hour base needs room: a skirmish AI builds nothing
+	// within its safe radius of an enemy's buildings, and its build list reaches a few hundred feet from its
+	// start, so with ten players side by side only the two at the ends of each row ever built. Each start in
+	// turn moves to the nearest ground with room for a base, as far from the starts before it as a base and
+	// its neighbour's need, keeping to its ground (where a vehicle drives to from it); the first stays. A
+	// map whose starts are all a base apart (Zero Hour's) keeps them where they are.
+	const Real CROWDED = 350.0f;		// starts closer than this: bases on top of one another
+	const Real SPACING = 950.0f;		// what a spread start keeps from the others
+	const Real BASE_ROOM = 120.0f;		// the clear ground round it
+	Bool crowded = FALSE;
+	for( size_t i = 0; i < starts.size() && !crowded; ++i )
+		for( size_t j = i + 1; j < starts.size() && !crowded; ++j )
+		{
+			const Real dx = starts[i].pos.x - starts[j].pos.x, dy = starts[i].pos.y - starts[j].pos.y;
+			crowded = dx * dx + dy * dy < CROWDED * CROWDED;
+		}
+	Int moved = 0;
+	for( size_t k = 1; crowded && k < starts.size(); ++k )
+	{
+		Start &start = starts[k];
+		Bool room = TRUE;
+		for( size_t j = 0; j < k && room; ++j )
+		{
+			const Real dx = starts[j].pos.x - start.pos.x, dy = starts[j].pos.y - start.pos.y;
+			room = dx * dx + dy * dy >= SPACING * SPACING;
+		}
+		if( room )
+			continue;
+		// (the ground it can reach: the whole search, a start's width more)
+		Reach reach;
+		reach.flood( m_pathfinder, start.pos, 4200.0f );
+		// rings outward, each from the way to the map's middle and turning either way in turn
+		Real ux = middle.x - start.pos.x, uy = middle.y - start.pos.y;
+		const Real length = WWMath::SqrtfOrigin( ux * ux + uy * uy );
+		if( length > 1.0f ) { ux /= length; uy /= length; } else { ux = 1.0f; uy = 0.0f; }
+		Bool found = FALSE;
+		Coord3D best = start.pos;
+		for( Real radius = 50.0f; radius <= 4000.0f && !found; radius += 50.0f )
+		{
+			const Int around = max( 8, (Int)( 2.0f * PI * radius / 60.0f ) );
+			for( Int n = 0; n < around && !found; ++n )
+			{
+				const Int side = ( n & 1 ) ? 1 : -1;
+				const Real a = side * (Real)( ( n + 1 ) / 2 ) * 2.0f * PI / around;
+				const Real c = WWMath::CosTrig( a ), s = WWMath::SinTrig( a );
+				Coord3D at = start.pos;
+				at.x += ( ux * c - uy * s ) * radius;
+				at.y += ( ux * s + uy * c ) * radius;
+				Bool apart = TRUE;
+				for( size_t j = 0; j < k && apart; ++j )
+				{
+					const Real dx = starts[j].pos.x - at.x, dy = starts[j].pos.y - at.y;
+					apart = dx * dx + dy * dy >= SPACING * SPACING;
+				}
+				if( apart && roomForBase( m_pathfinder, extent, at, BASE_ROOM, 300.0f, reach ) )
+				{
+					best = at;
+					found = TRUE;
+				}
+			}
+		}
+		if( !found )
+			continue;
+		best.z = TheTerrainLogic->getGroundHeight( best.x, best.y );
+		start.pos = best;
+		start.way->setLocation( &best );
+		++moved;
+	}
+	if( moved > 0 )
+		DEBUG_LOG(( "Tiberium Project: %d of the map's %d starts spread out, a base apart", moved, (Int)starts.size() ));
+	if( TiberiumTest::isActive() )
+	{
+		PathfindCell *first = m_pathfinder->getCell( LAYER_GROUND, &starts[0].pos );
+		TiberiumTest::log( "skirmish map: %d starts, %s, %d spread out (the first start's ground: type %d zone %d)",
+			(Int)starts.size(), crowded ? "crowded" : "a base apart", moved, first != nullptr ? (Int)first->getType() : -1,
+			first != nullptr ? (Int)first->getZone() : -1 );
+		for( size_t k = 0; k < starts.size(); ++k )
+			TiberiumTest::log( "skirmish map: start %d at %.0f %.0f", starts[k].number, starts[k].pos.x, starts[k].pos.y );
+	}
+
+	// the paths: degrees off the way to the middle, and how far out (a fraction of the way), first to last
+	struct Step { Real degrees; Real fraction; };
+	static const Step CENTER[] = { { 0, 1.0f }, { 0, 0.65f }, { 0, 0.4f }, { 0, 0.2f }, { 0, 0.05f } };
+	static const Step FLANK[] = { { 50, 0.95f }, { 42, 0.7f }, { 30, 0.45f }, { 15, 0.22f }, { 0, 0.05f } };
+	static const Step BACKDOOR[] = { { -50, 0.95f }, { -42, 0.7f }, { -30, 0.45f }, { -15, 0.22f }, { 0, 0.05f } };
+	struct Path { const char *label; const Step *steps; Int count; };
+	static const Path PATHS[] = {
+		{ SKIRMISH_CENTER, CENTER, ARRAY_SIZE( CENTER ) },
+		{ SKIRMISH_FLANK, FLANK, ARRAY_SIZE( FLANK ) },
+		{ SKIRMISH_BACKDOOR, BACKDOOR, ARRAY_SIZE( BACKDOOR ) } };
+
+	Int madePaths = 0, madeAreas = 0;
+	for( size_t k = 0; k < starts.size(); ++k )
+	{
+		const Start &start = starts[k];
+		for( Int p = 0; p < (Int)ARRAY_SIZE( PATHS ); ++p )
+		{
+			AsciiString label;
+			label.format( "%s%d", PATHS[p].label, start.number );
+			if( TheTerrainLogic->getClosestWaypointOnPath( &start.pos, label ) != nullptr )
+				continue;	// (the map's own)
+			Waypoint *previous = nullptr;
+			for( Int i = 0; i < PATHS[p].count; ++i )
+			{
+				Coord3D at = roundStart( start.pos, middle, PATHS[p].steps[i].degrees, PATHS[p].steps[i].fraction );
+				if( !nearestClearGround( m_pathfinder, extent, &at ) )
+					continue;
+				AsciiString name;
+				name.format( "TiberiumAI_%s_%d", label.str(), i + 1 );
+				Waypoint *way = TheTerrainLogic->addMadeWaypoint( name, &at, label );
+				TheTerrainLogic->linkMadeWaypoints( previous, way );
+				previous = way;
+			}
+			++madePaths;
+		}
+
+		// the rings: a third and a half of the way to the nearest other start, within limits
+		Real nearest = HUGE_DIST;
+		for( size_t j = 0; j < starts.size(); ++j )
+		{
+			if( j == k )
+				continue;
+			const Real dx = starts[j].pos.x - start.pos.x, dy = starts[j].pos.y - start.pos.y;
+			nearest = min( nearest, WWMath::SqrtfOrigin( dx * dx + dy * dy ) );
+		}
+		for( Int ring = 0; ring < 2; ++ring )
+		{
+			AsciiString name;
+			name.format( "%s%d", ring == 0 ? INNER_PERIMETER : OUTER_PERIMETER, start.number );
+			if( TheTerrainLogic->getTriggerAreaByName( name ) != nullptr )
+				continue;
+			const Real radius = ring == 0 ? clamp( 200.0f, nearest * 0.33f, 400.0f ) : clamp( 350.0f, nearest * 0.5f, 700.0f );
+			const Int corners = 16;
+			PolygonTrigger *area = newInstance(PolygonTrigger)( corners );
+			area->setTriggerName( name );
+			area->setShouldRender( FALSE );
+			for( Int c = 0; c < corners; ++c )
+			{
+				const Real a = c * 2.0f * PI / corners;
+				ICoord3D point;
+				point.x = REAL_TO_INT_FLOOR( clamp( extent.lo.x, start.pos.x + WWMath::CosTrig( a ) * radius, extent.hi.x ) );
+				point.y = REAL_TO_INT_FLOOR( clamp( extent.lo.y, start.pos.y + WWMath::SinTrig( a ) * radius, extent.hi.y ) );
+				point.z = 0;
+				area->addPoint( point );
+			}
+			PolygonTrigger::addPolygonTrigger( area );
+			++madeAreas;
+		}
+	}
+	if( madePaths > 0 || madeAreas > 0 )
+		DEBUG_LOG(( "Tiberium Project: the map's %d starts got %d approach paths and %d base areas for the skirmish AI",
+			(Int)starts.size(), madePaths, madeAreas ));
+	if( TiberiumTest::isActive() )
+		TiberiumTest::log( "skirmish map: made %d approach paths and %d base areas", madePaths, madeAreas );
 }
 
 //-------------------------------------------------------------------------------------------------

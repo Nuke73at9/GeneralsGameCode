@@ -1909,6 +1909,10 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 	// Note that it is important that the pathfinder be called before the map objects are loaded.
 	TheAI->pathfinder()->newMap();
 
+	// Tiberium Project @feature a map without the skirmish AI's approach paths and base perimeters (C&C4's)
+	// gets them, from its starts and the ground the pathfinder now has (before the scripts and AIs start)
+	TheAI->prepareSkirmishMap();
+
 	// update the loadscreen
 	updateLoadProgress(LOAD_PROGRESS_POST_PATHFINDER_NEW_MAP);
 

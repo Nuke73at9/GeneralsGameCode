@@ -302,6 +302,10 @@ public:
 	/// Tiberium Project @feature the unit an AI team builds for name in its slot-th slot (itself when none stands in)
 	AsciiString getUnitStandIn( const AsciiString &name, Int slot ) const;
 
+	/// Tiberium Project @feature a map without the skirmish AI's approach paths and base perimeters (C&C4's:
+	/// only its starts) gets them, made from its starts and ground (after the pathfinder has the map)
+	void prepareSkirmishMap();
+
 protected:
 	Pathfinder *m_pathfinder;							///< the pathfinding system
 	std::list<AIGroup *> m_groupList;			///< the list of AIGroups
