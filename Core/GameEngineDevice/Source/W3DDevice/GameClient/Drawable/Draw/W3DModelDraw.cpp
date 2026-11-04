@@ -4131,7 +4131,9 @@ void W3DModelDraw::reactToTransformChange( const Matrix3D* oldMtx,
 		m_renderObject->Set_Transform(mtx);
 	}
 
-	if (m_trackRenderObject)
+	// Abram's Personal Test @bugfix a model with no object (a unit's model following the cursor, the cheats'
+	// spawn menu) lays no tracks: the track code read the missing object and crashed
+	if (m_trackRenderObject && getDrawable()->getObject() != nullptr)
 	{
 		Object *obj = getDrawable()->getObject();
 		const Coord3D* pos = getDrawable()->getPosition();
