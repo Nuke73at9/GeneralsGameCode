@@ -196,6 +196,9 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "FireOCL",										parseAllVetLevelsAsciiString,					nullptr,							offsetof(WeaponTemplate, m_fireOCLNames) },
 	{ "TargetOCL",									INI::parseAsciiString,								nullptr,							offsetof(WeaponTemplate, m_targetOCLName) },	// Tiberium Project
 	{ "AttributeModifier",					AttributeModifierStore::parseModifierName,	nullptr,				offsetof(WeaponTemplate, m_victimModifier) },	// Tiberium Project
+	{ "FollowUp",									WeaponTemplate::parseFollowUp,						nullptr,							0 },	// Tiberium Project
+	{ "VictimKindOf",								KindOfMaskType::parseFromINI,						nullptr,							offsetof(WeaponTemplate, m_victimKindOf) },	// Tiberium Project
+	{ "VictimForbiddenKindOf",						KindOfMaskType::parseFromINI,						nullptr,							offsetof(WeaponTemplate, m_victimForbiddenKindOf) },	// Tiberium Project
 	{ "VictimFX",										INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[0]) },	// Tiberium Project
 	{ "VictimFXInfantry",						INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[1]) },	// Tiberium Project
 	{ "VictimFXStructure",					INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[2]) },	// Tiberium Project
@@ -589,6 +592,35 @@ Bool WeaponTemplate::isContactWeapon() const
 
 //-------------------------------------------------------------------------------------------------
 Real WeaponTemplate::estimateWeaponTemplateDamage(
+	const Object *sourceObj,
+	const Object *victimObj,
+	const Coord3D* victimPos,
+	const WeaponBonus& bonus
+) const
+{
+	// Tiberium Project @feature its own damage where it may hurt the victim's kind, and its follow-ups' (a weapon whose
+	// damage comes later or over time is still one that hurts: C&C4's depth charges, its flames)
+	Real total = (victimObj == nullptr || isVictimKindAllowed(victimObj)) ? estimateOwnDamage(sourceObj, victimObj, victimPos, bonus) : 0.0f;
+	for (size_t i = 0; i < m_followUps.size() && TheWeaponStore != nullptr; ++i)
+	{
+		const WeaponTemplate *weapon = TheWeaponStore->findWeaponTemplate(m_followUps[i].m_weaponName);
+		if (weapon != nullptr && weapon != this && (victimObj == nullptr || weapon->isVictimKindAllowed(victimObj)))
+			total += m_followUps[i].m_count * weapon->estimateOwnDamage(sourceObj, victimObj, victimPos, bonus);
+	}
+	return total;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature
+Bool WeaponTemplate::isVictimKindAllowed(const Object *victim) const
+{
+	if (m_victimKindOf.any() && !victim->isAnyKindOf(m_victimKindOf))
+		return false;
+	return !victim->isAnyKindOf(m_victimForbiddenKindOf);
+}
+
+//-------------------------------------------------------------------------------------------------
+Real WeaponTemplate::estimateOwnDamage(
 	const Object *sourceObj,
 	const Object *victimObj,
 	const Coord3D* victimPos,
@@ -1361,6 +1393,75 @@ void WeaponTemplate::processHistoricDamage(const Object* source, const Coord3D* 
 #endif
 
 //-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature FollowUp = Weapon:<name> Delay:<ms> Count:<n> Interval:<ms> (Count and Interval
+// may be left out: once)
+//-------------------------------------------------------------------------------------------------
+void WeaponTemplate::parseFollowUp( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ )
+{
+	WeaponTemplate* self = (WeaponTemplate*)instance;
+	WeaponFollowUp f;
+	f.m_weaponName = INI::getNextSubToken( "Weapon" );
+	f.m_delay = (UnsignedInt)REAL_TO_INT_CEIL( ConvertDurationFromMsecsToFrames( INI::scanReal( INI::getNextSubToken( "Delay" ) ) ) );
+	f.m_count = 1;
+	f.m_interval = 0;
+	const char *token = ini->getNextTokenOrNull( ini->getSepsColon() );
+	while( token != nullptr )
+	{
+		const char *value = ini->getNextToken( ini->getSepsColon() );
+		if( stricmp( token, "Count" ) == 0 )
+			f.m_count = max( 1, INI::scanInt( value ) );
+		else if( stricmp( token, "Interval" ) == 0 )
+			f.m_interval = (UnsignedInt)REAL_TO_INT_CEIL( ConvertDurationFromMsecsToFrames( INI::scanReal( value ) ) );
+		else
+			throw INI_INVALID_DATA;
+		token = ini->getNextTokenOrNull( ini->getSepsColon() );
+	}
+	self->m_followUps.push_back( f );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the further damage a weapon's sets off: each FollowUp weapon's, where this one
+// lands (on its target, which it follows), now or after its delay (through the delayed damage list)
+//-------------------------------------------------------------------------------------------------
+void WeaponTemplate::scheduleFollowUps(ObjectID sourceID, const Object *primaryVictim, const Coord3D *pos, const WeaponBonus& bonus) const
+{
+	static Int s_depth = 0;	// (a weapon whose follow-up follows up on it: a few rounds at most)
+	if (TheWeaponStore == nullptr || pos == nullptr || s_depth >= 4)
+		return;
+	// a projectile's further damage is its launcher's: the projectile is gone by then, and the damage of
+	// one with no source reaches friends too
+	ObjectID owner = sourceID;
+	const Object *source = TheGameLogic->findObjectByID(sourceID);
+	if (source != nullptr && source->isKindOf(KINDOF_PROJECTILE) && source->getProducerID() != INVALID_ID)
+		owner = source->getProducerID();
+	const ObjectID victimID = primaryVictim != nullptr ? primaryVictim->getID() : INVALID_ID;
+	const Coord3D at = *pos;
+	const UnsignedInt now = TheGameLogic->getFrame();
+	++s_depth;
+	for (size_t i = 0; i < m_followUps.size(); ++i)
+	{
+		const WeaponFollowUp &f = m_followUps[i];
+		const WeaponTemplate *weapon = TheWeaponStore->findWeaponTemplate(f.m_weaponName);
+		if (weapon == nullptr || weapon == this)
+			continue;
+		// a damage over time does not stack from one source on one target: hit again, it starts over (C&C4's
+		// fire fields burn at their own rate, not one more for each time they fire)
+		if (f.m_count > 1)
+			TheWeaponStore->cancelDelayedDamage(weapon, owner, victimID);
+		for (Int k = 0; k < f.m_count; ++k)
+		{
+			const UnsignedInt when = now + f.m_delay + (UnsignedInt)k * f.m_interval;
+			if (when <= now)
+				weapon->dealDamageInternal(owner, victimID, &at, bonus, FALSE);
+			else
+				TheWeaponStore->setDelayedDamage(weapon, &at, when, owner, victimID, bonus);
+		}
+	}
+	--s_depth;
+}
+
+//-------------------------------------------------------------------------------------------------
 void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, const Coord3D *pos, const WeaponBonus& bonus, Bool isProjectileDetonation) const
 {
 	if (sourceID == 0)	// must have a source
@@ -1404,6 +1505,10 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 		Object *curVictim;
 		Real curVictimDistSqr;
 
+		// Tiberium Project @feature the further damage this one sets off (FollowUp)
+		if (!m_followUps.empty())
+			scheduleFollowUps(sourceID, primaryVictim, pos, bonus);
+
 		Real primaryRadius = getPrimaryDamageRadius(bonus);
 		Real secondaryRadius = getSecondaryDamageRadius(bonus);
 		Real primaryDamage = getPrimaryDamage(bonus);
@@ -1446,6 +1551,10 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 
 		for (; curVictim != nullptr; curVictim = iter ? iter->nextWithNumeric(&curVictimDistSqr) : nullptr)
 		{
+			// Tiberium Project @feature only the kinds it names, none it forbids (C&C4's nuggets' object filters)
+			if (!isVictimKindAllowed(curVictim))
+				continue;
+
 			Bool killSelf = false;
 			if (source != nullptr)
 			{
@@ -1764,6 +1873,12 @@ void WeaponStore::update()
 {
 	for (std::list<WeaponDelayedDamageInfo>::iterator ddi = m_weaponDDI.begin(); ddi != m_weaponDDI.end(); )
 	{
+		// Tiberium Project: called off (cancelDelayedDamage)
+		if (ddi->m_delayedWeapon == nullptr)
+		{
+			ddi = m_weaponDDI.erase(ddi);
+			continue;
+		}
 		UnsignedInt curFrame = TheGameLogic->getFrame();
 		if (curFrame >= ddi->m_delayDamageFrame)
 		{
@@ -1827,6 +1942,17 @@ void WeaponStore::setDelayedDamage(const WeaponTemplate *weapon, const Coord3D* 
 	wi.m_delayIntendedVictimID = victimID;
 	wi.m_bonus = bonus;
 	m_weaponDDI.push_back(wi);
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature (marked here, gone at the next update: the list may be part way through one)
+void WeaponStore::cancelDelayedDamage(const WeaponTemplate *weapon, ObjectID sourceID, ObjectID victimID)
+{
+	for (std::list<WeaponDelayedDamageInfo>::iterator ddi = m_weaponDDI.begin(); ddi != m_weaponDDI.end(); ++ddi)
+	{
+		if (ddi->m_delayedWeapon == weapon && ddi->m_delaySourceID == sourceID && ddi->m_delayIntendedVictimID == victimID)
+			ddi->m_delayedWeapon = nullptr;
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

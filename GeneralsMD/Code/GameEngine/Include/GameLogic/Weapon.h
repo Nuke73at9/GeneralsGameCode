@@ -339,6 +339,19 @@ struct HistoricWeaponDamageInfo
 typedef std::list<HistoricWeaponDamageInfo> HistoricWeaponDamageList;
 
 //-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature a weapon's further damage (FollowUp = Weapon:<name> Delay:<ms> Count:<n>
+	Interval:<ms>): the named weapon's damage dealt where this one's lands (on its target, if it has one),
+	after Delay, Count times, Interval apart. C&C4's weapons carry several damage nuggets: a second hit, a
+	delayed blast, damage over time */
+struct WeaponFollowUp
+{
+	AsciiString m_weaponName;		///< found when it is due (the weapons it names may come later in the files)
+	UnsignedInt m_delay;			///< frames after the damage
+	Int m_count;					///< times
+	UnsignedInt m_interval;			///< frames between them
+};
+
 class WeaponTemplate : public MemoryPoolObject
 {
 	friend class WeaponStore;
@@ -452,6 +465,7 @@ public:
 	const FXList* getProjectileDetonateFX(VeterancyLevel v) const { return m_projectileDetonateFXs[v]; }
 	const ObjectCreationList* getFireOCL(VeterancyLevel v) const { return m_fireOCLs[v]; }
 	const ObjectCreationList* getTargetOCL() const { return m_targetOCL; }	///< Tiberium Project
+	const std::vector<WeaponFollowUp>& getFollowUps() const { return m_followUps; }	///< Tiberium Project
 	const ObjectCreationList* getProjectileDetonationOCL(VeterancyLevel v) const { return m_projectileDetonationOCLs[v]; }
 	const ParticleSystemTemplate* getProjectileExhaust(VeterancyLevel v) const { return m_projectileExhausts[v]; }
 
@@ -492,6 +506,13 @@ private:
 	static void parseWeaponBonusSet( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ );
 	static void parseScatterTarget( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ );
 	static void parseShotDelay( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ );
+	static void parseFollowUp( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ );	///< Tiberium Project
+	/// Tiberium Project @feature the further damage this weapon's sets off (FollowUp)
+	void scheduleFollowUps(ObjectID sourceID, const Object *primaryVictim, const Coord3D *pos, const WeaponBonus& bonus) const;
+	/// Tiberium Project @feature whether its damage reaches the victim's kind (VictimKindOf, VictimForbiddenKindOf)
+	Bool isVictimKindAllowed(const Object *victim) const;
+	/// the damage of its own (estimateWeaponTemplateDamage adds its follow-ups': Tiberium Project)
+	Real estimateOwnDamage(const Object *sourceObj, const Object *victimObj, const Coord3D* victimPos, const WeaponBonus& bonus) const;
 
 	static const FieldParse TheWeaponTemplateFieldParseTable[];		///< the parse table for INI definition
 
@@ -535,6 +556,9 @@ private:
 	AsciiString m_targetOCLName;												///< Tiberium Project: OCL made where the weapon's damage lands
 	const ObjectCreationList* m_targetOCL;										///< Tiberium Project: post-loaded m_targetOCLName
 	NameKeyType m_victimModifier;													///< Tiberium Project: an attribute modifier put on each object the damage reaches (C&C4's AttributeModifierNugget)
+	std::vector<WeaponFollowUp> m_followUps;										///< Tiberium Project: the further damage it sets off (FollowUp)
+	KindOfMaskType m_victimKindOf;												///< Tiberium Project: its damage reaches only these kinds (any of them; none: all)
+	KindOfMaskType m_victimForbiddenKindOf;										///< Tiberium Project: and none of these
 	const FXList* m_victimFX[3];													///< Tiberium Project: the hit shown on each object the damage reaches (C&C4's DamageFX): anything, a soldier, a structure
 	const FXList* m_fireFXs[LEVEL_COUNT];															///< weapon is fired fx
 	const FXList* m_projectileDetonateFXs[LEVEL_COUNT];								///< if we have a projectile, fx for projectile blowing up
@@ -875,6 +899,9 @@ protected:
 	void deleteAllDelayedDamage();
 	void resetWeaponTemplates();
 	void setDelayedDamage(const WeaponTemplate *weapon, const Coord3D* pos, UnsignedInt whichFrame, ObjectID sourceID, ObjectID victimID, const WeaponBonus& bonus);
+	/// Tiberium Project @feature the delayed damage of a weapon from a source on a victim called off (a damage over time
+	/// started over)
+	void cancelDelayedDamage(const WeaponTemplate *weapon, ObjectID sourceID, ObjectID victimID);
 
 private:
 
