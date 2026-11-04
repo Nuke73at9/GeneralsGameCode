@@ -2792,6 +2792,38 @@ void W3DModelDraw::stopClientParticleSystems()
 	DANGER WARNING READ ME
 	DANGER WARNING READ ME
 */
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @bugfix a turret bone turns about the object's axis (up for its turn, across for its pitch),
+// whatever way its own axes lie: about its own axis that is the object's at rest. C&C4's and Kane's Wrath's
+// Juggernauts' pitch bones lie a third of a turn round, so pitching about their own across axis spun the gun
+// head round its barrel. A bone whose axes are the object's turns as before.
+//-------------------------------------------------------------------------------------------------
+static Matrix3D turretBoneRotation( const HTreeClass *tree, Int bone, const Vector3 &objectAxis, Real angle )
+{
+	Vector3 axis = objectAxis;
+	if( tree != nullptr && bone > 0 && bone < tree->Num_Pivots() )
+	{
+		// the bone's rest pose in the object: its parents' rest poses, the root's first
+		Matrix3D rest( 1 );
+		for( Int b = bone, guard = 0; b > 0 && guard < 64; b = tree->Get_Parent_Index( b ), ++guard )
+		{
+			Matrix3D up;
+			Matrix3D::Multiply( tree->Get_Base_Transform( b ), rest, &up );
+			rest = up;
+		}
+		Vector3 local;
+		Matrix3D::Inverse_Rotate_Vector( rest, objectAxis, &local );
+		if( local.Length2() > 0.0001f )
+		{
+			local.Normalize();
+			axis = local;
+		}
+	}
+	Matrix3D out( 1 );
+	out.Set( axis, angle );
+	return out;
+}
+
 void W3DModelDraw::handleClientTurretPositioning()
 {
 	if (!m_curState || !(m_curState->m_validStuff & ModelConditionInfo::TURRETS_VALID))
@@ -2853,8 +2885,8 @@ void W3DModelDraw::handleClientTurretPositioning()
 					if (parentSlot >= 0)
 						turretAngle -= drawnAngle[parentSlot];
 				}
-				Matrix3D turretXfrm(1);
-				turretXfrm.Rotate_Z(turretAngle);
+				// (about the object's up axis, however the bone lies: Tiberium Project)
+				const Matrix3D turretXfrm = turretBoneRotation( tree, tur.m_turretAngleBone, Vector3( 0.0f, 0.0f, 1.0f ), turretAngle );
 				if (m_renderObject)
 				{
 					m_renderObject->Capture_Bone( tur.m_turretAngleBone );
@@ -2862,7 +2894,7 @@ void W3DModelDraw::handleClientTurretPositioning()
 					if (tur.m_twinAngleBone != 0)	// Tiberium Project
 					{
 						m_renderObject->Capture_Bone( tur.m_twinAngleBone );
-						m_renderObject->Control_Bone( tur.m_twinAngleBone, turretXfrm );
+						m_renderObject->Control_Bone( tur.m_twinAngleBone, turretBoneRotation( tree, tur.m_twinAngleBone, Vector3( 0.0f, 0.0f, 1.0f ), turretAngle ) );
 					}
 				}
 			}
@@ -2872,8 +2904,8 @@ void W3DModelDraw::handleClientTurretPositioning()
 			{
 				if (m_curState)
 					turretPitch += tur.m_turretArtPitch;
-				Matrix3D turretPitchXfrm(1);
-				turretPitchXfrm.Rotate_Y(-turretPitch);
+				// (about the object's across axis, however the bone lies: Tiberium Project)
+				const Matrix3D turretPitchXfrm = turretBoneRotation( tree, tur.m_turretPitchBone, Vector3( 0.0f, 1.0f, 0.0f ), -turretPitch );
 				if (m_renderObject)
 				{
 					m_renderObject->Capture_Bone( tur.m_turretPitchBone );
@@ -2881,7 +2913,7 @@ void W3DModelDraw::handleClientTurretPositioning()
 					if (tur.m_twinPitchBone != 0)	// Tiberium Project
 					{
 						m_renderObject->Capture_Bone( tur.m_twinPitchBone );
-						m_renderObject->Control_Bone( tur.m_twinPitchBone, turretPitchXfrm );
+						m_renderObject->Control_Bone( tur.m_twinPitchBone, turretBoneRotation( tree, tur.m_twinPitchBone, Vector3( 0.0f, 1.0f, 0.0f ), -turretPitch ) );
 					}
 				}
 			}

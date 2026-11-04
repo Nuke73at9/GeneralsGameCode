@@ -123,6 +123,8 @@ public:
 													HAnimComboClass *		anim);
 
 	WWINLINE const Matrix3D	&	Get_Transform(int pivot) const;
+	// Tiberium Project @feature a pivot's rest pose, relative to its parent
+	WWINLINE const Matrix3D &	Get_Base_Transform(int pivot) const;
 	WWINLINE bool					Get_Visibility(int pivot) const;
 
 	WWINLINE const Matrix3D &	Get_Root_Transform() const;
@@ -226,4 +228,12 @@ WWINLINE const Matrix3D & HTreeClass::Get_Transform(int pivot) const
 	assert(pivot < NumPivots);
 
 	return Pivot[pivot].Transform;
+}
+
+WWINLINE const Matrix3D & HTreeClass::Get_Base_Transform(int pivot) const
+{
+	assert(pivot >= 0);
+	assert(pivot < NumPivots);
+
+	return Pivot[pivot].BaseTransform;
 }
