@@ -65,8 +65,12 @@
 #include "GameClient/InGameUI.h"
 #include "GameClient/Mouse.h"
 #if RTS_ZEROHOUR
+#include "Common/Science.h"
+#include "GameClient/AbramSpawnMenu.h"
+#include "GameClient/AbramTeamMenu.h"
 #include "GameClient/TiberiumHUD.h"
 #include "GameClient/TiberiumSidebar.h"
+#include "GameLogic/AbramCheats.h"
 #if RTS_ZEROHOUR
 #include "GameClient/TiberiumZoneView.h"
 #include "GameLogic/TiberiumZones.h"
@@ -1613,6 +1617,95 @@ void TiberiumTest::update()
 					player->getMoney()->countMoney(), bx, by, (int)tally.units.size(), away, (int)tally.total, all.c_str() );
 			}
 		}
+#if RTS_ZEROHOUR
+		else if ( step.action == "teammenu" )
+		{
+			// Abram's Personal Test: the team menu (Ctrl+G), as the key opens it (its buttons: press=AbramPopup.wnd:ButtonChoiceN)
+			AbramTeamMenu::open();
+			log( "frame %d: ui: team menu", (int)s_frame );
+		}
+		else if ( step.action == "cheat" )
+		{
+			// "cheat=N,on": the cheats' command as the team menu sends it (0 freeze AI, 1 money, 2 power, 3 powers)
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_ABRAM_CHEAT );
+			msg->appendIntegerArgument( f.empty() ? 0 : atoi( f[0].c_str() ) );
+			msg->appendIntegerArgument( f.size() > 1 ? atoi( f[1].c_str() ) : 1 );
+			log( "frame %d: ui: cheat %s", (int)s_frame, step.arg.c_str() );
+		}
+		else if ( step.action == "cheats" && ThePlayerList != nullptr && TheGameLogic != nullptr )
+		{
+			// what the cheats have done: on or off, and each player's objects (frozen, held in the air), money
+			// and power
+			for ( Int n = 0; n < ThePlayerList->getPlayerCount(); ++n )
+			{
+				Player *player = ThePlayerList->getNthPlayer( n );
+				if ( player == nullptr || player == ThePlayerList->getNeutralPlayer() )
+					continue;
+				struct Count { Int all, frozen, held, tinted; static void each( Object *obj, void *data )
+				{
+					Count *me = (Count *)data;
+					if ( obj->isEffectivelyDead() )
+						return;
+					++me->all;
+					me->frozen += obj->isDisabledByType( DISABLED_SCRIPT_DISABLED ) ? 1 : 0;
+					me->held += obj->isDisabledByType( DISABLED_HELD ) ? 1 : 0;
+					me->tinted += obj->getDrawable() != nullptr && obj->getDrawable()->testTintStatus( TINT_STATUS_DISABLED ) ? 1 : 0;
+				} };
+				Count count = { 0, 0, 0, 0 };
+				player->iterateObjects( Count::each, &count );
+				if ( count.all == 0 )
+					continue;
+				// (and how many of the generals powers, the sciences bought with points, it has)
+				Int powers = 0, powersAll = 0;
+				const std::vector<AsciiString> names = TheScienceStore->friend_getScienceNames();
+				for ( size_t k = 0; k < names.size(); ++k )
+				{
+					const ScienceType science = TheScienceStore->getScienceFromInternalName( names[k] );
+					if ( science == SCIENCE_INVALID || TheScienceStore->getSciencePurchaseCost( science ) <= 0 )
+						continue;
+					++powersAll;
+					powers += player->hasScience( science ) ? 1 : 0;
+				}
+				log( "frame %d: ui: cheats: player %d (%s) frozen AI %d, unlimited money %d, power %d, powers unlocked %d; %d objects, %d frozen, %d held, %d tinted; $%u, power %d / %d, enough %d; %d of %d generals powers",
+					(int)s_frame, (int)n, player->getPlayerType() == PLAYER_COMPUTER ? "AI" : "human", (int)AbramCheats::isFrozenPlayer( player ),
+					(int)AbramCheats::hasUnlimitedMoney( n ), (int)AbramCheats::hasUnlimitedPower( n ), (int)AbramCheats::hasUnlockedPowers( n ),
+					(int)count.all, (int)count.frozen, (int)count.held, (int)count.tinted, player->getMoney()->countMoney(),
+					player->getEnergy()->getConsumption(), player->getEnergy()->getProduction(), (int)player->getEnergy()->hasSufficientPower(),
+					(int)powers, (int)powersAll );
+			}
+		}
+		else if ( step.action == "spawnmenu" )
+		{
+			// the cheats' spawn menu: "spawnmenu" opens it, "spawnmenu=Template" clicks that one's picture, "spawnmenu=?" says what it shows
+			if ( step.arg.empty() )
+				AbramSpawnMenu::open();
+			else if ( step.arg != "?" )
+				AbramSpawnMenu::testPick( step.arg.c_str() );
+			char text[512];
+			AbramSpawnMenu::describe( text, sizeof( text ) );
+			log( "frame %d: ui: spawn menu%s%s: %s", (int)s_frame, step.arg.empty() ? "" : " ", step.arg.c_str(), text );
+		}
+		else if ( step.action == "rground" && TheMessageStream != nullptr && TheDisplay != nullptr )
+		{
+			// a player's right click at fx,fy (fractions of the screen), as the mouse sends it
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			ICoord2D at;
+			at.x = (Int)( ( f.size() > 0 ? atof( f[0].c_str() ) : 0.5 ) * TheDisplay->getWidth() );
+			at.y = (Int)( ( f.size() > 1 ? atof( f[1].c_str() ) : 0.5 ) * TheDisplay->getHeight() );
+			if ( TheMouse != nullptr )
+				TheMouse->setPosition( at.x, at.y );
+			GameMessage *down = TheMessageStream->appendMessage( GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_DOWN );
+			down->appendPixelArgument( at );
+			down->appendIntegerArgument( 0 );
+			down->appendIntegerArgument( 0 );
+			GameMessage *up = TheMessageStream->appendMessage( GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_UP );
+			up->appendPixelArgument( at );
+			up->appendIntegerArgument( 0 );
+			up->appendIntegerArgument( 0 );
+			log( "frame %d: ui: right click at %d,%d", (int)s_frame, (int)at.x, (int)at.y );
+		}
+#endif
 		else if ( step.action == "sell" )
 		{
 			TheMessageStream->appendMessage( GameMessage::MSG_SELL );
