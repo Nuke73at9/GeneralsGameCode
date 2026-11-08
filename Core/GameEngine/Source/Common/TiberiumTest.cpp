@@ -156,10 +156,16 @@ namespace
 	Bool s_menuPushed = FALSE;
 	const Int MENU_FRAME = 60;
 	Int s_frame = 0;
+	// Tiberium Project @bugfix In game the test's frames are steps of the logic, not drawn frames:
+	// a fast machine draws two or more frames for each step (the logic runs at 30 a second), which
+	// cut every spawn, status line and quit frame short there. Frame times stay per drawn frame.
+	Int s_drawnFrame = 0;
+	UnsignedInt s_lastLogicFrame = 0xFFFFFFFFu;
 	Int s_lastShotFrame = -1000;
 	std::chrono::steady_clock::time_point s_lastShotTime;
 	std::chrono::steady_clock::time_point s_spanStart;	// frame timing: since the last screenshot (or the first frame)
 	Int s_spanStartFrame = 0;
+	Int s_spanStartDrawn = 0;
 	Int s_shotCount = 0;
 	FILE *s_log = nullptr;
 	Bool s_logTried = FALSE;
@@ -509,6 +515,14 @@ void TiberiumTest::update()
 {
 	if ( !s_active )
 		return;
+	++s_drawnFrame;
+	if ( TheGameLogic != nullptr && TheGameLogic->isInGame() )
+	{
+		const UnsignedInt logicFrame = TheGameLogic->getFrame();
+		if ( logicFrame == s_lastLogicFrame )
+			return;	// (drawn again, the logic not stepped since)
+		s_lastLogicFrame = logicFrame;
+	}
 	++s_frame;
 
 	if ( !s_announced )
@@ -2036,6 +2050,7 @@ void TiberiumTest::update()
 	if ( s_spanStartFrame == 0 && inGame )
 	{
 		s_spanStartFrame = s_frame;
+		s_spanStartDrawn = s_drawnFrame;
 		s_spanStart = now;
 	}
 	// (none from the quit frame on: on a fast machine more would keep the quit waiting forever)
@@ -2043,8 +2058,8 @@ void TiberiumTest::update()
 	if ( s_shotInterval > 0 && TheDisplay != nullptr && s_frame % s_shotInterval == 0 && s_frame >= s_shotStart && !quitReached )
 	{
 		double msPerFrame = 0.0;
-		if ( s_spanStartFrame > 0 && s_frame > s_spanStartFrame )
-			msPerFrame = std::chrono::duration<double, std::milli>( now - s_spanStart ).count() / ( s_frame - s_spanStartFrame );
+		if ( s_spanStartFrame > 0 && s_drawnFrame > s_spanStartDrawn )
+			msPerFrame = std::chrono::duration<double, std::milli>( now - s_spanStart ).count() / ( s_drawnFrame - s_spanStartDrawn );
 		TheDisplay->takeScreenShot( SCREENSHOT_PNG );
 		s_lastShotFrame = s_frame;
 		s_lastShotTime = now;
@@ -2052,6 +2067,7 @@ void TiberiumTest::update()
 		log( "frame %d: screenshot %d (logic frame %u, in game %d), %.2f ms per frame since frame %d", (int)s_frame, (int)s_shotCount,
 			TheGameLogic != nullptr ? (unsigned)TheGameLogic->getFrame() : 0u, inGame ? 1 : 0, msPerFrame, (int)s_spanStartFrame );
 		s_spanStartFrame = s_frame + 1;
+		s_spanStartDrawn = s_drawnFrame + 1;
 		s_spanStart = std::chrono::steady_clock::now();
 	}
 
