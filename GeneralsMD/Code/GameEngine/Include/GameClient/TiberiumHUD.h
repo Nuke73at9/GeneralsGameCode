@@ -17,17 +17,20 @@
 */
 
 // FILE: TiberiumHUD.h ////////////////////////////////////////////////////////////////////////////
-// Tiberium Project @feature the HUD as C&C3 and C&C4 together: Zero Hour's bar along the bottom
-// gives way to
-//   - on the right, C&C3's column: the radar (its power meter at its side), the money and power,
-//     the menu, idle worker, beacon and general's buttons, then the sidebar (TiberiumSidebar)
+// Tiberium Project @feature the HUD in C&C4's layout: Zero Hour's bar along the bottom gives way to
+//   - at the bottom left, C&C4's radar panel (its TacticalHUDCommandModeBar, drawn from its own shapes
+//     and textures): the radar in its square, the menu, idle worker, beacon and general's buttons in
+//     the slots of its column (the zones' in its top square)
+//   - at the bottom right, C&C4's build panel (TacticalHUDMainCommandBar): the sidebar (TiberiumSidebar),
+//     with the money, power and support points in its top boxes
 //   - at the bottom in the middle, C&C4's selection panel, in its art (GDI's blue, Nod's red): the
 //     selected unit's portrait, name and kind, its health, shield and rank, what it is; three of its
 //     abilities in the slots at the panel's right and its other commands in a row above the panel
 //     (Zero Hour's own command buttons, moved there, so they and their hotkeys work as they did);
 //     several kinds selected: a picture of each kind and how many (a click keeps only that kind)
-//   - at the bottom left, C&C4's tier bar (the player's tier: the Tech Up upgrades, and the one
-//     being researched); the support powers' buttons (Zero Hour's shortcut bar) on the left
+//   - under it, C&C4's experience bar as the tier bar (the player's tier: the Tech Up upgrades, and the
+//     one being researched); the support powers' buttons (Zero Hour's shortcut bar) up the left edge
+// Everything is sized by C&C4's units (its screen is 768 of them tall), as C&C4 places them.
 //
 // On with the sidebar, while the C&C4 art for it is there (TiberiumHUD.big: the TibHUD_* images,
 // made from the player's own C&C4 by make_hudart.py). Interface only: the game's logic sees the same
@@ -47,8 +50,10 @@ public:
 	static Bool isOn();
 	/// whether the game hides its interface now (a cinematic hides the control bar): the HUD and sidebar hide with it
 	static Bool isHidden();
-	/// the screen rectangle the sidebar has in the HUD's column (below the radar and its buttons); FALSE when off
+	/// the screen rectangle the sidebar has: C&C4's build panel, bottom right; FALSE when off
 	static Bool getSidebarArea( Int *x, Int *y, Int *w, Int *h );
+	/// C&C4's build panel's top left corner on the screen, and its scale (C&C4's units to the screen's); FALSE when off
+	static Bool getCommandBar( Int *x, Int *y, Real *scale );
 	/// test runs: a click on a part of the HUD by what it is: "button" (0 menu, 1 idle worker, 2 beacon,
 	/// 3 general), "row" or "slot" (the commands above the panel and the abilities in it, in order), "group"
 	/// (several kinds selected: the kinds, in order) or "portrait"; whether something took it

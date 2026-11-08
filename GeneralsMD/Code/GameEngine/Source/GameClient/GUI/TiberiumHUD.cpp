@@ -93,12 +93,26 @@ namespace
 	const Real ART_W = 470.0f;
 	const Real ART_H = 145.0f;
 
+	/// Tiberium Project @feature C&C4's bottom panels (TibHUD_RadarFrame and TibHUD_CommandBar: drawn from its
+	/// TacticalHUDCommandModeBar and TacticalHUDMainCommandBar screens), in C&C4's units (its screen 768 tall)
+	const Real BAR_W = 258.33f;
+	const Real BAR_H = 211.33f;
+	const Real BAR_REF_H = 768.0f;
+	const Real SELECTION_W = 487.0f;		///< C&C4's selection panel, between the two
+	/// the radar's panel (bottom left): the radar's square, its column's top square and four slots
+	const Real RADAR_X = 2.0f, RADAR_Y = 12.0f, RADAR_S = 195.0f;
+	const Real COLUMN_TOP_X = 203.0f, COLUMN_TOP_Y = 13.0f, COLUMN_TOP_S = 42.3f;
+	const Real COLUMN_X = 203.0f, COLUMN_Y = 65.0f, COLUMN_W = 38.3f, COLUMN_H = 143.3f;
+
 	struct HUDLayout
 	{
 		Int sw, sh, gap;
-		Int colX, colY, colW;										///< the column's top part (the sidebar is below sideY)
-		Int meterX, meterW, radarX, radarY, radarS;
-		Int moneyY, moneyH, buttonsY, buttonsH, sideY;
+		Real b;																	///< C&C4's units to the screen's
+		Int lx, ly, lw, lh;											///< the radar's panel (bottom left)
+		Int rx, ry, rw, rh;											///< the build panel (bottom right: the sidebar's)
+		Int radarX, radarY, radarS;
+		Int slotX, slotY, slotW, slotH;					///< the radar's panel's column: its slots (the buttons)
+		Int topX, topY, topS;										///< ... and its top square
 		Real s;																	///< the panel's scale (screen pixels to its art's)
 		Int px, py, pw, ph;											///< the panel
 		Int cmdW, cmdH, perRow, rowX;						///< the command buttons above it
@@ -125,6 +139,7 @@ namespace
 	struct Art
 	{
 		const Image *panel, *bar, *slot, *tier, *tierFill, *emblem;
+		const Image *radarFrame;			///< C&C4's bottom left panel
 		const Image *plateOff, *plateOn, *plateHover, *grid;	///< the sidebar's (C&C4's build panel)
 		const Image *rank[4];
 		Color accent, accentDim, text, textDim;
@@ -188,6 +203,7 @@ namespace
 		a->tier = findImage( "TibHUD_Tier", side );
 		a->tierFill = findImage( "TibHUD_TierFill", side );
 		a->emblem = findImage( "TibHUD_Emblem", side );
+		a->radarFrame = findImage( "TibHUD_RadarFrame", side );
 		a->plateOff = findImage( "TibHUD_Plate", nod ? "NodOff" : "GDIOff" );
 		a->plateOn = findImage( "TibHUD_Plate", nod ? "NodOn" : "GDIOn" );
 		a->plateHover = findImage( "TibHUD_Plate", "Hover" );
@@ -211,45 +227,50 @@ namespace
 		const Int sw = TheDisplay->getWidth(), sh = TheDisplay->getHeight();
 		L->sw = sw;
 		L->sh = sh;
-		// the column: as wide as the sidebar on its own (TiberiumSidebar), from the top to the bottom
-		L->colW = max( 200, min( sw * 22 / 100, sh * 40 / 100 ) );
-		L->colX = sw - L->colW;
-		L->colY = max( 16, sh / 40 );
-		L->gap = max( 3, L->colW / 80 );
-		L->meterW = max( 8, L->colW / 22 );
-		L->meterX = L->colX + L->gap * 2;
-		const Int room = L->colW - L->meterW - L->gap * 5;
-		L->radarS = min( room, sh * 30 / 100 );
-		L->radarX = L->meterX + L->meterW + L->gap * 2 + ( room - L->radarS ) / 2;
-		L->radarY = L->colY + L->gap * 2;
-		L->moneyY = L->radarY + L->radarS + L->gap * 2;
-		L->moneyH = max( 18, sh / 36 );
-		L->buttonsY = L->moneyY + L->moneyH + L->gap;
-		L->buttonsH = max( 20, sh / 32 );
-		L->sideY = L->buttonsY + L->buttonsH + L->gap * 2;
-		// the panel: C&C4's art, a fifth of the screen tall (no wider than 60% of the room left of the column)
-		Real s = sh * 0.19f / ART_H;
-		if( s > L->colX * 0.6f / ART_W )
-			s = L->colX * 0.6f / ART_W;
-		if( s < 0.5f )
-			s = 0.5f;
-		L->s = s;
-		L->pw = (Int)( ART_W * s );
-		L->ph = (Int)( ART_H * s );
-		L->px = ( L->colX - L->pw ) / 2;
-		L->py = sh - L->ph - max( 2, sh / 200 );
-		// Zero Hour's command buttons, their shape kept (50 by 44 on the bar's 800 by 600)
-		L->cmdH = max( 22, (Int)( 36.0f * s ) );
+		// Tiberium Project @feature C&C4's layout: its screen is 768 of its units tall; the radar's panel, the
+		// selection panel and the build panel side by side along the bottom must fit across
+		Real b = sh / BAR_REF_H;
+		if( b * ( 2.0f * BAR_W + SELECTION_W ) > sw )
+			b = sw / ( 2.0f * BAR_W + SELECTION_W );
+		L->b = b;
+		L->gap = max( 2, (Int)( 2.0f * b ) );
+		// the radar's panel, bottom left
+		L->lw = (Int)( BAR_W * b );
+		L->lh = (Int)( BAR_H * b );
+		L->lx = 0;
+		L->ly = sh - L->lh;
+		L->radarX = L->lx + (Int)( RADAR_X * b );
+		L->radarY = L->ly + (Int)( RADAR_Y * b );
+		L->radarS = (Int)( RADAR_S * b );
+		L->topX = L->lx + (Int)( COLUMN_TOP_X * b );
+		L->topY = L->ly + (Int)( COLUMN_TOP_Y * b );
+		L->topS = (Int)( COLUMN_TOP_S * b );
+		L->slotX = L->lx + (Int)( COLUMN_X * b );
+		L->slotY = L->ly + (Int)( COLUMN_Y * b );
+		L->slotW = (Int)( COLUMN_W * b );
+		L->slotH = (Int)( COLUMN_H * b / 4.0f );
+		// the build panel, bottom right (the sidebar draws it)
+		L->rw = L->lw;
+		L->rh = L->lh;
+		L->rx = sw - L->rw;
+		L->ry = sh - L->rh;
+		// the tier bar, at the bottom in the middle (C&C4's experience bar; its art is 469 by 21)
+		L->tierW = (Int)( 469.0f * b );
+		L->tierH = max( 8, (Int)( 21.0f * b ) );
+		L->tierX = ( sw - L->tierW ) / 2;
+		L->tierY = sh - L->tierH - max( 1, (Int)( 2.0f * b ) );
+		L->tierLabelH = 0;
+		// the selection panel above it, C&C4's size
+		L->s = b;
+		L->pw = (Int)( ART_W * b );
+		L->ph = (Int)( ART_H * b );
+		L->px = ( sw - L->pw ) / 2;
+		L->py = L->tierY - L->ph - L->gap;
+		// Zero Hour's command buttons above the panel, their shape kept (50 by 44 on the bar's 800 by 600)
+		L->cmdH = max( 22, (Int)( 36.0f * b ) );
 		L->cmdW = L->cmdH * 50 / 44;
-		L->rowX = L->px + (Int)( 16.0f * s );
-		L->perRow = max( 1, ( L->pw - (Int)( 32.0f * s ) ) / ( L->cmdW + L->gap ) );
-		// the tier bar, bottom left (its art is 469 by 21)
-		const Int m = max( 8, sw / 160 );
-		L->tierX = m;
-		L->tierW = min( (Int)( 469.0f * s * 0.8f ), L->px - 2 * m );
-		L->tierH = max( 8, L->tierW * 21 / 469 );
-		L->tierLabelH = max( 14, sh / 40 );
-		L->tierY = sh - L->tierH - m;
+		L->rowX = L->px + (Int)( 16.0f * b );
+		L->perRow = max( 1, ( L->pw - (Int)( 32.0f * b ) ) / ( L->cmdW + L->gap ) );
 	}
 
 	//-----------------------------------------------------------------------------------------------
@@ -292,12 +313,21 @@ namespace
 	//-----------------------------------------------------------------------------------------------
 	void buttonRect( const HUDLayout &L, Int i, Int *x, Int *y, Int *w, Int *h )
 	{
-		const Int n = buttonCount();
-		const Int bw = ( L.colW - L.gap * ( n + 3 ) ) / n;
-		*x = L.colX + L.gap * 2 + i * ( bw + L.gap );
-		*y = L.buttonsY;
-		*w = bw;
-		*h = L.buttonsH;
+		// the radar's panel's column: the menu, idle worker, beacon and general's buttons in its four slots, the
+		// zones' in its top square
+		const Int inset = max( 1, (Int)( 3.0f * L.b ) );
+		if( i >= BUTTON_ZONES )
+		{
+			*x = L.topX + inset;
+			*y = L.topY + inset;
+			*w = L.topS - 2 * inset;
+			*h = L.topS - 2 * inset;
+			return;
+		}
+		*x = L.slotX + inset;
+		*y = L.slotY + i * L.slotH + inset;
+		*w = L.slotW - 2 * inset;
+		*h = L.slotH - 2 * inset;
 	}
 
 	//-----------------------------------------------------------------------------------------------
@@ -728,27 +758,15 @@ namespace
 		ensureStrings( L );
 		Art a;
 		getArt( &a );
-		TheDisplay->drawFillRect( L.colX, L.colY, L.colW, L.sideY - L.colY, GameMakeColor( 6, 11, 16, 225 ) );
-		if( a.grid != nullptr )
+		// Tiberium Project @feature C&C4's bottom left panel: the radar in its square, the buttons in its column
+		if( a.radarFrame != nullptr )
+			TheDisplay->drawImage( a.radarFrame, L.lx, L.ly, L.lx + L.lw, L.ly + L.lh );
+		else
 		{
-			// C&C4's build panel grid, as the sidebar below has it
-			const Bool wasClipping = TheDisplay->isClippingEnabled();
-			IRegion2D clip;
-			clip.lo.x = L.colX;
-			clip.lo.y = L.colY;
-			clip.hi.x = L.colX + L.colW;
-			clip.hi.y = L.sideY;
-			TheDisplay->setClipRegion( &clip );
-			TheDisplay->enableClipping( TRUE );
-			const Int tile = max( 24, L.colW / 7 );
-			for( Int ty = L.colY; ty < L.sideY; ty += tile )
-				for( Int tx = L.colX; tx < L.colX + L.colW; tx += tile )
-					TheDisplay->drawImage( a.grid, tx, ty, tx + tile, ty + tile, GameMakeColor( 255, 255, 255, 200 ) );
-			TheDisplay->enableClipping( wasClipping );
+			TheDisplay->drawFillRect( L.lx, L.ly, L.lw, L.lh, GameMakeColor( 6, 11, 16, 225 ) );
+			TheDisplay->drawOpenRect( L.radarX, L.radarY, L.radarS, L.radarS, 1.0f, a.accent );
 		}
-		TheDisplay->drawFillRect( L.colX, L.colY, 2, L.sideY - L.colY, a.accent );
-		// the radar's frame; without a radar, the faction's emblem where it would be
-		TheDisplay->drawFillRect( L.radarX, L.radarY, L.radarS, L.radarS, GameMakeColor( 2, 6, 10, 240 ) );
+		// without a radar, the faction's emblem where it would be
 		static const NameKeyType radarID = NAMEKEY( "ControlBar.wnd:LeftHUD" );
 		GameWindow *radar = TheWindowManager->winGetWindowFromId( nullptr, radarID );
 		if( radar != nullptr && a.emblem != nullptr && TheRadar != nullptr && !rts::localPlayerHasRadar() )
@@ -757,63 +775,34 @@ namespace
 			TheDisplay->drawImage( a.emblem, L.radarX + ( L.radarS - e ) / 2, L.radarY + ( L.radarS - e ) / 2,
 				L.radarX + ( L.radarS + e ) / 2, L.radarY + ( L.radarS + e ) / 2, GameMakeColor( 255, 255, 255, 110 ) );
 		}
-		TheDisplay->drawOpenRect( L.radarX - 3, L.radarY - 3, L.radarS + 6, L.radarS + 6, 1.0f, a.accentDim );
-		TheDisplay->drawOpenRect( L.radarX - 2, L.radarY - 2, L.radarS + 4, L.radarS + 4, 2.0f, a.accent );
-
-		// the power meter: what the player makes (lit), what is used of it (bright), what is short (red)
-		const Int produced = me->getEnergy()->getProduction(), used = me->getEnergy()->getConsumption();
-		const Int most = max( 1, max( produced, used ) );
-		const Int segH = max( 4, L.radarS / 26 ), segs = max( 4, ( L.radarS + 2 ) / segH );
-		TheDisplay->drawFillRect( L.meterX - 2, L.radarY - 2, L.meterW + 4, L.radarS + 4, GameMakeColor( 2, 6, 10, 240 ) );
-		TheDisplay->drawOpenRect( L.meterX - 2, L.radarY - 2, L.meterW + 4, L.radarS + 4, 1.0f, a.accentDim );
-		const Int litMade = produced * segs / most, litUsed = min( used, produced ) * segs / most, litShort = used * segs / most;
-		for( Int i = 0; i < segs; ++i )
+		// without the zones' button, the faction's emblem in the column's top square
+		if( buttonCount() <= BUTTON_ZONES && a.emblem != nullptr )
 		{
-			const Int y = L.radarY + L.radarS - ( i + 1 ) * segH;
-			if( y < L.radarY )
-				break;
-			Color c = GameMakeColor( 30, 36, 40, 255 );
-			if( i < litUsed )
-				c = used * 10 > produced * 8 ? GameMakeColor( 240, 200, 60, 255 ) : GameMakeColor( 90, 230, 120, 255 );
-			else if( i < litMade )
-				c = GameMakeColor( 40, 110, 60, 255 );
-			else if( i < litShort )
-				c = GameMakeColor( 240, 60, 50, 255 );
-			TheDisplay->drawFillRect( L.meterX, y + 1, L.meterW, segH - 2, c );
+			const Int in = L.topS / 6;
+			TheDisplay->drawImage( a.emblem, L.topX + in, L.topY + in, L.topX + L.topS - in, L.topY + L.topS - in,
+				GameMakeColor( 255, 255, 255, 150 ) );
 		}
 
-		// the money and the power
-		UnicodeString money, digits;
-		digits.format( L"%u", me->getMoney()->countMoney() );
-		money = L"$ ";
-		const Int n = digits.getLength();
-		for( Int i = 0; i < n; ++i )
-		{
-			money.concat( digits.getCharAt( i ) );
-			if( ( n - 1 - i ) % 3 == 0 && i != n - 1 )
-				money.concat( L',' );
-		}
-		drawText( s_name, money, L.colX + L.gap * 3, L.moneyY, GameMakeColor( 255, 214, 90, 255 ) );
-		UnicodeString power;
-		power.format( L"Power %d / %d", used, produced );
-		s_text->setText( power );
-		drawText( s_text, power, L.colX + L.colW - s_text->getWidth() - L.gap * 3, L.moneyY + L.gap,
-			used > produced ? GameMakeColor( 255, 80, 60, 255 ) : a.textDim );
-
-		// the buttons
+		// the buttons, in the column's slots (C&C4's art has their frames): their names; lit, hovered
 		for( Int i = 0; i < buttonCount(); ++i )
 		{
 			Int x, y, w, h;
 			buttonRect( L, i, &x, &y, &w, &h );
 			const Bool usable = buttonUsable( i );
-			// (Zero Hour enables the idle worker's while there is one)
-			const UnicodeString label = plain( BUTTON_LABELS[i] );
-			// the general's: lit while there is a promotion to spend
+			// the general's: lit while there is a promotion to spend; the zones': lit while they are shown
 			Bool lit = i == 3 && me->getSciencePurchasePoints() > 0 && ( ( TheGameLogic->getFrame() / 15 ) & 1 );
-			// the zones': lit while they are shown
 			if( i == BUTTON_ZONES )
 				lit = TiberiumZoneView::isShown();
-			drawPlate( a, x, y, w, h, label, usable, usable && i == s_hoverButton, lit );
+			if( lit )
+				TheDisplay->drawFillRect( x, y, w, h, a.accentDim );
+			if( usable && i == s_hoverButton )
+				TheDisplay->drawOpenRect( x, y, w, h, 2.0f, a.accent );
+			const UnicodeString label = plain( BUTTON_LABELS[i] );
+			s_text->setText( label );
+			Int tw = 0, th = 0;
+			s_text->getSize( &tw, &th );
+			drawText( s_text, label, x + ( w - tw ) / 2, y + ( h - th ) / 2, usable ? ( lit || i == s_hoverButton ? a.text : a.textDim )
+				: GameMakeColor( 110, 116, 122, 200 ) );
 		}
 	}
 
@@ -1065,15 +1054,14 @@ namespace
 		Real progress = 0.0f;
 		Bool isTier = FALSE;
 		const Int tier = tierOf( &progress, &isTier );
+		// (its label is drawn last, on the bar: under C&C4's selection panel there is no room above it)
 		UnicodeString label;
 		label.format( isTier ? L"Tier %d" : L"Rank %d", tier );
-		drawText( s_name, label, L.tierX + 2, L.tierY - L.tierLabelH - 2, a.text );
 		if( isTier && progress >= 0.0f && tier < 3 )
 		{
 			UnicodeString next;
-			next.format( L"Tier %d  %d%%", tier + 1, (Int)( progress * 100.0f ) );
-			s_text->setText( next );
-			drawText( s_text, next, L.tierX + L.tierW - s_text->getWidth() - 2, L.tierY - L.tierLabelH, a.textDim );
+			next.format( L"   Tier %d  %d%%", tier + 1, (Int)( progress * 100.0f ) );
+			label.concat( next );
 		}
 		if( a.tier != nullptr )
 			TheDisplay->drawImage( a.tier, L.tierX, L.tierY, L.tierX + L.tierW, L.tierY + L.tierH );
@@ -1091,6 +1079,10 @@ namespace
 			else
 				TheDisplay->drawFillRect( fx, fy, fw, fh, a.accent );
 		}
+		s_text->setText( label );
+		Int lw = 0, lh = 0;
+		s_text->getSize( &lw, &lh );
+		drawText( s_text, label, L.tierX + ( L.tierW - lw ) / 2, L.tierY + ( L.tierH - lh ) / 2, a.text );
 	}
 
 	//-----------------------------------------------------------------------------------------------
@@ -1258,7 +1250,7 @@ namespace
 			x = mouse->pos.x - w / 2;
 			y = L.py - ( L.cmdH + L.gap ) * lines - L.gap * 2 - h;
 		}
-		x = max( 0, min( x, L.colX - w ) );
+		x = max( 0, min( x, L.rx - w ) );
 		y = max( 0, min( y, L.sh - h ) );
 		Int cx = 0, cy = 0;
 		tip->winGetScreenPosition( &cx, &cy );
@@ -1300,10 +1292,23 @@ Bool TiberiumHUD::getSidebarArea( Int *x, Int *y, Int *w, Int *h )
 		return FALSE;
 	HUDLayout L;
 	computeLayout( &L );
-	*x = L.colX;
-	*y = L.sideY;
-	*w = L.colW;
-	*h = L.sh - L.sideY;
+	*x = L.rx;
+	*y = L.ry;
+	*w = L.rw;
+	*h = L.rh;
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool TiberiumHUD::getCommandBar( Int *x, Int *y, Real *scale )
+{
+	if( !s_on || TheDisplay == nullptr )
+		return FALSE;
+	HUDLayout L;
+	computeLayout( &L );
+	*x = L.rx;
+	*y = L.ry;
+	*scale = L.b;
 	return TRUE;
 }
 
@@ -1319,9 +1324,9 @@ void TiberiumHUD::update()
 	computeLayout( &L );
 	if( s_column == nullptr )
 	{
-		s_column = makeWindow( L.colX, L.colY, L.colW, L.sideY - L.colY, drawColumn, inputColumn );
+		s_column = makeWindow( L.lx, L.ly, L.lw, L.lh, drawColumn, inputColumn );
 		s_panel = makeWindow( L.px, 0, L.pw, L.sh, drawPanel, inputPanel );
-		s_tier = makeWindow( L.tierX, L.tierY - L.tierLabelH - 2, L.tierW, L.tierH + L.tierLabelH + 2, drawTier, inputTier );
+		s_tier = makeWindow( L.tierX, L.tierY, L.tierW, L.tierH, drawTier, inputTier );
 		s_hold = TheWindowManager->winCreate( nullptr, WIN_STATUS_HIDDEN, 0, 0, 1, 1, nullptr, nullptr );
 		if( s_column == nullptr || s_panel == nullptr || s_tier == nullptr || s_hold == nullptr )
 		{
@@ -1357,10 +1362,10 @@ void TiberiumHUD::update()
 	s_tier->winHide( s_hidden );
 
 	// the screen may have changed size
-	fit( s_column, L.colX, L.colY, L.colW, L.sideY - L.colY );
+	fit( s_column, L.lx, L.ly, L.lw, L.lh );
 	const Int panelTop = L.py - ( L.cmdH + L.gap ) * MAX_ROW_LINES - L.gap * 2;
 	fit( s_panel, L.px, panelTop, L.pw, L.sh - panelTop );
-	fit( s_tier, L.tierX, L.tierY - L.tierLabelH - 2, L.tierW, L.tierH + L.tierLabelH + 2 );
+	fit( s_tier, L.tierX, L.tierY, L.tierW, L.tierH );
 
 	// the radar, in the column
 	static const NameKeyType radarID = NAMEKEY( "ControlBar.wnd:LeftHUD" );
@@ -1408,11 +1413,14 @@ void TiberiumHUD::update()
 	}
 	if( shortcut != nullptr )
 	{
-		Int x = 0, y = 0;
+		Int x = 0, y = 0, w = 0, h = 0;
 		shortcut->winGetPosition( &x, &y );
+		shortcut->winGetSize( &w, &h );
 		const Int left = max( 4, L.sw / 200 );
-		if( x != left || y != s_shortcutAt.y )
-			shortcut->winSetPosition( left, s_shortcutAt.y );
+		// (up the left edge, above the radar's panel)
+		const Int top = max( L.gap, min( s_shortcutAt.y, L.ly - L.gap * 2 - h ) );
+		if( x != left || y != top )
+			shortcut->winSetPosition( left, top );
 		if( s_hidden && !shortcut->winIsHidden() )
 			shortcut->winHide( TRUE );
 	}

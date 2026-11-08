@@ -88,6 +88,15 @@ namespace
 	{
 		Int x, y, w, h;							///< the whole sidebar
 		Int headerH, tabsY, tabsH, chipsY, chipH, chipsPerRow, gridY, cellW, cellH, gap, cols, infoY, infoH;
+		// Tiberium Project @feature in C&C4's build panel (the HUD's, bottom right), each part where its art has it
+		Bool panel;
+		Real b;									///< C&C4's units to the screen's
+		Int tabsX, tabsW;				///< the tabs' row
+		Int chipsX, chipW;			///< the queues (the producers): in the panel, its left column's slots
+		Int gridX, rowsFixed;		///< the grid's left edge; in the panel, its rows (its top: gridY)
+		Int infoX, infoW;
+		Int portX, portY, portS;	///< the panel's top left square: the current queue's producer
+		Int boxY, boxH, boxX[3], boxW[3];	///< the panel's top boxes: the money, the power, the support points
 	};
 
 	GameWindow *s_window = nullptr;
@@ -191,8 +200,59 @@ namespace
 	void computeLayout( SidebarLayout *L )
 	{
 		const Int sw = TheDisplay->getWidth(), sh = TheDisplay->getHeight();
-		// Tiberium Project @feature with the HUD up, the column below its radar and buttons (they have the
-		// money and power); else below the game's clock line, above Zero Hour's bar, which spans the bottom
+		// Tiberium Project @feature with the HUD up, C&C4's build panel at the bottom right: each part where the
+		// panel's art (TacticalHUDMainCommandBar, 258 by 211 of C&C4's units) has it
+		Int px = 0, py = 0;
+		Real b = 1.0f;
+		L->panel = TiberiumHUD::getCommandBar( &px, &py, &b );
+		if( L->panel )
+		{
+			L->b = b;
+			L->x = px;
+			L->y = py;
+			L->w = (Int)( 258.33f * b );
+			L->h = (Int)( 211.33f * b );
+			L->gap = max( 1, (Int)( 1.6f * b ) );
+			L->headerH = 0;
+			// the money, power and support points' boxes along the top
+			L->boxY = py + (Int)( 13.0f * b );
+			L->boxH = (Int)( 20.3f * b );
+			const Real bx[3] = { 61.0f, 133.7f, 187.7f }, bw[3] = { 68.3f, 49.7f, 68.7f };
+			for( Int i = 0; i < 3; ++i )
+			{
+				L->boxX[i] = px + (Int)( bx[i] * b );
+				L->boxW[i] = (Int)( bw[i] * b );
+			}
+			// the tabs, in the row C&C4 had its own (at 60.7, 37.7: 195.5 by 31.4)
+			L->tabsX = px + (Int)( 61.0f * b );
+			L->tabsY = py + (Int)( 39.0f * b );
+			L->tabsW = (Int)( 195.0f * b );
+			L->tabsH = (Int)( 28.0f * b );
+			// the producers: the top left square (the current one) and the four slots below it
+			L->portX = px + (Int)( 13.0f * b );
+			L->portY = py + (Int)( 13.0f * b );
+			L->portS = (Int)( 42.3f * b );
+			L->chipsX = px + (Int)( 18.0f * b );
+			L->chipsY = py + (Int)( 66.0f * b );
+			L->chipW = (Int)( 36.3f * b );
+			L->chipH = (Int)( 33.8f * b );
+			L->chipsPerRow = 1;
+			// the grid: five by three cells of 37.6 by 37.3 from 64.7, 72.2
+			L->cols = 5;
+			L->rowsFixed = 3;
+			L->gridX = px + (Int)( 64.7f * b ) + L->gap;
+			L->gridY = py + (Int)( 72.2f * b ) + L->gap;
+			L->cellW = (Int)( 37.6f * b ) - L->gap;
+			L->cellH = (Int)( 37.3f * b ) - L->gap;
+			// the bar along the bottom: what the cursor is on
+			L->infoX = px + (Int)( 65.7f * b );
+			L->infoY = py + (Int)( 187.3f * b );
+			L->infoW = (Int)( 186.0f * b );
+			L->infoH = (Int)( 19.3f * b );
+			return;
+		}
+		// with the HUD up, the column below its radar and buttons (they have the money and power); else below
+		// the game's clock line, above Zero Hour's bar, which spans the bottom
 		const Bool hud = TiberiumHUD::getSidebarArea( &L->x, &L->y, &L->w, &L->h );
 		if( !hud )
 		{
@@ -201,20 +261,31 @@ namespace
 			L->y = max( 16, sh / 40 );
 			L->h = sh * 74 / 100 - L->y;
 		}
+		L->b = 1.0f;
 		L->gap = max( 3, L->w / 80 );
 		L->headerH = hud ? 0 : max( 26, sh / 32 );
+		L->tabsX = L->x + L->gap / 2;
+		L->tabsW = L->w - L->gap;
 		L->tabsY = L->y + L->headerH;
 		// (C&C4's tab plates are 50 by 28)
 		L->tabsH = max( 24, ( ( L->w - L->gap ) / TAB_COUNT ) * 28 / 50 );
 		L->chipsY = L->tabsY + L->tabsH + L->gap;
 		L->chipH = max( 20, sh / 44 );
 		L->chipsPerRow = 2;
+		L->chipsX = L->x + L->gap;
+		L->chipW = ( L->w - L->gap * ( L->chipsPerRow + 1 ) ) / L->chipsPerRow;
 		L->cols = 3;
+		L->rowsFixed = 0;
+		L->gridX = L->x + L->gap;
 		L->cellW = ( L->w - L->gap * ( L->cols + 1 ) ) / L->cols;
 		L->cellH = L->cellW * 4 / 5;
 		L->infoH = max( 48, sh / 14 );
 		L->infoY = L->y + L->h - L->infoH;
+		L->infoX = L->x + L->gap;
+		L->infoW = L->w - 2 * L->gap;
 		L->gridY = 0;	// after the chips (they wrap)
+		L->portS = 0;
+		L->boxH = 0;
 	}
 
 	//-----------------------------------------------------------------------------------------------
@@ -233,7 +304,37 @@ namespace
 	/** how many rows of items the grid shows */
 	Int rowsFit( const SidebarLayout &L )
 	{
+		if( L.panel )
+			return L.rowsFixed;
 		return max( 1, ( L.infoY - gridTop( L ) - L.gap ) / ( L.cellH + L.gap ) );
+	}
+
+	//-----------------------------------------------------------------------------------------------
+	/** the grid's top: below the chips, or (in C&C4's build panel) where its art has the grid */
+	Int gridY( const SidebarLayout &L )
+	{
+		return L.panel ? L.gridY : gridTop( L );
+	}
+
+	//-----------------------------------------------------------------------------------------------
+	/** a tab's rectangle and a queue chip's */
+	void tabRect( const SidebarLayout &L, Int t, Int *x, Int *w )
+	{
+		const Int tabW = L.tabsW / TAB_COUNT;
+		*x = L.tabsX + t * tabW;
+		*w = tabW;
+	}
+
+	void chipRect( const SidebarLayout &L, Int i, Int *x, Int *y )
+	{
+		*x = L.chipsX + ( i % L.chipsPerRow ) * ( L.chipW + L.gap );
+		*y = L.chipsY + ( i / L.chipsPerRow ) * ( L.chipH + ( L.panel ? (Int)( 2.0f * L.b ) : L.gap ) );
+	}
+
+	/// how many queue chips show (C&C4's build panel has four slots for them)
+	Int chipsShown( const SidebarLayout &L, Int count )
+	{
+		return L.panel ? min( count, 4 ) : count;
 	}
 
 	//-----------------------------------------------------------------------------------------------
@@ -574,15 +675,39 @@ namespace
 
 		SidebarArt art;
 		const Bool styled = getSidebarArt( &art );
-		TheDisplay->drawFillRect( L.x, L.y, L.w, L.h, panel );
-		if( styled )
-			drawGrid( art.grid, L.x, L.y, L.w, L.h, max( 24, L.w / 7 ) );
-		TheDisplay->drawFillRect( L.x, L.y, 2, L.h, accent );
-		TheDisplay->drawOpenRect( L.x, L.y, L.w, L.h, 1.0f, styled ? accentDim : panelEdge );
-
-		// the header: money and power (the HUD's column has them, when it is up)
 		Player *me = ThePlayerList->getLocalPlayer();
 		UnicodeString s;
+		const Image *panelArt = L.panel ? sidebarImage( "CommandBar", isNod() ? "Nod" : "GDI" ) : nullptr;
+		if( panelArt != nullptr )
+		{
+			// Tiberium Project @feature C&C4's build panel (drawn from its own screen); its top boxes: the money,
+			// the power, the support points
+			TheDisplay->drawImage( panelArt, L.x, L.y, L.x + L.w, L.y + L.h );
+			const Int produced = me->getEnergy()->getProduction(), used = me->getEnergy()->getConsumption();
+			UnicodeString box[3];
+			box[0].format( L"$%u", me->getMoney()->countMoney() );
+			box[1].format( L"%d/%d", used, produced );
+			const Color boxColor[3] = { GameMakeColor( 255, 214, 90, 255 ), used > produced ? GameMakeColor( 255, 80, 60, 255 ) : text, text };
+			for( Int i = 0; i < 2; ++i )
+			{
+				// (right of the box's icon)
+				s_small->setText( box[i] );
+				Int tw = 0, th = 0;
+				s_small->getSize( &tw, &th );
+				const Int left = L.boxX[i] + L.boxH;
+				drawText( s_small, box[i], left + max( 0, ( L.boxX[i] + L.boxW[i] - left - tw ) / 2 ), L.boxY + ( L.boxH - th ) / 2, boxColor[i] );
+			}
+		}
+		else
+		{
+			TheDisplay->drawFillRect( L.x, L.y, L.w, L.h, panel );
+			if( styled )
+				drawGrid( art.grid, L.x, L.y, L.w, L.h, max( 24, L.w / 7 ) );
+			TheDisplay->drawFillRect( L.x, L.y, 2, L.h, accent );
+			TheDisplay->drawOpenRect( L.x, L.y, L.w, L.h, 1.0f, styled ? accentDim : panelEdge );
+		}
+
+		// the header: money and power (the HUD's panel has them, when it is up)
 		if( L.headerH > 0 )
 		{
 			s.format( L"$ %u", me->getMoney()->countMoney() );
@@ -593,10 +718,10 @@ namespace
 		}
 
 		// the tabs
-		const Int tabW = ( L.w - L.gap ) / TAB_COUNT;
 		for( Int t = 0; t < TAB_COUNT; ++t )
 		{
-			const Int tx = L.x + L.gap / 2 + t * tabW;
+			Int tx = 0, tabW = 0;
+			tabRect( L, t, &tx, &tabW );
 			const Bool on = t == s_tab;
 			if( styled )
 			{
@@ -624,12 +749,46 @@ namespace
 		// the queues (producers) of this tab
 		std::vector<SidebarQueue> &qs = s_queues[s_tab];
 		SidebarQueue *cur = currentQueue();
-		const Int chipW = ( L.w - L.gap * ( L.chipsPerRow + 1 ) ) / L.chipsPerRow;
-		for( size_t i = 0; i < qs.size(); ++i )
+		const Int chipW = L.chipW;
+		if( L.panel && L.portS > 0 && cur != nullptr )
 		{
-			const Int row = (Int)i / L.chipsPerRow, col = (Int)i % L.chipsPerRow;
-			const Int cx = L.x + L.gap + col * ( chipW + L.gap ), cy = L.chipsY + row * ( L.chipH + L.gap );
+			// C&C4's build panel: the current producer's picture in its top left square
+			Object *producer = TheGameLogic->findObjectByID( cur->producer );
+			const ThingTemplate *kind = producer != nullptr ? producer->getTemplate() : cur->kind;
+			const Image *picture = kind != nullptr ? kind->getButtonImage() : nullptr;
+			if( picture != nullptr )
+			{
+				const Int in = max( 2, (Int)( 3.0f * L.b ) );
+				TheDisplay->drawImage( picture, L.portX + in, L.portY + in, L.portX + L.portS - in, L.portY + L.portS - in );
+			}
+		}
+		for( size_t i = 0; i < (size_t)chipsShown( L, (Int)qs.size() ); ++i )
+		{
+			Int cx = 0, cy = 0;
+			chipRect( L, (Int)i, &cx, &cy );
 			const Bool on = &qs[i] == cur;
+			if( L.panel )
+			{
+				// C&C4's build panel: the producer's picture in its slot (the slot's frame is the panel's), lit when
+				// it is the current one; how many it has in production at its corner
+				Object *producer = TheGameLogic->findObjectByID( qs[i].producer );
+				const ThingTemplate *kind = producer != nullptr ? producer->getTemplate() : qs[i].kind;
+				const Image *picture = kind != nullptr ? kind->getButtonImage() : nullptr;
+				const Int in = max( 2, (Int)( 2.0f * L.b ) );
+				if( picture != nullptr )
+					TheDisplay->drawImage( picture, cx + in, cy + in, cx + chipW - in, cy + L.chipH - in,
+						on ? 0xFFFFFFFF : GameMakeColor( 170, 180, 190, 220 ) );
+				if( on )
+					TheDisplay->drawOpenRect( cx + 1, cy + 1, chipW - 2, L.chipH - 2, 2.0f, accent );
+				ProductionUpdateInterface *pu = producer != nullptr ? producer->getProductionUpdateInterface() : nullptr;
+				if( pu != nullptr && pu->getProductionCount() > 0 )
+				{
+					UnicodeString n;
+					n.format( L"%d", (Int)pu->getProductionCount() );
+					drawText( s_small, n, cx + in + 1, cy + in, GameMakeColor( 255, 230, 120, 255 ) );
+				}
+				continue;
+			}
 			if( styled )
 				drawPlate( art, cx, cy, chipW, L.chipH, on, FALSE, FALSE );
 			else
@@ -660,7 +819,7 @@ namespace
 		}
 
 		// the items
-		const Int gy = gridTop( L );
+		const Int gy = gridY( L );
 		const Int fit = rowsFit( L );
 		const Color cellBack = GameMakeColor( 22, 26, 30, 255 );
 		if( cur != nullptr )
@@ -673,7 +832,7 @@ namespace
 			{
 				const SidebarItem &item = cur->items[i];
 				const Int row = ( (Int)i - first ) / L.cols, col = (Int)i % L.cols;
-				const Int ix = L.x + L.gap + col * ( L.cellW + L.gap ), iy = gy + row * ( L.cellH + L.gap );
+				const Int ix = L.gridX + col * ( L.cellW + L.gap ), iy = gy + row * ( L.cellH + L.gap );
 				const Bool ok = available( *cur, item );
 				// (in C&C4's art: the picture inside its build button's frame)
 				const Int inset = styled ? max( 2, L.cellW / 14 ) : 1;
@@ -724,7 +883,7 @@ namespace
 					TheDisplay->drawOpenRect( ix, iy, L.cellW, L.cellH, hover ? 2.0f : 1.0f, hover ? accent : panelEdge );
 			}
 			// more above, more below: a small arrow at the grid's right edge
-			const Int ax = L.x + L.w - L.gap * 3, as = max( 4, L.gap * 2 );
+			const Int ax = L.panel ? L.gridX + L.cols * ( L.cellW + L.gap ) - L.gap * 3 : L.x + L.w - L.gap * 3, as = max( 4, L.gap * 2 );
 			if( s_scroll[s_tab] > 0 )
 				for( Int k = 0; k < as; ++k )
 					TheDisplay->drawLine( ax - k, gy - L.gap + k, ax + k, gy - L.gap + k, 1.0f, accent );
@@ -739,23 +898,30 @@ namespace
 		{
 			UnicodeString none;
 			none.translate( AsciiString( s_tab == TAB_STRUCTURES || s_tab == TAB_DEFENSES ? "No builders" : "Nothing builds these" ) );
-			drawText( s_small, none, L.x + L.gap * 2, gy + L.gap, textDim );
+			drawText( s_small, none, L.gridX + L.gap, gy + L.gap, textDim );
 		}
 
 		// what the cursor is on: its name, cost and time
-		TheDisplay->drawFillRect( L.x + L.gap, L.infoY, L.w - 2 * L.gap, L.infoH - L.gap, GameMakeColor( 24, 28, 33, 240 ) );
-		TheDisplay->drawFillRect( L.x + L.gap, L.infoY, L.w - 2 * L.gap, 2, accentDim );
+		if( panelArt == nullptr )
+		{
+			TheDisplay->drawFillRect( L.infoX, L.infoY, L.infoW, L.infoH - L.gap, GameMakeColor( 24, 28, 33, 240 ) );
+			TheDisplay->drawFillRect( L.infoX, L.infoY, L.infoW, 2, accentDim );
+		}
+		// (in C&C4's build panel one line in its bar; else the name above the cost and time)
+		const Int infoTextX = L.infoX + L.gap * 2;
+		const Int infoNameY = L.panel ? L.infoY + ( L.infoH - s_label->getFont()->height ) / 2 : L.infoY + 4;
 		if( s_hoverTab >= 0 && s_hoverTab < TAB_COUNT )
 		{
 			static const char *const TAB_TITLES[TAB_COUNT] = { "Structures", "Defenses", "Infantry", "Vehicles", "Aircraft", "Upgrades" };
 			UnicodeString title;
 			title.translate( AsciiString( TAB_TITLES[s_hoverTab] ) );
-			drawText( s_label, title, L.x + L.gap * 2, L.infoY + 4, text );
+			drawText( s_label, title, infoTextX, infoNameY, text );
 		}
 		else if( cur != nullptr && s_hoverItem >= 0 && s_hoverItem < (Int)cur->items.size() )
 		{
 			const SidebarItem &item = cur->items[s_hoverItem];
-			drawText( s_label, labelOf( item ), L.x + L.gap * 2, L.infoY + 4, text );
+			if( !L.panel )
+				drawText( s_label, labelOf( item ), infoTextX, infoNameY, text );
 			Int cost = 0, frames = 0;
 			if( item.thing != nullptr )
 			{
@@ -768,8 +934,29 @@ namespace
 				frames = item.upgrade->calcTimeToBuild( me );
 			}
 			UnicodeString line;
-			line.format( L"$%d    %d s    left click: build, right click: cancel", cost, frames / LOGICFRAMES_PER_SECOND );
-			drawText( s_info, line, L.x + L.gap * 2, L.infoY + L.infoH / 2, textDim );
+			if( L.panel )
+			{
+				// (the name shortened until the line fits the bar)
+				UnicodeString name = labelOf( item ), more;
+				more.format( L"  $%d  %ds", cost, frames / LOGICFRAMES_PER_SECOND );
+				line = name;
+				line.concat( more );
+				s_small->setText( line );
+				while( s_small->getWidth() > L.infoW - L.gap * 4 && name.getLength() > 1 )
+				{
+					name.removeLastChar();
+					line = name;
+					line.concat( L".." );
+					line.concat( more );
+					s_small->setText( line );
+				}
+				drawText( s_small, line, infoTextX, L.infoY + ( L.infoH - s_small->getFont()->height ) / 2, text );
+			}
+			else
+			{
+				line.format( L"$%d    %d s    left click: build, right click: cancel", cost, frames / LOGICFRAMES_PER_SECOND );
+				drawText( s_info, line, infoTextX, L.infoY + L.infoH / 2, textDim );
+			}
 		}
 	}
 
@@ -781,31 +968,30 @@ namespace
 		computeLayout( &L );
 		if( px < L.x || py < L.y || py >= L.y + L.h )
 			return -1;
-		if( py >= L.tabsY && py < L.tabsY + L.tabsH )
+		if( py >= L.tabsY && py < L.tabsY + L.tabsH && px >= L.tabsX && px < L.tabsX + L.tabsW )
 		{
-			const Int tabW = ( L.w - L.gap ) / TAB_COUNT;
-			const Int t = ( px - L.x - L.gap / 2 ) / max( 1, tabW );
+			const Int tabW = L.tabsW / TAB_COUNT;
+			const Int t = ( px - L.tabsX ) / max( 1, tabW );
 			return t >= 0 && t < TAB_COUNT ? t : -1;
 		}
 		const std::vector<SidebarQueue> &qs = s_queues[s_tab];
-		const Int chipW = ( L.w - L.gap * ( L.chipsPerRow + 1 ) ) / L.chipsPerRow;
-		for( size_t i = 0; i < qs.size(); ++i )
+		for( size_t i = 0; i < (size_t)chipsShown( L, (Int)qs.size() ); ++i )
 		{
-			const Int row = (Int)i / L.chipsPerRow, col = (Int)i % L.chipsPerRow;
-			const Int cx = L.x + L.gap + col * ( chipW + L.gap ), cy = L.chipsY + row * ( L.chipH + L.gap );
-			if( px >= cx && px < cx + chipW && py >= cy && py < cy + L.chipH )
+			Int cx = 0, cy = 0;
+			chipRect( L, (Int)i, &cx, &cy );
+			if( px >= cx && px < cx + L.chipW && py >= cy && py < cy + L.chipH )
 				return 100 + (Int)i;
 		}
 		const SidebarQueue *cur = currentQueue();
 		if( cur == nullptr )
 			return -1;
-		const Int gy = gridTop( L );
+		const Int gy = gridY( L );
 		const Int first = s_scroll[s_tab] * L.cols;
 		for( size_t i = first; i < cur->items.size(); ++i )
 		{
 			const Int row = ( (Int)i - first ) / L.cols, col = (Int)i % L.cols;
-			const Int ix = L.x + L.gap + col * ( L.cellW + L.gap ), iy = gy + row * ( L.cellH + L.gap );
-			if( iy + L.cellH > L.infoY )
+			const Int ix = L.gridX + col * ( L.cellW + L.gap ), iy = gy + row * ( L.cellH + L.gap );
+			if( iy + L.cellH > L.infoY || row >= rowsFit( L ) )
 				break;
 			if( px >= ix && px < ix + L.cellW && py >= iy && py < iy + L.cellH )
 				return 200 + (Int)i;
@@ -1078,15 +1264,17 @@ Bool TiberiumSidebar::testClickPart( const char *part, Int index, Bool right )
 	Int x = -1, y = -1;
 	if( strcmp( part, "tab" ) == 0 && index < TAB_COUNT )
 	{
-		const Int tabW = ( L.w - L.gap ) / TAB_COUNT;
-		x = L.x + L.gap / 2 + index * tabW + tabW / 2;
+		Int tx = 0, tabW = 0;
+		tabRect( L, index, &tx, &tabW );
+		x = tx + tabW / 2;
 		y = L.tabsY + L.tabsH / 2;
 	}
 	else if( strcmp( part, "queue" ) == 0 && index < (Int)s_queues[s_tab].size() )
 	{
-		const Int chipW = ( L.w - L.gap * ( L.chipsPerRow + 1 ) ) / L.chipsPerRow;
-		x = L.x + L.gap + ( index % L.chipsPerRow ) * ( chipW + L.gap ) + chipW / 2;
-		y = L.chipsY + ( index / L.chipsPerRow ) * ( L.chipH + L.gap ) + L.chipH / 2;
+		Int cx = 0, cy = 0;
+		chipRect( L, index, &cx, &cy );
+		x = cx + L.chipW / 2;
+		y = cy + L.chipH / 2;
 	}
 	else if( strcmp( part, "item" ) == 0 )
 	{
@@ -1099,8 +1287,8 @@ Bool TiberiumSidebar::testClickPart( const char *part, Int index, Bool right )
 			s_scroll[s_tab] = row;
 		else if( row >= s_scroll[s_tab] + fit )
 			s_scroll[s_tab] = row - fit + 1;
-		x = L.x + L.gap + ( index % L.cols ) * ( L.cellW + L.gap ) + L.cellW / 2;
-		y = gridTop( L ) + ( row - s_scroll[s_tab] ) * ( L.cellH + L.gap ) + L.cellH / 2;
+		x = L.gridX + ( index % L.cols ) * ( L.cellW + L.gap ) + L.cellW / 2;
+		y = gridY( L ) + ( row - s_scroll[s_tab] ) * ( L.cellH + L.gap ) + L.cellH / 2;
 	}
 	if( x < 0 )
 		return FALSE;
