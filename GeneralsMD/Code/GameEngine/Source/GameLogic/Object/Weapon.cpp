@@ -198,6 +198,9 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "TargetOCL",									INI::parseAsciiString,								nullptr,							offsetof(WeaponTemplate, m_targetOCLName) },	// Tiberium Project
 	{ "AttributeModifier",					AttributeModifierStore::parseModifierName,	nullptr,				offsetof(WeaponTemplate, m_victimModifier) },	// Tiberium Project
 	{ "FollowUp",									WeaponTemplate::parseFollowUp,						nullptr,							0 },	// Tiberium Project
+	{ "Scatter",									WeaponTemplate::parseScatter,						nullptr,							0 },	// Tiberium Project
+	{ "ScatterLaser",							INI::parseAsciiString,								nullptr,							offsetof(WeaponTemplate, m_scatterLaserName) },	// Tiberium Project
+	{ "ScatterFX",								INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_scatterFX) },	// Tiberium Project
 	{ "VictimKindOf",								KindOfMaskType::parseFromINI,						nullptr,							offsetof(WeaponTemplate, m_victimKindOf) },	// Tiberium Project
 	{ "VictimForbiddenKindOf",						KindOfMaskType::parseFromINI,						nullptr,							offsetof(WeaponTemplate, m_victimForbiddenKindOf) },	// Tiberium Project
 	{ "ImpactFX",										INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_impactFX) },	// Tiberium Project
@@ -301,6 +304,8 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_targetOCL										= nullptr;	// Tiberium Project
 	m_victimModifier							= NAMEKEY_INVALID;	// Tiberium Project
 	m_impactFX = nullptr;	// Tiberium Project
+	m_scatterLaser = nullptr;	// Tiberium Project
+	m_scatterFX = nullptr;
 	m_paralyzeType = DISABLED_EMP;	// Tiberium Project
 	m_paralyzeFrames = 0;
 	m_paralyzeRemove = FALSE;
@@ -493,6 +498,10 @@ void WeaponTemplate::postProcessLoad()
 	// OCL nugget: the fire a flamethrower leaves, an ion cannon called down on its target)
 	m_targetOCL = m_targetOCLName.isEmpty() ? nullptr : TheObjectCreationListStore->findObjectCreationList(m_targetOCLName.str());
 	DEBUG_ASSERTCRASH(m_targetOCLName.isEmpty() || m_targetOCL, ("OCL %s not found in a weapon!", m_targetOCLName.str()));
+
+	// Tiberium Project @feature the beam a chain draws from hop to hop (Scatter)
+	m_scatterLaser = m_scatterLaserName.isEmpty() ? nullptr : TheThingFactory->findTemplate(m_scatterLaserName);
+	DEBUG_ASSERTCRASH(m_scatterLaserName.isEmpty() || m_scatterLaser, ("laser %s not found in a weapon!", m_scatterLaserName.str()));
 
 }
 
@@ -1442,6 +1451,116 @@ void WeaponTemplate::parseFollowUp( INI* ini, void *instance, void * /*store*/, 
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature Scatter = Weapon:<name> Count:<n> Range:<distance> [Delay:<ms>] [Damage:<percent>]
+// (one line a stage, in order)
+//-------------------------------------------------------------------------------------------------
+void WeaponTemplate::parseScatter( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ )
+{
+	WeaponTemplate* self = (WeaponTemplate*)instance;
+	WeaponScatterStage st;
+	st.m_weaponName = INI::getNextSubToken( "Weapon" );
+	st.m_count = max( 1, INI::scanInt( INI::getNextSubToken( "Count" ) ) );
+	st.m_range = max( 0.0f, INI::scanReal( INI::getNextSubToken( "Range" ) ) );
+	st.m_delay = 0;
+	st.m_damageScale = 1.0f;
+	const char *token = ini->getNextTokenOrNull( ini->getSepsColon() );
+	while( token != nullptr )
+	{
+		const char *value = ini->getNextToken( ini->getSepsColon() );
+		if( stricmp( token, "Delay" ) == 0 )
+			st.m_delay = (UnsignedInt)REAL_TO_INT_CEIL( ConvertDurationFromMsecsToFrames( INI::scanReal( value ) ) );
+		else if( stricmp( token, "Damage" ) == 0 )
+			st.m_damageScale = max( 0.0f, INI::scanPercentToReal( value ) );
+		else
+			throw INI_INVALID_DATA;
+		token = ini->getNextTokenOrNull( ini->getSepsColon() );
+	}
+	self->m_scatterStages.push_back( st );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature C&C4's WeaponScatterEffectUpdate: where this weapon's damage lands, each Scatter stage
+// in turn deals its weapon to up to Count of the nearest objects within Range of each of the last stage's
+// targets (the first stage: of the one this hit, or where it landed), that its damage would reach and that
+// none of the chain has hit yet; the chain stops at a stage that finds none. Each hop draws the ScatterLaser
+// beam from the last target to its own (the Spider's split laser, the High Confessor's bouncing bolt)
+//-------------------------------------------------------------------------------------------------
+void WeaponTemplate::scheduleScatter(ObjectID sourceID, const Object *primaryVictim, const Coord3D *pos, const WeaponBonus& bonus) const
+{
+	static Int s_depth = 0;	// (a hop's weapon that chains on: not again from within a chain)
+	if (TheWeaponStore == nullptr || pos == nullptr || s_depth >= 1)
+		return;
+	ObjectID owner = sourceID;
+	const Object *source = TheGameLogic->findObjectByID(sourceID);
+	if (source != nullptr && source->isKindOf(KINDOF_PROJECTILE) && source->getProducerID() != INVALID_ID)
+		owner = source->getProducerID();
+	const Object *ownerObj = TheGameLogic->findObjectByID(owner);
+	if (ownerObj == nullptr)
+		return;
+	std::vector<ObjectID> hit;
+	std::vector<ObjectID> from;
+	std::vector<Coord3D> fromPos;
+	if (primaryVictim != nullptr)
+		hit.push_back(primaryVictim->getID());
+	from.push_back(primaryVictim != nullptr ? primaryVictim->getID() : INVALID_ID);
+	fromPos.push_back(*pos);
+	const UnsignedInt now = TheGameLogic->getFrame();
+	UnsignedInt when = now;
+	++s_depth;
+	for (size_t s = 0; s < m_scatterStages.size(); ++s)
+	{
+		const WeaponScatterStage &st = m_scatterStages[s];
+		const WeaponTemplate *weapon = TheWeaponStore->findWeaponTemplate(st.m_weaponName);
+		if (weapon == nullptr || st.m_range <= 0.0f)
+			break;
+		when += st.m_delay;
+		WeaponBonus scaled = bonus;
+		scaled.setField(WeaponBonus::DAMAGE, bonus.getField(WeaponBonus::DAMAGE) * st.m_damageScale);
+		const Int affects = weapon->getAffectsMask();
+		std::vector<ObjectID> next;
+		std::vector<Coord3D> nextPos;
+		for (size_t f = 0; f < from.size(); ++f)
+		{
+			Int picked = 0;
+			SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(&fromPos[f], st.m_range, FROM_CENTER_2D, nullptr, ITER_SORTED_NEAR_TO_FAR);
+			MemoryPoolObjectHolder hold(iter);
+			for (Object *other = iter->first(); other != nullptr && picked < st.m_count; other = iter->next())
+			{
+				if (other == ownerObj || other->isEffectivelyDead() || other->isKindOf(KINDOF_PROJECTILE) || other->isKindOf(KINDOF_INERT))
+					continue;
+				if (std::find(hit.begin(), hit.end(), other->getID()) != hit.end())
+					continue;
+				if (!weapon->isVictimKindAllowed(other))
+					continue;
+				const Relationship r = ownerObj->getRelationship(other);
+				if ((r == ALLIES) || (r == ENEMIES && !(affects & WEAPON_AFFECTS_ENEMIES)) || (r == NEUTRAL && !(affects & WEAPON_AFFECTS_NEUTRALS)))
+					continue;
+				if (other->isAirborneTarget() && !(weapon->getAntiMask() & (WEAPON_ANTI_AIRBORNE_VEHICLE | WEAPON_ANTI_AIRBORNE_INFANTRY)))
+					continue;
+				if (!other->isAirborneTarget() && !(weapon->getAntiMask() & WEAPON_ANTI_GROUND))
+					continue;
+				++picked;
+				hit.push_back(other->getID());
+				next.push_back(other->getID());
+				nextPos.push_back(*other->getPosition());
+				if (when <= now)
+				{
+					WeaponStore::showHop(this, ownerObj, TheGameLogic->findObjectByID(from[f]), &fromPos[f], other);
+					weapon->dealDamageInternal(owner, other->getID(), other->getPosition(), scaled, FALSE);
+				}
+				else
+					TheWeaponStore->setDelayedDamage(weapon, other->getPosition(), when, owner, other->getID(), scaled, this, from[f], &fromPos[f]);
+			}
+		}
+		if (next.empty())
+			break;
+		from.swap(next);
+		fromPos.swap(nextPos);
+	}
+	--s_depth;
+}
+
+//-------------------------------------------------------------------------------------------------
 // Tiberium Project @feature the further damage a weapon's sets off: each FollowUp weapon's, where this one
 // lands (on its target, which it follows), now or after its delay (through the delayed damage list).
 // One with Start or Step is a sweep (Kane's Wrath's LinearDamageUpdate: the Shatterer's sonic wave): its
@@ -1590,9 +1709,11 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 		Object *curVictim;
 		Real curVictimDistSqr;
 
-		// Tiberium Project @feature the further damage this one sets off (FollowUp)
+		// Tiberium Project @feature the further damage this one sets off (FollowUp), and its chain (Scatter)
 		if (!m_followUps.empty())
 			scheduleFollowUps(sourceID, primaryVictim, pos, bonus);
+		if (!m_scatterStages.empty())
+			scheduleScatter(sourceID, primaryVictim, pos, bonus);
 
 		// Tiberium Project @feature what shows where it is dealt (a sweep's wave at each of its steps)
 		if (m_impactFX != nullptr)
@@ -1989,6 +2110,10 @@ void WeaponStore::update()
 		{
 			// we never do projectile-detonation-damage via this code path.
 			const Bool isProjectileDetonation = false;
+			// Tiberium Project @feature a chain hop's beam and effect, from the last hop's target to this one's
+			if (ddi->m_hopOf != nullptr)
+				showHop(ddi->m_hopOf, TheGameLogic->findObjectByID(ddi->m_delaySourceID), TheGameLogic->findObjectByID(ddi->m_hopFromID),
+					&ddi->m_hopFromPos, TheGameLogic->findObjectByID(ddi->m_delayIntendedVictimID));
 			ddi->m_delayedWeapon->dealDamageInternal(ddi->m_delaySourceID, ddi->m_delayIntendedVictimID, &ddi->m_delayDamagePos, ddi->m_bonus, isProjectileDetonation);
 			ddi = m_weaponDDI.erase(ddi);
 		}
@@ -2037,7 +2162,8 @@ void WeaponStore::reset()
 }
 
 //-------------------------------------------------------------------------------------------------
-void WeaponStore::setDelayedDamage(const WeaponTemplate *weapon, const Coord3D* pos, UnsignedInt whichFrame, ObjectID sourceID, ObjectID victimID, const WeaponBonus& bonus)
+void WeaponStore::setDelayedDamage(const WeaponTemplate *weapon, const Coord3D* pos, UnsignedInt whichFrame, ObjectID sourceID, ObjectID victimID, const WeaponBonus& bonus,
+	const WeaponTemplate *hopOf, ObjectID hopFromID, const Coord3D *hopFromPos)
 {
 	WeaponDelayedDamageInfo wi;
 	wi.m_delayedWeapon = weapon;
@@ -2046,7 +2172,47 @@ void WeaponStore::setDelayedDamage(const WeaponTemplate *weapon, const Coord3D* 
 	wi.m_delaySourceID = sourceID;
 	wi.m_delayIntendedVictimID = victimID;
 	wi.m_bonus = bonus;
+	wi.m_hopOf = hopOf;
+	wi.m_hopFromID = hopFromID;
+	if (hopFromPos != nullptr)
+		wi.m_hopFromPos = *hopFromPos;
+	else
+		wi.m_hopFromPos = *pos;
 	m_weaponDDI.push_back(wi);
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature a chain hop's look (Scatter): the chain's ScatterFX played from where the hop starts to
+// where it lands (a bolt drawn between them), and its ScatterLaser, one of the owner's laser objects, from the
+// last target (or where it was) to this one, living as long as the laser does
+//-------------------------------------------------------------------------------------------------
+void WeaponStore::showHop(const WeaponTemplate *chain, const Object *owner, const Object *from, const Coord3D *fromPos, const Object *to)
+{
+	if (chain == nullptr || to == nullptr)
+		return;
+	// (raised off the ground, as a weapon's own laser is, unless it is a flier)
+	Coord3D a = from != nullptr ? *from->getPosition() : (fromPos != nullptr ? *fromPos : *to->getPosition());
+	Coord3D b = *to->getPosition();
+	if (from == nullptr || !from->isAirborneTarget())
+		a.z += 10.0f;
+	if (!to->isAirborneTarget())
+		b.z += 10.0f;
+	if (chain->getScatterFX() != nullptr)
+		FXList::doFXPos(chain->getScatterFX(), &a, nullptr, 0.0f, &b, 0.0f);
+	const ThingTemplate *laser = chain->getScatterLaser();
+	if (laser == nullptr || owner == nullptr || owner->getControllingPlayer() == nullptr)
+		return;
+	Object *beam = TheThingFactory->newObject(laser, owner->getControllingPlayer()->getDefaultTeam());
+	if (beam == nullptr)
+		return;
+	beam->setPosition(&a);
+	Drawable *draw = beam->getDrawable();
+	if (draw == nullptr)
+		return;
+	static NameKeyType key_LaserUpdate = NAMEKEY("LaserUpdate");
+	LaserUpdate *update = (LaserUpdate*)draw->findClientUpdateModule(key_LaserUpdate);
+	if (update != nullptr)
+		update->initLaser(nullptr, to, &a, &b, AsciiString::TheEmptyString);
 }
 
 //-------------------------------------------------------------------------------------------------

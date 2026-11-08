@@ -354,6 +354,18 @@ struct WeaponFollowUp
 	Real m_step;					///< Tiberium Project @feature a sweep: each further one this much further out (0 with no Start: where the damage lands)
 };
 
+// Tiberium Project @feature a stage of a chain (C&C4's WeaponScatterEffectUpdate: the Spider's and the Striker's
+// split lasers, the High Confessor's bouncing Tiberium bolt): its weapon on up to Count new targets within
+// Range of each of the last stage's, Delay after it, at DamageScale of its damage
+struct WeaponScatterStage
+{
+	AsciiString m_weaponName;		///< found when it is due
+	Int m_count;
+	Real m_range;
+	UnsignedInt m_delay;			///< frames after the last stage
+	Real m_damageScale;
+};
+
 class WeaponTemplate : public MemoryPoolObject
 {
 	friend class WeaponStore;
@@ -520,6 +532,10 @@ private:
 	static void parseFollowUp( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ );	///< Tiberium Project
 	/// Tiberium Project @feature the further damage this weapon's sets off (FollowUp)
 	void scheduleFollowUps(ObjectID sourceID, const Object *primaryVictim, const Coord3D *pos, const WeaponBonus& bonus) const;
+	void scheduleScatter(ObjectID sourceID, const Object *primaryVictim, const Coord3D *pos, const WeaponBonus& bonus) const;	///< Tiberium Project
+	static void parseScatter( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ );	///< Tiberium Project
+	const ThingTemplate* getScatterLaser() const { return m_scatterLaser; }	///< Tiberium Project
+	const FXList* getScatterFX() const { return m_scatterFX; }	///< Tiberium Project
 	/// Tiberium Project @feature whether its damage reaches the victim's kind (VictimKindOf, VictimForbiddenKindOf)
 	Bool isVictimKindAllowed(const Object *victim) const;
 	/// the damage of its own (estimateWeaponTemplateDamage adds its follow-ups': Tiberium Project)
@@ -569,6 +585,10 @@ private:
 	const ObjectCreationList* m_targetOCL;										///< Tiberium Project: post-loaded m_targetOCLName
 	NameKeyType m_victimModifier;													///< Tiberium Project: an attribute modifier put on each object the damage reaches (C&C4's AttributeModifierNugget)
 	std::vector<WeaponFollowUp> m_followUps;										///< Tiberium Project: the further damage it sets off (FollowUp)
+	std::vector<WeaponScatterStage> m_scatterStages;									///< Tiberium Project: its chain's stages, in order (Scatter)
+	AsciiString m_scatterLaserName;													///< Tiberium Project: the beam drawn from each hop to the next (ScatterLaser)
+	const ThingTemplate* m_scatterLaser;											///< Tiberium Project: post-loaded m_scatterLaserName
+	const FXList* m_scatterFX;														///< Tiberium Project: played from each hop to the next (ScatterFX: a bolt between them)
 	KindOfMaskType m_victimKindOf;												///< Tiberium Project: its damage reaches only these kinds (any of them; none: all)
 	KindOfMaskType m_victimForbiddenKindOf;										///< Tiberium Project: and none of these
 	const FXList* m_impactFX;														///< Tiberium Project: shown where the damage is dealt (a sweep's wave, at each of its steps)
@@ -924,7 +944,9 @@ protected:
 
 	void deleteAllDelayedDamage();
 	void resetWeaponTemplates();
-	void setDelayedDamage(const WeaponTemplate *weapon, const Coord3D* pos, UnsignedInt whichFrame, ObjectID sourceID, ObjectID victimID, const WeaponBonus& bonus);
+	void setDelayedDamage(const WeaponTemplate *weapon, const Coord3D* pos, UnsignedInt whichFrame, ObjectID sourceID, ObjectID victimID, const WeaponBonus& bonus,
+		const WeaponTemplate *hopOf = nullptr, ObjectID hopFromID = INVALID_ID, const Coord3D *hopFromPos = nullptr);	///< Tiberium Project: a chain hop of hopOf's, from hopFromID (or hopFromPos) to the victim
+	static void showHop(const WeaponTemplate *chain, const Object *owner, const Object *from, const Coord3D *fromPos, const Object *to);	///< Tiberium Project: its beam and effect
 	/// Tiberium Project @feature the delayed damage of a weapon from a source on a victim called off (a damage over time
 	/// started over)
 	void cancelDelayedDamage(const WeaponTemplate *weapon, ObjectID sourceID, ObjectID victimID);
@@ -946,6 +968,9 @@ private:
 		ObjectID m_delaySourceID;										///< who dealt the damage (by ID since it might be dead due to delay)
 		ObjectID m_delayIntendedVictimID;						///< who the damage was intended for (or zero if no specific target)
 		WeaponBonus m_bonus;												///< the weapon bonus to use
+		const WeaponTemplate *m_hopOf;							///< Tiberium Project: a hop of this weapon's chain (its beam and effect)
+		ObjectID m_hopFromID;												///< Tiberium Project: from what (the last hop's target)
+		Coord3D m_hopFromPos;												///< Tiberium Project: or from where, when that is gone
 	};
 
 	std::vector<WeaponTemplate*> m_weaponTemplateVector;
