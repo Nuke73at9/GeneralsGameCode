@@ -124,10 +124,11 @@ namespace
 		int prepassTechnique;	// _CreateDepthNormalMap, or -1
 		int shadowTechnique;	// _CreateShadowMap (the mesh as a shadow caster), or -1
 		bool treadScroll;		// a tread effect: the vertex colour's alpha scrolls the texture's U
+		bool showsDamage;		// Tiberium Project: a procedural-damage effect (it has a DamagedTexture)
 		std::vector<MaterialTexture> textures;
 		std::vector<MaterialValue> values;
 		std::vector<MaterialStandIn> standIns;
-		MeshMaterial() : effect(nullptr), technique(-1), forwardTechnique(-1), prepassTechnique(-1), shadowTechnique(-1), treadScroll(false) {}
+		MeshMaterial() : effect(nullptr), technique(-1), forwardTechnique(-1), prepassTechnique(-1), shadowTechnique(-1), treadScroll(false), showsDamage(false) {}
 	};
 	// mesh model (held) -> its material; a model without one is entered with effect == nullptr
 	std::map<MeshModelClass*, MeshMaterial> s_materials;
@@ -245,6 +246,10 @@ namespace
 		mat.effect = effect;
 		mat.technique = technique;
 		mat.treadScroll = effectName.find("tread") != std::string::npos;	// CNC4_Object_Tread*: SUPPORT_TREAD_SCROLLING
+		// Tiberium Project @bugfix only C&C4's procedural-damage effects (SUPPORT_DAMAGETEXTURE) read the
+		// bone's opacity as how intact the mesh is; the others take it as the mesh's opacity, so a damaged
+		// unit's other meshes (lights, glass, a Kane's Wrath body) would fade out with its health
+		mat.showsDamage = effect->Find_Param("DamagedTexture") >= 0;
 		// the High techniques light from the deferred light buffers; until the scene renders those,
 		// the Medium ones (forward per-pixel lighting) give the look
 		std::string forward = std::string(effect->Get_Technique_Name(technique)) + "_M";
@@ -819,7 +824,7 @@ bool Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const
 	// the draw's values
 	Sage2DrawState draw;
 	draw.opacity = material->Get_Opacity();
-	draw.damage = DamageLookClass::Get_Amount(mesh);
+	draw.damage = mat.showsDamage ? DamageLookClass::Get_Amount(mesh) : 0.0f;
 	RenderObjClass* top = mesh;
 	while (top->Get_Container() != nullptr)
 		top = top->Get_Container();
