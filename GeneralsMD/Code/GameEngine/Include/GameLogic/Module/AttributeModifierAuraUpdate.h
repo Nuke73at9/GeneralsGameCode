@@ -22,6 +22,10 @@
 // AttributeModifier on what is within Radius and Affects takes in (of the KindOf given, none of
 // ForbiddenKindOf), for the modifier's Duration (twice RefreshDelay when it has none), so it wears
 // off soon after they leave. Not while the object is being built or sold, or is disabled.
+// Tiberium Project @feature AffectContainedOnly: only on what rides inside it (C&C4's Armadillo and
+// Reckoner: their passengers fire further); Radius 0: only on itself (SELF in Affects). RequiredStatus,
+// RequiredModifier: only while the object has all of those status bits, or carries that modifier itself
+// (a toggled state's: C&C4's Kodiak shields its allies only while armoured up).
 //
 //   Behavior = AttributeModifierAuraUpdate ModuleTag_ArmorAura
 //     AttributeModifier   = C4AM_Modifier_ArmorUp_Aura
@@ -35,6 +39,7 @@
 
 #include "Common/INI.h"
 #include "Common/KindOf.h"
+#include "Common/ObjectStatusTypes.h"
 #include "GameLogic/AttributeModifier.h"
 #include "GameLogic/Weapon.h"
 #include "GameLogic/Module/UpdateModule.h"
@@ -49,6 +54,9 @@ public:
 	UnsignedInt m_refreshDelay;					///< frames
 	KindOfMaskType m_kindOf;						///< any of these (none: all)
 	KindOfMaskType m_forbiddenKindOf;
+	Bool m_affectContainedOnly;					///< Tiberium Project @feature only its passengers
+	ObjectStatusMaskType m_requiredStatus;	///< Tiberium Project @feature only while it has all of these
+	NameKeyType m_requiredModifier;			///< Tiberium Project @feature only while it carries this modifier
 
 	AttributeModifierAuraUpdateModuleData()
 	{
@@ -56,6 +64,8 @@ public:
 		m_radius = 0.0f;
 		m_affects = WEAPON_AFFECTS_ALLIES;
 		m_refreshDelay = LOGICFRAMES_PER_SECOND;
+		m_affectContainedOnly = FALSE;
+		m_requiredModifier = NAMEKEY_INVALID;
 	}
 
 	static void buildFieldParse( MultiIniFieldParse& p )
@@ -69,6 +79,9 @@ public:
 			{ "RefreshDelay",					INI::parseDurationUnsignedInt,	nullptr, offsetof( AttributeModifierAuraUpdateModuleData, m_refreshDelay ) },
 			{ "KindOf",								KindOfMaskType::parseFromINI,		nullptr, offsetof( AttributeModifierAuraUpdateModuleData, m_kindOf ) },
 			{ "ForbiddenKindOf",			KindOfMaskType::parseFromINI,		nullptr, offsetof( AttributeModifierAuraUpdateModuleData, m_forbiddenKindOf ) },
+			{ "AffectContainedOnly",	INI::parseBool,									nullptr, offsetof( AttributeModifierAuraUpdateModuleData, m_affectContainedOnly ) },
+			{ "RequiredStatus",				ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( AttributeModifierAuraUpdateModuleData, m_requiredStatus ) },
+			{ "RequiredModifier",			AttributeModifierStore::parseModifierName,	nullptr, offsetof( AttributeModifierAuraUpdateModuleData, m_requiredModifier ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 		p.add( dataFieldParse );
@@ -88,5 +101,9 @@ public:
 	// virtual destructor prototype provided by memory pool declaration
 
 	virtual UpdateSleepTime update() override;
+
+private:
+
+	void affect( Object *other, const AttributeModifierTemplate *modifier, UnsignedInt duration );
 
 };

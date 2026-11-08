@@ -350,6 +350,8 @@ struct WeaponFollowUp
 	UnsignedInt m_delay;			///< frames after the damage
 	Int m_count;					///< times
 	UnsignedInt m_interval;			///< frames between them
+	Real m_start;					///< Tiberium Project @feature a sweep: the first this far from the firer, out through where the damage lands
+	Real m_step;					///< Tiberium Project @feature a sweep: each further one this much further out (0 with no Start: where the damage lands)
 };
 
 class WeaponTemplate : public MemoryPoolObject
@@ -568,6 +570,7 @@ private:
 	std::vector<WeaponFollowUp> m_followUps;										///< Tiberium Project: the further damage it sets off (FollowUp)
 	KindOfMaskType m_victimKindOf;												///< Tiberium Project: its damage reaches only these kinds (any of them; none: all)
 	KindOfMaskType m_victimForbiddenKindOf;										///< Tiberium Project: and none of these
+	const FXList* m_impactFX;														///< Tiberium Project: shown where the damage is dealt (a sweep's wave, at each of its steps)
 	const FXList* m_victimFX[3];													///< Tiberium Project: the hit shown on each object the damage reaches (C&C4's DamageFX): anything, a soldier, a structure
 	const FXList* m_fireFXs[LEVEL_COUNT];															///< weapon is fired fx
 	const FXList* m_projectileDetonateFXs[LEVEL_COUNT];								///< if we have a projectile, fx for projectile blowing up

@@ -28,6 +28,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
+#include "GameLogic/Module/ContainModule.h"
 
 //-------------------------------------------------------------------------------------------------
 AttributeModifierAuraUpdate::AttributeModifierAuraUpdate( Thing *thing, const ModuleData* moduleData ) : UpdateModule( thing, moduleData )
@@ -52,21 +53,55 @@ UpdateSleepTime AttributeModifierAuraUpdate::update()
 
 	if( me->isDisabled() || me->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || me->testStatus( OBJECT_STATUS_SOLD ) )
 		return UPDATE_SLEEP( delay );
+	// Tiberium Project @feature only in the state given (its status bits, a toggle's own modifier on it)
+	if( !me->getStatusBits().testForAll( data->m_requiredStatus ) )
+		return UPDATE_SLEEP( delay );
+	if( data->m_requiredModifier != NAMEKEY_INVALID &&
+			!me->hasAttributeModifier( TheAttributeModifierStore->find( data->m_requiredModifier ) ) )
+		return UPDATE_SLEEP( delay );
 
 	const UnsignedInt duration = modifier->getDuration() > 0 ? modifier->getDuration() : 2 * delay;
+
+	// Tiberium Project @feature only its passengers (they are out of the partition while inside)
+	if( data->m_affectContainedOnly )
+	{
+		ContainModuleInterface *contain = me->getContain();
+		const ContainedItemsList *items = contain ? contain->getContainedItemsList() : nullptr;
+		if( items != nullptr )
+		{
+			for( ContainedItemsList::const_iterator it = items->begin(); it != items->end(); ++it )
+				affect( *it, modifier, duration );
+		}
+		return UPDATE_SLEEP( delay );
+	}
+
+	// Tiberium Project @feature no radius: only itself
+	if( data->m_radius <= 0.0f )
+	{
+		affect( me, modifier, duration );
+		return UPDATE_SLEEP( delay );
+	}
+
 	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( me->getPosition(), data->m_radius, FROM_CENTER_2D );
 	MemoryPoolObjectHolder hold( iter );
 	for( Object *other = iter->first(); other; other = iter->next() )
-	{
-		if( !attributeModifierReaches( me, other, data->m_affects ) )
-			continue;
-		if( data->m_kindOf.any() && !other->isAnyKindOf( data->m_kindOf ) )
-			continue;
-		if( other->isAnyKindOf( data->m_forbiddenKindOf ) )
-			continue;
-		other->applyAttributeModifier( modifier, me->getID(), duration );
-	}
+		affect( other, modifier, duration );
 	return UPDATE_SLEEP( delay );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The modifier on one object, if Affects, KindOf and ForbiddenKindOf take it in */
+void AttributeModifierAuraUpdate::affect( Object *other, const AttributeModifierTemplate *modifier, UnsignedInt duration )
+{
+	const AttributeModifierAuraUpdateModuleData *data = getAttributeModifierAuraUpdateModuleData();
+	Object *me = getObject();
+	if( other == nullptr || !attributeModifierReaches( me, other, data->m_affects ) )
+		return;
+	if( data->m_kindOf.any() && !other->isAnyKindOf( data->m_kindOf ) )
+		return;
+	if( other->isAnyKindOf( data->m_forbiddenKindOf ) )
+		return;
+	other->applyAttributeModifier( modifier, me->getID(), duration );
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -200,6 +200,7 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "FollowUp",									WeaponTemplate::parseFollowUp,						nullptr,							0 },	// Tiberium Project
 	{ "VictimKindOf",								KindOfMaskType::parseFromINI,						nullptr,							offsetof(WeaponTemplate, m_victimKindOf) },	// Tiberium Project
 	{ "VictimForbiddenKindOf",						KindOfMaskType::parseFromINI,						nullptr,							offsetof(WeaponTemplate, m_victimForbiddenKindOf) },	// Tiberium Project
+	{ "ImpactFX",										INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_impactFX) },	// Tiberium Project
 	{ "VictimFX",										INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[0]) },	// Tiberium Project
 	{ "VictimFXInfantry",						INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[1]) },	// Tiberium Project
 	{ "VictimFXStructure",					INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[2]) },	// Tiberium Project
@@ -295,6 +296,7 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_projectileTmpl								= nullptr;
 	m_targetOCL										= nullptr;	// Tiberium Project
 	m_victimModifier							= NAMEKEY_INVALID;	// Tiberium Project
+	m_impactFX = nullptr;	// Tiberium Project
 	m_victimFX[0] = m_victimFX[1] = m_victimFX[2] = nullptr;	// Tiberium Project
 	for (Int i = LEVEL_FIRST; i <= LEVEL_LAST; ++i)
 	{
@@ -1410,6 +1412,8 @@ void WeaponTemplate::parseFollowUp( INI* ini, void *instance, void * /*store*/, 
 	f.m_delay = (UnsignedInt)REAL_TO_INT_CEIL( ConvertDurationFromMsecsToFrames( INI::scanReal( INI::getNextSubToken( "Delay" ) ) ) );
 	f.m_count = 1;
 	f.m_interval = 0;
+	f.m_start = 0.0f;
+	f.m_step = 0.0f;
 	const char *token = ini->getNextTokenOrNull( ini->getSepsColon() );
 	while( token != nullptr )
 	{
@@ -1418,6 +1422,10 @@ void WeaponTemplate::parseFollowUp( INI* ini, void *instance, void * /*store*/, 
 			f.m_count = max( 1, INI::scanInt( value ) );
 		else if( stricmp( token, "Interval" ) == 0 )
 			f.m_interval = (UnsignedInt)REAL_TO_INT_CEIL( ConvertDurationFromMsecsToFrames( INI::scanReal( value ) ) );
+		else if( stricmp( token, "Start" ) == 0 )
+			f.m_start = max( 0.0f, INI::scanReal( value ) );
+		else if( stricmp( token, "Step" ) == 0 )
+			f.m_step = max( 0.0f, INI::scanReal( value ) );
 		else
 			throw INI_INVALID_DATA;
 		token = ini->getNextTokenOrNull( ini->getSepsColon() );
@@ -1427,7 +1435,10 @@ void WeaponTemplate::parseFollowUp( INI* ini, void *instance, void * /*store*/, 
 
 //-------------------------------------------------------------------------------------------------
 // Tiberium Project @feature the further damage a weapon's sets off: each FollowUp weapon's, where this one
-// lands (on its target, which it follows), now or after its delay (through the delayed damage list)
+// lands (on its target, which it follows), now or after its delay (through the delayed damage list).
+// One with Start or Step is a sweep (Kane's Wrath's LinearDamageUpdate: the Shatterer's sonic wave): its
+// repeats go out along the line from the firer through where this one lands, the first Start from the
+// firer, each next Step further, on the ground there and on what is there then
 //-------------------------------------------------------------------------------------------------
 void WeaponTemplate::scheduleFollowUps(ObjectID sourceID, const Object *primaryVictim, const Coord3D *pos, const WeaponBonus& bonus) const
 {
@@ -1450,17 +1461,50 @@ void WeaponTemplate::scheduleFollowUps(ObjectID sourceID, const Object *primaryV
 		const WeaponTemplate *weapon = TheWeaponStore->findWeaponTemplate(f.m_weaponName);
 		if (weapon == nullptr || weapon == this)
 			continue;
+		// a sweep: out from the firer along the line through where this one lands (the firer's facing when
+		// it lands on the firer)
+		const Object *firer = TheGameLogic->findObjectByID(owner);
+		const Bool sweep = (f.m_start > 0.0f || f.m_step > 0.0f) && firer != nullptr;
+		Coord3D from = at, dir;
+		dir.zero();
+		if (sweep)
+		{
+			from = *firer->getPosition();
+			dir.x = at.x - from.x;
+			dir.y = at.y - from.y;
+			const Real length = WWMath::Sqrt(dir.x * dir.x + dir.y * dir.y);
+			if (length > 1.0f)
+			{
+				dir.x /= length;
+				dir.y /= length;
+			}
+			else
+			{
+				dir.x = WWMath::Cos(firer->getOrientation());
+				dir.y = WWMath::Sin(firer->getOrientation());
+			}
+		}
 		// a damage over time does not stack from one source on one target: hit again, it starts over (C&C4's
 		// fire fields burn at their own rate, not one more for each time they fire)
-		if (f.m_count > 1)
+		if (f.m_count > 1 && !sweep)
 			TheWeaponStore->cancelDelayedDamage(weapon, owner, victimID);
 		for (Int k = 0; k < f.m_count; ++k)
 		{
 			const UnsignedInt when = now + f.m_delay + (UnsignedInt)k * f.m_interval;
+			Coord3D where = at;
+			ObjectID whom = victimID;
+			if (sweep)
+			{
+				const Real out = f.m_start + (Real)k * f.m_step;
+				where.x = from.x + dir.x * out;
+				where.y = from.y + dir.y * out;
+				where.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight(where.x, where.y) : from.z;
+				whom = INVALID_ID;
+			}
 			if (when <= now)
-				weapon->dealDamageInternal(owner, victimID, &at, bonus, FALSE);
+				weapon->dealDamageInternal(owner, whom, &where, bonus, FALSE);
 			else
-				TheWeaponStore->setDelayedDamage(weapon, &at, when, owner, victimID, bonus);
+				TheWeaponStore->setDelayedDamage(weapon, &where, when, owner, whom, bonus);
 		}
 	}
 	--s_depth;
@@ -1513,6 +1557,13 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 					continue;
 				if (!other->isKindOf(KINDOF_INFANTRY) && !other->isKindOf(KINDOF_VEHICLE) && !other->isKindOf(KINDOF_STRUCTURE))
 					continue;
+				// only what its damage would reach: a shot that misses next to a friend leaves its charge on no
+				// friend (C&C4's Shockwave: its sonic charge burns what it sticks to)
+				const Relationship r = owner->getRelationship(other);
+				const Int affects = getAffectsMask();
+				if ((r == ALLIES && !(affects & WEAPON_AFFECTS_ALLIES)) || (r == ENEMIES && !(affects & WEAPON_AFFECTS_ENEMIES)) ||
+						(r == NEUTRAL && !(affects & WEAPON_AFFECTS_NEUTRALS)))
+					continue;
 				stickTo = other;
 				break;
 			}
@@ -1534,6 +1585,10 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 		// Tiberium Project @feature the further damage this one sets off (FollowUp)
 		if (!m_followUps.empty())
 			scheduleFollowUps(sourceID, primaryVictim, pos, bonus);
+
+		// Tiberium Project @feature what shows where it is dealt (a sweep's wave at each of its steps)
+		if (m_impactFX != nullptr)
+			FXList::doFXPos(m_impactFX, pos);
 
 		Real primaryRadius = getPrimaryDamageRadius(bonus);
 		Real secondaryRadius = getSecondaryDamageRadius(bonus);

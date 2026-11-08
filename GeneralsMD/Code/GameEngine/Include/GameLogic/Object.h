@@ -639,6 +639,7 @@ public:
 	Int purgeAttributeModifiers( UnsignedInt buffMask, Int maxCount );	///< of those classes (1 << buff), latest first; maxCount 0: all; returns how many
 	Real getAttributeModifierScalar( AttributeModifierAttribute what ) const;	///< the product of those in force (1: none)
 	Bool hasAttributeModifiers() const { return !m_attributeModifiers.empty(); }
+	Bool hasAttributeModifier( const AttributeModifierTemplate *tmpl ) const;	///< Tiberium Project: that one in force, from any source
 	void updateAttributeModifiers();	///< takes off those whose time is up (GameLogic, each frame)
 
 	inline UnsignedInt getSafeOcclusionFrame() { return m_safeOcclusionFrame; }	//< this is an object specific frame at which it's safe to enable building occlusion.

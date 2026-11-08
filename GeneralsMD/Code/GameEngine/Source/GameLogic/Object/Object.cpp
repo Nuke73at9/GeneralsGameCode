@@ -4711,6 +4711,24 @@ Real Object::getAttributeModifierScalar(AttributeModifierAttribute what) const
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature whether that modifier is in force on it (an aura that works only while its
+// holder's toggle has put its own modifier on: C&C4's Kodiak shields its allies while it is armoured up)
+//-------------------------------------------------------------------------------------------------
+Bool Object::hasAttributeModifier(const AttributeModifierTemplate *tmpl) const
+{
+	if (tmpl == nullptr)
+		return FALSE;
+	const UnsignedInt now = TheGameLogic->getFrame();
+	for (size_t i = 0; i < m_attributeModifiers.size(); ++i)
+	{
+		const AttributeModifierEntry &entry = m_attributeModifiers[i];
+		if (entry.tmpl == tmpl && (entry.expireFrame == 0 || entry.expireFrame > now))
+			return TRUE;
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
 void Object::updateAttributeModifiers()
 {
 	const UnsignedInt now = TheGameLogic->getFrame();
