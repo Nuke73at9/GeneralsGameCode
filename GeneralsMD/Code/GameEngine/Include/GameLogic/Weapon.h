@@ -476,6 +476,7 @@ public:
 	const ObjectCreationList* getFireOCL(VeterancyLevel v) const { return m_fireOCLs[v]; }
 	const ObjectCreationList* getTargetOCL() const { return m_targetOCL; }	///< Tiberium Project
 	const std::vector<WeaponFollowUp>& getFollowUps() const { return m_followUps; }	///< Tiberium Project
+	Bool isParalyzer() const { return m_paralyzeFrames > 0 && !m_paralyzeRemove; }	///< Tiberium Project: disables what it reaches
 	const ObjectCreationList* getProjectileDetonationOCL(VeterancyLevel v) const { return m_projectileDetonationOCLs[v]; }
 	const ParticleSystemTemplate* getProjectileExhaust(VeterancyLevel v) const { return m_projectileExhausts[v]; }
 
@@ -571,6 +572,10 @@ private:
 	KindOfMaskType m_victimKindOf;												///< Tiberium Project: its damage reaches only these kinds (any of them; none: all)
 	KindOfMaskType m_victimForbiddenKindOf;										///< Tiberium Project: and none of these
 	const FXList* m_impactFX;														///< Tiberium Project: shown where the damage is dealt (a sweep's wave, at each of its steps)
+	Int m_paralyzeType;																///< Tiberium Project: the DisabledType ParalyzeTime puts on each object the damage reaches
+	UnsignedInt m_paralyzeFrames;													///< Tiberium Project: how long (SAGE's ParalyzeNugget: an EMP, a stasis field); 0: none
+	Bool m_paralyzeRemove;															///< Tiberium Project: frees them of it instead (C&C4's EMP countermeasures)
+	const FXList* m_paralyzeFX;														///< Tiberium Project: shown on each object it disables
 	const FXList* m_victimFX[3];													///< Tiberium Project: the hit shown on each object the damage reaches (C&C4's DamageFX): anything, a soldier, a structure
 	const FXList* m_fireFXs[LEVEL_COUNT];															///< weapon is fired fx
 	const FXList* m_projectileDetonateFXs[LEVEL_COUNT];								///< if we have a projectile, fx for projectile blowing up

@@ -1083,6 +1083,12 @@ void TiberiumTest::update()
 						snprintf( facing, sizeof( facing ), ", inside %s", obj->getContainedBy()->getTemplate()->getName().str() );
 						strlcat( modifiers, facing, sizeof( modifiers ) );
 					}
+					// (its target held by an EMP or a stasis field)
+					if ( target != nullptr && ( target->isDisabledByType( DISABLED_EMP ) || target->isDisabledByType( DISABLED_PARALYZED ) ) )
+					{
+						snprintf( facing, sizeof( facing ), ", target %s", target->isDisabledByType( DISABLED_EMP ) ? "EMP" : "paralyzed" );
+						strlcat( modifiers, facing, sizeof( modifiers ) );
+					}
 					const DamageInfo *own = body->getLastDamageInfo();
 					if ( own != nullptr && own->in.m_sourceID != INVALID_ID )
 					{

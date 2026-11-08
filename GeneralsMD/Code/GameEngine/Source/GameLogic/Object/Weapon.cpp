@@ -201,6 +201,10 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "VictimKindOf",								KindOfMaskType::parseFromINI,						nullptr,							offsetof(WeaponTemplate, m_victimKindOf) },	// Tiberium Project
 	{ "VictimForbiddenKindOf",						KindOfMaskType::parseFromINI,						nullptr,							offsetof(WeaponTemplate, m_victimForbiddenKindOf) },	// Tiberium Project
 	{ "ImpactFX",										INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_impactFX) },	// Tiberium Project
+	{ "ParalyzeType",								INI::parseIndexList,									DisabledMaskType::s_bitNameList,	offsetof(WeaponTemplate, m_paralyzeType) },	// Tiberium Project
+	{ "ParalyzeTime",								INI::parseDurationUnsignedInt,				nullptr,							offsetof(WeaponTemplate, m_paralyzeFrames) },	// Tiberium Project
+	{ "ParalyzeRemove",							INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_paralyzeRemove) },	// Tiberium Project
+	{ "ParalyzeFX",									INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_paralyzeFX) },	// Tiberium Project
 	{ "VictimFX",										INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[0]) },	// Tiberium Project
 	{ "VictimFXInfantry",						INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[1]) },	// Tiberium Project
 	{ "VictimFXStructure",					INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[2]) },	// Tiberium Project
@@ -297,6 +301,10 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_targetOCL										= nullptr;	// Tiberium Project
 	m_victimModifier							= NAMEKEY_INVALID;	// Tiberium Project
 	m_impactFX = nullptr;	// Tiberium Project
+	m_paralyzeType = DISABLED_EMP;	// Tiberium Project
+	m_paralyzeFrames = 0;
+	m_paralyzeRemove = FALSE;
+	m_paralyzeFX = nullptr;
 	m_victimFX[0] = m_victimFX[1] = m_victimFX[2] = nullptr;	// Tiberium Project
 	for (Int i = LEVEL_FIRST; i <= LEVEL_LAST; ++i)
 	{
@@ -1798,6 +1806,22 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 			// (C&C4's AttributeModifierNugget: a slow, an armour debuff, an ally's damage boost)
 			if (m_victimModifier != NAMEKEY_INVALID && !curVictim->isEffectivelyDead())
 				curVictim->applyAttributeModifier(TheAttributeModifierStore->find(m_victimModifier), sourceID);
+			// Tiberium Project @feature SAGE's ParalyzeNugget: each object its damage reaches is disabled for
+			// ParalyzeTime (an EMP stops vehicles and structures, a stasis field holds what is in it), or freed
+			// of it (ParalyzeRemove: C&C4's EMP countermeasures)
+			if (m_paralyzeFrames > 0 && !curVictim->isEffectivelyDead())
+			{
+				const DisabledType disable = (DisabledType)m_paralyzeType;
+				if (m_paralyzeRemove)
+					curVictim->clearDisabled(disable);
+				else
+				{
+					const UnsignedInt until = TheGameLogic->getFrame() + m_paralyzeFrames;
+					if (!curVictim->isDisabledByType(disable) || curVictim->getDisabledUntil(disable) < until)
+						curVictim->setDisabledUntil(disable, until);
+					FXList::doFXObj(m_paralyzeFX, curVictim);
+				}
+			}
 			// Tiberium Project @feature the hit shown on what the damage reaches (C&C4's DamageFX, by what it
 			// is: a structure, a soldier, anything else): where a projectile burst on it, else at its middle
 			if (!damageInfo.out.m_noEffect && !curVictim->isKindOf(KINDOF_PROJECTILE) && curVictim->getDrawable() != nullptr)
@@ -3273,6 +3297,10 @@ Bool Weapon::isDamageWeapon() const
 		return TRUE;
 	}
 
+	// Tiberium Project @feature one that disables what it hits (an EMP) is a weapon to attack with
+	if( m_template->isParalyzer() )
+		return TRUE;
+
 	// Tiberium Project @bugfix a weapon whose damage comes after it fires (its FollowUp weapons: Kane's Wrath's
 	// flamethrowers burn their target half a second later, C&C4's lasers and fire fields hurt over time) hurts
 	// all the same; counted as no weapon, its unit would never attack with it
@@ -3281,7 +3309,7 @@ Bool Weapon::isDamageWeapon() const
 	{
 		const WeaponTemplate *followUp = TheWeaponStore->findWeaponTemplate( followUps[i].m_weaponName );
 		if( followUp != nullptr && followUp != m_template &&
-				( followUp->getPrimaryDamage( whoCares ) > 0.0f || followUp->getSecondaryDamage( whoCares ) > 0.0f ) )
+				( followUp->getPrimaryDamage( whoCares ) > 0.0f || followUp->getSecondaryDamage( whoCares ) > 0.0f || followUp->isParalyzer() ) )
 		{
 			return TRUE;
 		}
