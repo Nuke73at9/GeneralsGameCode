@@ -21,13 +21,16 @@
 // calls in (the Orcas of a bombing run, the Vertigos that drop mines or seed Tiberium) flies over the
 // spot its object creation list sends it to (OrderAfterCreation = STRAFE), firing Weapon at points
 // within Radius of it (TargetJitter more or less) from PreattackDistance before it until it is past,
-// then flies on off the map and is gone.
+// then flies on off the map and is gone. It fires a shot every SweepFrequency at most (else the
+// weapon's delay), and one clip of a weapon with a clip (Kane's Wrath's bombing run Orcas drop their
+// two bombs, a Vertigo its one).
 //
 //   Behavior = StrafeAreaUpdate ModuleTag_Strafe
 //     Weapon            = KWW_GDIBombingRunOrcaWeapon
 //     PreattackDistance = 500
 //     Radius            = 50
 //     TargetJitter      = 50
+//     SweepFrequency    = 200
 //   End
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -45,6 +48,7 @@ public:
 	Real m_preattackDistance;			///< it fires from this far before the spot
 	Real m_radius;								///< ... at points this far around it, and until this far past it
 	Real m_targetJitter;					///< the points' spread beyond Radius
+	UnsignedInt m_sweepFrequency;	///< frames between shots at least
 
 	StrafeAreaUpdateModuleData()
 	{
@@ -52,6 +56,7 @@ public:
 		m_preattackDistance = 200.0f;
 		m_radius = 50.0f;
 		m_targetJitter = 0.0f;
+		m_sweepFrequency = LOGICFRAMES_PER_SECOND / 5;
 	}
 
 	static void buildFieldParse( MultiIniFieldParse& p )
@@ -63,6 +68,7 @@ public:
 			{ "PreattackDistance",	INI::parseReal,						nullptr, offsetof( StrafeAreaUpdateModuleData, m_preattackDistance ) },
 			{ "Radius",							INI::parseReal,						nullptr, offsetof( StrafeAreaUpdateModuleData, m_radius ) },
 			{ "TargetJitter",				INI::parseReal,						nullptr, offsetof( StrafeAreaUpdateModuleData, m_targetJitter ) },
+			{ "SweepFrequency",			INI::parseDurationUnsignedInt,	nullptr, offsetof( StrafeAreaUpdateModuleData, m_sweepFrequency ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 		p.add( dataFieldParse );
@@ -96,4 +102,5 @@ private:
 	Coord3D m_dir;								///< along its run (2D, unit)
 	UnsignedInt m_nextShotFrame;
 	UnsignedInt m_startFrame;
+	Int m_shotsFired;							///< this run's (a weapon with a clip fires one)
 };

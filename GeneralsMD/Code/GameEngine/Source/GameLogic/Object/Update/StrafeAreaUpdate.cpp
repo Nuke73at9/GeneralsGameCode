@@ -47,6 +47,7 @@ StrafeAreaUpdate::StrafeAreaUpdate( Thing *thing, const ModuleData* moduleData )
 	m_dir.zero();
 	m_nextShotFrame = 0;
 	m_startFrame = 0;
+	m_shotsFired = 0;
 	setWakeFrame( getObject(), UPDATE_SLEEP_FOREVER );
 }
 
@@ -87,6 +88,7 @@ void StrafeAreaUpdate::strafe( const Coord3D *target )
 	m_state = STRAFE_RUN;
 	m_startFrame = TheGameLogic->getFrame();
 	m_nextShotFrame = 0;
+	m_shotsFired = 0;
 	// over the spot and on: it turns away only once past (it may start beyond the playable area)
 	const StrafeAreaUpdateModuleData *data = getStrafeAreaUpdateModuleData();
 	Coord3D through = m_target;
@@ -153,7 +155,9 @@ UpdateSleepTime StrafeAreaUpdate::update()
 
 	// how far along its run it is, the spot at 0
 	const Real along = ( pos->x - m_target.x ) * m_dir.x + ( pos->y - m_target.y ) * m_dir.y;
-	if( along >= -data->m_preattackDistance && along <= data->m_radius && data->m_weapon != nullptr && now >= m_nextShotFrame )
+	// (a weapon with a clip fires one clip a run: the bombing run's Orcas their two bombs, not a stream of them)
+	const Bool ammo = data->m_weapon != nullptr && ( data->m_weapon->getClipSize() <= 0 || m_shotsFired < data->m_weapon->getClipSize() );
+	if( along >= -data->m_preattackDistance && along <= data->m_radius && ammo && now >= m_nextShotFrame )
 	{
 		// a point around the spot (the logic's own random numbers: the same on every machine)
 		const Real reach = data->m_radius + data->m_targetJitter;
@@ -164,8 +168,10 @@ UpdateSleepTime StrafeAreaUpdate::update()
 		at.y += r * WWMath::Sin( angle );
 		at.z = TheTerrainLogic->getGroundHeight( at.x, at.y );
 		TheWeaponStore->createAndFireTempWeapon( data->m_weapon, me, &at );
+		++m_shotsFired;
 		WeaponBonus bonus;
-		m_nextShotFrame = now + (UnsignedInt)max( 1, data->m_weapon->getDelayBetweenShots( bonus ) );
+		const UnsignedInt delay = (UnsignedInt)max( 1, data->m_weapon->getDelayBetweenShots( bonus ) );
+		m_nextShotFrame = now + max( delay, data->m_sweepFrequency );
 	}
 	// past the spot (or stopped short of it, or too long about it): away
 	const UnsignedInt tooLong = LOGICFRAMES_PER_SECOND * 60;
@@ -184,10 +190,11 @@ void StrafeAreaUpdate::crc( Xfer *xfer )
 // Xfer method
 // Version Info:
 // 1: Initial version
+// 2: the run's shots
 //-------------------------------------------------------------------------------------------------
 void StrafeAreaUpdate::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -197,6 +204,8 @@ void StrafeAreaUpdate::xfer( Xfer *xfer )
 	xfer->xferCoord3D( &m_dir );
 	xfer->xferUnsignedInt( &m_nextShotFrame );
 	xfer->xferUnsignedInt( &m_startFrame );
+	if( version >= 2 )
+		xfer->xferInt( &m_shotsFired );
 }
 
 //-------------------------------------------------------------------------------------------------
