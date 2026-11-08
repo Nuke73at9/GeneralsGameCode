@@ -115,6 +115,7 @@ namespace
 	//---------------------------------------------------------------------------- mesh materials
 	struct MaterialTexture { int param; TextureClass* texture; };
 	struct MaterialValue { int param; std::vector<float> values; };
+	struct MaterialStandIn { int param; int binding; };	// Tiberium Project @feature "Key=*white"
 	struct MeshMaterial
 	{
 		Sage2EffectClass* effect;
@@ -125,6 +126,7 @@ namespace
 		bool treadScroll;		// a tread effect: the vertex colour's alpha scrolls the texture's U
 		std::vector<MaterialTexture> textures;
 		std::vector<MaterialValue> values;
+		std::vector<MaterialStandIn> standIns;
 		MeshMaterial() : effect(nullptr), technique(-1), forwardTechnique(-1), prepassTechnique(-1), shadowTechnique(-1), treadScroll(false) {}
 	};
 	// mesh model (held) -> its material; a model without one is entered with effect == nullptr
@@ -213,7 +215,18 @@ namespace
 			if (param < 0)
 				continue;
 			const Sage2EffectClass::Param& pr = effect->Get_Param(param);
-			if (pr.type >= Sage2EffectClass::TYPE_TEXTURE && pr.type <= Sage2EffectClass::TYPE_TEXTURECUBE)
+			if (pr.type >= Sage2EffectClass::TYPE_TEXTURE && pr.type <= Sage2EffectClass::TYPE_TEXTURECUBE
+				&& !lines[i].second.empty() && lines[i].second[0] == '*')
+			{
+				// Tiberium Project @feature one of the scene's stand-ins ("*white"): a converted Kane's
+				// Wrath material drawn by a C&C4 effect whose house colour takes no C&C4 scroll
+				MaterialStandIn si;
+				si.param = param;
+				si.binding = Sage2GlobalsClass::Stand_In_Binding(lines[i].second.c_str() + 1);
+				if (si.binding != SAGE2_BIND_NONE)
+					mat.standIns.push_back(si);
+			}
+			else if (pr.type >= Sage2EffectClass::TYPE_TEXTURE && pr.type <= Sage2EffectClass::TYPE_TEXTURECUBE)
 			{
 				MaterialTexture mt;
 				mt.param = param;
@@ -826,6 +839,8 @@ bool Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const
 		mat.effect->Set_Texture(mat.textures[i].param, D3D_Texture(mat.textures[i].texture));
 	for (size_t i = 0; i < mat.values.size(); ++i)
 		mat.effect->Set_Float(mat.values[i].param, &mat.values[i].values[0], (unsigned)mat.values[i].values.size());
+	for (size_t i = 0; i < mat.standIns.size(); ++i)
+		Sage2GlobalsClass::Apply_Stand_In(*mat.effect, mat.standIns[i].param, mat.standIns[i].binding);
 	if (legacy)
 		Apply_Legacy_Values(*mat.effect, base, material);
 

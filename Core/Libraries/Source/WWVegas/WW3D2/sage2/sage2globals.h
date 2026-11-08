@@ -95,6 +95,8 @@ enum Sage2Binding
 	SAGE2_BIND_TEXTURE_ENVIRONMENT,		// reflection cube (C&C4's EVDefault)
 	SAGE2_BIND_TEXTURE_ENV_GDI,			// GDI faction reflection cube
 	SAGE2_BIND_TEXTURE_ENV_NOD,			// Nod faction reflection cube
+	SAGE2_BIND_TEXTURE_SCROLL_GDI,		// GDI's house colour scroll (C&C4's GDI_Scroll; white while there is none)
+	SAGE2_BIND_TEXTURE_SCROLL_NOD,		// Nod's house colour scroll (C&C4's Nod_Scroll; white while there is none)
 	SAGE2_BIND_TEXTURE_CLOUD,			// cloud shadow layer
 	SAGE2_BIND_TEXTURE_MACRO,			// the terrain's macro texture (large-scale variation; white for none)
 	SAGE2_BIND_TEXTURE_SHADOW_MAP,		// the sun's shadow map (white while there is none)
@@ -159,6 +161,13 @@ public:
 
 	/// Fills every bound parameter of the effect from W3D's current state and the draw's values.
 	static void Apply(Sage2EffectClass& effect, const Sage2DrawState& draw);
+
+	/// Tiberium Project @feature One of the scene's stand-in textures ("white", "black", "grey") by
+	/// name, as a SAGE2_BIND_TEXTURE_* binding, or SAGE2_BIND_NONE; and that texture set on one of the
+	/// effect's parameters (a material's "Key=*white": a converted Kane's Wrath material that needs no
+	/// scroll on its house colour).
+	static int Stand_In_Binding(const char* name);
+	static void Apply_Stand_In(Sage2EffectClass& effect, int param, int binding);
 
 	/// Tiberium Project @bugfix The map's own lights, for the terrain and what lies on it (roads,
 	/// tracks, water, and the deferred light pass behind them). The terrain draws without a light

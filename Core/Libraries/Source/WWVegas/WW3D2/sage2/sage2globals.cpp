@@ -116,7 +116,9 @@ namespace
 		{ "ShroudTexture", SAGE2_BIND_TEXTURE_SHROUD },
 		{ "Noise", SAGE2_BIND_TEXTURE_GREY },
 		{ "FilteredNoise", SAGE2_BIND_TEXTURE_GREY },
-		{ "RecolorScrollTexture", SAGE2_BIND_TEXTURE_GREY },
+		// Tiberium Project @bugfix the house colour's scroll multiplies it: white is "no scroll" (grey
+		// halved every unit's house colour); the faction effects name their scroll by SAS address below
+		{ "RecolorScrollTexture", SAGE2_BIND_TEXTURE_WHITE },
 		{ "Buff_HexGrid", SAGE2_BIND_TEXTURE_BLACK },
 		{ "Buff_ShieldRamp", SAGE2_BIND_TEXTURE_BLACK },
 		{ "EnvironmentTexture", SAGE2_BIND_TEXTURE_ENVIRONMENT },
@@ -159,6 +161,9 @@ namespace
 		{ "Terrain.Cloud.CurrentOffsetUV", SAGE2_BIND_CLOUD_OFFSET },
 		{ "WW3D.GDI_Env_cube", SAGE2_BIND_TEXTURE_ENV_GDI },
 		{ "WW3D.NOD_Env_cube", SAGE2_BIND_TEXTURE_ENV_NOD },
+		// Tiberium Project @bugfix C&C4's faction house colour scrolls (Objects.fxh, RecolorScrollTexture)
+		{ "WW3D.GDI_Scroll", SAGE2_BIND_TEXTURE_SCROLL_GDI },
+		{ "WW3D.NOD_Scroll", SAGE2_BIND_TEXTURE_SCROLL_NOD },
 		{ "Objects.LightSpaceEnvironmentMap", SAGE2_BIND_TEXTURE_ENVIRONMENT },
 		{ "Water.LightSpaceEnvironmentMap", SAGE2_BIND_TEXTURE_ENVIRONMENT },
 		{ "Terrain.Macro.Texture", SAGE2_BIND_TEXTURE_MACRO },
@@ -212,6 +217,8 @@ namespace
 			case SAGE2_BIND_TEXTURE_ENVIRONMENT: effect.Set_Texture(i, Texture_Or("evdefault", s_environment)); return true;
 			case SAGE2_BIND_TEXTURE_ENV_GDI: effect.Set_Texture(i, Texture_Or("gdi_env_cube", s_environment)); return true;
 			case SAGE2_BIND_TEXTURE_ENV_NOD: effect.Set_Texture(i, Texture_Or("nod_env_cube", s_environment)); return true;
+			case SAGE2_BIND_TEXTURE_SCROLL_GDI: effect.Set_Texture(i, Texture_Or("gdi_scroll", s_white)); return true;
+			case SAGE2_BIND_TEXTURE_SCROLL_NOD: effect.Set_Texture(i, Texture_Or("nod_scroll", s_white)); return true;
 			case SAGE2_BIND_TEXTURE_CLOUD: effect.Set_Texture(i, Texture_Or("tscloudmed", s_white)); return true;
 			case SAGE2_BIND_TEXTURE_MACRO: effect.Set_Texture(i, s_macroName.empty() ? s_white : Texture_Or(s_macroName.c_str(), s_white)); return true;
 			case SAGE2_BIND_TEXTURE_SHADOW_MAP: effect.Set_Texture(i, Sage2ShadowClass::Is_Available() ? Sage2ShadowClass::Get_Texture() : s_white); return true;
@@ -508,6 +515,28 @@ bool Sage2GlobalsClass::Use_Scene_Lights(bool use)
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature a material's stand-in texture ("*white" and the like)
+int Sage2GlobalsClass::Stand_In_Binding(const char* name)
+{
+	if (name == nullptr)
+		return SAGE2_BIND_NONE;
+	if (strcmp(name, "white") == 0)
+		return SAGE2_BIND_TEXTURE_WHITE;
+	if (strcmp(name, "black") == 0)
+		return SAGE2_BIND_TEXTURE_BLACK;
+	if (strcmp(name, "grey") == 0)
+		return SAGE2_BIND_TEXTURE_GREY;
+	return SAGE2_BIND_NONE;
+}
+
+//-------------------------------------------------------------------------------------------------
+void Sage2GlobalsClass::Apply_Stand_In(Sage2EffectClass& effect, int param, int binding)
+{
+	Make_Stand_Ins();
+	Apply_Scene_Texture(effect, param, binding);
+}
+
+//-------------------------------------------------------------------------------------------------
 Sage2SceneLightsScope::Sage2SceneLightsScope() : m_previous(Sage2GlobalsClass::Use_Scene_Lights(true)) {}
 Sage2SceneLightsScope::~Sage2SceneLightsScope() { Sage2GlobalsClass::Use_Scene_Lights(m_previous); }
 
@@ -679,7 +708,12 @@ void Sage2GlobalsClass::Apply(Sage2EffectClass& effect, const Sage2DrawState& dr
 				effect.Set_Float(i, v, 3);
 				break;
 			case SAGE2_BIND_HOUSE_COLOR_BLOOM:
-				v[0] = v[1] = v[2] = v[3] = 1.0f;
+				// Tiberium Project @bugfix C&C4's house colour brightness by HouseColorUnitType (its
+				// GlobalData HouseColorBloom: GDI large, GDI small, Nod large, Nod small); 1 left it dim
+				v[0] = 3.0f;
+				v[1] = 4.0f;
+				v[2] = 3.0f;
+				v[3] = 4.0f;
 				effect.Set_Float(i, v, 4);
 				break;
 			case SAGE2_BIND_FLASH_PCT:
