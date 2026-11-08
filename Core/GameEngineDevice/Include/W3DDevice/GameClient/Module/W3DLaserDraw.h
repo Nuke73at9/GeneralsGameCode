@@ -53,8 +53,10 @@ public:
 	AsciiString m_textureName;
 	UnsignedInt m_segments;
 	Real m_arcHeight;
+	Real m_arcHeightFactor;		///< Tiberium Project: the arc's height grows with the beam, this share of its length (ArcHeightFactor)
 	Real m_segmentOverlapRatio;
 	Real m_tilingScalar;
+	Real m_tileLength;				///< Tiberium Project: the texture once every this far along the beam (TileLength), 0 for TilingScalar's way
 
 	W3DLaserDrawModuleData();
 	virtual ~W3DLaserDrawModuleData() override;
@@ -84,6 +86,9 @@ public:
 	virtual void reactToGeometryChange() override { }
 	virtual Bool isLaser() const override { return true; }
 	virtual Real getLaserTemplateWidth() const override;
+#if RTS_ZEROHOUR
+	virtual Real getLaserArcHeight( Real length ) const override;	///< Tiberium Project
+#endif
 
 	virtual LaserDrawInterface* getLaserDrawInterface() override { return this; }
 	virtual const LaserDrawInterface* getLaserDrawInterface() const override { return this; }

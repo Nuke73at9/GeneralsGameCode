@@ -62,6 +62,7 @@
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/LaserUpdate.h"
+#include "GameLogic/Module/LifetimeUpdate.h"
 #include "GameLogic/Module/UpdateModule.h"
 #include "GameLogic/Module/SpecialPowerCompletionDie.h"
 #include "GameLogic/Module/AssaultTransportAIUpdate.h"
@@ -233,6 +234,7 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "ProjectileStreamName",			INI::parseAsciiString,									nullptr,							offsetof(WeaponTemplate, m_projectileStreamName) },
 	{ "LaserName",								INI::parseAsciiString,									nullptr,							offsetof(WeaponTemplate, m_laserName) },
 	{ "LaserBoneName",						INI::parseAsciiString,									nullptr,							offsetof(WeaponTemplate, m_laserBoneName) },
+	{ "RenewLaser",								INI::parseBool,													nullptr,							offsetof(WeaponTemplate, m_renewLaser) },	// Tiberium Project
 	{ "WeaponBonus",							WeaponTemplate::parseWeaponBonusSet,		nullptr,							0 },
 	{ "HistoricBonusTime",				INI::parseDurationUnsignedInt,					nullptr,							offsetof(WeaponTemplate, m_historicBonusTime) },
 	{ "HistoricBonusRadius",			INI::parseReal,													nullptr,							offsetof(WeaponTemplate, m_historicBonusRadius) },
@@ -326,6 +328,7 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_projectileStreamName.clear();
 	m_laserName.clear();
 	m_laserBoneName.clear();
+	m_renewLaser										= FALSE;	// Tiberium Project
 	m_historicBonusTime							= 0;
 	m_historicBonusCount						= 0;
 	m_historicBonusRadius						= 0;
@@ -2056,6 +2059,7 @@ Weapon::Weapon(const WeaponTemplate* tmpl, WeaponSlotType wslot)
 	m_whenPreAttackFinished = 0;
 	m_whenLastReloadStarted = 0;
 	m_projectileStreamID = INVALID_ID;
+	m_renewLaserID = INVALID_ID;	// Tiberium Project
 	m_leechWeaponRangeActive = false;
 	m_pitchLimited = (m_template->getMinTargetPitch() > -PI || m_template->getMaxTargetPitch() < PI);
 	m_maxShotCount = NO_MAX_SHOTS_LIMIT;
@@ -2077,6 +2081,7 @@ Weapon::Weapon(const Weapon& that)
 	this->m_whenLastReloadStarted = 0;
 	this->m_whenWeCanFireAgain = 0;
 	this->m_projectileStreamID = INVALID_ID;
+	this->m_renewLaserID = INVALID_ID;	// Tiberium Project
 	this->m_leechWeaponRangeActive = false;
 	this->m_pitchLimited = (m_template->getMinTargetPitch() > -PI || m_template->getMaxTargetPitch() < PI);
 	this->m_maxShotCount = NO_MAX_SHOTS_LIMIT;
@@ -2107,6 +2112,7 @@ Weapon& Weapon::operator=(const Weapon& that)
 		this->m_suspendFXFrame = that.getSuspendFXFrame();
 		this->m_numShotsForCurBarrel = m_template->getShotsPerBarrel();
 		this->m_projectileStreamID = INVALID_ID;
+		this->m_renewLaserID = INVALID_ID;	// Tiberium Project
 	}
 	return *this;
 }
@@ -2755,9 +2761,32 @@ void Weapon::createLaser( const Object *sourceObj, const Object *victimObj, cons
 			sourceObj->getTemplate()->getName().str(), m_template->getLaserName().str() ) );
 		return;
 	}
-	Object* laser = TheThingFactory->newObject( pst, sourceObj->getControllingPlayer()->getDefaultTeam() );
+	// Tiberium Project @feature RenewLaser: while the laser the last shot made lives, this shot renews it (its life
+	// starts over, its end turns to the new target) instead of making one more beside it, so a stream fired a tenth
+	// of a second at a time is one stream (C&C3 and Kane's Wrath's ActivateStreamNugget)
+	Object* laser = nullptr;
+	if( m_template->isRenewLaser() && m_renewLaserID != INVALID_ID )
+	{
+		// (a laser has no health, so it counts as dead from the start: it lives until its lifetime destroys it)
+		Object *last = TheGameLogic->findObjectByID( m_renewLaserID );
+		if( last != nullptr && !last->isDestroyed() && last->getTemplate()->isEquivalentTo( pst ) )
+		{
+			static NameKeyType key_LifetimeUpdate = NAMEKEY( "LifetimeUpdate" );
+			LifetimeUpdate *life = (LifetimeUpdate*)last->findUpdateModule( key_LifetimeUpdate );
+			if( life != nullptr )
+				life->renewLifetime();
+			laser = last;
+		}
+	}
+
 	if( laser == nullptr )
-		return;
+	{
+		laser = TheThingFactory->newObject( pst, sourceObj->getControllingPlayer()->getDefaultTeam() );
+		if( laser == nullptr )
+			return;
+		if( m_template->isRenewLaser() )
+			m_renewLaserID = laser->getID();
+	}
 
 	// Give it a good basis in reality to ensure it can draw when on screen.
 	laser->setPosition(sourceObj->getPosition());
@@ -3189,6 +3218,20 @@ Bool Weapon::isDamageWeapon() const
 		return TRUE;
 	}
 
+	// Tiberium Project @bugfix a weapon whose damage comes after it fires (its FollowUp weapons: Kane's Wrath's
+	// flamethrowers burn their target half a second later, C&C4's lasers and fire fields hurt over time) hurts
+	// all the same; counted as no weapon, its unit would never attack with it
+	const std::vector<WeaponFollowUp>& followUps = m_template->getFollowUps();
+	for( size_t i = 0; i < followUps.size() && TheWeaponStore != nullptr; ++i )
+	{
+		const WeaponTemplate *followUp = TheWeaponStore->findWeaponTemplate( followUps[i].m_weaponName );
+		if( followUp != nullptr && followUp != m_template &&
+				( followUp->getPrimaryDamage( whoCares ) > 0.0f || followUp->getSecondaryDamage( whoCares ) > 0.0f ) )
+		{
+			return TRUE;
+		}
+	}
+
 	return FALSE;
 }
 
@@ -3608,13 +3651,13 @@ void Weapon::crc( Xfer *xfer )
 	}
 #endif // DEBUG_CRC
 
-	// laser object (defunct)
-	ObjectID laserIDUnused = INVALID_ID;
-	xfer->xferObjectID( &laserIDUnused );
+	// laser object (defunct in Zero Hour, where it stays INVALID_ID; Tiberium Project: the laser the last shot made,
+	// which the next renews, RenewLaser)
+	xfer->xferObjectID( &m_renewLaserID );
 #ifdef DEBUG_CRC
 	if (doLogging)
 	{
-		tmp.format("laserID %d ", laserIDUnused);
+		tmp.format("laserID %d ", m_renewLaserID);
 		logString.concat(tmp);
 	}
 #endif // DEBUG_CRC
@@ -3763,9 +3806,9 @@ void Weapon::xfer( Xfer *xfer )
 	// projectile stream object
 	xfer->xferObjectID( &m_projectileStreamID );
 
-	// laser object
-	ObjectID laserIDUnused = INVALID_ID;
-	xfer->xferObjectID( &laserIDUnused );
+	// laser object (Tiberium Project: the laser the last shot made, which the next renews (RenewLaser); Zero Hour
+	// saved INVALID_ID here)
+	xfer->xferObjectID( &m_renewLaserID );
 
 	// max shot count
 	xfer->xferInt( &m_maxShotCount );

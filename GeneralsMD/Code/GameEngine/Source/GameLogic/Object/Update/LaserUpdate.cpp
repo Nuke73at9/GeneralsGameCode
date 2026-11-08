@@ -43,6 +43,7 @@
 #include "GameLogic/GameLogic.h" // For frame number
 #include "GameLogic/Module/LaserUpdate.h"
 #include "WWMath/vector3.h"
+#include "WWMath/matrix3d.h"
 
 
 //-------------------------------------------------------------------------------------------------
@@ -50,6 +51,39 @@
 LaserUpdateModuleData::LaserUpdateModuleData()
 {
 	m_punchThroughScalar = 0.0f;
+	m_streamSystemCount = 0;	// Tiberium Project
+	m_streamSpeed = 0.0f;		// Tiberium Project
+	for( Int i = 0; i < MAX_STREAM_SYSTEMS; ++i )
+	{
+		m_streamSystems[i].m_from = 0.0f;
+		m_streamSystems[i].m_to = 1.0f;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature StreamParticleSystem = <name> [from to]: a system emitted along the beam, from a
+// share of its length to another (the whole beam when left out)
+//-------------------------------------------------------------------------------------------------
+void LaserUpdateModuleData::parseStreamParticleSystem( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ )
+{
+	LaserUpdateModuleData *self = (LaserUpdateModuleData*)instance;
+	const char *name = ini->getNextToken();
+	if( self->m_streamSystemCount >= MAX_STREAM_SYSTEMS )
+	{
+		DEBUG_CRASH( ("LaserUpdate: at most %d StreamParticleSystem lines", (Int)MAX_STREAM_SYSTEMS) );
+		throw INI_INVALID_DATA;
+	}
+	StreamSystem &s = self->m_streamSystems[ self->m_streamSystemCount ];
+	s.m_name = name;
+	s.m_from = 0.0f;
+	s.m_to = 1.0f;
+	const char *from = ini->getNextTokenOrNull();
+	if( from != nullptr )
+	{
+		s.m_from = INI::scanReal( from );
+		s.m_to = INI::scanReal( ini->getNextToken() );
+	}
+	++self->m_streamSystemCount;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -62,6 +96,8 @@ LaserUpdateModuleData::LaserUpdateModuleData()
 		{ "MuzzleParticleSystem",		INI::parseAsciiString,	nullptr, offsetof( LaserUpdateModuleData, m_particleSystemName ) },
 		{ "TargetParticleSystem",		INI::parseAsciiString,  nullptr, offsetof( LaserUpdateModuleData, m_targetParticleSystemName ) },
 		{ "PunchThroughScalar",			INI::parseReal,					nullptr, offsetof( LaserUpdateModuleData, m_punchThroughScalar ) },
+		{ "StreamParticleSystem",		LaserUpdateModuleData::parseStreamParticleSystem,	nullptr, 0 },	// Tiberium Project
+		{ "StreamSpeed",						INI::parseVelocityReal,	nullptr, offsetof( LaserUpdateModuleData, m_streamSpeed ) },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
 	p.add(dataFieldParse);
@@ -93,6 +129,9 @@ LaserUpdate::LaserUpdate( Thing *thing, const ModuleData* moduleData ) : ClientU
 	m_parentID = INVALID_DRAWABLE_ID;
 	m_targetID = INVALID_DRAWABLE_ID;
 	m_parentBoneName.clear();
+	for( Int i = 0; i < LaserUpdateModuleData::MAX_STREAM_SYSTEMS; ++i )	// Tiberium Project
+		m_streamSystemIDs[i] = INVALID_PARTICLE_SYSTEM_ID;
+	m_streamStartFrame = 0;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -104,6 +143,12 @@ LaserUpdate::~LaserUpdate()
 		TheParticleSystemManager->destroyParticleSystemByID( m_particleSystemID );
 	if( m_targetParticleSystemID )
 		TheParticleSystemManager->destroyParticleSystemByID( m_targetParticleSystemID );
+	// Tiberium Project: the stream's systems stop; their particles burn out
+	for( Int i = 0; i < LaserUpdateModuleData::MAX_STREAM_SYSTEMS; ++i )
+	{
+		if( m_streamSystemIDs[i] != INVALID_PARTICLE_SYSTEM_ID )
+			TheParticleSystemManager->destroyParticleSystemByID( m_streamSystemIDs[i] );
+	}
 
 }
 
@@ -202,6 +247,89 @@ void LaserUpdate::clientUpdate()
 	updateStartPos();
 	updateEndPos();
 	m_dirty |= m_laserRadius.updateRadius();
+
+	// Tiberium Project @feature a stream running out redraws as it goes, and its particles follow the beam
+	if( getStreamReach() < 1.0f )
+		m_dirty = TRUE;
+	updateStreamSystems();
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature how far the beam has run out from its start towards its end (StreamSpeed)
+//-------------------------------------------------------------------------------------------------
+Real LaserUpdate::getStreamReach() const
+{
+	const LaserUpdateModuleData *data = getLaserUpdateModuleData();
+	if( data->m_streamSpeed <= 0.0f || m_streamStartFrame == 0 )
+		return 1.0f;
+	Coord3D along = m_endPos;
+	along.sub( m_startPos );
+	const Real length = along.length();
+	if( length <= 0.001f )
+		return 1.0f;
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const Real frames = (Real)( now > m_streamStartFrame ? now - m_streamStartFrame : 0 ) + 1.0f;
+	return min( 1.0f, frames * data->m_streamSpeed / length );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the stream's particle systems along the beam: each a line in the stream's frame (Y
+// from its start towards its end, X to its right, Z up) over its share of the length run out so far, arcing as
+// the beam's draw arcs it
+//-------------------------------------------------------------------------------------------------
+void LaserUpdate::updateStreamSystems()
+{
+	const LaserUpdateModuleData *data = getLaserUpdateModuleData();
+	if( data->m_streamSystemCount == 0 )
+		return;
+
+	Vector3 along( m_endPos.x - m_startPos.x, m_endPos.y - m_startPos.y, m_endPos.z - m_startPos.z );
+	const Real length = along.Length();
+	if( length > 0.001f )
+		along /= length;
+	else
+		along.Set( 1.0f, 0.0f, 0.0f );
+	Vector3 side;
+	Vector3::Cross_Product( along, Vector3( 0.0f, 0.0f, 1.0f ), &side );
+	if( side.Length2() < 0.0001f )
+		side.Set( 1.0f, 0.0f, 0.0f );
+	side.Normalize();
+	Vector3 up;
+	Vector3::Cross_Product( side, along, &up );
+	Matrix3D frame;
+	frame.Set( side.X, along.X, up.X, m_startPos.x,
+						 side.Y, along.Y, up.Y, m_startPos.y,
+						 side.Z, along.Z, up.Z, m_startPos.z );
+
+	// the arc the beam's draw gives this length
+	Real arcHeight = 0.0f;
+	const Drawable *draw = getDrawable();
+	if( draw != nullptr )
+	{
+		for( const DrawModule** d = draw->getDrawModules(); *d; ++d )
+		{
+			const LaserDrawInterface* ldi = (*d)->getLaserDrawInterface();
+			if( ldi != nullptr )
+			{
+				arcHeight = ldi->getLaserArcHeight( length );
+				break;
+			}
+		}
+	}
+
+	const Real reach = getStreamReach();
+	for( Int i = 0; i < data->m_streamSystemCount; ++i )
+	{
+		if( m_streamSystemIDs[i] == INVALID_PARTICLE_SYSTEM_ID )
+			continue;
+		ParticleSystem *system = TheParticleSystemManager->findParticleSystem( m_streamSystemIDs[i] );
+		if( system == nullptr )
+			continue;
+		const Real from = data->m_streamSystems[i].m_from * reach;
+		const Real to = data->m_streamSystems[i].m_to * reach;
+		system->setLocalTransform( &frame );
+		system->setStreamLine( length * from, length * to, from, to, arcHeight );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -383,6 +511,26 @@ void LaserUpdate::initLaser( const Object *parent, const Object *target, const C
 		}
 	}
 
+	// Tiberium Project @feature the stream's systems, once, where the player sees the firer (as the muzzle's)
+	if( m_streamStartFrame == 0 )
+	{
+		const UnsignedInt now = TheGameLogic->getFrame();
+		m_streamStartFrame = now > 0 ? now : 1;	// (0 stands for not yet begun)
+		const Player *localPlayer = rts::getObservedOrLocalPlayer();
+		if( !parent || parent->getShroudedStatus( localPlayer->getPlayerIndex() ) <= OBJECTSHROUD_PARTIAL_CLEAR )
+		{
+			for( Int i = 0; i < data->m_streamSystemCount; ++i )
+			{
+				const ParticleSystemTemplate *tmp = TheParticleSystemManager->findTemplate( data->m_streamSystems[i].m_name );
+				DEBUG_ASSERTCRASH( tmp != nullptr, ("LaserUpdate: StreamParticleSystem %s not found", data->m_streamSystems[i].m_name.str()) );
+				system = tmp != nullptr ? TheParticleSystemManager->createParticleSystem( tmp ) : nullptr;
+				if( system != nullptr )
+					m_streamSystemIDs[i] = system->getSystemID();
+			}
+		}
+	}
+	updateStreamSystems();
+
 	//Adjust the position of any existing particle system.
 	//PLEASE NOTE You cannot check an ID for nullptr.  This should be a check against INVALID_PARTICLE_SYSTEM_ID.  Can't change it on the last day without a bug though.
 	if( m_particleSystemID )
@@ -474,7 +622,8 @@ void LaserUpdate::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	// Tiberium Project: 2 saves the stream's systems and the frame it began to run out
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -502,6 +651,13 @@ void LaserUpdate::xfer( Xfer *xfer )
 	xfer->xferDrawableID(&m_targetID);
 
 	xfer->xferAsciiString(&m_parentBoneName);
+
+	if( version >= 2 )
+	{
+		for( Int i = 0; i < LaserUpdateModuleData::MAX_STREAM_SYSTEMS; ++i )
+			xfer->xferUser( &m_streamSystemIDs[i], sizeof( ParticleSystemID ) );
+		xfer->xferUnsignedInt( &m_streamStartFrame );
+	}
 
 }
 

@@ -429,6 +429,10 @@ public:
 	AsciiString getProjectileStreamName() const { return m_projectileStreamName; }
 	AsciiString getLaserName() const { return m_laserName; }
 	const AsciiString& getLaserBoneName() const { return m_laserBoneName; }
+	/// Tiberium Project @feature RenewLaser: while the laser the weapon's last shot made lives, each shot renews
+	/// it (its life starts over, its end moves to the new target) instead of making one more beside it. C&C3 and
+	/// Kane's Wrath's streams (ActivateStreamNugget) keep one stream going through a flamethrower's burst.
+	Bool isRenewLaser() const { return m_renewLaser; }
 	NameKeyType getNameKey() const { return m_nameKey; }
 	Real getWeaponSpeed() const { return m_weaponSpeed; }
 	Real getMinWeaponSpeed() const { return m_minWeaponSpeed; }
@@ -525,6 +529,7 @@ private:
 	AsciiString m_projectileStreamName;			///< Name of object that tracks are stream, if we have one
 	AsciiString m_laserName;								///< Name of the laser object that persists.
 	AsciiString m_laserBoneName;						///< Where to put the laser object
+	Bool m_renewLaser;											///< Tiberium Project: each shot renews the last shot's laser while it lives (RenewLaser)
 	Real m_primaryDamage;										///< primary damage amount
 	Real m_primaryDamageRadius;							///< primary damage radius range
 	Real m_secondaryDamage;									///< secondary damage amount
@@ -849,6 +854,7 @@ private:
 	UnsignedInt								m_lastFireFrame;						///< frame a shot was last fired on
 	UnsignedInt								m_suspendFXFrame;						///< The fireFX can be suspended for any delay, in frames, then they will execute as normal
 	ObjectID									m_projectileStreamID;				///< the object that is tracking our stream if we have one.  It can't go away without us.
+	ObjectID									m_renewLaserID;							///< Tiberium Project: the laser the last shot made, which the next renews (RenewLaser)
 	Int												m_maxShotCount;							///< used for limiting consecutive firing
 	Int												m_curBarrel;								///< current barrel used for firing
 	Int												m_numShotsForCurBarrel;			///< how many shots to fire from cur barrel before moving to next barrel

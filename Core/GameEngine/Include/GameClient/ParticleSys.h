@@ -787,6 +787,10 @@ public:
 	void setLightningTarget( const Coord3D *pos );
 	/// Tiberium Project @feature lightning: where a point of a bolt is at an age (0 to 1 of its life)
 	void placeLightningPoint( Int bolt, Real t, Real age, Coord3D *pos ) const;
+	/// Tiberium Project @feature a stream's line (a laser's StreamParticleSystem): emitted along the system's Y from
+	/// startY to endY, arcing up its Z by arcHeight * sin(pi * u), u running from arcFrom to arcTo (the line's
+	/// share of the whole stream), at its full length whatever the particle detail
+	void setStreamLine( Real startY, Real endY, Real arcFrom, Real arcTo, Real arcHeight );
 
 	const AsciiString& getParticleTypeName() const { return m_particleTypeName; }	///< return the name of the particles
 	Bool isUsingParticles() const { return m_particleType == PARTICLE; }
@@ -937,6 +941,12 @@ protected:
 		Real phase[ParticleSystemTemplate::MAX_LIGHTNING_WAVES], phaseChange[ParticleSystemTemplate::MAX_LIGHTNING_WAVES];
 	};
 	std::vector<LightningBolt>	m_lightningBolts;								///< each bolt's line and waves, by the index its points hold
+
+	// Tiberium Project @feature a stream's line (not saved: its laser sets it every frame)
+	Bool							m_streamLine;													///< the line volume is a stream's (setStreamLine)
+	Real							m_streamArcFrom;											///< the line's share of the stream: from
+	Real							m_streamArcTo;												///< to
+	Real							m_streamArcHeight;										///< the stream's arc at its middle
 
 
 	// the actual particle system data is inherited from ParticleSystemInfo

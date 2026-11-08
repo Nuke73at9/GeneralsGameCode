@@ -79,6 +79,16 @@ void LifetimeUpdate::setLifetimeRange( UnsignedInt minFrames, UnsignedInt maxFra
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the object's life starts over from now, as long as its module gives (a renewed
+// laser: RenewLaser)
+//-------------------------------------------------------------------------------------------------
+void LifetimeUpdate::renewLifetime()
+{
+	const LifetimeUpdateModuleData* d = getLifetimeUpdateModuleData();
+	setLifetimeRange( d->m_minFrames, d->m_maxFrames );
+}
+
+//-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 UnsignedInt LifetimeUpdate::calcSleepDelay(UnsignedInt minFrames, UnsignedInt maxFrames)
 {

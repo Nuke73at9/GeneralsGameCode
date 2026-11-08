@@ -49,8 +49,26 @@ public:
 
 	Real m_punchThroughScalar;	///< If non-zero, length modifier when we used to have a target object and now don't
 
+	/// Tiberium Project @feature the particle systems a stream draws along its length (C&C3 and Kane's Wrath's
+	/// StreamDraw ParticleSystems: a flamethrower's flames and glow along the stream), each emitted from a share
+	/// of the length to another (0 at the beam's start, 1 at its end): StreamParticleSystem = <name> [from to].
+	/// Their ortho velocity's Y runs along the stream, X to its right, Z up.
+	enum { MAX_STREAM_SYSTEMS = 4 };
+	struct StreamSystem
+	{
+		AsciiString m_name;
+		Real m_from;
+		Real m_to;
+	};
+	StreamSystem m_streamSystems[MAX_STREAM_SYSTEMS];
+	Int m_streamSystemCount;
+	/// Tiberium Project @feature how fast the beam runs out from its start towards its end, distance per frame
+	/// (StreamSpeed, per second in the INI: C&C3's StreamDraw Velocity); 0 for all at once
+	Real m_streamSpeed;
+
 	LaserUpdateModuleData();
 	static void buildFieldParse(MultiIniFieldParse& p);
+	static void parseStreamParticleSystem( INI* ini, void *instance, void *store, const void* userData );	///< Tiberium Project
 
 private:
 
@@ -106,6 +124,9 @@ public:
 	Real getTemplateLaserRadius() const;
 	Real getCurrentLaserRadius() const;
 
+	/// Tiberium Project @feature how far the beam has run out towards its end, 0 to 1 (StreamSpeed; 1 without)
+	Real getStreamReach() const;
+
 	void setDirty( Bool dirty ) { m_dirty = dirty; }
 	Bool isDirty() const { return m_dirty; }
 
@@ -115,6 +136,7 @@ protected:
 
 	void updateStartPos(); ///< figures out and sets startPos
 	void updateEndPos(); ///< figures out and sets endPos
+	void updateStreamSystems(); ///< Tiberium Project: the stream's particle systems along the beam as it is now
 
 	//If the master dies, so will this laser (although if it has a fade delay, it'll just skip to the fade)
 	Coord3D m_startPos;
@@ -129,4 +151,7 @@ protected:
 	AsciiString m_parentBoneName;
 
 	LaserRadiusUpdate m_laserRadius;
+
+	ParticleSystemID m_streamSystemIDs[LaserUpdateModuleData::MAX_STREAM_SYSTEMS];	///< Tiberium Project: StreamParticleSystem
+	UnsignedInt m_streamStartFrame;		///< Tiberium Project: the frame the beam began to run out (StreamSpeed)
 };

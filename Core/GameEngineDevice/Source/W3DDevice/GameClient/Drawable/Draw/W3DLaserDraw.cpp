@@ -68,6 +68,8 @@ W3DLaserDrawModuleData::W3DLaserDrawModuleData()
 	m_tile = false;
 	m_segments = 1;
 	m_arcHeight = 0.0f;
+	m_arcHeightFactor = 0.0f;	// Tiberium Project
+	m_tileLength = 0.0f;			// Tiberium Project
 	m_segmentOverlapRatio = 0.0f;
 	m_tilingScalar = 1.0f;
 }
@@ -98,8 +100,10 @@ void W3DLaserDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "Tile",									INI::parseBool,									nullptr, offsetof( W3DLaserDrawModuleData, m_tile ) },
 		{ "Segments",							INI::parseUnsignedInt,					nullptr, offsetof( W3DLaserDrawModuleData, m_segments ) },
     { "ArcHeight",						INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_arcHeight ) },
+		{ "ArcHeightFactor",			INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_arcHeightFactor ) },	// Tiberium Project
 		{ "SegmentOverlapRatio",	INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_segmentOverlapRatio ) },
 		{ "TilingScalar",					INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_tilingScalar ) },
+		{ "TileLength",						INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_tileLength ) },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
   p.add(dataFieldParse);
@@ -246,6 +250,20 @@ Real W3DLaserDraw::getLaserTemplateWidth() const
 	return data->m_outerBeamWidth * 0.5f;
 }
 
+#if RTS_ZEROHOUR
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature how high the beam arcs at its middle for a length: ArcHeight, and ArcHeightFactor's
+// share of the length (C&C3's StreamDraw ArcHeightFactor); none unless drawn in segments
+//-------------------------------------------------------------------------------------------------
+Real W3DLaserDraw::getLaserArcHeight( Real length ) const
+{
+	const W3DLaserDrawModuleData *data = getW3DLaserDrawModuleData();
+	if( data->m_segments <= 1 )
+		return 0.0f;
+	return data->m_arcHeight + data->m_arcHeightFactor * length;
+}
+#endif
+
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 void W3DLaserDraw::doDrawModule(const Matrix3D* transformMtx)
@@ -271,9 +289,22 @@ void W3DLaserDraw::doDrawModule(const Matrix3D* transformMtx)
 
 		Vector3 laserPoints[ 2 ];
 
+		// Tiberium Project @feature how far a stream has run out (LaserUpdate StreamSpeed): the beam is drawn
+		// that share of the way, along its whole course
+#if RTS_ZEROHOUR
+		const Real reach = update->getStreamReach();
+#else
+		const Real reach = 1.0f;
+#endif
+
 		for( UnsignedInt segment = 0; segment < data->m_segments; segment++ )
 		{
-			if( data->m_arcHeight > 0.0f && data->m_segments > 1 )
+			// Tiberium Project @feature the arc may also grow with the beam's length (ArcHeightFactor)
+			Coord3D fullLine;
+			fullLine.set( *update->getEndPos() );
+			fullLine.sub( *update->getStartPos() );
+			const Real arcHeight = data->m_arcHeight + data->m_arcHeightFactor * fullLine.length();
+			if( arcHeight > 0.0f && data->m_segments > 1 )
 			{
 				//CALCULATE A CURVED LINE BASED ON TOTAL LENGTH AND DESIRED HEIGHT INCREASE
 				//To do this we will use a portion of the cos wave ranging between -0.25PI
@@ -318,6 +349,8 @@ void W3DLaserDraw::doDrawModule(const Matrix3D* transformMtx)
 				{
 					endSegmentRatio += data->m_segmentOverlapRatio;
 				}
+				startSegmentRatio *= reach;
+				endSegmentRatio *= reach;
 
 				//Calculate our start segment position on the *ground*.
 				Coord3D segmentStart, segmentEnd, vector;
@@ -343,7 +376,7 @@ void W3DLaserDraw::doDrawModule(const Matrix3D* transformMtx)
 				Real dist = vector.length();
 				Real scaledRadians = dist / halfLength * PI * 0.5f;
 				Real height = cos( scaledRadians );
-				height *= data->m_arcHeight;
+				height *= arcHeight;
 				segmentStart.z += height;
 
 				//Now do the same thing for the end position.
@@ -352,7 +385,7 @@ void W3DLaserDraw::doDrawModule(const Matrix3D* transformMtx)
 				dist = vector.length();
 				scaledRadians = dist / halfLength * PI * 0.5f;
 				height = cos( scaledRadians );
-				height *= data->m_arcHeight;
+				height *= arcHeight;
 				segmentEnd.z += height;
 
 				//This makes the laser skim the ground rather than penetrate it!
@@ -366,7 +399,8 @@ void W3DLaserDraw::doDrawModule(const Matrix3D* transformMtx)
 			{
 				//No arc -- way simpler!
 				laserPoints[ 0 ].Set( update->getStartPos()->x, update->getStartPos()->y, update->getStartPos()->z );
-				laserPoints[ 1 ].Set( update->getEndPos()->x, update->getEndPos()->y, update->getEndPos()->z );
+				laserPoints[ 1 ].Set( update->getStartPos()->x + fullLine.x * reach, update->getStartPos()->y + fullLine.y * reach,
+					update->getStartPos()->z + fullLine.z * reach );
 			}
 
 			//Get the color components for calculation purposes.
@@ -408,6 +442,10 @@ void W3DLaserDraw::doDrawModule(const Matrix3D* transformMtx)
 
 					//Adjust tile factor so texture is NOT stretched but tiled equally in both width and length.
 					Real tileFactor = length/width*m_textureAspectRatio*data->m_tilingScalar;
+					// Tiberium Project @feature or once every TileLength along the beam, whatever its width and the
+					// texture's shape (C&C3's StreamDraw UVWorldSize)
+					if( data->m_tileLength > 0.0f )
+						tileFactor = length / data->m_tileLength;
 
 					//Set the tile factor
 					m_line3D[ index ]->Set_Texture_Tile_Factor( tileFactor );	//number of times to tile texture across each segment

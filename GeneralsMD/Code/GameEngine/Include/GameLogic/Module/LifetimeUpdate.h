@@ -79,6 +79,7 @@ public:
 	// virtual destructor prototype provided by memory pool declaration
 
 	void setLifetimeRange( UnsignedInt minFrames, UnsignedInt maxFrames );
+	void renewLifetime();	///< Tiberium Project: the life starts over from now (MinLifetime to MaxLifetime)
 	UnsignedInt getDieFrame() const { return m_dieFrame; }
 
 	virtual UpdateSleepTime update() override;

@@ -146,6 +146,9 @@ class LaserDrawInterface
 {
 public:
 	virtual Real getLaserTemplateWidth() const = 0;
+	/// Tiberium Project @feature how high the beam arcs at its middle for a length (W3DLaserDraw ArcHeight,
+	/// ArcHeightFactor), for what follows the beam (a stream's particles)
+	virtual Real getLaserArcHeight( Real /*length*/ ) const { return 0.0f; }
 };
 
 //-------------------------------------------------------------------------------------------------

@@ -1254,6 +1254,10 @@ ParticleSystem::ParticleSystem( const ParticleSystemTemplate *sysTemplate,
 
 	// Tiberium Project @feature lightning: no target until an effect gives one
 	m_hasLightningTarget = false;
+	m_streamLine = false;			// Tiberium Project
+	m_streamArcFrom = 0.0f;
+	m_streamArcTo = 1.0f;
+	m_streamArcHeight = 0.0f;
 	m_lightningTarget.zero();
 
 	m_isStopped = false;
@@ -1819,6 +1823,21 @@ void ParticleSystem::computeLightningPosition( Int particleNum, Int particleCoun
 }
 
 // ------------------------------------------------------------------------------------------------
+// Tiberium Project @feature a stream's line (a laser's StreamParticleSystem): along the system's Y, arcing up
+// its Z as the stream's beam arcs
+// ------------------------------------------------------------------------------------------------
+void ParticleSystem::setStreamLine( Real startY, Real endY, Real arcFrom, Real arcTo, Real arcHeight )
+{
+	m_emissionVolumeType = LINE;
+	m_emissionVolume.line.start.set( 0.0f, startY, 0.0f );
+	m_emissionVolume.line.end.set( 0.0f, endY, 0.0f );
+	m_streamLine = true;
+	m_streamArcFrom = arcFrom;
+	m_streamArcTo = arcTo;
+	m_streamArcHeight = arcHeight;
+}
+
+// ------------------------------------------------------------------------------------------------
 // Tiberium Project @feature lightning: a point t (0 to 1) along a bolt at an age (0 to 1 of its life): on the
 // line, pushed across it by the bolt's waves as they stand at that age (the first wave and the third to one side,
 // the second up), which taper to nothing at the ends, so the bolt meets both
@@ -1974,6 +1993,14 @@ const Coord3D *ParticleSystem::computeParticlePosition()
 			newPos.x = start.x + t * delta.x;
 			newPos.y = start.y + t * delta.y;
 			newPos.z = start.z + t * delta.z;
+
+			// Tiberium Project @feature a stream's line arcs as its beam does, at its full length
+			if( m_streamLine )
+			{
+				const Real u = m_streamArcFrom + t * ( m_streamArcTo - m_streamArcFrom );
+				newPos.z += m_streamArcHeight * sinf( PI * u );
+				return &newPos;
+			}
 			break;
 		}
 
