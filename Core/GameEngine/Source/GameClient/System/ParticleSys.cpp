@@ -95,6 +95,9 @@ ParticleInfo::ParticleInfo()
 	m_lifetime = 0;
 	m_particleUpTowardsEmitter = FALSE;
 
+	m_lightningBolt = -1;	// Tiberium Project
+	m_lightningT = 0.0f;
+
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -323,6 +326,8 @@ Particle::Particle( ParticleSystem *system, const ParticleInfo *info )
 	m_windRandomness = info->m_windRandomness;
 	m_particleUpTowardsEmitter = info->m_particleUpTowardsEmitter;
 	m_emitterPos = info->m_emitterPos;
+	m_lightningBolt = info->m_lightningBolt;	// Tiberium Project
+	m_lightningT = info->m_lightningT;
 
 #if PARTICLE_USE_XY_ROTATION
 	m_angularRateX = info->m_angularRateX;
@@ -469,6 +474,10 @@ Bool Particle::update()
 	m_accel.z = 0.0f;
 
 	const UnsignedInt frameCount = getElapsedFrames();
+
+	// Tiberium Project @feature lightning: a point of a bolt follows its bolt's waves as they change with its age
+	if (m_lightningBolt >= 0 && m_lifetime > 0)
+		m_system->placeLightningPoint( m_lightningBolt, m_lightningT, (Real)frameCount / (Real)m_lifetime, &m_pos );
 
 	// TheSuperHackers @info Skip the rest of the logic update on the creation frame. No render update has
 	// integrated this particle yet, so its rates must stay at their initial values for this frame, and testing
@@ -1243,6 +1252,10 @@ ParticleSystem::ParticleSystem( const ParticleSystemTemplate *sysTemplate,
 	m_transform.Make_Identity();
 	m_skipParentXfrm = false;
 
+	// Tiberium Project @feature lightning: no target until an effect gives one
+	m_hasLightningTarget = false;
+	m_lightningTarget.zero();
+
 	m_isStopped = false;
 	m_isDestroyed = false;
 	m_isSaveable = true;
@@ -1758,6 +1771,101 @@ const Coord3D *ParticleSystem::computeParticleVelocity( const Coord3D *pos )
 }
 
 // ------------------------------------------------------------------------------------------------
+// Tiberium Project @feature lightning: where its bolt ends
+void ParticleSystem::setLightningTarget( const Coord3D *pos )
+{
+	m_hasLightningTarget = pos != nullptr;
+	if (pos != nullptr)
+		m_lightningTarget = *pos;
+}
+
+// ------------------------------------------------------------------------------------------------
+// Tiberium Project @feature lightning: point particleNum of a burst of particleCount, the burst one bolt from the
+// system (its first point) to its target (its last), its waves drawn at its first point
+void ParticleSystem::computeLightningPosition( Int particleNum, Int particleCount, ParticleInfo *info )
+{
+	const ParticleSystemTemplate *tmpl = m_template;
+	if (particleNum == 0 || m_lightningBolts.empty())
+	{
+		LightningBolt bolt;
+		Vector3 origin;
+		m_transform.mulVector3( Vector3( 0, 0, 0 ), origin );
+		bolt.start.x = origin.X;
+		bolt.start.y = origin.Y;
+		bolt.start.z = origin.Z;
+		bolt.end = m_lightningTarget;
+		for (Int w = 0; w < ParticleSystemTemplate::MAX_LIGHTNING_WAVES; ++w)
+		{
+			bolt.amplitude[w] = bolt.amplitudeChange[w] = bolt.frequency[w] = bolt.frequencyChange[w] = 0.0f;
+			bolt.phase[w] = bolt.phaseChange[w] = 0.0f;
+			if (w < tmpl->getLightningWaveCount())
+			{
+				const ParticleSystemTemplate::LightningWave &wave = tmpl->getLightningWave( w );
+				bolt.amplitude[w] = GameClientRandomValueReal( wave.amplitude[0], wave.amplitude[1] );
+				bolt.amplitudeChange[w] = GameClientRandomValueReal( wave.amplitudeChange[0], wave.amplitudeChange[1] );
+				bolt.frequency[w] = GameClientRandomValueReal( wave.frequency[0], wave.frequency[1] );
+				bolt.frequencyChange[w] = GameClientRandomValueReal( wave.frequencyChange[0], wave.frequencyChange[1] );
+				bolt.phase[w] = GameClientRandomValueReal( wave.phase[0], wave.phase[1] );
+				bolt.phaseChange[w] = GameClientRandomValueReal( wave.phaseChange[0], wave.phaseChange[1] );
+			}
+		}
+		m_lightningBolts.push_back( bolt );
+	}
+
+	info->m_lightningBolt = (Int)m_lightningBolts.size() - 1;
+	info->m_lightningT = particleCount > 1 ? (Real)particleNum / (Real)( particleCount - 1 ) : 1.0f;
+	placeLightningPoint( info->m_lightningBolt, info->m_lightningT, 0.0f, &info->m_pos );
+	info->m_vel.zero();
+}
+
+// ------------------------------------------------------------------------------------------------
+// Tiberium Project @feature lightning: a point t (0 to 1) along a bolt at an age (0 to 1 of its life): on the
+// line, pushed across it by the bolt's waves as they stand at that age (the first wave and the third to one side,
+// the second up), which taper to nothing at the ends, so the bolt meets both
+void ParticleSystem::placeLightningPoint( Int boltIndex, Real t, Real age, Coord3D *pos ) const
+{
+	if (boltIndex < 0 || boltIndex >= (Int)m_lightningBolts.size())
+		return;
+	const LightningBolt &bolt = m_lightningBolts[boltIndex];
+	Vector3 dir( bolt.end.x - bolt.start.x, bolt.end.y - bolt.start.y, bolt.end.z - bolt.start.z );
+	pos->x = bolt.start.x + dir.X * t;
+	pos->y = bolt.start.y + dir.Y * t;
+	pos->z = bolt.start.z + dir.Z * t;
+
+	const Real length = dir.Length();
+	if (length < 0.001f)
+		return;
+	dir /= length;
+	Vector3 side;
+	Vector3::Cross_Product( dir, Vector3( 0, 0, 1 ), &side );
+	if (side.Length2() < 0.0001f)
+		side.Set( 1, 0, 0 );
+	side.Normalize();
+	Vector3 up;
+	Vector3::Cross_Product( side, dir, &up );
+	up.Normalize();
+
+	const Real taper = sinf( PI * t );
+	Real across = 0.0f, above = 0.0f;
+	for (Int w = 0; w < ParticleSystemTemplate::MAX_LIGHTNING_WAVES; ++w)
+	{
+		const Real amplitude = bolt.amplitude[w] + bolt.amplitudeChange[w] * age;
+		if (amplitude == 0.0f)
+			continue;
+		const Real frequency = bolt.frequency[w] + bolt.frequencyChange[w] * age;
+		const Real phase = bolt.phase[w] + bolt.phaseChange[w] * age;
+		const Real offset = amplitude * sinf( 2.0f * PI * frequency * t + phase ) * taper;
+		if (w == 1)
+			above += offset;
+		else
+			across += offset;
+	}
+	pos->x += side.X * across + up.X * above;
+	pos->y += side.Y * across + up.Y * above;
+	pos->z += side.Z * across + up.Z * above;
+}
+
+// ------------------------------------------------------------------------------------------------
 /** Compute a position based on emission properties */
 // ------------------------------------------------------------------------------------------------
 const Coord3D *ParticleSystem::computeParticlePosition()
@@ -2018,6 +2126,12 @@ const ParticleInfo *ParticleSystem::generateParticleInfo( Int particleNum, Int p
 		info.m_vel.z = vr.Z;
 	}
 
+	// Tiberium Project @feature lightning: the burst along its bolts (in the world), still
+	info.m_lightningBolt = -1;
+	info.m_lightningT = 0.0f;
+	if (m_hasLightningTarget && m_template != nullptr && m_template->isLightning())
+		computeLightningPosition( particleNum, particleCount, &info );
+
 	info.m_velDamping = m_velDamping.getValue();
 	info.m_angularDamping = m_angularDamping.getValue();
 
@@ -2127,6 +2241,10 @@ Bool ParticleSystem::update( Int localPlayerIndex  )
 					Int count = REAL_TO_INT(m_burstCount.getValue());
 
 					count *= m_countCoeff;
+
+					// Tiberium Project @feature lightning: the burst's points after one at the system
+					if (m_hasLightningTarget && m_template != nullptr && m_template->isLightning() && count > 0)
+						count += 1;
 
 					for( Int i=0; i<count; i++ )
 					{
@@ -3059,6 +3177,9 @@ const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 	{ "GeometryLengthDamping",	INI::parseGameClientRandomVariable,	nullptr,	offsetof( ParticleSystemTemplate, m_geometryLengthDamping ) },
 	// Tiberium Project @feature the emission volume moved off the origin
 	{ "VolumeOffset",						INI::parseCoord3D,			nullptr,	offsetof( ParticleSystemTemplate, m_volumeOffset ) },
+	// Tiberium Project @feature lightning: a burst laid out along a bolt to the effect's target
+	{ "Lightning",							INI::parseBool,					nullptr,	offsetof( ParticleSystemTemplate, m_lightning ) },
+	{ "LightningWave",					ParticleSystemTemplate::parseLightningWave,	nullptr,	0 },
 
 
 	{ nullptr,											nullptr,																					nullptr,		0 },
@@ -3166,6 +3287,25 @@ ParticleSystemTemplate::ParticleSystemTemplate( const AsciiString &name ) :
 	m_geometryLengthRate.setRange( 0.0f, 0.0f );
 	m_geometryLengthDamping.setRange( 1.0f, 1.0f );
 	m_volumeOffset.x = m_volumeOffset.y = m_volumeOffset.z = 0.0f;
+	m_lightning = FALSE;
+	m_lightningWaveCount = 0;
+	memset( m_lightningWaves, 0, sizeof( m_lightningWaves ) );
+}
+
+// ------------------------------------------------------------------------------------------------
+// Tiberium Project @feature lightning: "LightningWave = amplitude min max, its change min max, frequency min
+// max, its change min max, phase min max, its change min max" (twelve numbers; up to three lines)
+void ParticleSystemTemplate::parseLightningWave( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ )
+{
+	ParticleSystemTemplate *self = static_cast<ParticleSystemTemplate *>( instance );
+	LightningWave wave;
+	Real *fields[] = { &wave.amplitude[0], &wave.amplitude[1], &wave.amplitudeChange[0], &wave.amplitudeChange[1],
+		&wave.frequency[0], &wave.frequency[1], &wave.frequencyChange[0], &wave.frequencyChange[1],
+		&wave.phase[0], &wave.phase[1], &wave.phaseChange[0], &wave.phaseChange[1] };
+	for (Int i = 0; i < (Int)ARRAY_SIZE( fields ); ++i)
+		*fields[i] = INI::scanReal( ini->getNextToken() );
+	if (self->m_lightningWaveCount < MAX_LIGHTNING_WAVES)
+		self->m_lightningWaves[self->m_lightningWaveCount++] = wave;
 }
 
 // ------------------------------------------------------------------------------------------------

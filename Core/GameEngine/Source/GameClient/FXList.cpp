@@ -520,14 +520,27 @@ public:
 		m_attachToObject = false;
 		m_createAtGroundHeight = FALSE;
 		m_useCallersRadius = FALSE;
+		m_useTarget = FALSE;
+		m_ricochet = FALSE;	// Tiberium Project @bugfix was left unset (only a Ricochet line set it)
 		m_rotateX = m_rotateY = m_rotateZ = 0;
 	}
 
-	virtual void doFXPos(const Coord3D *primary, const Matrix3D* primaryMtx, const Real /*primarySpeed*/, const Coord3D * /*secondary*/, const Real overrideRadius ) const override
+	virtual void doFXPos(const Coord3D *primary, const Matrix3D* primaryMtx, const Real /*primarySpeed*/, const Coord3D * secondary, const Real overrideRadius ) const override
 	{
 		if (primary)
 		{
-			reallyDoFX(primary, primaryMtx, nullptr, overrideRadius);
+			// Tiberium Project @feature UseTarget (C&C4's): the system at the other end (a weapon's victim), turned
+			// along the line of fire when it is to orient or ricochet (sparks thrown on past the hit)
+			if (m_useTarget && secondary)
+			{
+				Matrix3D aimingMatrix(1);
+				aimingMatrix.Rotate_Z( WWMath::Atan2( secondary->y - primary->y, secondary->x - primary->x ) );
+				reallyDoFX(secondary, (m_orientToObject || m_ricochet) ? &aimingMatrix : nullptr, nullptr, overrideRadius, primary);
+			}
+			else
+			{
+				reallyDoFX(primary, primaryMtx, nullptr, overrideRadius, secondary);
+			}
 		}
 		else
 		{
@@ -537,6 +550,13 @@ public:
 
 	virtual void doFXObj(const Object* primary, const Object* secondary) const override
 	{
+		// Tiberium Project @feature UseTarget: the system on the other object (see doFXPos)
+		if (m_useTarget && primary && secondary)
+		{
+			reallyDoFX(secondary->getPosition(), secondary->getTransformMatrix(), secondary, 0.0f, primary->getPosition());
+			return;
+		}
+
 		if (primary)
 		{
 
@@ -550,12 +570,12 @@ public:
 				Matrix3D aimingMatrix(1);
 				aimingMatrix.Rotate_Z( aimingAngle );
 
-				reallyDoFX(primary->getPosition(), &aimingMatrix, primary, 0.0f);
+				reallyDoFX(primary->getPosition(), &aimingMatrix, primary, 0.0f, secondary->getPosition());
 			}
 			else
 				// if we have an object, then adjust the offset and direction by the object's transformation
 				// matrix, so that (say) an offset of +10 in the z axis "follows" the orientation of the object.
-				reallyDoFX(primary->getPosition(), primary->getTransformMatrix(), primary, 0.0f);
+				reallyDoFX(primary->getPosition(), primary->getTransformMatrix(), primary, 0.0f, secondary ? secondary->getPosition() : nullptr);
 		}
 		else
 		{
@@ -581,6 +601,7 @@ public:
 			{ "AttachToObject",				INI::parseBool,							nullptr, offsetof( ParticleSystemFXNugget, m_attachToObject ) },
 			{ "CreateAtGroundHeight",	INI::parseBool,							nullptr, offsetof( ParticleSystemFXNugget, m_createAtGroundHeight ) },
 			{ "UseCallersRadius",			INI::parseBool,							nullptr, offsetof( ParticleSystemFXNugget, m_useCallersRadius ) },
+			{ "UseTarget",						INI::parseBool,							nullptr, offsetof( ParticleSystemFXNugget, m_useTarget ) },	// Tiberium Project
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 
@@ -591,7 +612,8 @@ public:
 
 protected:
 
-	void reallyDoFX(const Coord3D *primary, const Matrix3D* mtx, const Object* thingToAttachTo, Real overrideRadius ) const
+	// otherEnd: the effect's other end, where a lightning system's bolt goes (Tiberium Project)
+	void reallyDoFX(const Coord3D *primary, const Matrix3D* mtx, const Object* thingToAttachTo, Real overrideRadius, const Coord3D *otherEnd = nullptr ) const
 	{
 		Coord3D offset = m_offset;
 		if (mtx)
@@ -651,6 +673,10 @@ protected:
 						sys->setInitialDelay(delayInFrames);
 					}
 
+					// Tiberium Project @feature a lightning system's bolt runs to the effect's other end
+					if (otherEnd != nullptr && tmp->isLightning())
+						sys->setLightningTarget(otherEnd);
+
 					if( m_useCallersRadius  &&  overrideRadius )
 					{
 						ParticleSystemInfo::EmissionVolumeType type = sys->getEmisionVolumeType();
@@ -679,6 +705,7 @@ private:
 	Bool						m_createAtGroundHeight;
 	Bool						m_useCallersRadius;
 	Bool						m_ricochet;
+	Bool						m_useTarget;	///< Tiberium Project: made at the effect's other end (C&C4's UseTarget)
 };
 EMPTY_DTOR(ParticleSystemFXNugget)
 

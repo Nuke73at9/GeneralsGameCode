@@ -156,6 +156,11 @@ public:
 	Bool m_particleUpTowardsEmitter;						///< if this is true, then the 0.0 Z rotation should actually
 																							///< correspond to the direction of the emitter.
 
+	// Tiberium Project @feature lightning (not saved): the bolt of the system this particle is a point of
+	// (-1: none) and where along it (0 at the system, 1 at its target)
+	Int m_lightningBolt;
+	Real m_lightningT;
+
 protected:
 
 	// snapshot methods
@@ -655,6 +660,26 @@ public:
 	/// axes; outward velocities still point away from the volume's centre. Drawing only.
 	const Coord3D& getVolumeOffset() const { return m_volumeOffset; }
 
+	/// Tiberium Project @feature lightning (C&C4 and Kane's Wrath's Lightning volume: the threads of their
+	/// lasers, railguns and particle beams, healing beams): each burst is a bolt from the system to its target
+	/// (the other end of the effect that made it: a weapon's fire effect from the muzzle to the victim), its
+	/// particles the points along it in order after one at the system (so a burst of one is a straight beam),
+	/// pushed across it by up to three waves drawn for the bolt (LightningWave: amplitude, its change over the
+	/// life, frequency (waves along the line), its change, phase and its change, each a min/max range); a STREAK
+	/// system draws each bolt as a line (C&C4 puts three of a railgun's thread system about its core). Without a
+	/// target it emits from its volume as usual. Drawing only.
+	struct LightningWave
+	{
+		Real amplitude[2], amplitudeChange[2];
+		Real frequency[2], frequencyChange[2];
+		Real phase[2], phaseChange[2];
+	};
+	enum { MAX_LIGHTNING_WAVES = 3 };
+	Bool isLightning() const { return m_lightning; }
+	Int getLightningWaveCount() const { return m_lightningWaveCount; }
+	const LightningWave& getLightningWave( Int i ) const { return m_lightningWaves[i]; }
+	static void parseLightningWave( INI* ini, void *instance, void *store, const void* /*userData*/ );
+
 protected:
 	friend class ParticleSystemManager;					///< @todo remove this friendship
 	friend class ParticleSystem;								///< @todo remove this friendship
@@ -690,6 +715,9 @@ protected:
 	GameClientRandomVariable m_geometryLengthRate;		///< GeometryLengthRate: added to it each frame
 	GameClientRandomVariable m_geometryLengthDamping;	///< GeometryLengthDamping: the rate's factor each frame
 	Coord3D m_volumeOffset;				///< VolumeOffset (on the template only)
+	Bool m_lightning;					///< Lightning (on the template only)
+	Int m_lightningWaveCount;			///< LightningWave lines read
+	LightningWave m_lightningWaves[MAX_LIGHTNING_WAVES];
 
 	// template attribute data inherited from ParticleSystemInfo class
 };
@@ -754,6 +782,11 @@ public:
 	void trigger () { m_burstDelayLeft = 0; m_delayLeft = 0;}
 
 	void setInitialDelay( UnsignedInt delay ) { m_delayLeft = delay; }
+
+	/// Tiberium Project @feature where a lightning system's bolt ends (see ParticleSystemTemplate::isLightning)
+	void setLightningTarget( const Coord3D *pos );
+	/// Tiberium Project @feature lightning: where a point of a bolt is at an age (0 to 1 of its life)
+	void placeLightningPoint( Int bolt, Real t, Real age, Coord3D *pos ) const;
 
 	const AsciiString& getParticleTypeName() const { return m_particleTypeName; }	///< return the name of the particles
 	Bool isUsingParticles() const { return m_particleType == PARTICLE; }
@@ -842,6 +875,7 @@ protected:
 	const Coord3D *computeParticlePosition();		///< compute a position based on emission properties
 	const Coord3D *computeParticleVelocity( const Coord3D *pos );	///< compute a velocity vector based on emission properties
 	const Coord3D *computePointOnUnitSphere();	///< compute a random point on a unit sphere
+	void computeLightningPosition( Int particleNum, Int particleCount, ParticleInfo *info );	///< Tiberium Project: a point of a bolt
 
 protected:
 	Particle *				m_systemParticlesHead;
@@ -891,6 +925,18 @@ protected:
 	Bool							m_isFirstPos;													///< true if this system hasn't been drawn before.
 	Bool							m_isSaveable;													///< true if this system should be saved/loaded
 	Bool							m_skipParentXfrm;											///< true if this system is already in world space.
+
+	// Tiberium Project @feature lightning (not saved: a bolt lives a moment)
+	Bool							m_hasLightningTarget;									///< m_lightningTarget is set
+	Coord3D						m_lightningTarget;										///< where the bolts end (world)
+	struct LightningBolt
+	{
+		Coord3D start, end;
+		Real amplitude[ParticleSystemTemplate::MAX_LIGHTNING_WAVES], amplitudeChange[ParticleSystemTemplate::MAX_LIGHTNING_WAVES];
+		Real frequency[ParticleSystemTemplate::MAX_LIGHTNING_WAVES], frequencyChange[ParticleSystemTemplate::MAX_LIGHTNING_WAVES];
+		Real phase[ParticleSystemTemplate::MAX_LIGHTNING_WAVES], phaseChange[ParticleSystemTemplate::MAX_LIGHTNING_WAVES];
+	};
+	std::vector<LightningBolt>	m_lightningBolts;								///< each bolt's line and waves, by the index its points hold
 
 
 	// the actual particle system data is inherited from ParticleSystemInfo

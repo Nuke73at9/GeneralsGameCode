@@ -213,6 +213,7 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 	Real beZ = bbox.Extent.Z;
 
 	unsigned int personalities[MAX_POINTS_PER_GROUP];
+	Int lightningBolts[MAX_POINTS_PER_GROUP];	// Tiberium Project
 
 
 	m_fieldParticleCount = 0;
@@ -394,6 +395,7 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 
 			//@todo lorenzen sez: use pointer arithmetic for these arrays
 			personalities[pointCount] = p->getPersonality();
+			lightningBolts[pointCount] = p->m_lightningBolt;	// Tiberium Project: which bolt a lightning point is of
 
 			posArray[pointCount].X = pos->x;
 			posArray[pointCount].Y = pos->y;
@@ -480,6 +482,31 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 					break;
 			}
 
+			// Tiberium Project @feature lightning: each bolt (a burst's points, in order) a line of its own
+			if (sysTemplate != nullptr && sysTemplate->isLightning())
+			{
+				UnsignedInt runStart = startCount;
+				for (UnsignedInt i = startCount + 1; i <= pointCount; ++i)
+				{
+					if (i < pointCount && lightningBolts[i] == lightningBolts[runStart])
+						continue;
+					if (i - runStart >= 2)
+					{
+						m_streakLine->Reset_Line();
+						m_streakLine->Set_LocsWidthsColors(
+							i - runStart,
+							m_posBuffer->Get_Array() + runStart,
+							m_sizeBuffer->Get_Array() + runStart,
+							m_RGBABuffer->Get_Array() + runStart,
+							&personalities[runStart]
+							);
+						m_streakLine->Render( rinfo );
+					}
+					runStart = i;
+				}
+			}
+			else
+			{
 			//UPDATE THE STREAK'S ARRAYS
 			m_streakLine->Set_LocsWidthsColors(
 				pointCount,
@@ -500,6 +527,7 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 
 			//RENDER STREAK!
 			m_streakLine->Render( rinfo );
+			}
 			m_onScreenParticleCount += (pointCount - startCount);
 			pointCount = startCount;
 		}
