@@ -20,8 +20,8 @@
 // Tiberium Project @feature Kane's Wrath's StrafeAreaUpdate and RunOffMapBehavior: an aircraft a power
 // calls in (the Orcas of a bombing run, the Vertigos that drop mines or seed Tiberium) flies over the
 // spot its object creation list sends it to (OrderAfterCreation = STRAFE), firing Weapon at points
-// within Radius of it (TargetJitter more or less) from PreattackDistance before it until it is past,
-// then flies on off the map and is gone. It fires a shot every SweepFrequency at most (else the
+// within Radius of it (TargetJitter more or less) from PreattackDistance before it (or its weapon's
+// reach, when that is less) until it is past, then flies on off the map and is gone. It fires a shot every SweepFrequency at most (else the
 // weapon's delay), and one clip of a weapon with a clip (Kane's Wrath's bombing run Orcas drop their
 // two bombs, a Vertigo its one).
 //

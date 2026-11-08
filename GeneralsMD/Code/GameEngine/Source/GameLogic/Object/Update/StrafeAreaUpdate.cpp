@@ -155,9 +155,14 @@ UpdateSleepTime StrafeAreaUpdate::update()
 
 	// how far along its run it is, the spot at 0
 	const Real along = ( pos->x - m_target.x ) * m_dir.x + ( pos->y - m_target.y ) * m_dir.y;
-	// (a weapon with a clip fires one clip a run: the bombing run's Orcas their two bombs, not a stream of them)
+	// (a weapon with a clip fires one clip a run: the bombing run's Orcas their two bombs, not a stream of them;
+	// and it fires once the spot is within its weapon's reach, PreattackDistance being where its run begins:
+	// bombs let go at the run's start fell short of the spot)
 	const Bool ammo = data->m_weapon != nullptr && ( data->m_weapon->getClipSize() <= 0 || m_shotsFired < data->m_weapon->getClipSize() );
-	if( along >= -data->m_preattackDistance && along <= data->m_radius && ammo && now >= m_nextShotFrame )
+	Real window = data->m_preattackDistance;
+	if( data->m_weapon != nullptr && data->m_weapon->getUnmodifiedAttackRange() > 0.0f )
+		window = min( window, data->m_weapon->getUnmodifiedAttackRange() );
+	if( along >= -window && along <= data->m_radius && ammo && now >= m_nextShotFrame )
 	{
 		// a point around the spot (the logic's own random numbers: the same on every machine)
 		const Real reach = data->m_radius + data->m_targetJitter;
