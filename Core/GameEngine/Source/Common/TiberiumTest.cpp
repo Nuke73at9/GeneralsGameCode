@@ -123,6 +123,7 @@ namespace
 	std::string s_spawnTarget = "ChinaTankBattleMaster";	// "target=Template": the fight targets ("A/B/C": for each, the first it can attack)
 	Bool s_spawnBack = FALSE;		// "back": told to move to a spot close behind them (backing up)
 	Bool s_spawnDrive = FALSE;		// "drive": the fight targets drive over the spawned objects (mines)
+	Bool s_spawnRide = FALSE;		// "ride": the others get into the first spawned object that takes them (passengers)
 	Bool s_spawnHarvest = FALSE;	// "harvest": harvesters go to work, as a supply center's new ones do
 	Bool s_spawnMutual = FALSE;		// "mutual": the fight targets attack the spawned objects too
 	Bool s_spawnFoeAI = FALSE;		// "foe=ai": the fight targets are the skirmish AI's (a real enemy), not the first other player's
@@ -427,6 +428,7 @@ void TiberiumTest::setSpawn( const char *spec )
 		}
 		s_spawnBack = parts[2].find( "back" ) != std::string::npos;
 		s_spawnDrive = parts[2].find( "drive" ) != std::string::npos;
+		s_spawnRide = parts[2].find( "ride" ) != std::string::npos;
 		s_spawnHarvest = parts[2].find( "harvest" ) != std::string::npos;
 		s_spawnMutual = parts[2].find( "mutual" ) != std::string::npos;
 		s_spawnFoeAI = parts[2].find( "foe=ai" ) != std::string::npos;
@@ -947,6 +949,19 @@ void TiberiumTest::update()
 				{
 					Coord3D dest = *obj->getPosition();
 					tai->aiMoveToPosition( &dest, CMD_FROM_SCRIPT );
+				}
+			}
+			else if ( since == 10 && ai != nullptr && s_spawnRide )
+			{
+				// into the first spawned object that takes it
+				for ( size_t j = 0; j < s_spawned.size(); ++j )
+				{
+					Object *ride = j != k ? TheGameLogic->findObjectByID( s_spawned[j] ) : nullptr;
+					if ( ride != nullptr && ride->getContain() != nullptr && ride->getContain()->isValidContainerFor( obj, TRUE ) )
+					{
+						ai->aiEnter( ride, CMD_FROM_SCRIPT );
+						break;
+					}
 				}
 			}
 			else if ( since == 10 && ai != nullptr )
