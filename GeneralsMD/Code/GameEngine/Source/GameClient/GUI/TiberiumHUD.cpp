@@ -1007,6 +1007,9 @@ namespace
 			drawText( s_text, line, bx + pad, by + pad + nh, me->canAffordSpecialPower( e.power ) ? a.textDim : GameMakeColor( 255, 70, 60, 255 ) );
 			if( !desc.isEmpty() )
 				drawText( s_body, desc, bx + pad, by + pad * 2 + nh + lh, a.textDim );
+			// Tiberium Project @bugfix the panel wraps its own lines with this string: a wrap left on folded a long
+			// line in two over the next one (a description of three lines at 2560 by 1440)
+			s_body->setWordWrap( 0 );
 		}
 	}
 
@@ -1267,6 +1270,7 @@ namespace
 			if( b != nullptr && b->getDescriptionLabel().isNotEmpty() )
 			{
 				const UnicodeString text = TheGameText->fetch( b->getDescriptionLabel() );
+				s_body->setWordWrap( 0 );	// (its own lines: the string must not fold them again)
 				const Int lineH = s_body->getFont() != nullptr ? s_body->getFont()->height + 1 : 12;
 				const Int bottom = L.py + (Int)( 138.0f * s );
 				const Int width = textRight - textX;
