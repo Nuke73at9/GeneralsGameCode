@@ -43,6 +43,14 @@ public:
 	UnsignedInt m_exclusiveWeaponDelay;	///< If non-zero, any other weapon having fired this recently will keep us from doing anything
 	ObjectStatusMaskType m_requiredStatus;	///< Tiberium Project @feature fires only with all of these (SAGE 2's ObjectStatusValidation)
 	ObjectStatusMaskType m_forbiddenStatus;	///< Tiberium Project: and none of these
+	/// Tiberium Project @feature fires only with another object this near (SAGE 2's RequiredObject: a fire field
+	/// burns while something stands in it, a barrel mine goes off as an enemy comes): of these relationships to
+	/// it (RequiredObjectRelationship: ALLIES ENEMIES NEUTRALS; none named: any), of any of these kinds and none
+	/// of those (RequiredObjectKindOf, RequiredObjectForbiddenKindOf)
+	Real m_requiredObjectRange;
+	UnsignedInt m_requiredObjectRelationship;
+	KindOfMaskType m_requiredObjectKindOf;
+	KindOfMaskType m_requiredObjectForbiddenKindOf;
 
 	FireWeaponUpdateModuleData();
 
@@ -70,6 +78,7 @@ public:
 protected:
 
 	Bool isOkayToFire();
+	Bool hasRequiredObject() const;	///< Tiberium Project: another object near enough (RequiredObjectRange)
 
 	Weapon* m_weapon;
   UnsignedInt m_initialDelayFrame;

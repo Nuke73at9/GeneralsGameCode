@@ -161,6 +161,11 @@ public:
 		return nullptr;
 	}
 
+	/// Tiberium Project @feature while set, what an OCL makes with a StickyBombUpdate sticks to this object (a
+	/// weapon's TargetOCL on its victim: C&C4's AttachToTarget, the Shockwave's sonic charge on what it hits)
+	static void setStickTarget( Object *target );
+	static Object *getStickTarget();
+
 protected:
 
 private:

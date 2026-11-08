@@ -97,7 +97,9 @@ void StickyBombUpdate::initStickyBomb( Object *target, const Object *bomber, con
 	m_targetID = target ? target->getID() : INVALID_ID;
 
 	//Set the target as the producer ID -- so we can access it from other areas.
-	getObject()->setProducer( target );
+	// Tiberium Project @feature unless it keeps the one who made it (KeepProducer)
+	if( !getStickyBombUpdateModuleData()->m_keepProducer )
+		getObject()->setProducer( target );
 	UnsignedInt now = TheGameLogic->getFrame();
 
 	//Also determine our lifetime.... for countdown purposes.
@@ -169,6 +171,14 @@ UpdateSleepTime StickyBombUpdate::update()
 	{
 		if( target->isEffectivelyDead() )
 		{
+			// Tiberium Project @feature a charge that dies with its target (DieWithTarget): its death weapons and
+			// effects play where it was
+			if( getStickyBombUpdateModuleData()->m_dieWithTarget )
+			{
+				if( !self->isEffectivelyDead() )
+					self->kill();
+				return UPDATE_SLEEP_FOREVER;
+			}
 			//If the target is dead, then
 			TheGameLogic->destroyObject( self );
 			return UPDATE_SLEEP_NONE;

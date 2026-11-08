@@ -43,12 +43,16 @@ public:
 	Real						m_offsetZ;
 	WeaponTemplate*	m_geometryBasedDamageWeaponTemplate;
 	FXList*					m_geometryBasedDamageFX;
+	Bool						m_keepProducer;		///< Tiberium Project: the one who made it stays its producer (not the target)
+	Bool						m_dieWithTarget;	///< Tiberium Project: dies (its death modules run) when the target dies, not just vanishes
 
 	StickyBombUpdateModuleData()
 	{
 		m_offsetZ = 10.0f;
 		m_geometryBasedDamageWeaponTemplate = nullptr;
 		m_geometryBasedDamageFX = nullptr;
+		m_keepProducer = FALSE;
+		m_dieWithTarget = FALSE;
 	}
 
 	static void buildFieldParse(MultiIniFieldParse& p)
@@ -60,6 +64,11 @@ public:
 			{ "OffsetZ",									INI::parseReal,						nullptr, offsetof( StickyBombUpdateModuleData, m_offsetZ ) },
 			{ "GeometryBasedDamageWeapon",INI::parseWeaponTemplate, nullptr, offsetof( StickyBombUpdateModuleData, m_geometryBasedDamageWeaponTemplate ) },
 			{ "GeometryBasedDamageFX",		INI::parseFXList,					nullptr, offsetof( StickyBombUpdateModuleData, m_geometryBasedDamageFX ) },
+			// Tiberium Project @feature a charge stuck to its target by a weapon (C&C4's AttachToTarget): the
+			// one who fired it stays its producer, so its damage spares him and not the target; and it dies
+			// with the target (its death weapons and effects play) instead of vanishing
+			{ "KeepProducer",							INI::parseBool,						nullptr, offsetof( StickyBombUpdateModuleData, m_keepProducer ) },
+			{ "DieWithTarget",						INI::parseBool,						nullptr, offsetof( StickyBombUpdateModuleData, m_dieWithTarget ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
     p.add(dataFieldParse);

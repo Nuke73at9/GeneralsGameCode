@@ -30,12 +30,20 @@
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#define DEFINE_DEATH_NAMES	// Tiberium Project: for the DeathType field
 #include "Common/RandomValue.h"
 #include "Common/Xfer.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Module/LifetimeUpdate.h"
 #include "GameLogic/Object.h"
 
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the death type by name
+void LifetimeUpdateModuleData::parseDeathType( INI* ini, void *instance, void *store, const void* /*userData*/ )
+{
+	INI::parseIndexList( ini, instance, store, TheDeathNames );
+}
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -85,7 +93,8 @@ UnsignedInt LifetimeUpdate::calcSleepDelay(UnsignedInt minFrames, UnsignedInt ma
 UpdateSleepTime LifetimeUpdate::update()
 {
 	// Kill (NOT destroy) if time is up
-	getObject()->kill();
+	// Tiberium Project @feature with the module's death type (DEATH_NORMAL unless given)
+	getObject()->kill( DAMAGE_UNRESISTABLE, getLifetimeUpdateModuleData()->m_deathType );
 	return UPDATE_SLEEP_FOREVER;
 }
 

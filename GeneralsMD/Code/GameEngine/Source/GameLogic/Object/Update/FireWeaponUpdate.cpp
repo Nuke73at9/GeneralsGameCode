@@ -33,6 +33,9 @@
 #include "Common/Xfer.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/FireWeaponUpdate.h"
+#include "GameLogic/Module/StickyBombUpdate.h"
+#include "GameLogic/ObjectIter.h"
+#include "GameLogic/PartitionManager.h"
 #include "GameLogic/WeaponStatus.h"
 #include "GameLogic/GameLogic.h"
 
@@ -44,7 +47,13 @@ FireWeaponUpdateModuleData::FireWeaponUpdateModuleData()
 	m_weaponTemplate = nullptr;
   m_initialDelayFrames = 0;
 	m_exclusiveWeaponDelay = 0;
+	m_requiredObjectRange = 0.0f;	// Tiberium Project
+	m_requiredObjectRelationship = 0;
 }
+
+// Tiberium Project: the relationships RequiredObjectRelationship names
+static const char *const RequiredObjectRelationshipNames[] = { "ALLIES", "ENEMIES", "NEUTRALS", nullptr };
+enum { REQUIRED_ALLIES = 1, REQUIRED_ENEMIES = 2, REQUIRED_NEUTRALS = 4 };
 
 //-------------------------------------------------------------------------------------------------
 /*static*/ void FireWeaponUpdateModuleData::buildFieldParse(MultiIniFieldParse& p)
@@ -58,6 +67,10 @@ FireWeaponUpdateModuleData::FireWeaponUpdateModuleData()
 		{ "ExclusiveWeaponDelay",	INI::parseDurationUnsignedInt,	nullptr, offsetof( FireWeaponUpdateModuleData, m_exclusiveWeaponDelay ) },
 		{ "RequiredStatus",				ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( FireWeaponUpdateModuleData, m_requiredStatus ) },	// Tiberium Project
 		{ "ForbiddenStatus",			ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( FireWeaponUpdateModuleData, m_forbiddenStatus ) },	// Tiberium Project
+		{ "RequiredObjectRange",	INI::parseReal,									nullptr, offsetof( FireWeaponUpdateModuleData, m_requiredObjectRange ) },	// Tiberium Project
+		{ "RequiredObjectRelationship",	INI::parseBitString32,	RequiredObjectRelationshipNames, offsetof( FireWeaponUpdateModuleData, m_requiredObjectRelationship ) },	// Tiberium Project
+		{ "RequiredObjectKindOf",	KindOfMaskType::parseFromINI,		nullptr, offsetof( FireWeaponUpdateModuleData, m_requiredObjectKindOf ) },	// Tiberium Project
+		{ "RequiredObjectForbiddenKindOf",	KindOfMaskType::parseFromINI,	nullptr, offsetof( FireWeaponUpdateModuleData, m_requiredObjectForbiddenKindOf ) },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
   p.add(dataFieldParse);
@@ -100,7 +113,15 @@ UpdateSleepTime FireWeaponUpdate::update()
 	// If my weapon is ready, shoot it.
 	if( isOkayToFire() )
 	{
-		m_weapon->forceFireWeapon( getObject(), getObject()->getPosition() );
+		// Tiberium Project @feature a charge stuck to something (StickyBombUpdate) shoots what it is stuck to
+		// (C&C4's damage over time from an attached charge: the Shockwave's sonic charge)
+		static NameKeyType key_StickyBombUpdate = NAMEKEY( "StickyBombUpdate" );
+		const StickyBombUpdate *sticky = (const StickyBombUpdate *)getObject()->findUpdateModule( key_StickyBombUpdate );
+		Object *stuckTo = sticky != nullptr ? sticky->getTargetObject() : nullptr;
+		if( stuckTo != nullptr && !stuckTo->isEffectivelyDead() )
+			m_weapon->forceFireWeapon( getObject(), stuckTo );
+		else
+			m_weapon->forceFireWeapon( getObject(), getObject()->getPosition() );
 	}
 	return UPDATE_SLEEP_NONE;
 }
@@ -132,7 +153,39 @@ Bool FireWeaponUpdate::isOkayToFire()
 	if( data->m_exclusiveWeaponDelay > 0  &&  ( TheGameLogic->getFrame() < (me->getLastShotFiredFrame() + data->m_exclusiveWeaponDelay) ) )
 		return FALSE;
 
+	// Tiberium Project @feature only with another object near enough
+	if( data->m_requiredObjectRange > 0.0f && !hasRequiredObject() )
+		return FALSE;
+
 	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature another live object within RequiredObjectRange of the relationships and kinds asked
+Bool FireWeaponUpdate::hasRequiredObject() const
+{
+	const Object *me = getObject();
+	const FireWeaponUpdateModuleData *data = getFireWeaponUpdateModuleData();
+	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( me, data->m_requiredObjectRange, FROM_BOUNDINGSPHERE_2D );
+	MemoryPoolObjectHolder hold( iter );
+	for( Object *other = iter->first(); other != nullptr; other = iter->next() )
+	{
+		if( other == me || other->isEffectivelyDead() )
+			continue;
+		if( data->m_requiredObjectRelationship != 0 )
+		{
+			const Relationship r = me->getRelationship( other );
+			const UnsignedInt bit = r == ALLIES ? REQUIRED_ALLIES : ( r == ENEMIES ? REQUIRED_ENEMIES : REQUIRED_NEUTRALS );
+			if( ( data->m_requiredObjectRelationship & bit ) == 0 )
+				continue;
+		}
+		if( data->m_requiredObjectKindOf.any() && !other->isAnyKindOf( data->m_requiredObjectKindOf ) )
+			continue;
+		if( data->m_requiredObjectForbiddenKindOf.any() && other->isAnyKindOf( data->m_requiredObjectForbiddenKindOf ) )
+			continue;
+		return TRUE;
+	}
+	return FALSE;
 }
 
 // ------------------------------------------------------------------------------------------------

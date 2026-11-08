@@ -59,6 +59,7 @@
 #include "GameLogic/Module/FloatUpdate.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/SpecialPowerCompletionDie.h"
+#include "GameLogic/Module/StickyBombUpdate.h"
 #include "GameLogic/Module/LifetimeUpdate.h"
 #include "GameLogic/Module/RadiusDecalUpdate.h"
 #include "GameLogic/Object.h"
@@ -79,6 +80,20 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 ObjectCreationListStore *TheObjectCreationListStore = nullptr;					///< the ObjectCreationList store definition
+
+// Tiberium Project @feature the object what an OCL makes sticks to, while a weapon's TargetOCL is made on its
+// victim (set and cleared around the one call, so nothing of it outlives a frame)
+static Object *s_stickTarget = nullptr;
+
+void ObjectCreationList::setStickTarget( Object *target )
+{
+	s_stickTarget = target;
+}
+
+Object *ObjectCreationList::getStickTarget()
+{
+	return s_stickTarget;
+}
 
 //-------------------------------------------------------------------------------------------------
 static void adjustVector(Coord3D *vec, const Matrix3D* mtx)
@@ -1277,6 +1292,16 @@ protected:
 		}
 
 
+
+		// Tiberium Project @feature stuck to the weapon's victim (ObjectCreationList::setStickTarget)
+		Object *stickTo = ObjectCreationList::getStickTarget();
+		if( stickTo != nullptr && stickTo != obj && !stickTo->isEffectivelyDead() )
+		{
+			static NameKeyType key_StickyBombUpdate = NAMEKEY( "StickyBombUpdate" );
+			StickyBombUpdate *sticky = (StickyBombUpdate *)obj->findUpdateModule( key_StickyBombUpdate );
+			if( sticky != nullptr )
+				sticky->initStickyBomb( stickTo, nullptr );
+		}
 
     if ( m_diesOnBadLand && obj )
     {

@@ -1495,7 +1495,28 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 			if (launcher != nullptr)
 				owner = launcher;
 		}
+		// Tiberium Project @feature what it makes with a StickyBombUpdate sticks to the victim (C&C4's AttachToTarget); a shot that bursts
+		// where it lands (a projectile) has none named: what it burst on, the nearest soldier, vehicle or
+		// structure within its radius but its firer
+		Object *stickTo = primaryVictim;
+		if (stickTo == nullptr && m_targetOCL != nullptr)
+		{
+			const Real reach = max(getPrimaryDamageRadius(bonus), 5.0f);
+			SimpleObjectIterator *closest = ThePartitionManager->iterateObjectsInRange(pos, reach, DAMAGE_RANGE_CALC_TYPE, nullptr, ITER_SORTED_NEAR_TO_FAR);
+			MemoryPoolObjectHolder holdClosest(closest);
+			for (Object *other = closest->first(); other != nullptr; other = closest->next())
+			{
+				if (other == owner || other == source || other->isEffectivelyDead())
+					continue;
+				if (!other->isKindOf(KINDOF_INFANTRY) && !other->isKindOf(KINDOF_VEHICLE) && !other->isKindOf(KINDOF_STRUCTURE))
+					continue;
+				stickTo = other;
+				break;
+			}
+		}
+		ObjectCreationList::setStickTarget(stickTo != nullptr && !stickTo->isEffectivelyDead() ? stickTo : nullptr);
 		ObjectCreationList::create(m_targetOCL, owner, pos, pos, owner->getOrientation());
+		ObjectCreationList::setStickTarget(nullptr);
 	}
 
 	DamageType damageType = getDamageType();
@@ -3074,6 +3095,16 @@ Object* Weapon::forceFireWeapon( const Object *source, const Coord3D *pos)
 	ObjectID projectileID = INVALID_ID;
 	const Bool ignoreRange = true;
 	privateFireWeapon(source, nullptr, pos, false, ignoreRange, 0, &projectileID, TRUE );
+	return TheGameLogic->findObjectByID( projectileID );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature fired at an object whatever the range (a charge's damage on what it is stuck to)
+Object* Weapon::forceFireWeapon( const Object *source, Object *victim )
+{
+	ObjectID projectileID = INVALID_ID;
+	const Bool ignoreRange = true;
+	privateFireWeapon(source, victim, nullptr, false, ignoreRange, 0, &projectileID, TRUE );
 	return TheGameLogic->findObjectByID( projectileID );
 }
 
