@@ -26,10 +26,13 @@
 
 #include "Common/Player.h"
 #include "Common/SpecialPower.h"
+#include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
+#include "GameLogic/PartitionManager.h"
 #include "GameLogic/Weapon.h"
+#include "GameLogic/WeaponSet.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
 
@@ -38,9 +41,60 @@ static const char *const TheAIAbilityHeuristicNames[] =
 	"IN_COMBAT",
 	"AT_VICTIM",
 	"TOGGLE",
+	"TRANSFORM",
 	nullptr
 };
 static_assert(ARRAY_SIZE(TheAIAbilityHeuristicNames) == AI_ABILITY_HEURISTIC_COUNT + 1, "Incorrect array size");
+
+//-------------------------------------------------------------------------------------------------
+/** what a weapon set's weapons can hit (their anti mask), and the longest reach among them */
+static Int weaponSetAntiMask( const WeaponTemplateSet *set, Real &reach )
+{
+	Int mask = 0;
+	if( set == nullptr )
+		return 0;
+	for( Int slot = PRIMARY_WEAPON; slot < WEAPONSLOT_COUNT; ++slot )
+	{
+		const WeaponTemplate *weapon = set->getNth( (WeaponSlotType)slot );
+		if( weapon == nullptr )
+			continue;
+		mask |= weapon->getAntiMask();
+		if( weapon->getUnmodifiedAttackRange() > reach )
+			reach = weapon->getUnmodifiedAttackRange();
+	}
+	return mask;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** TRANSFORM: whether the toggle's other state (the ABILITY_TOGGLED weapon set flipped) suits what is
+	near: the nearest enemy, within the longer reach of the two states' weapons, that either state can
+	hit decides; one the weapons now can hit keeps the unit as it is */
+static Bool otherStateSuits( const Object *me )
+{
+	WeaponSetFlags other = me->getWeaponSetFlags();
+	other.set( WEAPONSET_ABILITY_TOGGLED, me->testWeaponSetFlag( WEAPONSET_ABILITY_TOGGLED ) ? 0 : 1 );
+	Real reach = 0.0f;
+	const Int now = weaponSetAntiMask( me->getTemplate()->findWeaponTemplateSet( me->getWeaponSetFlags() ), reach );
+	const Int then = weaponSetAntiMask( me->getTemplate()->findWeaponTemplateSet( other ), reach );
+	if( then == 0 || then == now || reach <= 0.0f )
+		return FALSE;
+	PartitionFilterRelationship enemies( me, PartitionFilterRelationship::ALLOW_ENEMIES );
+	PartitionFilterAlive alive;
+	PartitionFilterSameMapStatus sameMap( me );
+	PartitionFilterStealthedAndUndetected seen( me, FALSE );
+	PartitionFilter *filters[] = { &enemies, &alive, &sameMap, &seen, nullptr };
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( me, reach, FROM_BOUNDINGSPHERE_2D, filters, ITER_SORTED_NEAR_TO_FAR );
+	MemoryPoolObjectHolder hold( iter );
+	for( Object *o = iter->first(); o != nullptr; o = iter->next() )
+	{
+		const Int need = WeaponSet::getVictimAntiMaskFor( o );
+		if( ( now & need ) != 0 )
+			return FALSE;
+		if( ( then & need ) != 0 )
+			return TRUE;
+	}
+	return FALSE;
+}
 
 //-------------------------------------------------------------------------------------------------
 /** Power = SpecialPowerTemplate Heuristic */
@@ -150,6 +204,11 @@ UpdateSleepTime AIAbilityUseUpdate::update()
 					module->doSpecialPower( 0 );
 					m_toggledMask &= ~bit;
 				}
+				break;
+			case AI_ABILITY_TRANSFORM:
+				// (in a fight its weapons already hit what it fights)
+				if( victim == nullptr && otherStateSuits( me ) )
+					module->doSpecialPower( 0 );
 				break;
 			default:
 				break;

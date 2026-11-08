@@ -21,7 +21,9 @@
 // heuristics): for a computer player's unit, every ScanDelay each Power that is ready is used as its
 // heuristic says: IN_COMBAT (a power on itself: a berserk, an armour-up) while it fights; AT_VICTIM (a
 // power aimed at what it fights: an attack, a debuff, a purge); TOGGLE (a deploy) on while it
-// fights, back off after CalmTime without a fight. A human player's units are left alone.
+// fights, back off after CalmTime without a fight; TRANSFORM (a toggle that switches the unit's
+// weapon set: the Thunderhead's flight, an anti-rocket mode) out of a fight, into whichever state's
+// weapons can hit the nearest enemy that only one of them can. A human player's units are left alone.
 //
 //   Behavior = AIAbilityUseUpdate ModuleTag_AIAbilities
 //     Power = C4SP_SpecialPower_GDIAircraftQBezerkAbility IN_COMBAT
@@ -41,6 +43,7 @@ enum AIAbilityHeuristic CPP_11(: Int)
 	AI_ABILITY_IN_COMBAT = 0,
 	AI_ABILITY_AT_VICTIM,
 	AI_ABILITY_TOGGLE,
+	AI_ABILITY_TRANSFORM,	///< Tiberium Project @feature the state whose weapons suit what is near
 	AI_ABILITY_HEURISTIC_COUNT
 };
 
