@@ -120,7 +120,7 @@ namespace
 	std::vector<std::string> s_spawnNames;
 	Bool s_spawnMove = FALSE, s_spawnFight = FALSE, s_spawnDamage = FALSE, s_spawnExplode = FALSE;
 	Bool s_spawnRear = FALSE;		// "rear": the fight targets face away (their backs to the spawned objects)
-	std::string s_spawnTarget = "ChinaTankBattleMaster";	// "target=Template": the fight targets
+	std::string s_spawnTarget = "ChinaTankBattleMaster";	// "target=Template": the fight targets ("A/B/C": for each, the first it can attack)
 	Bool s_spawnBack = FALSE;		// "back": told to move to a spot close behind them (backing up)
 	Bool s_spawnDrive = FALSE;		// "drive": the fight targets drive over the spawned objects (mines)
 	Bool s_spawnHarvest = FALSE;	// "harvest": harvesters go to work, as a supply center's new ones do
@@ -847,7 +847,17 @@ void TiberiumTest::update()
 		{
 			const Object *first = TheGameLogic->findObjectByID( s_spawned[0] );
 			Player *ours = first != nullptr ? first->getControllingPlayer() : nullptr;
-			const ThingTemplate *tt = TheThingFactory->findTemplate( s_spawnTarget.c_str() );
+			// the target kinds, in order of preference (each object gets the first it can attack)
+			std::vector<const ThingTemplate *> kinds;
+			for ( const std::string &name : split( s_spawnTarget.c_str(), '/' ) )
+			{
+				const ThingTemplate *kind = TheThingFactory->findTemplate( name.c_str() );
+				if ( kind != nullptr )
+					kinds.push_back( kind );
+				else
+					log( "fight targets: no object %s", name.c_str() );
+			}
+			const ThingTemplate *tt = kinds.empty() ? nullptr : kinds[0];
 			Player *foe = nullptr;
 			for ( Int n = 0; n < ThePlayerList->getPlayerCount() && foe == nullptr && tt != nullptr; ++n )
 			{
@@ -873,16 +883,41 @@ void TiberiumTest::update()
 			{
 				const Object *obj = TheGameLogic->findObjectByID( s_spawned[k] );
 				Player *owner = foe != nullptr ? foe : ThePlayerList->getNeutralPlayer();
-				Object *target = obj != nullptr && owner != nullptr ? TheThingFactory->newObject( tt, owner->getDefaultTeam() ) : nullptr;
-				if ( target != nullptr )
+				Object *target = nullptr;
+				for ( size_t n = 0; n < kinds.size() && obj != nullptr && owner != nullptr; ++n )
 				{
+					Object *candidate = TheThingFactory->newObject( kinds[n], owner->getDefaultTeam() );
+					if ( candidate == nullptr )
+						continue;
 					Coord3D q = *obj->getPosition();
 					q.y += s_spawnTargetDistance;
 					q.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( q.x, q.y ) : 0.0f;
-					target->setPosition( &q );
-					target->setOrientation( s_spawnRear ? PI * 0.5f : -PI * 0.5f );
-					s_spawnTargets.push_back( target->getID() );
+					candidate->setPosition( &q );
+					candidate->setOrientation( s_spawnRear ? PI * 0.5f : -PI * 0.5f );
+					// the first kind it can attack, else the first kind (a unit that can attack none of them)
+					const CanAttackResult able = obj->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET, candidate, CMD_FROM_SCRIPT );
+					if ( able >= ATTACKRESULT_POSSIBLE_AFTER_MOVING || n + 1 == kinds.size() )
+					{
+						if ( able < ATTACKRESULT_POSSIBLE_AFTER_MOVING )
+						{
+							TheGameLogic->destroyObject( candidate );
+							candidate = TheThingFactory->newObject( kinds[0], owner->getDefaultTeam() );
+							if ( candidate != nullptr )
+							{
+								candidate->setPosition( &q );
+								candidate->setOrientation( s_spawnRear ? PI * 0.5f : -PI * 0.5f );
+							}
+							log( "fight targets: #%d %s can attack none of them", (int)k, obj->getTemplate()->getName().str() );
+						}
+						target = candidate;
+						break;
+					}
+					TheGameLogic->destroyObject( candidate );
 				}
+				// (one for each spawned object, in its order: none where none could be made)
+				s_spawnTargets.push_back( target != nullptr ? target->getID() : INVALID_ID );
+				if ( target != nullptr )
+					log( "fight targets: #%d %s against %s", (int)k, obj->getTemplate()->getName().str(), target->getTemplate()->getName().str() );
 			}
 		}
 		log( "frame %d: %d objects spawned around %.0f %.0f", (int)s_frame, (int)s_spawned.size(), center.x, center.y );
