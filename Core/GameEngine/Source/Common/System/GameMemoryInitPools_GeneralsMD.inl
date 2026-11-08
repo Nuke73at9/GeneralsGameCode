@@ -185,6 +185,8 @@ static PoolSizeRec PoolSizes[] =
 	{ "FireWeaponAbilityUpdate", 256, 64 },	// Tiberium Project @feature C&C4 unit abilities
 	{ "ToggleAbilityUpdate", 256, 64 },
 	{ "ModifierAbilityUpdate", 64, 32 },	// Tiberium Project @feature attribute modifiers
+	{ "SupportMeterUpdate", 16, 16 },	// Tiberium Project @feature C&C4's support meter
+	{ "StrafeAreaUpdate", 16, 16 },	// Tiberium Project @feature Kane's Wrath's strafing runs
 	{ "AttributeModifierAuraUpdate", 256, 64 },
 	{ "ShieldSphereUpdate", 256, 64 },
 	{ "StealthFieldUpdate", 64, 16 },

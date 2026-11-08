@@ -122,6 +122,10 @@ public:
 	Real getRadiusCursorRadius() const { return getFO()->m_radiusCursorRadius; }
 	Bool isShortcutPower() const { return getFO()->m_shortcutPower; }
 	AcademyClassificationType getAcademyClassificationType() const { return m_academyClassificationType; }
+	// Tiberium Project @feature a power's price, paid each time it is used (Kane's Wrath's credits, C&C4's support points)
+	UnsignedInt getCost() const { return getFO()->m_cost; }
+	UnsignedInt getSupportPoints() const { return getFO()->m_supportPoints; }
+	Bool isShroudedTargetOK() const { return getFO()->m_shroudedTargetOK; }	///< Tiberium Project: aimed into the shroud too (SAGE's FOGGED_SHROUDED_CELLS_OK)
 
 private:
 
@@ -143,6 +147,9 @@ private:
 	Bool							m_publicTimer;				///< display a countdown timer for this special power for all to see
 	Bool							m_sharedNSync;				///< If true, this is a special that is shared between all of a player's command centers
 	Bool							m_shortcutPower;		///< Is this shortcut power capable of being fired by the side panel?
+	UnsignedInt				m_cost;							///< Tiberium Project: credits paid each time it is used
+	UnsignedInt				m_supportPoints;		///< Tiberium Project: support meter points paid each time it is used
+	Bool							m_shroudedTargetOK;	///< Tiberium Project: may be aimed into the shroud
 
 	static const FieldParse m_specialPowerFieldParse[];		///< the parse table
 

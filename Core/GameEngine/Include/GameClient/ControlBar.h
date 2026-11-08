@@ -658,6 +658,10 @@ class ControlBar : public SubsystemInterface
 {
 
 public:
+	/// Tiberium Project @feature a power the local player cannot pay for (its Cost, its SupportPoints): EVA and a
+	/// message say so, and TRUE says the command is refused
+	static Bool refuseUnaffordablePower( const CommandButton *button );
+
 
 	ControlBar();
 	virtual ~ControlBar() override;

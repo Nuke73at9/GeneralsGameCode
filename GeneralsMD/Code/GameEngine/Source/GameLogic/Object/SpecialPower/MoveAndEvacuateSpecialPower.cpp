@@ -42,7 +42,7 @@ MoveAndEvacuateSpecialPower::~MoveAndEvacuateSpecialPower()
 void MoveAndEvacuateSpecialPower::doSpecialPowerAtLocation( const Coord3D *loc, Real angle, UnsignedInt commandOptions )
 {
 	Object *obj = getObject();
-	if( loc == nullptr || obj->isDisabled() || !isReady() )
+	if( loc == nullptr || obj->isDisabled() || !isReady() || !canPayForPower() )	// Tiberium Project @feature its price
 		return;
 	AIUpdateInterface *ai = obj->getAI();
 	if( ai == nullptr )

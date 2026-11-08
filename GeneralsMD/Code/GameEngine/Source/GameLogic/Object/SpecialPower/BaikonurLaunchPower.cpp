@@ -90,6 +90,8 @@ void BaikonurLaunchPower::doSpecialPower( UnsignedInt commandOptions )
 {
 	if (getObject()->isDisabled())
 		return;
+	if( !canPayForPower() )	// Tiberium Project @feature its price (the base pays it)
+		return;
 
 	// call the base class action cause we are *EXTENDING* functionality
 	SpecialPowerModule::doSpecialPower( commandOptions );
@@ -101,6 +103,8 @@ void BaikonurLaunchPower::doSpecialPower( UnsignedInt commandOptions )
 void BaikonurLaunchPower::doSpecialPowerAtLocation( const Coord3D *loc, Real angle, UnsignedInt commandOptions )
 {
 	if (getObject()->isDisabled())
+		return;
+	if( !canPayForPower() )	// Tiberium Project @feature its price (the base pays it)
 		return;
 
 	const BaikonurLaunchPowerModuleData *data = getBaikonurLaunchPowerModuleData();

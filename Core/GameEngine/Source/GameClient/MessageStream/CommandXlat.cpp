@@ -1748,6 +1748,13 @@ GameMessage::Type CommandTranslator::handleGuiCommand( const CommandButton *comm
 			break;
 	}
 
+	// Tiberium Project @feature a power its player can no longer pay for (the money went while it was aimed)
+	if( currentlyValid && type == DO_COMMAND && ControlBar::refuseUnaffordablePower( command ) )
+	{
+		TheInGameUI->setGUICommand( nullptr );
+		return GameMessage::MSG_INVALID;
+	}
+
 	if( currentlyValid )
 	{
 		if( type == DO_COMMAND || type == EVALUATE_ONLY )

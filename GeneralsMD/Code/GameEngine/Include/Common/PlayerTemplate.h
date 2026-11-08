@@ -134,6 +134,8 @@ public:
 	AsciiString getScoreScreenMusic() const { return m_scoreScreenMusic; }
 
   Bool isOldFaction() const { return m_oldFaction; }
+	/// Tiberium Project @feature whether a rank-up gives General's Points (No: the Tiberium factions, whose powers come from their buildings and the Support Crawler)
+	Bool hasGeneralsPoints() const { return m_generalsPoints; }
 
 	static const FieldParse* getFieldParse();
 
@@ -173,6 +175,7 @@ private:
 	Bool							m_observer;
 	Bool							m_playableSide;
   Bool              m_oldFaction;                       ///< Faction existed in the original Generals
+	Bool							m_generalsPoints;										///< Tiberium Project: rank-ups give General's Points
 
 	Int								m_intrinsicSPP;
 

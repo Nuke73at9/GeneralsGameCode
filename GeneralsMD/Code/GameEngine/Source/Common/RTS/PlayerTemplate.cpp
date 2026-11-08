@@ -97,6 +97,7 @@
 		{ "IsObserver",								INI::parseBool,																	nullptr, offsetof( PlayerTemplate, m_observer ) },
     { "OldFaction",               INI::parseBool,                                 nullptr, offsetof( PlayerTemplate, m_oldFaction ) },
 		{ "IntrinsicSciencePurchasePoints",				INI::parseInt,												nullptr, offsetof( PlayerTemplate, m_intrinsicSPP ) },
+		{ "GeneralsPoints",						INI::parseBool,																	nullptr, offsetof( PlayerTemplate, m_generalsPoints ) },	// Tiberium Project @feature
 		{ "ScoreScreenImage",					INI::parseAsciiString,													nullptr, offsetof( PlayerTemplate, m_scoreScreenImage ) },
 		{ "LoadScreenImage",					INI::parseAsciiString,													nullptr, offsetof( PlayerTemplate, m_loadScreenImage ) },
 		{ "LoadScreenMusic",					INI::parseAsciiString,													nullptr, offsetof( PlayerTemplate, m_loadScreenMusic ) },
@@ -194,6 +195,7 @@ PlayerTemplate::PlayerTemplate() :
 	m_observer(false),
 	m_playableSide(false),
   m_oldFaction(false),
+	m_generalsPoints(true),
 	m_intrinsicSPP(0),
 	m_specialPowerShortcutButtonCount(0)
 {

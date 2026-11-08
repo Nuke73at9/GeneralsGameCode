@@ -46,6 +46,8 @@
 #include "Common/Player.h"
 #include "Common/Upgrade.h"
 #include "Common/PlayerList.h"
+#include "Common/PlayerTemplate.h"
+#include "GameLogic/Module/SpecialPowerModule.h"
 #include "GameLogic/PartitionManager.h"
 #include "Common/Team.h"
 #include "Common/ThingFactory.h"
@@ -1819,6 +1821,71 @@ void TiberiumTest::update()
 			log( "frame %d: ui: cash %u", (int)s_frame, (unsigned)ThePlayerList->getLocalPlayer()->getMoney()->countMoney() );
 		}
 #if RTS_ZEROHOUR
+		else if ( step.action == "shortcut" && TheControlBar != nullptr && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
+		{
+			// "shortcut=Button[,dx,dy]": a shortcut bar power, as its button's click and the click on the ground do:
+			// refused when its price is not there (as the button refuses it), else used from the most ready of the
+			// local player's objects with it, aimed dx,dy from the first spawned object (none given: no target)
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			const CommandButton *button = f.empty() ? nullptr : TheControlBar->findCommandButton( AsciiString( f[0].c_str() ) );
+			Player *me = ThePlayerList->getLocalPlayer();
+			const SpecialPowerTemplate *power = button != nullptr ? button->getSpecialPowerTemplate() : nullptr;
+			Object *source = power != nullptr ? me->findMostReadyShortcutSpecialPowerOfType( power->getSpecialPowerType() ) : nullptr;
+			Object *from = !s_spawned.empty() ? TheGameLogic->findObjectByID( s_spawned[0] ) : nullptr;
+			if ( power == nullptr || source == nullptr )
+				log( "frame %d: ui: shortcut %s: no such button, power or source", (int)s_frame, step.arg.c_str() );
+			else if ( ControlBar::refuseUnaffordablePower( button ) )
+				log( "frame %d: ui: shortcut %s refused: $%u and %d points (it costs $%u and %u points)", (int)s_frame, f[0].c_str(),
+					(unsigned)me->getMoney()->countMoney(), (int)me->getSupportPoints(), (unsigned)power->getCost(), (unsigned)power->getSupportPoints() );
+			else if ( f.size() >= 3 && from != nullptr )
+			{
+				Coord3D at = *from->getPosition();
+				at.x += (Real)atof( f[1].c_str() );
+				at.y += (Real)atof( f[2].c_str() );
+				at.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( at.x, at.y ) : 0.0f;
+				GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_DO_SPECIAL_POWER_AT_LOCATION );
+				msg->appendIntegerArgument( power->getID() );
+				msg->appendLocationArgument( at );
+				msg->appendRealArgument( INVALID_ANGLE );
+				msg->appendObjectIDArgument( INVALID_ID );
+				msg->appendIntegerArgument( button->getOptions() );
+				msg->appendObjectIDArgument( source->getID() );
+				log( "frame %d: ui: shortcut %s at %.0f %.0f from %s ($%u, %d points)", (int)s_frame, f[0].c_str(), at.x, at.y,
+					source->getTemplate()->getName().str(), (unsigned)me->getMoney()->countMoney(), (int)me->getSupportPoints() );
+			}
+			else
+			{
+				GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_DO_SPECIAL_POWER );
+				msg->appendIntegerArgument( power->getID() );
+				msg->appendIntegerArgument( button->getOptions() );
+				msg->appendObjectIDArgument( source->getID() );
+				log( "frame %d: ui: shortcut %s (no target) from %s ($%u, %d points)", (int)s_frame, f[0].c_str(),
+					source->getTemplate()->getName().str(), (unsigned)me->getMoney()->countMoney(), (int)me->getSupportPoints() );
+			}
+		}
+		else if ( step.action == "powers" && TheControlBar != nullptr && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
+		{
+			// the local player's shortcut bar: each power's source and how ready it is; the money and the support meter
+			Player *me = ThePlayerList->getLocalPlayer();
+			const PlayerTemplate *pt = me->getPlayerTemplate();
+			const CommandSet *set = pt != nullptr ? TheControlBar->findCommandSet( pt->getSpecialPowerShortcutCommandSet() ) : nullptr;
+			std::string all;
+			for ( Int i = 0; set != nullptr && i < MAX_COMMANDS_PER_SET; ++i )
+			{
+				const CommandButton *b = set->getCommandButton( i );
+				const SpecialPowerTemplate *power = b != nullptr ? b->getSpecialPowerTemplate() : nullptr;
+				if ( power == nullptr )
+					continue;
+				Object *source = me->findMostReadyShortcutSpecialPowerOfType( power->getSpecialPowerType() );
+				SpecialPowerModuleInterface *mod = source != nullptr ? source->getSpecialPowerModule( power ) : nullptr;
+				char one[160];
+				snprintf( one, sizeof( one ), " %s:%s%s", power->getName().str(),
+					mod == nullptr ? "-" : ( mod->isReady() ? "ready" : "charging" ), source != nullptr && source->isDisabled() ? "(disabled)" : "" );
+				all += one;
+			}
+			log( "frame %d: ui: powers: $%u, %d of %d points, GP %d;%s", (int)s_frame, (unsigned)me->getMoney()->countMoney(),
+				(int)me->getSupportPoints(), (int)me->getSupportPointsMax(), (int)me->getSciencePurchasePoints(), all.c_str() );
+		}
 		else if ( step.action == "census" && TheGameLogic != nullptr )
 		{
 			// every player's objects of a kind (a map's Tiberium crystals are nobody's), with the boxes

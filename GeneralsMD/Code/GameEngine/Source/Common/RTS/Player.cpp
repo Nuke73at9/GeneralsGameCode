@@ -331,6 +331,10 @@ Player::Player( Int playerIndex )
 	m_currentSelection = nullptr;
 	m_rankLevel = 0;
 	m_sciencePurchasePoints = 0;
+	m_supportPoints = 0;
+	m_supportProgress = 0;
+	m_supportPointsMax = 0;
+	m_supportFedFrame = 0;
 	m_side = nullptr;
 	m_baseSide = nullptr;
 	m_skillPoints = 0;
@@ -358,6 +362,10 @@ void Player::init(const PlayerTemplate* pt)
 	DEBUG_ASSERTCRASH(m_playerTeamPrototypes.empty(), ("Player::m_playerTeamPrototypes is not empty at game start!"));
 	m_skillPointsModifier = 1.0f;
 	m_attackedFrame = 0;
+	m_supportPoints = 0;
+	m_supportProgress = 0;
+	m_supportPointsMax = 0;
+	m_supportFedFrame = 0;
 
 	m_isPreorder = FALSE;
 	m_isPlayerDead = FALSE;
@@ -2623,6 +2631,71 @@ Bool Player::addScience(ScienceType science)
 }
 
 //=============================================================================
+// Tiberium Project @feature C&C4's support meter. C&C4 fills it 10 points a minute while the Support
+// Crawler lives (twice that with its third tier), to 50 at most; the rate and the top come from the
+// Crawler's SupportMeterUpdate. Points are whole, the progress toward the next in 1/1800 of a point, so
+// that a rate in points a minute adds that many each logic frame (30 frames a second).
+void Player::feedSupportMeter( Int pointsPerMinute, Int maxPoints )
+{
+	const UnsignedInt now = TheGameLogic->getFrame();
+	if( m_supportFedFrame == now && m_supportPointsMax > 0 )
+		return;
+	m_supportFedFrame = now;
+	m_supportPointsMax = max( maxPoints, 1 );
+	if( m_supportPoints >= m_supportPointsMax )
+	{
+		m_supportPoints = m_supportPointsMax;
+		m_supportProgress = 0;
+		return;
+	}
+	m_supportProgress += max( pointsPerMinute, 0 );
+	const Int perPoint = LOGICFRAMES_PER_SECOND * 60;
+	while( m_supportProgress >= perPoint && m_supportPoints < m_supportPointsMax )
+	{
+		m_supportProgress -= perPoint;
+		++m_supportPoints;
+	}
+	if( m_supportPoints >= m_supportPointsMax )
+		m_supportProgress = 0;
+}
+
+//=============================================================================
+void Player::spendSupportPoints( Int points )
+{
+	m_supportPoints = max( 0, m_supportPoints - points );
+}
+
+//=============================================================================
+void Player::emptySupportMeter()
+{
+	m_supportPoints = 0;
+	m_supportProgress = 0;
+}
+
+//=============================================================================
+Bool Player::canAffordSpecialPower( const SpecialPowerTemplate *power ) const
+{
+	if( power == nullptr )
+		return TRUE;
+	if( power->getCost() > 0 && m_money.countMoney() < power->getCost() )
+		return FALSE;
+	if( power->getSupportPoints() > 0 && m_supportPoints < (Int)power->getSupportPoints() )
+		return FALSE;
+	return TRUE;
+}
+
+//=============================================================================
+void Player::payForSpecialPower( const SpecialPowerTemplate *power )
+{
+	if( power == nullptr )
+		return;
+	if( power->getCost() > 0 )
+		m_money.withdraw( power->getCost() );
+	if( power->getSupportPoints() > 0 )
+		spendSupportPoints( (Int)power->getSupportPoints() );
+}
+
+//=============================================================================
 void Player::addSciencePurchasePoints(Int delta)
 {
 	//DEBUG_LOG(("Adding SciencePurchasePoints %d -> %d",m_sciencePurchasePoints,m_sciencePurchasePoints+delta));
@@ -2716,6 +2789,9 @@ void Player::resetRank()
 	m_sciencePurchasePoints = getPlayerTemplate() ? getPlayerTemplate()->getIntrinsicSciencePurchasePoints() : 0;
 	const RankInfo* curRank = TheRankInfoStore->getRankInfo(m_rankLevel);
 	m_sciencePurchasePoints += curRank ? curRank->m_sciencePurchasePointsGranted : 0;
+	// Tiberium Project @feature no General's Points for a faction without them
+	if( getPlayerTemplate() != nullptr && !getPlayerTemplate()->hasGeneralsPoints() )
+		m_sciencePurchasePoints = 0;
 	m_generalName = TheGameText? TheGameText->fetch("SCIENCE:GeneralName"):UnicodeString::TheEmptyString;
 	resetSciences();
 }
@@ -2753,7 +2829,9 @@ Bool Player::setRankLevel(Int newLevel)
 		{
 			//addSciencePurchasePoints(rank->m_sciencePurchasePointsGranted);
 			// do this directly, so we can defer the UI notification till the end
-			m_sciencePurchasePoints += rank->m_sciencePurchasePointsGranted;
+			// (Tiberium Project @feature none for a faction without General's Points)
+			if( getPlayerTemplate() == nullptr || getPlayerTemplate()->hasGeneralsPoints() )
+				m_sciencePurchasePoints += rank->m_sciencePurchasePointsGranted;
 			if (m_sciencePurchasePoints < 0)
 				m_sciencePurchasePoints = 0;
 
@@ -4040,6 +4118,14 @@ void Player::crc( Xfer *xfer )
 	xfer->xferInt( &m_skillPoints );
 	xfer->xferInt( &m_sciencePurchasePoints );
 
+	// Tiberium Project @feature C&C4's support meter (only once it has filled at all, so that a game
+	// without one keeps its CRC)
+	if( m_supportPointsMax > 0 )
+	{
+		xfer->xferInt( &m_supportPoints );
+		xfer->xferInt( &m_supportProgress );
+	}
+
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -4059,7 +4145,7 @@ void Player::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 9;	// Tiberium Project @feature 9: 32 players (attacked by)
+	const XferVersion currentVersion = 10;	// Tiberium Project @feature 9: 32 players (attacked by); 10: C&C4's support meter
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -4592,6 +4678,22 @@ void Player::xfer( Xfer *xfer )
 	}
 	else
 		m_unitsShouldHunt = FALSE;
+
+	// Tiberium Project @feature C&C4's support meter
+	if( version >= 10 )
+	{
+		xfer->xferInt( &m_supportPoints );
+		xfer->xferInt( &m_supportProgress );
+		xfer->xferInt( &m_supportPointsMax );
+		xfer->xferUnsignedInt( &m_supportFedFrame );
+	}
+	else
+	{
+		m_supportPoints = 0;
+		m_supportProgress = 0;
+		m_supportPointsMax = 0;
+		m_supportFedFrame = 0;
+	}
 
 }
 

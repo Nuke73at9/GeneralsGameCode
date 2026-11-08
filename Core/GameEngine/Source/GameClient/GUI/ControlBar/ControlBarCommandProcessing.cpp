@@ -204,6 +204,10 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 		TheAudio->addAudioEvent( &sound );
 	}
 
+	// Tiberium Project @feature a power its player cannot pay for is refused at once, as a build is
+	if( refuseUnaffordablePower( commandButton ) )
+		return CBC_COMMAND_USED;
+
 	if( BitIsSet( commandButton->getOptions(), COMMAND_OPTION_NEED_TARGET ) )
 	{
 		if (commandButton->getOptions() & USES_MINE_CLEARING_WEAPONSET)
@@ -920,3 +924,27 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 
 }
 
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature a power's price: refused, with EVA's insufficient funds, when the local
+// player has not the credits (Cost) or the support points (SupportPoints) for it
+//-------------------------------------------------------------------------------------------------
+Bool ControlBar::refuseUnaffordablePower( const CommandButton *button )
+{
+#if RTS_ZEROHOUR
+	if( button == nullptr || ( button->getCommandType() != GUI_COMMAND_SPECIAL_POWER
+		&& button->getCommandType() != GUI_COMMAND_SPECIAL_POWER_FROM_SHORTCUT ) )
+		return FALSE;
+	const SpecialPowerTemplate *power = button->getSpecialPowerTemplate();
+	Player *player = ThePlayerList != nullptr ? ThePlayerList->getLocalPlayer() : nullptr;
+	if( power == nullptr || player == nullptr || player->canAffordSpecialPower( power ) )
+		return FALSE;
+	TheEva->setShouldPlay( EVA_InsufficientFunds );
+	if( power->getCost() > 0 && player->getMoney()->countMoney() < power->getCost() )
+		TheInGameUI->message( "GUI:NotEnoughMoneyToBuild" );
+	else
+		TheInGameUI->message( UnicodeString( L"Not enough support points" ) );
+	return TRUE;
+#else
+	return FALSE;
+#endif
+}

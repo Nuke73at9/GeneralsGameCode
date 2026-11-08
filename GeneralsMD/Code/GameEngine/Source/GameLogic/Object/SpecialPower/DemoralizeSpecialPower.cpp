@@ -102,6 +102,8 @@ void DemoralizeSpecialPower::doSpecialPowerAtLocation( const Coord3D *loc, Real 
 {
 	if (getObject()->isDisabled())
 		return;
+	if( !canPayForPower() )	// Tiberium Project @feature its price (the base pays it)
+		return;
 
 	// sanity
 	if( loc == nullptr )

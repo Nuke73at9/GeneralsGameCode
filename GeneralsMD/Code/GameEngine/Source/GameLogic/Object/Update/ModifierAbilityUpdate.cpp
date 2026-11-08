@@ -120,8 +120,15 @@ void ModifierAbilityUpdate::act()
 		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( &spot, data->m_radius, FROM_CENTER_2D );
 		MemoryPoolObjectHolder hold( iter );
 		for( Object *other = iter->first(); other; other = iter->next() )
+		{
+			// (a player power's filter: the kinds it takes and those it leaves)
+			if( data->m_kindOf.any() && !other->isAnyKindOf( data->m_kindOf ) )
+				continue;
+			if( other->isAnyKindOf( data->m_forbiddenKindOf ) )
+				continue;
 			if( attributeModifierReaches( me, other, data->m_affects ) )
 				reached.push_back( other );
+		}
 	}
 	else
 	{

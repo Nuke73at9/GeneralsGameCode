@@ -1494,6 +1494,16 @@ Bool ActionManager::canDoSpecialPowerAtLocation( const Object *obj, const Coord3
 			}
 		}
 
+		// Tiberium Project @feature the converted player powers: anywhere on the map, out of the shroud unless
+		// the power may be aimed into it (radar scans, superweapons)
+		if( isPlayerPowerType( spTemplate->getSpecialPowerType() ) )
+		{
+			if( !isPointOnMap( loc ) )
+				return FALSE;
+			return spTemplate->isShroudedTargetOK()
+				|| ThePartitionManager->getShroudStatusForPlayer( obj->getControllingPlayer()->getPlayerIndex(), loc ) != CELLSHROUD_SHROUDED;
+		}
+
 		// First check terrain type, if it is cared about.  Don't return a true, since there are more checks.
 		switch( spTemplate->getSpecialPowerType() )
 		{
@@ -1654,6 +1664,10 @@ Bool ActionManager::canDoSpecialPowerAtObject( const Object *obj, const Object *
 		// if the target is in the shroud, we can't do anything
 		if (isObjectShroudedForAction(obj, target, commandSource))
 			return FALSE;
+
+		// Tiberium Project @feature the converted player powers: the button's options pick the targets
+		if( isPlayerPowerType( spTemplate->getSpecialPowerType() ) )
+			return TRUE;
 
 		switch( spTemplate->getSpecialPowerType() )
 		{
@@ -1908,6 +1922,10 @@ Bool ActionManager::canDoSpecialPower( const Object *obj, const SpecialPowerTemp
 				return false;
 			}
 		}
+
+		// Tiberium Project @feature the converted player powers with no target
+		if( isPlayerPowerType( spTemplate->getSpecialPowerType() ) )
+			return TRUE;
 
 		switch( spTemplate->getSpecialPowerType() )
 		{

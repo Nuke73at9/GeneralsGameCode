@@ -687,6 +687,18 @@ private:
 public:
 	Int getSkillPoints() const						{ return m_skillPoints; }
 	Int getSciencePurchasePoints() const	{ return m_sciencePurchasePoints; }
+
+	// Tiberium Project @feature C&C4's support meter: points a C&C4 faction's Support Crawler gathers
+	// (SupportMeterUpdate) and its support powers spend (SpecialPowerTemplate SupportPoints)
+	Int getSupportPoints() const					{ return m_supportPoints; }
+	Int getSupportPointsMax() const				{ return m_supportPointsMax; }
+	Bool hasSupportMeter() const					{ return m_supportPointsMax > 0; }
+	void feedSupportMeter( Int pointsPerMinute, Int maxPoints );	///< once a frame at most (the first source to call)
+	void spendSupportPoints( Int points );
+	void emptySupportMeter();
+	/// Tiberium Project @feature a power's price (its Cost in credits, its SupportPoints): whether this player has it, and paying it
+	Bool canAffordSpecialPower( const SpecialPowerTemplate *power ) const;
+	void payForSpecialPower( const SpecialPowerTemplate *power );
 	Int getRankLevel() const							{ return m_rankLevel; }
 	Int getSkillPointsLevelUp() const			{ return m_levelUp;	}
 	Int getSkillPointsLevelDown() const			{ return m_levelDown;	}
@@ -782,6 +794,10 @@ private:
 	Int										m_rankLevel;			///< (SAVE) our RankLevel, 1...n
 	Int										m_skillPoints;		///< (SAVE) our cumulative SkillPoint total
 	Int										m_sciencePurchasePoints;		///< (SAVE) our unspent SciencePurchasePoint total
+	Int										m_supportPoints;					///< (SAVE) Tiberium Project: C&C4's support meter, in points
+	Int										m_supportProgress;				///< (SAVE) toward the next point, in 1/1800 of one (a point a minute adds 1 a frame)
+	Int										m_supportPointsMax;				///< (SAVE) the meter's top (0: no meter yet)
+	UnsignedInt						m_supportFedFrame;				///< (SAVE) the frame the meter last filled on
 	Int										m_levelUp, m_levelDown;			///< (NO-SAVE) skill points to go up/down a level (runtime only)
 	UnicodeString					m_generalName;		///< (SAVE) This is the name of the general the player is allowed to change.
 

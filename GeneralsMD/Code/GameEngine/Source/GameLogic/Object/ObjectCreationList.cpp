@@ -60,6 +60,8 @@
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/SpecialPowerCompletionDie.h"
 #include "GameLogic/Module/StickyBombUpdate.h"
+#include "GameLogic/Module/StrafeAreaUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/LifetimeUpdate.h"
 #include "GameLogic/Module/RadiusDecalUpdate.h"
 #include "GameLogic/Object.h"
@@ -737,6 +739,20 @@ static void parseFrictionPerSec( INI* ini, void * /*instance*/, void *store, con
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature Kane's Wrath's ISSUE_MOVE_AFTER_CREATION: what a power's list makes is sent to the
+// spot the power was aimed at (the list's second position): flown there (MOVE), flown there to set down its
+// passengers (EVACUATE_AND_EXIT: the Ox of the Bloodhounds, the airborne troops; away off the map by its
+// TransportContain's LeaveMapWhenEmpty), or
+// flown over it firing and away (STRAFE: StrafeAreaUpdate, a bombing run's Orcas, a mine drop's Vertigos)
+enum OrderAfterCreationType
+{
+	ORDER_AFTER_CREATION_NONE = 0,
+	ORDER_AFTER_CREATION_MOVE,
+	ORDER_AFTER_CREATION_EVACUATE_AND_EXIT,
+	ORDER_AFTER_CREATION_STRAFE,
+};
+static const char *const OrderAfterCreationNames[] = { "NONE", "MOVE", "EVACUATE_AND_EXIT", "STRAFE", nullptr };
+
 class GenericObjectCreationNugget : public ObjectCreationNugget
 {
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(GenericObjectCreationNugget, "GenericObjectCreationNugget")
@@ -786,7 +802,8 @@ public:
 		m_shadowType(SHADOW_NONE),
 		m_fxFinal(nullptr),
 		m_preserveLayer(true),
-		m_objectCount(0)
+		m_objectCount(0),
+		m_orderAfterCreation(ORDER_AFTER_CREATION_NONE)
 	{
 		m_offset.zero();
 	}
@@ -817,7 +834,7 @@ public:
 				//Vast majority of OCL's don't care about the angle, so if it comes in invalid, default the angle to 0.
 				angle = 0.0f;
 			}
-			return reallyCreate( primary, xfrm, angle, primaryObj, lifetimeFrames );
+			return reallyCreate( primary, xfrm, angle, primaryObj, lifetimeFrames, secondary );
 		}
 		else
 		{
@@ -881,6 +898,7 @@ public:
 			{ "MinHealth",					INI::parsePercentToReal, nullptr, offsetof(GenericObjectCreationNugget, m_minHealth) },
 			{ "MaxHealth",					INI::parsePercentToReal, nullptr, offsetof(GenericObjectCreationNugget, m_maxHealth) },
 			{ "RequiresLivePlayer",	INI::parseBool, nullptr, offsetof(GenericObjectCreationNugget, m_requiresLivePlayer) },
+			{ "OrderAfterCreation",	INI::parseIndexList, OrderAfterCreationNames, offsetof(GenericObjectCreationNugget, m_orderAfterCreation) },	// Tiberium Project
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 
@@ -1351,7 +1369,39 @@ protected:
 
 	}
 
-	Object* reallyCreate(const Coord3D *pos, const Matrix3D *mtx, Real orientation, const Object *sourceObj, UnsignedInt lifetimeFrames ) const
+	//-------------------------------------------------------------------------------------------------
+	/** Tiberium Project @feature what was made sent on to the spot (OrderAfterCreation) */
+	void orderAfterCreation( Object *obj, const Coord3D *target ) const
+	{
+		if( m_orderAfterCreation == ORDER_AFTER_CREATION_NONE || target == nullptr || obj == nullptr )
+			return;
+		AIUpdateInterface *ai = obj->getAI();
+		if( ai == nullptr )
+			return;
+		Coord3D to = *target;
+		to.z = TheTerrainLogic->getGroundHeight( to.x, to.y );
+		switch( m_orderAfterCreation )
+		{
+			case ORDER_AFTER_CREATION_MOVE:
+				ai->aiMoveToPosition( &to, CMD_FROM_AI );
+				break;
+			case ORDER_AFTER_CREATION_EVACUATE_AND_EXIT:
+				// (the way off the map is its transport's: LeaveMapWhenEmpty, once its riders are out)
+				ai->aiMoveToAndEvacuate( &to, CMD_FROM_AI );
+				break;
+			case ORDER_AFTER_CREATION_STRAFE:
+			{
+				StrafeAreaUpdate *strafe = StrafeAreaUpdate::find( obj );
+				if( strafe != nullptr )
+					strafe->strafe( &to );
+				else
+					ai->aiMoveToPosition( &to, CMD_FROM_AI );
+				break;
+			}
+		}
+	}
+
+	Object* reallyCreate(const Coord3D *pos, const Matrix3D *mtx, Real orientation, const Object *sourceObj, UnsignedInt lifetimeFrames, const Coord3D *target = nullptr ) const
 	{
 		static const ThingTemplate* debrisTemplate = TheThingFactory->findTemplate("GenericDebris");
 
@@ -1459,6 +1509,7 @@ protected:
 				// do stuff to contained objects too
 				doStuffToObj( debris, m_names[pick], pos, mtx, orientation, sourceObj, lifetimeFrames );
 			}
+			orderAfterCreation( debris, target );	// Tiberium Project
 
 			if (m_fadeIn)
 			{
@@ -1544,6 +1595,7 @@ private:
 	Bool											m_requiresLivePlayer;
 	Bool											m_containInsideSourceObject; ///< The created stuff will be added to the Contain module of the SourceObject
 	Bool											m_preserveLayer;
+	Int												m_orderAfterCreation;		///< Tiberium Project: OrderAfterCreationType
 	Bool											m_nameAreObjects;
 	Bool											m_okToChangeModelColor;
 	Bool											m_orientInForceDirection;

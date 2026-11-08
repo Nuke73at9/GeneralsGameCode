@@ -40,6 +40,7 @@
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/PlayerTemplate.h"
+#include "Common/SpecialPower.h"
 #include "Common/Radar.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Upgrade.h"
@@ -63,6 +64,7 @@
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Module/ShieldSphereUpdate.h"
+#include "GameLogic/Module/SpecialPowerModule.h"
 
 #include <map>
 #include <vector>
@@ -168,6 +170,24 @@ namespace
 	DisplayString *s_body = nullptr;
 	Int s_fontHeight = 0;
 	std::map<const ThingTemplate *, const CommandButton *> s_buildButtons;
+
+	/// Tiberium Project @feature the Powers bar: a faction without General's Points (the Tiberium factions) has its
+	/// powers (its buildings' or its Support Crawler's: its shortcut command set) up the left edge, each with its
+	/// price and its countdown, and C&C4's support meter beside them
+	struct PowerEntry
+	{
+		const CommandButton *button;
+		const SpecialPowerTemplate *power;
+		ObjectID source;
+		Real ready;							///< 0..1
+		UnsignedInt readyFrame;
+		Bool off;								///< its source is switched off (no power, hacked, EMP)
+	};
+	GameWindow *s_powers = nullptr;
+	std::vector<PowerEntry> s_powerList;
+	UnsignedInt s_powerListFrame = 0xFFFFFFFFu;
+	Int s_hoverPower = -1;
+	Bool s_powersHidden = FALSE;		///< the column's Powers button hides the bar
 
 	//-----------------------------------------------------------------------------------------------
 	Player *localPlayer()
@@ -492,10 +512,14 @@ namespace
 
 	//-----------------------------------------------------------------------------------------------
 	/** the column's buttons: whether Zero Hour has them up now */
+	Bool powersWanted();
+
 	Bool buttonUsable( Int i )
 	{
 		if( i == BUTTON_ZONES )
 			return TiberiumZoneView::isAvailable();
+		if( i == 3 && powersWanted() )
+			return TRUE;	// (Tiberium Project: the Powers bar's button, in the general's place)
 		GameWindow *win = findWindow( BUTTON_WINDOWS[i] );
 		return win != nullptr && !win->winIsHidden() && win->winGetEnabled();
 	}
@@ -509,6 +533,12 @@ namespace
 			if( !TiberiumZoneView::isAvailable() )
 				return FALSE;
 			TiberiumZoneView::toggle();
+			return TRUE;
+		}
+		if( i == 3 && powersWanted() )
+		{
+			// Tiberium Project @feature a faction without General's Points: the Powers bar shown or put away
+			s_powersHidden = !s_powersHidden;
 			return TRUE;
 		}
 		GameWindow *win = findWindow( BUTTON_WINDOWS[i] );
@@ -747,6 +777,306 @@ namespace
 	}
 
 	//-----------------------------------------------------------------------------------------------
+	/** Tiberium Project @feature whether the local player's faction has the Powers bar (no General's Points) */
+	Bool powersWanted()
+	{
+		const Player *me = localPlayer();
+		const PlayerTemplate *pt = me != nullptr ? me->getPlayerTemplate() : nullptr;
+		return pt != nullptr && !pt->hasGeneralsPoints() && pt->getSpecialPowerShortcutCommandSet().isNotEmpty();
+	}
+
+	//-----------------------------------------------------------------------------------------------
+	/** the powers the player has now (a source for each), once a logic frame */
+	void collectPowers()
+	{
+		const UnsignedInt now = TheGameLogic->getFrame();
+		if( now == s_powerListFrame )
+			return;
+		s_powerListFrame = now;
+		s_powerList.clear();
+		Player *me = localPlayer();
+		const PlayerTemplate *pt = me != nullptr ? me->getPlayerTemplate() : nullptr;
+		const CommandSet *set = pt != nullptr ? TheControlBar->findCommandSet( pt->getSpecialPowerShortcutCommandSet() ) : nullptr;
+		for( Int i = 0; set != nullptr && i < MAX_COMMANDS_PER_SET; ++i )
+		{
+			const CommandButton *b = set->getCommandButton( i );
+			const SpecialPowerTemplate *power = b != nullptr ? b->getSpecialPowerTemplate() : nullptr;
+			if( power == nullptr )
+				continue;
+			Object *source = me->findMostReadyShortcutSpecialPowerOfType( power->getSpecialPowerType() );
+			SpecialPowerModuleInterface *mod = source != nullptr ? source->getSpecialPowerModule( power ) : nullptr;
+			if( mod == nullptr )
+				continue;
+			PowerEntry e;
+			e.button = b;
+			e.power = power;
+			e.source = source->getID();
+			e.ready = mod->getPercentReady();
+			e.readyFrame = mod->getReadyFrame();
+			e.off = source->isDisabled();
+			s_powerList.push_back( e );
+		}
+	}
+
+	/// where the Powers bar's buttons go: up the left edge from above the radar's panel, two columns when
+	/// one is too tall; the support meter beside them
+	struct PowersLayout
+	{
+		Int x, bottom, size, gap, perCol, cols;
+		Int meterX, meterY, meterW, meterH;
+		Int x0, y0, w, h;			///< its window
+	};
+
+	void powersLayout( const HUDLayout &L, Int count, Bool meter, PowersLayout *P )
+	{
+		P->gap = L.gap;
+		P->size = (Int)( 38.0f * L.b );
+		const Int top = (Int)( 48.0f * L.b );
+		P->bottom = L.ly - L.gap * 3;
+		const Int room = max( 1, P->bottom - top );
+		P->perCol = max( 1, ( room + P->gap ) / ( P->size + P->gap ) );
+		if( count > P->perCol )
+		{
+			// smaller first, then a second column
+			const Int smaller = max( (Int)( 30.0f * L.b ), ( room + P->gap ) / max( 1, count ) - P->gap );
+			P->size = min( P->size, smaller );
+			P->perCol = max( 1, ( room + P->gap ) / ( P->size + P->gap ) );
+		}
+		P->cols = max( 1, ( count + P->perCol - 1 ) / P->perCol );
+		P->x = max( 4, (Int)( 6.0f * L.b ) );
+		P->meterW = meter ? max( 6, (Int)( 11.0f * L.b ) ) : 0;
+		P->meterH = meter ? min( room, (Int)( 190.0f * L.b ) ) : 0;
+		P->meterX = P->x + P->cols * ( P->size + P->gap ) + P->gap;
+		P->meterY = P->bottom - P->meterH;
+		const Int rows = min( max( count, 1 ), P->perCol );
+		P->x0 = 0;
+		P->y0 = min( P->bottom - rows * ( P->size + P->gap ), P->meterY ) - (Int)( 16.0f * L.b );
+		P->w = ( meter ? P->meterX + P->meterW : P->x + P->cols * ( P->size + P->gap ) ) + P->gap * 2;
+		P->h = P->bottom - P->y0 + P->gap;
+	}
+
+	void powerRect( const PowersLayout &P, Int i, Int *x, Int *y )
+	{
+		const Int col = i / P.perCol, row = i % P.perCol;
+		*x = P.x + col * ( P.size + P.gap );
+		*y = P.bottom - ( row + 1 ) * ( P.size + P.gap ) + P.gap;
+	}
+
+	UnicodeString clockText( UnsignedInt frames )
+	{
+		const Int secs = (Int)( ( frames + LOGICFRAMES_PER_SECOND - 1 ) / LOGICFRAMES_PER_SECOND );
+		UnicodeString s;
+		s.format( L"%d:%02d", secs / 60, secs % 60 );
+		return s;
+	}
+
+	//-----------------------------------------------------------------------------------------------
+	/** the Powers bar: each power's picture, dark over the part still charging with its countdown, its price
+		(red when the player has not got it), lit when it can be used; the support meter with its five ranks */
+	void drawPowers( GameWindow *, WinInstanceData * )
+	{
+		Player *me = localPlayer();
+		if( me == nullptr || TheDisplay == nullptr || s_powersHidden )
+			return;
+		HUDLayout L;
+		computeLayout( &L );
+		ensureStrings( L );
+		Art a;
+		getArt( &a );
+		collectPowers();
+		const Bool meter = me->hasSupportMeter();
+		PowersLayout P;
+		powersLayout( L, (Int)s_powerList.size(), meter, &P );
+		const UnsignedInt now = TheGameLogic->getFrame();
+		for( size_t i = 0; i < s_powerList.size(); ++i )
+		{
+			const PowerEntry &e = s_powerList[i];
+			Int x, y;
+			powerRect( P, (Int)i, &x, &y );
+			const Bool ready = e.ready >= 1.0f && !e.off;
+			const Bool afford = me->canAffordSpecialPower( e.power );
+			const Bool hover = (Int)i == s_hoverPower;
+			TheDisplay->drawFillRect( x, y, P.size, P.size, GameMakeColor( 2, 8, 14, 200 ) );
+			const Image *img = e.button->getButtonImage();
+			if( img != nullptr )
+				TheDisplay->drawImage( img, x + 1, y + 1, x + P.size - 1, y + P.size - 1,
+					ready && afford ? 0xFFFFFFFF : GameMakeColor( 150, 150, 150, 255 ) );
+			if( e.off )
+			{
+				// its source is off (a building without power): dark, and said so
+				TheDisplay->drawFillRect( x + 1, y + 1, P.size - 2, P.size - 2, GameMakeColor( 40, 0, 0, 170 ) );
+				const UnicodeString off = plain( "Off" );
+				s_text->setText( off );
+				Int tw = 0, th = 0;
+				s_text->getSize( &tw, &th );
+				drawText( s_text, off, x + ( P.size - tw ) / 2, y + ( P.size - th ) / 2, GameMakeColor( 255, 90, 70, 255 ) );
+			}
+			else if( !ready )
+			{
+				// the part still to charge, dark from the top, and the time left
+				const Int dark = (Int)( ( P.size - 2 ) * ( 1.0f - max( 0.0f, e.ready ) ) );
+				if( dark > 0 )
+					TheDisplay->drawFillRect( x + 1, y + 1, P.size - 2, dark, GameMakeColor( 0, 0, 0, 170 ) );
+				if( e.readyFrame > now )
+				{
+					const UnicodeString clock = clockText( e.readyFrame - now );
+					s_text->setText( clock );
+					Int tw = 0, th = 0;
+					s_text->getSize( &tw, &th );
+					drawText( s_text, clock, x + ( P.size - tw ) / 2, y + ( P.size - th ) / 2, a.text );
+				}
+			}
+			// the price: credits at the bottom, the support points (C&C4's rank) at the top
+			if( e.power->getSupportPoints() > 0 )
+			{
+				UnicodeString pts;
+				pts.format( L"%u", (unsigned)e.power->getSupportPoints() );
+				drawText( s_text, pts, x + 2, y + 1, me->getSupportPoints() >= (Int)e.power->getSupportPoints() ? a.accent : GameMakeColor( 255, 70, 60, 255 ) );
+			}
+			UnicodeString price;
+			if( e.power->getCost() > 0 )
+				price.format( L"$%u", (unsigned)e.power->getCost() );
+			if( !price.isEmpty() )
+			{
+				s_text->setText( price );
+				Int tw = 0, th = 0;
+				s_text->getSize( &tw, &th );
+				const Bool money = me->getMoney()->countMoney() >= e.power->getCost();
+				drawText( s_text, price, x + P.size - tw - 2, y + P.size - th, money ? a.text : GameMakeColor( 255, 70, 60, 255 ) );
+			}
+			const Color edge = hover ? GameMakeColor( 255, 220, 90, 255 ) : ( ready && afford ? a.accent : GameMakeColor( 60, 70, 78, 255 ) );
+			TheDisplay->drawOpenRect( x, y, P.size, P.size, hover ? 2.0f : 1.0f, edge );
+		}
+
+		// C&C4's support meter: its points, a notch a rank (10 points), lit up to what it holds
+		if( meter )
+		{
+			const Int pts = me->getSupportPoints(), most = max( 1, me->getSupportPointsMax() );
+			TheDisplay->drawFillRect( P.meterX, P.meterY, P.meterW, P.meterH, GameMakeColor( 2, 8, 14, 210 ) );
+			const Int fill = (Int)( ( P.meterH - 2 ) * min( 1.0f, (Real)pts / most ) );
+			if( fill > 0 )
+				TheDisplay->drawFillRect( P.meterX + 1, P.meterY + P.meterH - 1 - fill, P.meterW - 2, fill, a.accent );
+			for( Int k = 1; k * 10 < most; ++k )
+			{
+				const Int ny = P.meterY + P.meterH - 1 - (Int)( ( P.meterH - 2 ) * ( 10.0f * k / most ) );
+				TheDisplay->drawFillRect( P.meterX, ny, P.meterW, max( 1, P.gap / 2 ), GameMakeColor( 0, 0, 0, 230 ) );
+			}
+			TheDisplay->drawOpenRect( P.meterX, P.meterY, P.meterW, P.meterH, 1.0f, a.accentDim );
+			UnicodeString label;
+			label.format( L"%d", pts );
+			s_text->setText( label );
+			Int tw = 0, th = 0;
+			s_text->getSize( &tw, &th );
+			drawText( s_text, label, P.meterX + ( P.meterW - tw ) / 2, P.meterY - th - 1, a.text );
+		}
+
+		// the hovered power: its name, price and cooldown, and what it does, beside the bar
+		if( s_hoverPower >= 0 && s_hoverPower < (Int)s_powerList.size() )
+		{
+			const PowerEntry &e = s_powerList[s_hoverPower];
+			Int x, y;
+			powerRect( P, s_hoverPower, &x, &y );
+			UnicodeString name = TheGameText->fetch( e.button->getTextLabel() );
+			UnicodeString line;
+			const Int secs = (Int)( e.power->getReloadTime() / LOGICFRAMES_PER_SECOND );
+			if( e.power->getCost() > 0 && e.power->getSupportPoints() > 0 )
+				line.format( L"$%u and %u support points, ready again after %d:%02d", (unsigned)e.power->getCost(),
+					(unsigned)e.power->getSupportPoints(), secs / 60, secs % 60 );
+			else if( e.power->getCost() > 0 )
+				line.format( L"$%u, ready again after %d:%02d", (unsigned)e.power->getCost(), secs / 60, secs % 60 );
+			else
+				line.format( L"Ready again after %d:%02d", secs / 60, secs % 60 );
+			UnicodeString desc = e.button->getDescriptionLabel().isNotEmpty() ? TheGameText->fetch( e.button->getDescriptionLabel() ) : UnicodeString();
+			const Int boxW = (Int)( 260.0f * L.b ), pad = max( 3, (Int)( 5.0f * L.b ) );
+			s_body->setWordWrap( boxW - 2 * pad );
+			Int nw = 0, nh = 0, lw = 0, lh = 0, dw = 0, dh = 0;
+			s_name->setText( name );
+			s_name->getSize( &nw, &nh );
+			s_text->setText( line );
+			s_text->getSize( &lw, &lh );
+			if( !desc.isEmpty() )
+			{
+				s_body->setText( desc );
+				s_body->getSize( &dw, &dh );
+			}
+			const Int boxH = pad * 3 + nh + lh + dh;
+			const Int bx = P.w + P.gap, by = max( 0, min( y + P.size / 2 - boxH / 2, L.sh - boxH ) );
+			TheDisplay->drawFillRect( bx, by, boxW, boxH, GameMakeColor( 2, 8, 14, 230 ) );
+			TheDisplay->drawOpenRect( bx, by, boxW, boxH, 1.0f, a.accent );
+			drawText( s_name, name, bx + pad, by + pad, a.text );
+			drawText( s_text, line, bx + pad, by + pad + nh, me->canAffordSpecialPower( e.power ) ? a.textDim : GameMakeColor( 255, 70, 60, 255 ) );
+			if( !desc.isEmpty() )
+				drawText( s_body, desc, bx + pad, by + pad * 2 + nh + lh, a.textDim );
+		}
+	}
+
+	//-----------------------------------------------------------------------------------------------
+	/** a power's button pressed: refused when it cannot be paid for or is not ready; aimed (its targeting)
+		or used at once */
+	void pressPower( Int i )
+	{
+		if( i < 0 || i >= (Int)s_powerList.size() )
+			return;
+		const PowerEntry &e = s_powerList[i];
+		if( ControlBar::refuseUnaffordablePower( e.button ) )
+			return;
+		Object *source = TheGameLogic->findObjectByID( e.source );
+		SpecialPowerModuleInterface *mod = source != nullptr ? source->getSpecialPowerModule( e.power ) : nullptr;
+		if( mod == nullptr || !mod->isReady() || source->isDisabled() )
+			return;
+		if( BitIsSet( e.button->getOptions(), COMMAND_OPTION_NEED_TARGET ) )
+		{
+			TheInGameUI->setGUICommand( e.button );
+			return;
+		}
+		GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_DO_SPECIAL_POWER );
+		msg->appendIntegerArgument( e.power->getID() );
+		msg->appendIntegerArgument( e.button->getOptions() );
+		msg->appendObjectIDArgument( source->getID() );
+	}
+
+	//-----------------------------------------------------------------------------------------------
+	WindowMsgHandledType inputPowers( GameWindow *, UnsignedInt msg, WindowMsgData mData1, WindowMsgData )
+	{
+		const Int mx = (Short)( mData1 & 0xFFFF ), my = (Short)( ( mData1 >> 16 ) & 0xFFFF );
+		Player *me = localPlayer();
+		if( me == nullptr || s_powersHidden )
+			return MSG_IGNORED;
+		HUDLayout L;
+		computeLayout( &L );
+		PowersLayout P;
+		powersLayout( L, (Int)s_powerList.size(), me->hasSupportMeter(), &P );
+		Int hit = -1;
+		for( Int i = 0; i < (Int)s_powerList.size() && hit < 0; ++i )
+		{
+			Int x, y;
+			powerRect( P, i, &x, &y );
+			if( mx >= x && mx < x + P.size && my >= y && my < y + P.size )
+				hit = i;
+		}
+		switch( msg )
+		{
+			case GWM_MOUSE_POS:
+				s_hoverPower = hit;
+				return hit >= 0 ? MSG_HANDLED : MSG_IGNORED;
+			case GWM_MOUSE_LEAVING:
+				s_hoverPower = -1;
+				return MSG_HANDLED;
+			case GWM_LEFT_UP:
+				if( hit < 0 )
+					return MSG_IGNORED;
+				pressPower( hit );
+				return MSG_HANDLED;
+			case GWM_LEFT_DOWN:
+			case GWM_RIGHT_DOWN:
+			case GWM_RIGHT_UP:
+				return hit >= 0 ? MSG_HANDLED : MSG_IGNORED;
+			default:
+				return MSG_IGNORED;
+		}
+	}
+
+	//-----------------------------------------------------------------------------------------------
 	/** the column: the radar's frame and its power meter, the money and power, the buttons */
 	void drawColumn( GameWindow *, WinInstanceData * )
 	{
@@ -789,15 +1119,18 @@ namespace
 			Int x, y, w, h;
 			buttonRect( L, i, &x, &y, &w, &h );
 			const Bool usable = buttonUsable( i );
-			// the general's: lit while there is a promotion to spend; the zones': lit while they are shown
+			// the general's: lit while there is a promotion to spend; the zones': lit while they are shown; the
+			// Powers bar's (in the general's place for a faction without General's Points): lit while it is up
 			Bool lit = i == 3 && me->getSciencePurchasePoints() > 0 && ( ( TheGameLogic->getFrame() / 15 ) & 1 );
 			if( i == BUTTON_ZONES )
 				lit = TiberiumZoneView::isShown();
+			if( i == 3 && powersWanted() )
+				lit = !s_powersHidden;
 			if( lit )
 				TheDisplay->drawFillRect( x, y, w, h, a.accentDim );
 			if( usable && i == s_hoverButton )
 				TheDisplay->drawOpenRect( x, y, w, h, 2.0f, a.accent );
-			const UnicodeString label = plain( BUTTON_LABELS[i] );
+			const UnicodeString label = plain( i == 3 && powersWanted() ? "Powers" : BUTTON_LABELS[i] );
 			s_text->setText( label );
 			Int tw = 0, th = 0;
 			s_text->getSize( &tw, &th );
@@ -1328,7 +1661,8 @@ void TiberiumHUD::update()
 		s_panel = makeWindow( L.px, 0, L.pw, L.sh, drawPanel, inputPanel );
 		s_tier = makeWindow( L.tierX, L.tierY, L.tierW, L.tierH, drawTier, inputTier );
 		s_hold = TheWindowManager->winCreate( nullptr, WIN_STATUS_HIDDEN, 0, 0, 1, 1, nullptr, nullptr );
-		if( s_column == nullptr || s_panel == nullptr || s_tier == nullptr || s_hold == nullptr )
+		s_powers = makeWindow( 0, 0, 1, 1, drawPowers, inputPowers );
+		if( s_column == nullptr || s_panel == nullptr || s_tier == nullptr || s_hold == nullptr || s_powers == nullptr )
 		{
 			reset();
 			return;
@@ -1411,7 +1745,19 @@ void TiberiumHUD::update()
 		if( shortcut != nullptr )
 			shortcut->winGetPosition( &s_shortcutAt.x, &s_shortcutAt.y );
 	}
-	if( shortcut != nullptr )
+	// Tiberium Project @feature a faction without General's Points: the Powers bar in place of Zero Hour's
+	const Bool powers = powersWanted();
+	if( powers )
+	{
+		collectPowers();
+		PowersLayout P;
+		powersLayout( L, (Int)s_powerList.size(), localPlayer()->hasSupportMeter(), &P );
+		fit( s_powers, P.x0, P.y0, P.w, P.h );
+		if( shortcut != nullptr && !shortcut->winIsHidden() )
+			shortcut->winHide( TRUE );
+	}
+	s_powers->winHide( !powers || s_hidden || s_powersHidden || ( s_powerList.empty() && !localPlayer()->hasSupportMeter() ) );
+	if( shortcut != nullptr && !powers )
 	{
 		Int x = 0, y = 0, w = 0, h = 0;
 		shortcut->winGetPosition( &x, &y );
@@ -1444,9 +1790,14 @@ void TiberiumHUD::reset()
 			TheWindowManager->winDestroy( s_tier );
 		if( s_hold != nullptr )
 			TheWindowManager->winDestroy( s_hold );
+		if( s_powers != nullptr )
+			TheWindowManager->winDestroy( s_powers );
 	}
 	s_moved.clear();
-	s_column = s_panel = s_tier = s_hold = nullptr;
+	s_column = s_panel = s_tier = s_hold = s_powers = nullptr;
+	s_powerList.clear();
+	s_powerListFrame = 0xFFFFFFFFu;
+	s_hoverPower = -1;
 	s_master = s_shortcut = nullptr;
 	s_on = s_hidden = FALSE;
 	s_row.clear();
@@ -1493,6 +1844,15 @@ Bool TiberiumHUD::testClickPart( const char *part, Int index, Bool right )
 		clickPanel( 100, right );
 		return TRUE;
 	}
+	if( strcmp( part, "power" ) == 0 && powersWanted() )
+	{
+		// Tiberium Project @feature a click on the Powers bar's index-th power
+		collectPowers();
+		if( index >= (Int)s_powerList.size() )
+			return FALSE;
+		pressPower( index );
+		return TRUE;
+	}
 	return FALSE;
 }
 
@@ -1531,9 +1891,21 @@ void TiberiumHUD::describe( char *buffer, Int size )
 	GameWindow *radar = TheWindowManager->winGetWindowFromId( nullptr, radarID );
 	if( radar != nullptr )
 		radar->winGetScreenPosition( &rx, &ry );
-	snprintf( buffer, size, "on%s; selected %d (%d kinds)%s%s%s; shield %s; row [%s]; slots [%s]; %s %d (next %d%%); radar at %d,%d; view %d high",
+	// (Tiberium Project @feature the Powers bar: how many powers, how many ready, the support meter)
+	Int powers = 0, readyPowers = 0;
+	if( powersWanted() )
+	{
+		collectPowers();
+		powers = (Int)s_powerList.size();
+		for( size_t i = 0; i < s_powerList.size(); ++i )
+			if( s_powerList[i].ready >= 1.0f && !s_powerList[i].off )
+				++readyPowers;
+	}
+	const Player *me = localPlayer();
+	snprintf( buffer, size, "on%s; selected %d (%d kinds)%s%s%s; shield %s; row [%s]; slots [%s]; %s %d (next %d%%); radar at %d,%d; view %d high; powers %d (%d ready)%s, meter %d/%d",
 		s_hidden ? " (hidden)" : "", (int)s_selected, (int)s_groups.size(), obj != nullptr ? ": " : "",
 		obj != nullptr ? obj->getTemplate()->getName().str() : "", obj != nullptr && obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) ? " (being built)" : "",
 		shield ? ( up ? "up" : "down" ) : "none", row.str(), slots.str(), isTier ? "tier" : "rank", (int)tier, progress >= 0.0f ? (int)( progress * 100.0f ) : 0,
-		(int)rx, (int)ry, TheTacticalView != nullptr ? (int)TheTacticalView->getHeight() : -1 );
+		(int)rx, (int)ry, TheTacticalView != nullptr ? (int)TheTacticalView->getHeight() : -1, (int)powers, (int)readyPowers,
+		s_powersHidden ? " (put away)" : "", me != nullptr ? (int)me->getSupportPoints() : 0, me != nullptr ? (int)me->getSupportPointsMax() : 0 );
 }

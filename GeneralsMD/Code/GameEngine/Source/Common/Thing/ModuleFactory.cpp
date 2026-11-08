@@ -145,6 +145,8 @@
 #include "GameLogic/Module/RadiusDecalUpdate.h"
 #include "GameLogic/Module/ReplaceSelfUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/ModifierAbilityUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/SupportMeterUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/StrafeAreaUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/AttributeModifierAuraUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/ShieldSphereUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/StealthFieldUpdate.h"	// Tiberium Project
@@ -422,6 +424,8 @@ void ModuleFactory::init()
 	addModule( RadiusDecalUpdate );
 	addModule( ReplaceSelfUpdate );	// Tiberium Project
 	addModule( ModifierAbilityUpdate );	// Tiberium Project
+	addModule( SupportMeterUpdate );	// Tiberium Project
+	addModule( StrafeAreaUpdate );	// Tiberium Project
 	addModule( AttributeModifierAuraUpdate );	// Tiberium Project
 	addModule( ShieldSphereUpdate );	// Tiberium Project
 	addModule( StealthFieldUpdate );	// Tiberium Project

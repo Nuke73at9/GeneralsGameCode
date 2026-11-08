@@ -100,6 +100,8 @@ void FireWeaponPower::doSpecialPower( UnsignedInt commandOptions )
 
 	if( self->isDisabled() )
 		return;
+	if( !canPayForPower() )	// Tiberium Project @feature its price (the base pays it)
+		return;
 
 	// call the base class action cause we are *EXTENDING* functionality
 	SpecialPowerModule::doSpecialPower( commandOptions );
@@ -128,6 +130,8 @@ void FireWeaponPower::doSpecialPowerAtLocation( const Coord3D *loc, Real angle, 
 
 	if( self->isDisabled() )
 		return;
+	if( !canPayForPower() )	// Tiberium Project @feature its price (the base pays it)
+		return;
 
 	// call the base class action cause we are *EXTENDING* functionality
 	SpecialPowerModule::doSpecialPowerAtLocation( loc, angle, commandOptions );
@@ -155,6 +159,8 @@ void FireWeaponPower::doSpecialPowerAtObject( Object *obj, UnsignedInt commandOp
 	const FireWeaponPowerModuleData *data = getFireWeaponPowerModuleData();
 
 	if( self->isDisabled() )
+		return;
+	if( !canPayForPower() )	// Tiberium Project @feature its price (the base pays it)
 		return;
 
 	// call the base class action cause we are *EXTENDING* functionality

@@ -150,6 +150,8 @@ void OCLSpecialPower::doSpecialPowerAtLocation( const Coord3D *loc, Real angle, 
 {
 	if (getObject()->isDisabled())
 		return;
+	if( !canPayForPower() )	// Tiberium Project @feature its price (the base pays it)
+		return;
 
 	// sanity
 	if( loc == nullptr )
@@ -235,6 +237,8 @@ void OCLSpecialPower::doSpecialPowerAtObject( Object *obj, UnsignedInt commandOp
 void OCLSpecialPower::doSpecialPower( UnsignedInt commandOptions )
 {
 	if (getObject()->isDisabled())
+		return;
+	if( !canPayForPower() )	// Tiberium Project @feature its price (the base pays it)
 		return;
 
 	Coord3D creationCoord;

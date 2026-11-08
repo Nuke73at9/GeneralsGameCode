@@ -38,11 +38,15 @@
 //     StartAbilityRange      = 200
 //     TargetFX               = FX_SystemRestore
 //   End
+//
+// KindOf and ForbiddenKindOf narrow what it reaches in an area (C&C4's and Kane's Wrath's player powers'
+// ObjectFilter: Include and Exclude).
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #pragma once
 
 #include "Common/INI.h"
+#include "Common/KindOf.h"
 #include "GameLogic/AttributeModifier.h"
 #include "GameLogic/Weapon.h"
 #include "GameLogic/Module/UpdateModule.h"
@@ -68,6 +72,8 @@ public:
 	Real m_startAbilityRange;					///< 0: where it is
 	const FXList *m_initiateFX;				///< on itself, when it acts
 	const FXList *m_targetFX;					///< on each object it reaches
+	KindOfMaskType m_kindOf;					///< in an area: any of these (none: all)
+	KindOfMaskType m_forbiddenKindOf;	///< in an area: none of these
 
 	ModifierAbilityUpdateModuleData()
 	{
@@ -81,6 +87,8 @@ public:
 		m_startAbilityRange = 0.0f;
 		m_initiateFX = nullptr;
 		m_targetFX = nullptr;
+		m_kindOf.clear();
+		m_forbiddenKindOf.clear();
 	}
 
 	static void buildFieldParse( MultiIniFieldParse& p )
@@ -98,6 +106,8 @@ public:
 			{ "StartAbilityRange",			INI::parseReal,									nullptr, offsetof( ModifierAbilityUpdateModuleData, m_startAbilityRange ) },
 			{ "InitiateFX",							INI::parseFXList,								nullptr, offsetof( ModifierAbilityUpdateModuleData, m_initiateFX ) },
 			{ "TargetFX",								INI::parseFXList,								nullptr, offsetof( ModifierAbilityUpdateModuleData, m_targetFX ) },
+			{ "KindOf",									KindOfMaskType::parseFromINI,		nullptr, offsetof( ModifierAbilityUpdateModuleData, m_kindOf ) },
+			{ "ForbiddenKindOf",				KindOfMaskType::parseFromINI,		nullptr, offsetof( ModifierAbilityUpdateModuleData, m_forbiddenKindOf ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 		p.add( dataFieldParse );

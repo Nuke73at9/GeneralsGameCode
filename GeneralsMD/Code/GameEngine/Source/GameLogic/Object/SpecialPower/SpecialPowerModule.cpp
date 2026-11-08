@@ -682,6 +682,24 @@ void SpecialPowerModule::aboutToDoSpecialPower( const Coord3D *location )
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature a power with a price (Cost, SupportPoints) is refused when its player cannot
+// pay it, and paid once it is under way (before its update module or its trigger acts)
+//-------------------------------------------------------------------------------------------------
+Bool SpecialPowerModule::canPayForPower() const
+{
+	const Player *player = getObject()->getControllingPlayer();
+	return player == nullptr || player->canAffordSpecialPower( getSpecialPowerModuleData()->m_specialPowerTemplate );
+}
+
+//-------------------------------------------------------------------------------------------------
+void SpecialPowerModule::payForPower()
+{
+	Player *player = getObject()->getControllingPlayer();
+	if( player != nullptr )
+		player->payForSpecialPower( getSpecialPowerModuleData()->m_specialPowerTemplate );
+}
+
+//-------------------------------------------------------------------------------------------------
 //By default, special powers are not triggered by it's update module -- in which case
 //it triggers it and resets its timer immediately. When the update module triggers it,
 //then all we do is initiate the special power, and trust that the update module will
@@ -692,10 +710,13 @@ void SpecialPowerModule::doSpecialPower( UnsignedInt commandOptions )
 	if (m_pausedCount > 0 || getObject()->isDisabled()) {
 		return;
 	}
+	if( !canPayForPower() )	// Tiberium Project @feature
+		return;
 
 	//This tells the update module that we want to do our special power. The update modules
 	//will then start processing each frame.
 	initiateIntentToDoSpecialPower( nullptr, nullptr, nullptr, commandOptions );
+	payForPower();
 
 	//Only trigger the special power immediately if the updatemodule doesn't start the attack.
 	//An example of a case that wouldn't trigger immediately is for a unit that needs to
@@ -714,10 +735,13 @@ void SpecialPowerModule::doSpecialPowerAtObject( Object *obj, UnsignedInt comman
 	if (m_pausedCount > 0 || getObject()->isDisabled()) {
 		return;
 	}
+	if( !canPayForPower() )	// Tiberium Project @feature
+		return;
 
 	//This tells the update module that we want to do our special power. The update modules
 	//will then start processing each frame.
 	initiateIntentToDoSpecialPower( obj, nullptr, nullptr, commandOptions );
+	payForPower();
 
 	//Only trigger the special power immediately if the updatemodule doesn't start the attack.
 	//An example of a case that wouldn't trigger immediately is for a unit that needs to
@@ -736,6 +760,8 @@ void SpecialPowerModule::doSpecialPowerAtLocation( const Coord3D *loc, Real angl
 	if (m_pausedCount > 0 || getObject()->isDisabled()) {
 		return;
 	}
+	if( !canPayForPower() )	// Tiberium Project @feature
+		return;
 
 	//This tells the update module that we want to do our special power. The update modules
 	//will then start processing each frame.
@@ -744,6 +770,7 @@ void SpecialPowerModule::doSpecialPowerAtLocation( const Coord3D *loc, Real angl
 	// GeneralsX @bugfix Copilot 06/09/2026 Do not trigger a location power after its update module rejected the intent.
 	if (m_availableOnFrame == 0xFFFFFFFF)
 		return;
+	payForPower();
 
 	//Only trigger the special power immediately if the updatemodule doesn't start the attack.
 	//An example of a case that wouldn't trigger immediately is for a unit that needs to
@@ -762,10 +789,13 @@ void SpecialPowerModule::doSpecialPowerUsingWaypoints( const Waypoint *way, Unsi
 	if (m_pausedCount > 0 || getObject()->isDisabled()) {
 		return;
 	}
+	if( !canPayForPower() )	// Tiberium Project @feature
+		return;
 
 	//This tells the update module that we want to do our special power. The update modules
 	//will then start processing each frame.
 	initiateIntentToDoSpecialPower( nullptr, nullptr, way, commandOptions );
+	payForPower();
 
 	//Only trigger the special power immediately if the updatemodule doesn't start the attack.
 	//An example of a case that wouldn't trigger immediately is for a unit that needs to
