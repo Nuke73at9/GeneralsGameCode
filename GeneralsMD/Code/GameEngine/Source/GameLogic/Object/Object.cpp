@@ -1370,6 +1370,8 @@ void Object::adjustModelConditionForIndependentWeapon( WeaponSlotType slot, Bool
 	WeaponSetConditionType conditionToSet = WSF_NONE;
 	if (w->getLastShotFrame() == TheGameLogic->getFrame())
 		conditionToSet = WSF_FIRING;
+	else if (engaged && w->isStillFiring( TheGameLogic->getFrame() ))
+		conditionToSet = WSF_FIRING;	// the shot goes on firing (FiringDuration)
 	else if (engaged)
 	{
 		switch (w->getStatus())
@@ -5071,6 +5073,12 @@ void Object::adjustModelConditionForWeaponStatus()
 		else if (w->getLastShotFrame() == now)
 		{
 			// yep, this overrides any weapon-status condition!
+			conditionToSet = WSF_FIRING;
+		}
+		// Tiberium Project @feature a shot that goes on firing (FiringDuration: a flamethrower's burst, a beam)
+		// keeps the firing look while it lasts, if the attack goes on
+		else if (w->isStillFiring( now ) && testStatus( OBJECT_STATUS_IS_ATTACKING ))
+		{
 			conditionToSet = WSF_FIRING;
 		}
 		else if (!testStatus( OBJECT_STATUS_IS_ATTACKING ))

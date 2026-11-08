@@ -460,6 +460,10 @@ public:
 	UnsignedInt getContinuousFireCoastFrames() const { return m_continuousFireCoastFrames; }
  	UnsignedInt getAutoReloadWhenIdleFrames() const { return m_autoReloadWhenIdleFrames; }
 	UnsignedInt getSuspendFXDelay() const { return m_suspendFXDelay; }
+	/// Tiberium Project @feature how long a shot goes on firing (C&C4's FiringDuration: a flamethrower's burst,
+	/// a beam): the firer keeps its firing look (FIRING_A...) that long after the shot, so the effects of that
+	/// state (the flame stream, the beam's animation) play through. Its time counts within DelayBetweenShots.
+	UnsignedInt getFiringDurationFrames() const { return m_firingDurationFrames; }
 
 	const FXList* getFireFX(VeterancyLevel v) const { return m_fireFXs[v]; }
 	const FXList* getProjectileDetonateFX(VeterancyLevel v) const { return m_projectileDetonateFXs[v]; }
@@ -567,6 +571,7 @@ private:
 	WeaponBonusSet* m_extraBonus;						///< optional extra per-weapon bonus
 	Int m_clipSize;													///< number of 'shots' in a clip
 	Int m_clipReloadTime;										///< when 'clip' is empty, how long it takes to reload (frames)
+	UnsignedInt m_firingDurationFrames;			///< Tiberium Project: how long a shot keeps the firer's firing look (FiringDuration)
 	Int m_minDelayBetweenShots;							///< min time allowed between firing single shots (frames)
 	Int m_maxDelayBetweenShots;							///< max time allowed between firing single shots (frames)
 	Int m_continuousFireOneShotsNeeded;			///< How many consecutive shots will give my owner the ContinuousFire Property
@@ -726,6 +731,12 @@ public:
 	WeaponSlotType getWeaponSlot() const { return m_wslot; }
 	AsciiString getName() const { return m_template->getName(); }
 	UnsignedInt getLastShotFrame() const { return m_lastFireFrame; }						///< frame a shot was last fired on
+	/// Tiberium Project @feature whether the last shot is still firing on this frame (FiringDuration)
+	Bool isStillFiring( UnsignedInt frame ) const
+	{
+		const UnsignedInt duration = m_template->getFiringDurationFrames();
+		return duration > 0 && m_lastFireFrame > 0 && frame >= m_lastFireFrame && frame < m_lastFireFrame + duration;
+	}
 	// If we are "reloading", then m_ammoInClip is a lie.  It will say full.
 	UnsignedInt getRemainingAmmo() const { return (getStatus() == RELOADING_CLIP) ? 0 : m_ammoInClip; }
 	WeaponReloadType getReloadType() const { return m_template->getReloadType(); }
