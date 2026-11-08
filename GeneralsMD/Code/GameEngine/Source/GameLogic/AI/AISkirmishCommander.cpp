@@ -38,6 +38,7 @@
 #include "Common/Money.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
+#include "Common/PlayerTemplate.h"
 #include "Common/SpecialPower.h"
 #include "Common/TiberiumTest.h"
 #include "Common/ThingFactory.h"
@@ -54,6 +55,7 @@
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Weapon.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Module/ReplaceSelfUpdate.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
@@ -570,5 +572,357 @@ void AISkirmishPlayer::commandProduction()
 			m_factoryIdleSince.erase( it++ );
 		else
 			++it;
+	}
+}
+
+//----------------------------------------------------------------------------------------------------------
+// Tiberium Project @feature its player powers: each power's AIUse (SpecialPower.h) says where it goes;
+// Kane's Wrath's are its buildings' (AISpecialPowerUpdate), C&C4's the Support Crawler's
+//----------------------------------------------------------------------------------------------------------
+namespace
+{
+	const UnsignedInt POWER_PERIOD = 3 * LOGICFRAMES_PER_SECOND;	///< how often a hard AI looks at its powers
+	const UnsignedInt LATELY = 3 * LOGICFRAMES_PER_SECOND;			///< hurt this recently: under attack
+	const Real POWER_RADIUS = 150.0f;	///< a power with no cursor radius counts what is this near its spot
+	const Real FIGHT_GROUP = 400.0f;	///< fighting units this near one another are one fight
+	const Real STEALTH_NEAR = 450.0f;	///< a hidden enemy this near its units or buildings is worth a scan
+	const Int POWER_RESERVE = 1000;		///< money a power leaves it, for its building and its army
+	const Int MIN_WORTH = 600;			///< a strike is worth it on enemies worth this much (or the strike's price)
+	const Int HEAL_WORTH = 400;			///< a heal is worth it where this much health is missing
+	const Int BUFF_GROUP = 3;			///< a buff is worth it on this many fighting units
+
+	/// what an object is worth to hit or to save: its price (a little for what has none)
+	Int worthOf( const Object *obj )
+	{
+		const Int cost = obj->getTemplate()->friend_getBuildCost();
+		return cost > 0 ? cost : 100;
+	}
+
+	Bool hurtLately( const Object *obj, UnsignedInt now )
+	{
+		const BodyModuleInterface *body = obj->getBodyModule();
+		const UnsignedInt *last = body != nullptr ? body->getLastDamageTimestamp() : nullptr;
+		return last != nullptr && *last <= now && now - *last <= LATELY;
+	}
+
+	/// in a fight: attacking something alive, or hurt lately
+	Bool isFighting( Object *obj, UnsignedInt now )
+	{
+		AIUpdateInterface *ai = obj->getAI();
+		if( ai != nullptr && ai->isAttacking() )
+		{
+			const Object *victim = ai->getCurrentVictim();
+			if( victim != nullptr && !victim->isEffectivelyDead() )
+				return TRUE;
+		}
+		return hurtLately( obj, now );
+	}
+
+	/// what a power can be aimed at: alive, out, on the ground (not flying), and a unit or a building
+	Bool isPowerVictim( const Object *obj )
+	{
+		if( obj->isEffectivelyDead() || obj->isContained() || obj->isAirborneTarget() )
+			return FALSE;
+		if( obj->isKindOf( KINDOF_PROJECTILE ) || obj->isKindOf( KINDOF_INERT ) || obj->isKindOf( KINDOF_MINE ) )
+			return FALSE;
+		return obj->isKindOf( KINDOF_STRUCTURE ) || obj->isSelectable();
+	}
+
+	/// what a strike at `at` would do: the worth of the enemies within radius (ENEMY: units only; ENEMY_STRUCTURES:
+	/// buildings, those of the kinds twice; SUPERWEAPON: all), less twice the worth of its own and its allies'
+	Int strikeScore( const Player *me, const Coord3D *at, Real radius, SpecialPowerAIUse use, const KindOfMaskType &kinds )
+	{
+		PartitionFilterAlive alive;
+		PartitionFilter *filters[] = { &alive, nullptr };
+		SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( at, radius, FROM_BOUNDINGSPHERE_2D, filters, ITER_FASTEST );
+		MemoryPoolObjectHolder hold( iter );
+		Int score = 0;
+		for( Object *other = iter->first(); other != nullptr; other = iter->next() )
+		{
+			if( !isPowerVictim( other ) || other->getTeam() == nullptr )
+				continue;
+			const Relationship r = me->getRelationship( other->getTeam() );
+			const Bool structure = other->isKindOf( KINDOF_STRUCTURE );
+			if( r == ENEMIES )
+			{
+				if( use == AI_USE_ENEMY && structure )
+					continue;
+				if( use == AI_USE_ENEMY_STRUCTURES && !structure )
+					continue;
+				Int worth = worthOf( other );
+				if( use == AI_USE_ENEMY_STRUCTURES && ( !kinds.any() || other->isAnyKindOf( kinds ) ) )
+					worth *= 2;
+				score += worth;
+			}
+			else if( r == ALLIES || other->getControllingPlayer() == me )
+				score -= 2 * worthOf( other );
+		}
+		return score;
+	}
+
+	Real distSq( const Coord3D *a, const Coord3D *b )
+	{
+		return ( a->x - b->x ) * ( a->x - b->x ) + ( a->y - b->y ) * ( a->y - b->y );
+	}
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature where a power of its goes (its AIUse); FALSE: nowhere worth it now */
+//----------------------------------------------------------------------------------------------------------
+Bool AISkirmishPlayer::findPowerTarget( const SpecialPowerTemplate *power, UnsignedInt options, Coord3D *pos, Object **target )
+{
+	*target = nullptr;
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const SpecialPowerAIUse use = power->getAIUse();
+	const Real radius = power->getRadiusCursorRadius() > 1.0f ? power->getRadiusCursorRadius() : POWER_RADIUS;
+	const KindOfMaskType &kinds = power->getAIKinds();
+	const KindOfMaskType &forbidden = power->getAIForbiddenKinds();
+	Object *best = nullptr;
+	Int bestScore = 0;
+
+	if( use == AI_USE_ENEMY || use == AI_USE_ENEMY_STRUCTURES || use == AI_USE_SUPERWEAPON )
+	{
+		// the enemy unit or building whose surroundings a strike would hurt most (ENEMY_STRUCTURES: a building of
+		// the kinds, else any: an enemy without power plants, as C&C4's sides, is still struck)
+		const Int threshold = use == AI_USE_ENEMY ? max( MIN_WORTH, (Int)power->getCost() ) : 1;
+		for( Int pass = 0; pass < 2 && best == nullptr; ++pass )
+		{
+			const Bool anyKind = pass == 1 || !kinds.any();
+			if( pass == 1 && ( use != AI_USE_ENEMY_STRUCTURES || !kinds.any() ) )
+				break;
+			for( Object *obj = TheGameLogic->getFirstObject(); obj != nullptr; obj = obj->getNextObject() )
+			{
+				if( !isPowerVictim( obj ) || obj->getTeam() == nullptr || m_player->getRelationship( obj->getTeam() ) != ENEMIES )
+					continue;
+				const Bool structure = obj->isKindOf( KINDOF_STRUCTURE );
+				if( ( use == AI_USE_ENEMY && structure ) || ( use != AI_USE_ENEMY && !structure ) )
+					continue;
+				if( use == AI_USE_ENEMY_STRUCTURES && !anyKind && !obj->isAnyKindOf( kinds ) )
+					continue;
+				const Int score = strikeScore( m_player, obj->getPosition(), radius, use, kinds );
+				if( score >= threshold && score > bestScore )
+				{
+					bestScore = score;
+					best = obj;
+				}
+			}
+		}
+		if( best == nullptr )
+			return FALSE;
+		*pos = *best->getPosition();
+		*target = best;
+		return TRUE;
+	}
+
+	if( use == AI_USE_STEALTH )
+	{
+		// a hidden enemy near its units or buildings (the AI knows where they are)
+		for( Object *obj = TheGameLogic->getFirstObject(); obj != nullptr; obj = obj->getNextObject() )
+		{
+			if( obj->isEffectivelyDead() || !obj->testStatus( OBJECT_STATUS_STEALTHED ) || obj->testStatus( OBJECT_STATUS_DETECTED ) )
+				continue;
+			if( obj->getTeam() == nullptr || m_player->getRelationship( obj->getTeam() ) != ENEMIES )
+				continue;
+			PartitionFilterAlive alive;
+			PartitionFilter *filters[] = { &alive, nullptr };
+			SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( obj->getPosition(), STEALTH_NEAR, FROM_BOUNDINGSPHERE_2D, filters, ITER_FASTEST );
+			MemoryPoolObjectHolder hold( iter );
+			Int mine = 0;	// (not "near": a Windows macro)
+			for( Object *other = iter->first(); other != nullptr; other = iter->next() )
+				if( other->getControllingPlayer() == m_player )
+					++mine;
+			if( mine > bestScore )
+			{
+				bestScore = mine;
+				best = obj;
+			}
+		}
+		if( best == nullptr )
+			return FALSE;
+		*pos = *best->getPosition();
+		*target = best;
+		return TRUE;
+	}
+
+	// its own: what fights, what is hurt
+	Muster muster;
+	m_player->iterateObjects( musterOne, &muster );
+	std::vector<Object *> fighting;
+	for( size_t i = 0; i < muster.soldiers.size(); ++i )
+		if( isFighting( muster.soldiers[i], now ) )
+			fighting.push_back( muster.soldiers[i] );
+
+	if( use == AI_USE_REINFORCE || use == AI_USE_IN_COMBAT )
+	{
+		// the biggest fight: the fighting unit with the most fighting units near it
+		for( size_t i = 0; i < fighting.size(); ++i )
+		{
+			Int count = 0;
+			for( size_t j = 0; j < fighting.size(); ++j )
+				if( distSq( fighting[i]->getPosition(), fighting[j]->getPosition() ) <= FIGHT_GROUP * FIGHT_GROUP )
+					++count;
+			if( count > bestScore )
+			{
+				bestScore = count;
+				best = fighting[i];
+			}
+		}
+		if( best != nullptr && bestScore >= ( use == AI_USE_IN_COMBAT ? BUFF_GROUP : 2 ) )
+		{
+			*pos = *best->getPosition();
+			// (reinforcements come Distance back from it, toward its base)
+			Coord3D base;
+			if( use == AI_USE_REINFORCE && power->getAIDistance() > 0.0f && getCommandBase( &base ) )
+			{
+				const Real dx = base.x - pos->x, dy = base.y - pos->y;
+				const Real len = WWMath::Sqrt( dx * dx + dy * dy );
+				if( len > 1.0f )
+				{
+					const Real step = min( power->getAIDistance(), len );
+					pos->x += dx / len * step;
+					pos->y += dy / len * step;
+				}
+			}
+			pos->z = TheTerrainLogic->getGroundHeight( pos->x, pos->y );
+			return TRUE;
+		}
+		if( use == AI_USE_IN_COMBAT )
+			return FALSE;
+		// else its base under attack: a building of its hurt lately with an enemy near
+		for( size_t i = 0; i < muster.structures.size(); ++i )
+		{
+			Object *building = muster.structures[i];
+			if( !hurtLately( building, now ) )
+				continue;
+			*pos = *building->getPosition();
+			pos->z = TheTerrainLogic->getGroundHeight( pos->x, pos->y );
+			return TRUE;
+		}
+		return FALSE;
+	}
+
+	if( use == AI_USE_ALLY_BUFF || use == AI_USE_HEAL )
+	{
+		// what it would help: (ALLY_BUFF) its fighting units of the kinds, its buildings under attack when the kinds
+		// name buildings; (HEAL) what of its is hurt, by the health missing
+		std::vector<Object *> helped;
+		std::vector<Int> worth;
+		if( use == AI_USE_ALLY_BUFF )
+		{
+			for( size_t i = 0; i < fighting.size(); ++i )
+			{
+				Object *obj = fighting[i];
+				if( ( kinds.any() && !obj->isAnyKindOf( kinds ) ) || ( forbidden.any() && obj->isAnyKindOf( forbidden ) ) )
+					continue;
+				helped.push_back( obj );
+				worth.push_back( 1 );
+			}
+			if( kinds.test( KINDOF_STRUCTURE ) )
+			{
+				for( size_t i = 0; i < muster.structures.size(); ++i )
+				{
+					if( !hurtLately( muster.structures[i], now ) )
+						continue;
+					helped.push_back( muster.structures[i] );
+					worth.push_back( BUFF_GROUP );
+				}
+			}
+		}
+		else
+		{
+			for( Int pass = 0; pass < 2; ++pass )
+			{
+				const std::vector<Object *> &list = pass == 0 ? muster.soldiers : muster.structures;
+				for( size_t i = 0; i < list.size(); ++i )
+				{
+					const BodyModuleInterface *body = list[i]->getBodyModule();
+					if( body == nullptr || body->getMaxHealth() <= 0.0f )
+						continue;
+					const Real missing = body->getMaxHealth() - body->getHealth();
+					if( missing <= body->getMaxHealth() * 0.25f )
+						continue;
+					helped.push_back( list[i] );
+					worth.push_back( REAL_TO_INT_FLOOR( missing ) );
+				}
+			}
+		}
+		for( size_t i = 0; i < helped.size(); ++i )
+		{
+			Int score = 0;
+			for( size_t j = 0; j < helped.size(); ++j )
+				if( distSq( helped[i]->getPosition(), helped[j]->getPosition() ) <= radius * radius )
+					score += worth[j];
+			if( score > bestScore )
+			{
+				bestScore = score;
+				best = helped[i];
+			}
+		}
+		if( best == nullptr || bestScore < ( use == AI_USE_HEAL ? HEAL_WORTH : BUFF_GROUP ) )
+			return FALSE;
+		*pos = *best->getPosition();
+		*target = best;
+		return TRUE;
+	}
+	return FALSE;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature its player powers: every few seconds (less often on an easier AI) the first of
+	its powers, in turn, that is ready, that it can pay for with money to spare, and that has somewhere worth it */
+//----------------------------------------------------------------------------------------------------------
+void AISkirmishPlayer::commandPowers()
+{
+	const UnsignedInt now = TheGameLogic->getFrame();
+	if( now < m_nextPowerFrame || m_player == nullptr || !m_player->isPlayerActive() )
+		return;
+	UnsignedInt period = POWER_PERIOD;
+	if( m_player->getPlayerDifficulty() == DIFFICULTY_EASY )
+		period *= 3;
+	else if( m_player->getPlayerDifficulty() == DIFFICULTY_NORMAL )
+		period *= 2;
+	m_nextPowerFrame = now + period;
+
+	const PlayerTemplate *pt = m_player->getPlayerTemplate();
+	const CommandSet *set = pt != nullptr && TheControlBar != nullptr ? TheControlBar->findCommandSet( pt->getSpecialPowerShortcutCommandSet() ) : nullptr;
+	if( set == nullptr )
+		return;
+	const Int money = (Int)m_player->getMoney()->countMoney();
+	const Int first = (Int)( ( now / period ) % MAX_COMMANDS_PER_SET );
+	for( Int k = 0; k < MAX_COMMANDS_PER_SET; ++k )
+	{
+		const CommandButton *button = set->getCommandButton( ( first + k ) % MAX_COMMANDS_PER_SET );
+		const SpecialPowerTemplate *power = button != nullptr ? button->getSpecialPowerTemplate() : nullptr;
+		if( power == nullptr || power->getAIUse() == AI_USE_NONE || !m_player->canAffordSpecialPower( power ) )
+			continue;
+		if( power->getCost() > 0 && money - (Int)power->getCost() < POWER_RESERVE )
+			continue;
+		Object *source = m_player->findMostReadyShortcutSpecialPowerOfType( power->getSpecialPowerType() );
+		if( source == nullptr || source->isEffectivelyDead() || source->isDisabled() || source->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
+			continue;
+		SpecialPowerModuleInterface *module = source->getSpecialPowerModule( power );
+		if( module == nullptr || !module->isReady() )
+			continue;
+		const UnsignedInt options = button->getOptions();
+		Coord3D pos;
+		pos.zero();
+		Object *target = nullptr;
+		if( !findPowerTarget( power, options, &pos, &target ) )
+			continue;
+		const UnsignedInt fired = options | COMMAND_FIRED_BY_SCRIPT;
+		if( ( options & NEED_TARGET_POS ) != 0 )
+			module->doSpecialPowerAtLocation( &pos, INVALID_ANGLE, fired );
+		else if( ( options & ( NEED_TARGET_ENEMY_OBJECT | NEED_TARGET_ALLY_OBJECT | NEED_TARGET_NEUTRAL_OBJECT ) ) != 0 )
+		{
+			if( target == nullptr )
+				continue;
+			module->doSpecialPowerAtObject( target, fired );
+		}
+		else
+			module->doSpecialPower( fired );
+		if( TiberiumTest::isActive() )
+			TiberiumTest::log( "frame %u: AI player %d uses %s from %s at %.0f %.0f ($%d before, %d points)", now, (Int)m_player->getPlayerIndex(),
+				power->getName().str(), source->getTemplate()->getName().str(), pos.x, pos.y, money, (Int)m_player->getSupportPoints() );
+		break;	// (one a look)
 	}
 }

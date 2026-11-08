@@ -308,6 +308,7 @@ void SpecialPowerStore::parseSpecialPowerDefinition( INI *ini )
 	{ "Cost",											INI::parseUnsignedInt,						nullptr, offsetof( SpecialPowerTemplate, m_cost ) },	// Tiberium Project @feature
 	{ "SupportPoints",						INI::parseUnsignedInt,						nullptr, offsetof( SpecialPowerTemplate, m_supportPoints ) },
 	{ "ShroudedTargetOK",					INI::parseBool,										nullptr, offsetof( SpecialPowerTemplate, m_shroudedTargetOK ) },
+	{ "AIUse",										SpecialPowerTemplate::parseAIUse,	nullptr, 0 },	// Tiberium Project @feature
 	{ nullptr,	nullptr, nullptr,	0 }
 
 };
@@ -330,7 +331,50 @@ SpecialPowerTemplate::SpecialPowerTemplate()
 	m_cost = 0;
 	m_supportPoints = 0;
 	m_shroudedTargetOK = FALSE;
+	m_aiUse = AI_USE_NONE;
+	m_aiKinds.clear();
+	m_aiForbiddenKinds.clear();
+	m_aiDistance = 0.0f;
 
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature how the skirmish AI uses the power: "AIUse = Type [Kind ...] [-Kind ...] [Distance]"
+//-------------------------------------------------------------------------------------------------
+static const char *const TheSpecialPowerAIUseNames[] =
+{
+	"NONE",
+	"ENEMY",
+	"ENEMY_STRUCTURES",
+	"SUPERWEAPON",
+	"REINFORCE",
+	"ALLY_BUFF",
+	"HEAL",
+	"STEALTH",
+	"IN_COMBAT",
+	nullptr
+};
+static_assert(ARRAY_SIZE(TheSpecialPowerAIUseNames) == AI_USE_COUNT + 1, "Incorrect array size");
+
+void SpecialPowerTemplate::parseAIUse( INI *ini, void *instance, void * /*store*/, const void * /*userData*/ )
+{
+	SpecialPowerTemplate *self = (SpecialPowerTemplate *)instance;
+	self->m_aiUse = (SpecialPowerAIUse)INI::scanIndexList( ini->getNextToken(), TheSpecialPowerAIUseNames );
+	self->m_aiKinds.clear();
+	self->m_aiForbiddenKinds.clear();
+	self->m_aiDistance = 0.0f;
+	for( const char *token = ini->getNextTokenOrNull(); token != nullptr; token = ini->getNextTokenOrNull() )
+	{
+		if( token[0] >= '0' && token[0] <= '9' )
+			self->m_aiDistance = INI::scanReal( token );
+		else if( token[0] == '-' )
+		{
+			if( !self->m_aiForbiddenKinds.setBitByName( token + 1 ) )
+				DEBUG_CRASH( ( "SpecialPower %s: AIUse names an unknown kind %s", self->m_name.str(), token + 1 ) );
+		}
+		else if( !self->m_aiKinds.setBitByName( token ) )
+			DEBUG_CRASH( ( "SpecialPower %s: AIUse names an unknown kind %s", self->m_name.str(), token ) );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -109,6 +109,10 @@ protected:
 	void commandArmy();
 	void commandProduction();
 	Bool getCommandBase( Coord3D *pos ) const;
+	// Tiberium Project @feature the AI's use of its player powers (their AIUse): Kane's Wrath's buildings'
+	// and C&C4's Support Crawler's, one every few seconds, leaving money for its building
+	void commandPowers();
+	Bool findPowerTarget( const SpecialPowerTemplate *power, UnsignedInt options, Coord3D *pos, Object **target );
 
 	std::map<ObjectID, UnsignedInt> m_idleSince;			///< when each of its fighting units fell idle
 	std::map<ObjectID, UnsignedInt> m_factoryIdleSince;	///< when each of its factories ran out of work
@@ -116,6 +120,7 @@ protected:
 	UnsignedInt m_nextProductionFrame;	///< when it next looks over its factories
 	UnsignedInt m_lastWaveFrame;		///< when it last sent a wave at its enemy
 	Int m_wavesSent;					///< how many it has sent (each wants more strength)
+	UnsignedInt m_nextPowerFrame;		///< Tiberium Project: when it next looks over its powers
 
 protected:
 	Int m_curFrontBaseDefense; // First is 0.

@@ -79,7 +79,8 @@ m_currentEnemy(nullptr),
 m_nextArmyFrame(0),
 m_nextProductionFrame(0),
 m_lastWaveFrame(0),
-m_wavesSent(0)
+m_wavesSent(0),
+m_nextPowerFrame(0)
 
 {
 	m_frameLastBuildingBuilt = TheGameLogic->getFrame();
@@ -87,6 +88,7 @@ m_wavesSent(0)
 	// Tiberium Project: each AI looks over its army and factories on frames of its own
 	m_nextArmyFrame = TheGameLogic->getFrame() + 150 + 7 * p->getPlayerIndex();
 	m_nextProductionFrame = TheGameLogic->getFrame() + 120 + 11 * p->getPlayerIndex();
+	m_nextPowerFrame = TheGameLogic->getFrame() + 300 + 13 * p->getPlayerIndex();
 	m_lastWaveFrame = TheGameLogic->getFrame();
 }
 
@@ -966,6 +968,7 @@ void AISkirmishPlayer::update()
 	// Tiberium Project @feature its own command of its army and factories (AISkirmishCommander.cpp)
 	commandArmy();
 	commandProduction();
+	commandPowers();
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -1206,7 +1209,7 @@ void AISkirmishPlayer::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 3;	// Tiberium Project: 2 its command of its army and factories, 3 its powers
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1273,6 +1276,8 @@ void AISkirmishPlayer::xfer( Xfer *xfer )
 			}
 		}
 	}
+	if( version >= 3 )
+		xfer->xferUnsignedInt( &m_nextPowerFrame );
 
 }
 

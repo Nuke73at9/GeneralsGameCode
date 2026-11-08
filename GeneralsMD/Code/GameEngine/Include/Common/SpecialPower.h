@@ -35,6 +35,7 @@
 #include "Common/GameMemory.h"
 #include "Common/SubsystemInterface.h"
 #include "Common/BitFlags.h"
+#include "Common/KindOf.h"
 #include "Common/Overridable.h"
 #include "Common/Override.h"
 
@@ -88,6 +89,26 @@ inline void FLIP_SPECIALPOWERMASK(SpecialPowerMaskType& m)
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature how the skirmish AI uses a player power (AISkirmishCommander.cpp): Kane's
+	Wrath's AISpecialPowerUpdate types for its buildings' powers, C&C4's support powers by what they aim at.
+	"AIUse = Type [Kind ...] [-Kind ...] [Distance]" */
+//-------------------------------------------------------------------------------------------------
+enum SpecialPowerAIUse CPP_11(: Int)
+{
+	AI_USE_NONE = 0,				///< the AI leaves it alone
+	AI_USE_ENEMY,						///< at the enemies worth the most within its radius (a strike, mines, a debuff)
+	AI_USE_ENEMY_STRUCTURES,///< at enemy buildings of the Kinds (Kane's Wrath's ENEMY_TYPE_KILLER_STRUCTURES)
+	AI_USE_SUPERWEAPON,			///< at the enemy base worth the most within its radius
+	AI_USE_REINFORCE,				///< where its units fight, Distance back toward its base (or at its base under attack)
+	AI_USE_ALLY_BUFF,				///< at its fighting units (or its buildings under attack) of the Kinds, but not the -Kinds
+	AI_USE_HEAL,						///< at its damaged units and buildings
+	AI_USE_STEALTH,					///< at a hidden enemy near its units or buildings (a scan)
+	AI_USE_IN_COMBAT,				///< (no target) while its units fight
+
+	AI_USE_COUNT
+};
+
+//-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 class SpecialPowerTemplate : public Overridable
 {
@@ -126,6 +147,13 @@ public:
 	UnsignedInt getCost() const { return getFO()->m_cost; }
 	UnsignedInt getSupportPoints() const { return getFO()->m_supportPoints; }
 	Bool isShroudedTargetOK() const { return getFO()->m_shroudedTargetOK; }	///< Tiberium Project: aimed into the shroud too (SAGE's FOGGED_SHROUDED_CELLS_OK)
+	// Tiberium Project @feature how the skirmish AI uses it (AIUse)
+	SpecialPowerAIUse getAIUse() const { return getFO()->m_aiUse; }
+	const KindOfMaskType &getAIKinds() const { return getFO()->m_aiKinds; }
+	const KindOfMaskType &getAIForbiddenKinds() const { return getFO()->m_aiForbiddenKinds; }
+	Real getAIDistance() const { return getFO()->m_aiDistance; }
+
+	static void parseAIUse( INI *ini, void *instance, void *store, const void *userData );
 
 private:
 
@@ -150,6 +178,10 @@ private:
 	UnsignedInt				m_cost;							///< Tiberium Project: credits paid each time it is used
 	UnsignedInt				m_supportPoints;		///< Tiberium Project: support meter points paid each time it is used
 	Bool							m_shroudedTargetOK;	///< Tiberium Project: may be aimed into the shroud
+	SpecialPowerAIUse	m_aiUse;						///< Tiberium Project: how the skirmish AI uses it
+	KindOfMaskType		m_aiKinds;					///< ... the kinds it is used on (any of them)
+	KindOfMaskType		m_aiForbiddenKinds;	///< ... and not on
+	Real							m_aiDistance;				///< ... how far back from a fight reinforcements come
 
 	static const FieldParse m_specialPowerFieldParse[];		///< the parse table
 
