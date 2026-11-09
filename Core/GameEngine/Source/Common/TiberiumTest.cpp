@@ -2133,7 +2133,13 @@ void TiberiumTest::update()
 				char returns[32] = "";
 				if ( falseReturns > 0 )
 					snprintf( returns, sizeof( returns ), ", %d false returns", (int)falseReturns );
-				snprintf( field, sizeof( field ), "%s%s%s%s%s%s%s%s%s%s%s%s",
+				// (what its AI is after: a taunt turning it on the taunter)
+				char aiming[32] = "";
+				const Object *goal = obj->getAI() != nullptr ? obj->getAI()->getGoalObject() : nullptr;
+				if ( goal != nullptr )
+					snprintf( aiming, sizeof( aiming ), ", after #%u", (unsigned)goal->getID() );
+				snprintf( field, sizeof( field ), "%s%s%s%s%s%s%s%s%s%s%s%s%s",
+					aiming,
 					// (a burrowed unit, C&C4's: dug out by the Seismic Disturbance)
 					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_BURROWING ) ? ", BURROWING" : "",
 					armourBody != nullptr && armourBody->testArmorSetFlag( ARMORSET_PLAYER_UPGRADE ) ? ", armour upgraded" : "",

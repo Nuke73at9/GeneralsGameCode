@@ -595,6 +595,8 @@ private:
 	std::vector<AsciiString> m_victimNames;									///< Tiberium Project: its damage reaches only these objects (C&C4's IncludeThing; none: any)
 	std::vector<AsciiString> m_victimForbiddenNames;						///< Tiberium Project: and none of these (C&C4's ExcludeThing: a Black Hand in his own fire)
 	Bool m_forceToggleToDefault;													///< Tiberium Project: its victims' toggles go back to their first state (C&C4's ForceToggleToDefaultNugget)
+	Bool m_hijackVictim;																///< Tiberium Project: landing, its firer takes the vehicle over (C&C4's Hacker: its hijack, through the firer's ConvertToHijackedVehicleCrateCollide)
+	Bool m_taunt;																				///< Tiberium Project: what it hits turns on its firer (C&C4's TauntNugget: the Titan draws fire)
 	ModelConditionFlags m_forceToggleConditions;								///< Tiberium Project: ... those whose second state shows any of these (none: all)
 	NameKeyType m_victimModifier;													///< Tiberium Project: an attribute modifier put on each object the damage reaches (C&C4's AttributeModifierNugget)
 	UnsignedInt m_victimModifierDuration;									///< Tiberium Project: ... for so long each time (frames; 0: the modifier's own)

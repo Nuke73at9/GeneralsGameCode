@@ -66,6 +66,8 @@
 #include "GameLogic/Module/LaserUpdate.h"
 #include "GameLogic/Module/LifetimeUpdate.h"
 #include "GameLogic/Module/ToggleAbilityUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/CollideModule.h"	// Tiberium Project
+#include "Common/ActionManager.h"	// Tiberium Project
 #include "GameLogic/Module/UpdateModule.h"
 #include "GameLogic/Module/SpecialPowerCompletionDie.h"
 #include "GameLogic/Module/AssaultTransportAIUpdate.h"
@@ -204,6 +206,8 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "VictimNames",								INI::parseAsciiStringVectorAppend,		nullptr,							offsetof(WeaponTemplate, m_victimNames) },	// Tiberium Project
 	{ "VictimForbiddenNames",				INI::parseAsciiStringVectorAppend,		nullptr,							offsetof(WeaponTemplate, m_victimForbiddenNames) },	// Tiberium Project
 	{ "ForceToggleToDefault",				INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_forceToggleToDefault) },	// Tiberium Project
+	{ "HijackVictim",								INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_hijackVictim) },	// Tiberium Project
+	{ "Taunt",											INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_taunt) },	// Tiberium Project
 	{ "ForceToggleConditions",			ModelConditionFlags::parseFromINI,			nullptr,							offsetof(WeaponTemplate, m_forceToggleConditions) },	// Tiberium Project
 	{ "AttributeModifier",					AttributeModifierStore::parseModifierName,	nullptr,				offsetof(WeaponTemplate, m_victimModifier) },	// Tiberium Project
 	{ "AttributeModifierDuration",	INI::parseDurationUnsignedInt,	nullptr,				offsetof(WeaponTemplate, m_victimModifierDuration) },	// Tiberium Project
@@ -318,6 +322,8 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_targetOCL										= nullptr;	// Tiberium Project
 	m_targetStatusOCL							= nullptr;	// Tiberium Project
 	m_forceToggleToDefault				= FALSE;	// Tiberium Project
+	m_hijackVictim								= FALSE;	// Tiberium Project
+	m_taunt												= FALSE;	// Tiberium Project
 	m_victimModifier							= NAMEKEY_INVALID;	// Tiberium Project
 	m_victimModifierDuration			= 0;	// Tiberium Project
 	m_impactFX = nullptr;	// Tiberium Project
@@ -711,6 +717,15 @@ Real WeaponTemplate::estimateOwnDamage(
 		DEBUG_CRASH(("bad args to estimate"));
 		return 0.0f;
 	}
+
+	// Tiberium Project @feature a hijack is worth firing at what its firer can take over, nothing else (C&C4's Hacker
+	// beams only at enemy vehicles)
+	if (m_hijackVictim)
+		return victimObj != nullptr && TheActionManager->canHijackVehicle(sourceObj, victimObj, CMD_FROM_AI) ? 1.0f : 0.0f;
+	// Tiberium Project @feature a taunt is worth firing at an enemy that can fight back (C&C4's Titan's taunt turret)
+	if (m_taunt && getPrimaryDamage(bonus) <= 0.0f)
+		return victimObj != nullptr && victimObj->getAI() != nullptr && victimObj->isAbleToAttack() &&
+			victimObj->getRelationship(sourceObj) == ENEMIES ? 1.0f : 0.0f;
 
 	const Real damageAmount = getPrimaryDamage(bonus);
 	if ( victimObj == nullptr )
@@ -1766,6 +1781,31 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 	if (primaryVictim)
 	{
 		pos = primaryVictim->getPosition();
+	}
+
+	// Tiberium Project @feature its firer takes the vehicle over as it lands (HijackVictim: C&C4's Hacker after its beam
+	// and its hijack's preparation), as Zero Hour's hijacker does on reaching one (the firer still at it)
+	if (m_hijackVictim && source != nullptr && primaryVictim != nullptr && !source->isEffectivelyDead())
+	{
+		for (BehaviorModule **m = source->getBehaviorModules(); *m != nullptr; ++m)
+		{
+			CollideModuleInterface *collide = (*m)->getCollide();
+			if (collide != nullptr && collide->isHijackedVehicleCrateCollide() && collide->wouldLikeToCollideWith(primaryVictim))
+			{
+				collide->onCollide(primaryVictim, primaryVictim->getPosition(), nullptr);
+				break;
+			}
+		}
+		return;
+	}
+
+	// Tiberium Project @feature what it hits turns on its firer (Taunt: C&C4's TauntNugget), each time it is hit so
+	if (m_taunt && source != nullptr && primaryVictim != nullptr && !source->isEffectivelyDead() && !primaryVictim->isEffectivelyDead())
+	{
+		AIUpdateInterface *victimAI = primaryVictim->getAI();
+		if (victimAI != nullptr && primaryVictim->isAbleToAttack() && primaryVictim->getRelationship(source) == ENEMIES &&
+				victimAI->getGoalObject() != source)
+			victimAI->aiAttackObject(source, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI);
 	}
 
 	// Tiberium Project @feature TargetOCL: made where the damage lands, by the weapon's owner
