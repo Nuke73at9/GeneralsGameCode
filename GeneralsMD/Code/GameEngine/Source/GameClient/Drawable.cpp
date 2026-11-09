@@ -447,6 +447,9 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatusBits statu
 #endif
 
 	m_hidden = false;
+	m_radarFalseReturns = 0;		// Tiberium Project
+	m_radarFalseReturnsRadius = 0.0f;
+	m_radarFalseReturnsUntil = 0;
 	m_hiddenByStealth = false;
 	m_secondMaterialPassOpacity = 0.0f;
 	m_drawableFullyObscuredByShroud = false;

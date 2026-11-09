@@ -335,6 +335,11 @@ public:
 	//
 	Bool isDrawableEffectivelyHidden() const { return m_hidden || m_hiddenByStealth; }
 
+	// Tiberium Project @feature false returns on the radar about it, until a logic frame (RadarHackSpecialPower: Kane's
+	// Wrath's Venom's Signature Generator); the radar draws them
+	void setRadarFalseReturns( Int count, Real radius, UnsignedInt untilFrame ) { m_radarFalseReturns = count; m_radarFalseReturnsRadius = radius; m_radarFalseReturnsUntil = untilFrame; }
+	Int getRadarFalseReturns( UnsignedInt nowFrame, Real *radius ) const { if( radius ) *radius = m_radarFalseReturnsRadius; return nowFrame < m_radarFalseReturnsUntil ? m_radarFalseReturns : 0; }
+
 	void setSelectable( Bool selectable );												///< Changes the drawables selectability
 	Bool isSelectable() const;
 	Bool isMassSelectable() const;
@@ -736,6 +741,9 @@ private:
 	DrawableIconInfo*		m_iconInfo;					///< lazily allocated!
 
 	Real m_secondMaterialPassOpacity;			///< drawable gets rendered again in hardware with an extra material layer
+	Int m_radarFalseReturns;					///< Tiberium Project: its false returns on the radar (setRadarFalseReturns)
+	Real m_radarFalseReturnsRadius;
+	UnsignedInt m_radarFalseReturnsUntil;
 	// --------- BYTE-SIZED THINGS GO HERE
 	Byte m_selected;						///< drawable is selected or not
 	Bool m_hidden;							///< drawable is "hidden" or not (overrides stealth effects)

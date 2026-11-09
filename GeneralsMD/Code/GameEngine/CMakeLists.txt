@@ -455,6 +455,7 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/SpawnBehavior.h
     Include/GameLogic/Module/SpawnPointProductionExitUpdate.h
     Include/GameLogic/Module/SpecialAbility.h
+    Include/GameLogic/Module/RadarHackSpecialPower.h
     Include/GameLogic/Module/SpecialAbilityUpdate.h
     Include/GameLogic/Module/SpecialPowerCompletionDie.h
     Include/GameLogic/Module/SpecialPowerCreate.h
@@ -1009,6 +1010,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/SpecialPower/FireWeaponPower.cpp
     Source/GameLogic/Object/SpecialPower/OCLSpecialPower.cpp
     Source/GameLogic/Object/SpecialPower/SpecialAbility.cpp
+    Source/GameLogic/Object/SpecialPower/RadarHackSpecialPower.cpp
     Source/GameLogic/Object/SpecialPower/SpecialPowerModule.cpp
     Source/GameLogic/Object/SpecialPower/SpyVisionSpecialPower.cpp
     Source/GameLogic/Object/Update/AIUpdate.cpp

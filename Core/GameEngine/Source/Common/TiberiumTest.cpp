@@ -2082,7 +2082,12 @@ void TiberiumTest::update()
 				BodyModuleInterface *armourBody = obj->getBodyModule();
 				const Drawable *look = obj->getDrawable();
 				char field[256];
-				snprintf( field, sizeof( field ), "%s%s%s%s%s%s%s%s%s%s",
+				// (Tiberium Project: its false returns on the radar, a Signature Generator's)
+				const Int falseReturns = look != nullptr ? look->getRadarFalseReturns( TheGameLogic->getFrame(), nullptr ) : 0;
+				char returns[32] = "";
+				if ( falseReturns > 0 )
+					snprintf( returns, sizeof( returns ), ", %d false returns", (int)falseReturns );
+				snprintf( field, sizeof( field ), "%s%s%s%s%s%s%s%s%s%s%s",
 					armourBody != nullptr && armourBody->testArmorSetFlag( ARMORSET_PLAYER_UPGRADE ) ? ", armour upgraded" : "",
 					obj->testStatus( OBJECT_STATUS_RIDER1 ) ? ", RIDER1" : "",
 					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_USER_6 ) ? ", USER_6" : "",
@@ -2094,7 +2099,7 @@ void TiberiumTest::update()
 					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_PACKING ) ? ", PACKING" : "",
 					look != nullptr && look->isDrawableEffectivelyHidden() ? ", hidden" : "",
 					obj->testStatus( OBJECT_STATUS_MASKED ) ? ", masked" : "",
-					obj->isDisabledByType( DISABLED_HELD ) ? ", held" : "" );
+					obj->isDisabledByType( DISABLED_HELD ) ? ", held" : "", returns );
 				log( "frame %d: ui: state %s #%u player %d at %.0f %.0f height %.0f (%s to me): health %.0f of %.0f%s%s%s, sight %.0f (clears %.0f), dodge %.2f, reflect %.2f, %d modifiers%s, upgrades %s, veterancy %d%s",
 					(int)s_frame, step.arg.c_str(), (unsigned)obj->getID(),
 					obj->getControllingPlayer() != nullptr ? (int)obj->getControllingPlayer()->getPlayerIndex() : -1,

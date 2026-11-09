@@ -39,6 +39,8 @@
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
+#include "GameLogic/PartitionManager.h"
+#include "GameClient/Drawable.h"
 
 #include "GameClient/Color.h"
 #include "GameClient/ControlBar.h"
@@ -763,6 +765,33 @@ void W3DRadar::renderObjectList( const RadarObject *listHead, TextureClass *text
 		radarPoint.y--;
 		if( legalRadarPoint( radarPoint.x, radarPoint.y ) )
 			surface->Draw_Pixel( radarPoint.x, radarPoint.y, pixelColor, bytesPerPixel, pBits, pitch );
+
+#if RTS_ZEROHOUR
+		// Tiberium Project @feature its false returns (RadarHackSpecialPower: Kane's Wrath's Venom's Signature Generator):
+		// more blips of its colour about it, drifting round, each where the player sees the ground
+		const Drawable *draw = obj->getDrawable();
+		Real reach = 0.0f;
+		const Int falseReturns = draw != nullptr ? draw->getRadarFalseReturns( TheGameLogic->getFrame(), &reach ) : 0;
+		for( Int k = 0; k < falseReturns && reach > 0.0f; ++k )
+		{
+			const UnsignedInt seed = (UnsignedInt)obj->getID() * 2654435761u + (UnsignedInt)k * 40503u;
+			const Real dist = reach * ( 0.4f + 0.6f * (Real)( seed % 1000u ) / 1000.0f );
+			const Real drift = (Real)TheGameLogic->getFrame() * ( ( k & 1 ) ? 0.012f : -0.009f );
+			const Real angle = 2.0f * PI * (Real)k / (Real)falseReturns + (Real)( ( seed >> 10 ) % 628u ) / 100.0f + drift;
+			Coord3D fake = *pos;
+			fake.x += Cos( angle ) * dist;
+			fake.y += Sin( angle ) * dist;
+			if( player != nullptr && ThePartitionManager->getShroudStatusForPlayer( player->getPlayerIndex(), &fake ) != CELLSHROUD_CLEAR )
+				continue;
+			ICoord2D fakePoint;
+			fakePoint.x = fake.x / (m_mapExtent.width() / static_cast<float>(RADAR_CELL_WIDTH));
+			fakePoint.y = fake.y / (m_mapExtent.height() / static_cast<float>(RADAR_CELL_HEIGHT));
+			for( Int dx = 0; dx < 2; ++dx )
+				for( Int dy = 0; dy < 2; ++dy )
+					if( legalRadarPoint( fakePoint.x + dx, fakePoint.y + dy ) )
+						surface->Draw_Pixel( fakePoint.x + dx, fakePoint.y + dy, pixelColor, bytesPerPixel, pBits, pitch );
+		}
+#endif
 
 	}
 
