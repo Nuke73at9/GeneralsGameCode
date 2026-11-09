@@ -1565,6 +1565,10 @@ Bool ActionManager::canDoSpecialPowerAtLocation( const Object *obj, const Coord3
 			case SPECIAL_CLEANUP_AREA:
 			case SPECIAL_BATTLESHIP_BOMBARDMENT:
 			case SPECIAL_ABILITY_AT_LOCATION:	// Tiberium Project @feature converted C&C4 abilities
+				// Tiberium Project @feature ... into the shroud as well when the ability may be (SAGE's
+				// FOGGED_SHROUDED_CELLS_OK: Kane's Wrath's Firehawk Stratofighter goes anywhere on the map)
+				if( spTemplate->getSpecialPowerType() == SPECIAL_ABILITY_AT_LOCATION && spTemplate->isShroudedTargetOK() )
+					return isPointOnMap( loc );
 				//Don't allow "damaging" special powers in shrouded areas, but Fogged are okay.
 				return ThePartitionManager->getShroudStatusForPlayer( obj->getControllingPlayer()->getPlayerIndex(), loc ) != CELLSHROUD_SHROUDED;
 

@@ -28,6 +28,7 @@
 #include "Common/GameAudio.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Upgrade.h"
+#include "GameClient/Drawable.h"
 #include "Common/Xfer.h"
 #include "GameClient/FXList.h"
 #include "GameLogic/AI.h"
@@ -123,10 +124,11 @@ Bool FireWeaponAbilityUpdate::initiateIntentToDoSpecialPower( const SpecialPower
 	const FireWeaponAbilityUpdateModuleData *data = getFireWeaponAbilityUpdateModuleData();
 	// (a leap needs no shots, nor a beam: Tiberium Project)
 	if( specialPowerTemplate != data->m_specialPowerTemplate
-		|| ( data->m_shots.empty() && data->m_leapSpeed <= 0.0f && data->m_beamWeaponName.isEmpty() ) )
+		|| ( data->m_shots.empty() && data->m_leapSpeed <= 0.0f && data->m_beamWeaponName.isEmpty() && data->m_teleportHeight <= 0.0f ) )
 		return FALSE;
 	Object *me = getObject();
-	if( me->isDisabled() || me->isEffectivelyDead() || m_stage == STAGE_LEAP )
+	// (nor while it climbs out or is gone: Tiberium Project)
+	if( me->isDisabled() || me->isEffectivelyDead() || m_stage == STAGE_LEAP || m_stage == STAGE_TELEPORT || isTeleportClimb() )
 		return FALSE;
 	// Tiberium Project @feature not an object it cannot take over
 	if( refusesSpecialPower( specialPowerTemplate, targetObj, targetPos ) )
@@ -144,6 +146,19 @@ Bool FireWeaponAbilityUpdate::initiateIntentToDoSpecialPower( const SpecialPower
 		m_targetPos = *targetPos;
 	else
 		m_targetPos = *me->getPosition();
+	// Tiberium Project @feature a teleport goes no farther than TeleportMaxDistance (towards the spot)
+	if( data->m_teleportHeight > 0.0f && data->m_teleportMaxDistance > 0.0f && targetObj == nullptr )
+	{
+		const Coord3D *at = me->getPosition();
+		const Real dx = m_targetPos.x - at->x, dy = m_targetPos.y - at->y;
+		const Real dist = WWMath::Sqrt( dx * dx + dy * dy );
+		if( dist > data->m_teleportMaxDistance )
+		{
+			const Real f = data->m_teleportMaxDistance / dist;
+			m_targetPos.x = at->x + dx * f;
+			m_targetPos.y = at->y + dy * f;
+		}
+	}
 	m_nextShot = 0;
 	m_moveIssued = FALSE;
 	m_leapSegments = 0;
@@ -189,8 +204,20 @@ void FireWeaponAbilityUpdate::enterStage( Stage stage )
 		{
 			// stand still and face the target (Tiberium Project: a beam's unit stops where it is ordered to fire it,
 			// as Kane's Wrath's Beam Cannon does)
-			if( ai != nullptr && ( data->m_startAbilityRange > 0.0f || !data->m_beamWeaponName.isEmpty() ) )
+			if( ai != nullptr && ( data->m_startAbilityRange > 0.0f || !data->m_beamWeaponName.isEmpty() || data->m_teleportHeight > 0.0f ) )
 				ai->aiIdle( CMD_FROM_AI );
+			// Tiberium Project @feature a teleport: held as it climbs out (no physics, no orders, no shots), from here
+			// (m_leapPoints[0]) to TeleportHeight above the ground (m_leapPoints[1]; no lower than it is)
+			if( data->m_teleportHeight > 0.0f )
+			{
+				m_leapPoints[0] = *me->getPosition();
+				m_leapPoints[1] = m_leapPoints[0];
+				m_leapPoints[1].z = max( m_leapPoints[0].z, TheTerrainLogic->getGroundHeight( m_leapPoints[0].x, m_leapPoints[0].y ) + data->m_teleportHeight );
+				me->setDisabled( DISABLED_HELD );
+				m_leapNoAttack = !me->testStatus( OBJECT_STATUS_NO_ATTACK );
+				if( m_leapNoAttack )
+					me->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_NO_ATTACK ) );
+			}
 			if( !data->m_beamWeaponName.isEmpty() )
 				clearTurretTargets( me );
 			Coord3D pos;
@@ -243,10 +270,61 @@ void FireWeaponAbilityUpdate::enterStage( Stage stage )
 			if( data->m_packTime > 0 )
 				me->setModelConditionState( MODELCONDITION_PACKING );
 			break;
+		case STAGE_TELEPORT:
+			// Tiberium Project @feature up there: gone (its climb's last step first)
+			me->setPosition( &m_leapPoints[1] );
+			setGone( TRUE );
+			break;
 		default:
 			break;
 	}
 	setWakeFrame( me, UPDATE_SLEEP_NONE );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature a teleport's climb (its unpacking, the unit held)
+Bool FireWeaponAbilityUpdate::isTeleportClimb() const
+{
+	return m_stage == STAGE_UNPACK && getFireWeaponAbilityUpdateModuleData()->m_teleportHeight > 0.0f;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature gone while it teleports: not drawn (nor on the radar), and no target for anyone (as
+// Zero Hour hides a hijacker in the vehicle he took)
+void FireWeaponAbilityUpdate::setGone( Bool gone )
+{
+	Object *me = getObject();
+	if( gone )
+		me->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_MASKED ) );
+	else
+		me->clearStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_MASKED ) );
+	if( me->getDrawable() != nullptr )
+		me->getDrawable()->setDrawableHidden( gone );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature back: over the target spot as high as it went, facing the way it went, not held
+void FireWeaponAbilityUpdate::endTeleport()
+{
+	Object *me = getObject();
+	const FireWeaponAbilityUpdateModuleData *data = getFireWeaponAbilityUpdateModuleData();
+	Coord3D dest;
+	if( !targetPosition( &dest ) )
+		dest = m_targetPos;		// (the object it went for is gone: where it was)
+	const Real dx = dest.x - m_leapPoints[0].x;
+	const Real dy = dest.y - m_leapPoints[0].y;
+	dest.z = TheTerrainLogic->getGroundHeight( dest.x, dest.y ) + data->m_teleportHeight;
+	me->setPosition( &dest );
+	if( dx != 0.0f || dy != 0.0f )
+		me->setOrientation( WWMath::Atan2Origin( dy, dx ) );
+	setGone( FALSE );
+	me->clearDisabled( DISABLED_HELD );
+	if( m_leapNoAttack )
+		me->clearStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_NO_ATTACK ) );
+	m_leapNoAttack = FALSE;
+	PhysicsBehavior *physics = me->getPhysics();
+	if( physics != nullptr )
+		physics->resetDynamicPhysics();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -260,6 +338,15 @@ void FireWeaponAbilityUpdate::finish()
 		pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
 		me->setPosition( &pos );
 		endLeap();
+	}
+	// Tiberium Project @feature a teleport stopped part way (it died climbing out, or up there): seen, and let go
+	if( m_stage == STAGE_TELEPORT || isTeleportClimb() )
+	{
+		setGone( FALSE );
+		me->clearDisabled( DISABLED_HELD );
+		if( m_leapNoAttack )
+			me->clearStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_NO_ATTACK ) );
+		m_leapNoAttack = FALSE;
 	}
 	me->clearModelConditionFlags( MAKE_MODELCONDITION_MASK2( MODELCONDITION_UNPACKING, MODELCONDITION_PACKING ) );
 	// Tiberium Project: the special weapon's state ends with the ability (and a beam's hold on the unit)
@@ -436,6 +523,20 @@ UpdateSleepTime FireWeaponAbilityUpdate::update()
 			return UPDATE_SLEEP( 3 );
 		}
 		case STAGE_UNPACK:
+			// Tiberium Project @feature a teleport climbs to TeleportHeight above the ground as it unpacks (no lower
+			// than it was), then is gone
+			if( data->m_teleportHeight > 0.0f )
+			{
+				if( since >= data->m_unpackTime )
+				{
+					enterStage( STAGE_TELEPORT );
+					return UPDATE_SLEEP_NONE;
+				}
+				Coord3D at = m_leapPoints[0];
+				at.z += ( m_leapPoints[1].z - m_leapPoints[0].z ) * (Real)( since + 1 ) / (Real)data->m_unpackTime;
+				me->setPosition( &at );
+				return UPDATE_SLEEP_NONE;
+			}
 			if( since >= data->m_unpackTime )
 				enterStage( data->m_preparationTime > 0 ? STAGE_PREPARE : STAGE_FIRE );
 			return UPDATE_SLEEP_NONE;
@@ -535,6 +636,20 @@ UpdateSleepTime FireWeaponAbilityUpdate::update()
 			{
 				finish();
 				return UPDATE_SLEEP_FOREVER;
+			}
+			return UPDATE_SLEEP_NONE;
+		case STAGE_TELEPORT:
+			// Tiberium Project @feature gone for TeleportTime, then back at the spot (its arrival: PACKING for PackTime)
+			if( since >= data->m_teleportTime )
+			{
+				endTeleport();
+				if( data->m_packTime > 0 )
+					enterStage( STAGE_PACK );
+				else
+				{
+					finish();
+					return UPDATE_SLEEP_FOREVER;
+				}
 			}
 			return UPDATE_SLEEP_NONE;
 		case STAGE_LEAP:
@@ -673,4 +788,7 @@ void FireWeaponAbilityUpdate::xfer( Xfer *xfer )
 void FireWeaponAbilityUpdate::loadPostProcess()
 {
 	SpecialPowerUpdateModule::loadPostProcess();
+	// Tiberium Project: still gone (a teleport's; its drawable is made anew)
+	if( m_stage == STAGE_TELEPORT )
+		setGone( TRUE );
 }

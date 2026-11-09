@@ -41,6 +41,11 @@
 // within BeamReflectorReach of one of the unit's side's of those (Kane's Wrath's Venom): BeamReflectorWeapon is fired
 // at the reflector and BeamWeapon from it at the target (the Beam Cannon's reflector attack).
 //
+// Tiberium Project @feature a teleport (SAGE's TeleportSpecialAbilityUpdate: Kane's Wrath's Firehawk Stratofighter): with
+// TeleportHeight > 0 the unit climbs that high above the ground as it unpacks (held, firing nothing), is gone for
+// TeleportTime (not drawn, nothing can see or target it), and comes back at the target spot at that height, its
+// locomotor taking it on from there. TeleportMaxDistance (0: any) limits how far.
+//
 // Tiberium Project @feature taking a vehicle over (Kane's Wrath's Avatar commandeering a Beam Cannon, a Flame
 // Tank, an Attack Bike or a Stealth Tank): with TargetUpgrade = <object> <upgrade> (any number), only the
 // player's own objects of those kinds are taken (and not one whose upgrade the unit has already); on reaching it
@@ -96,6 +101,9 @@ public:
 	SpecialPowerTemplate *m_specialPowerTemplate;
 	std::vector<FireWeaponAbilityShot> m_shots;
 	std::vector<FireWeaponAbilityTargetUpgrade> m_targetUpgrades;	///< Tiberium Project: the objects it takes over
+	Real m_teleportHeight;					///< Tiberium Project: above the ground (0: no teleport)
+	UnsignedInt m_teleportTime;			///< frames gone
+	Real m_teleportMaxDistance;			///< 0: any
 	Real m_startAbilityRange;		///< closes to this distance of the target first (0: fires from where it is)
 	UnsignedInt m_unpackTime;		///< frames
 	UnsignedInt m_preparationTime;	///< frames
@@ -127,6 +135,9 @@ public:
 	FireWeaponAbilityUpdateModuleData()
 	{
 		m_whichSpecialWeapon = 0;
+		m_teleportHeight = 0.0f;
+		m_teleportTime = 0;
+		m_teleportMaxDistance = 0.0f;
 		m_beamTime = 0;
 		m_beamInterval = LOGICFRAMES_PER_SECOND / 4;
 		m_abortRange = 0.0f;
@@ -180,6 +191,9 @@ public:
 			{ "BeamReflectorReach",		INI::parseReal,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_reflectorReach ) },
 			{ "BeamReflectorWeapon",		INI::parseAsciiString,			nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_reflectorWeaponName ) },
 			{ "TargetUpgrade",			parseTargetUpgrade,				nullptr, 0 },	// Tiberium Project
+			{ "TeleportHeight",			INI::parseReal,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_teleportHeight ) },
+			{ "TeleportTime",				INI::parseDurationUnsignedInt,	nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_teleportTime ) },
+			{ "TeleportMaxDistance",		INI::parseReal,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_teleportMaxDistance ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 		p.add( dataFieldParse );
@@ -217,7 +231,7 @@ public:
 	Object *findReflector( const Object *target ) const;	///< Tiberium Project: the beam's reflector nearest the target
 	const FireWeaponAbilityTargetUpgrade *targetUpgradeFor( const Object *target ) const;	///< Tiberium Project: or nullptr
 	// Tiberium Project: in the air the unit is held (and may be disabled on the way), and still flies on
-	virtual DisabledMaskType getDisabledTypesToProcess() const override { return m_stage == STAGE_LEAP ? DISABLEDMASK_ALL : DISABLEDMASK_NONE; }
+	virtual DisabledMaskType getDisabledTypesToProcess() const override { return m_stage == STAGE_LEAP || m_stage == STAGE_TELEPORT || isTeleportClimb() ? DISABLEDMASK_ALL : DISABLEDMASK_NONE; }
 
 private:
 
@@ -230,6 +244,7 @@ private:
 		STAGE_FIRE,
 		STAGE_PACK,
 		STAGE_LEAP,		///< Tiberium Project: in the air, to the target spot
+		STAGE_TELEPORT,	///< Tiberium Project: gone, to come back at the target spot
 	};
 
 	Bool targetPosition( Coord3D *pos ) const;	///< where the target is now (false: it is gone)
@@ -239,6 +254,9 @@ private:
 	void endLeap();							///< Tiberium Project: not held, nor in the air, any more
 	void playSound( const AudioEventRTS &sound ) const;	///< Tiberium Project
 	void setLeapLook( Int look );			///< Tiberium Project: 0 none, 1 in flight, 2 landing, 3 packing in flight
+	Bool isTeleportClimb() const;		///< Tiberium Project: climbing to go (a teleport's unpacking)
+	void setGone( Bool gone );			///< Tiberium Project: not drawn, seen or targeted while teleporting
+	void endTeleport();							///< Tiberium Project: back, at the target spot
 	ModelConditionFlags leapLook( Int look ) const;
 
 	Stage m_stage;

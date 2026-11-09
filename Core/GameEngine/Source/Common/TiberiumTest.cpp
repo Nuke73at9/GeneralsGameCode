@@ -2081,19 +2081,24 @@ void TiberiumTest::update()
 				// (Kane's Wrath's building fields: the upgraded armour, the field's status and its look)
 				BodyModuleInterface *armourBody = obj->getBodyModule();
 				const Drawable *look = obj->getDrawable();
-				char field[160];
-				snprintf( field, sizeof( field ), "%s%s%s%s%s%s",
+				char field[256];
+				snprintf( field, sizeof( field ), "%s%s%s%s%s%s%s%s%s%s",
 					armourBody != nullptr && armourBody->testArmorSetFlag( ARMORSET_PLAYER_UPGRADE ) ? ", armour upgraded" : "",
 					obj->testStatus( OBJECT_STATUS_RIDER1 ) ? ", RIDER1" : "",
 					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_USER_6 ) ? ", USER_6" : "",
 					// (a superweapon: ready, launching)
 					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_SPECIALPOWER1_READY ) ? ", SPECIALPOWER1_READY" : "",
 					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_SPECIAL_WEAPON_ONE ) ? ", SPECIAL_WEAPON_ONE" : "",
-					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_UNPACKING ) ? ", UNPACKING" : "" );
-				log( "frame %d: ui: state %s #%u player %d at %.0f %.0f (%s to me): health %.0f of %.0f%s%s%s, sight %.0f (clears %.0f), dodge %.2f, reflect %.2f, %d modifiers%s, upgrades %s, veterancy %d%s",
+					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_UNPACKING ) ? ", UNPACKING" : "",
+					// (a teleport: its arrival, gone meanwhile)
+					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_PACKING ) ? ", PACKING" : "",
+					look != nullptr && look->isDrawableEffectivelyHidden() ? ", hidden" : "",
+					obj->testStatus( OBJECT_STATUS_MASKED ) ? ", masked" : "",
+					obj->isDisabledByType( DISABLED_HELD ) ? ", held" : "" );
+				log( "frame %d: ui: state %s #%u player %d at %.0f %.0f height %.0f (%s to me): health %.0f of %.0f%s%s%s, sight %.0f (clears %.0f), dodge %.2f, reflect %.2f, %d modifiers%s, upgrades %s, veterancy %d%s",
 					(int)s_frame, step.arg.c_str(), (unsigned)obj->getID(),
 					obj->getControllingPlayer() != nullptr ? (int)obj->getControllingPlayer()->getPlayerIndex() : -1,
-					obj->getPosition()->x, obj->getPosition()->y,
+					obj->getPosition()->x, obj->getPosition()->y, obj->getHeightAboveTerrain(),
 					seen == CELLSHROUD_CLEAR ? "clear" : ( seen == CELLSHROUD_FOGGED ? "fogged" : "shrouded" ),
 					body != nullptr ? body->getHealth() : 0.0f, body != nullptr ? body->getMaxHealth() : 0.0f,
 					obj->testStatus( OBJECT_STATUS_STEALTHED ) ? ", stealthed" : "",
