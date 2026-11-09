@@ -1645,6 +1645,23 @@ void Player::onStructureCreated( Object *builder, Object *structure )
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature whether the structure has a power the announcer calls that superweapon: one of
+// that type, or one whose EvaAs names it (Kane's Wrath's ion cannon and nuclear missile)
+//-------------------------------------------------------------------------------------------------
+static Bool announcedAs( const Object *structure, SpecialPowerType type )
+{
+	if( structure->hasSpecialPower( type ) )
+		return TRUE;
+	for( BehaviorModule **m = structure->getBehaviorModules(); *m; ++m )
+	{
+		const SpecialPowerModuleInterface *power = (*m)->getSpecialPower();
+		if( power != nullptr && power->getSpecialPowerTemplate() != nullptr && power->getSpecialPowerTemplate()->getEvaType() == type )
+			return TRUE;
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
 /// a structure that was under construction has become completed
 //-------------------------------------------------------------------------------------------------
 void Player::onStructureConstructionComplete( Object *builder, Object *structure, Bool isRebuild )
@@ -1677,7 +1694,7 @@ void Player::onStructureConstructionComplete( Object *builder, Object *structure
 	// This object may require us to play some EVA sounds.
 	Player *localPlayer = ThePlayerList->getLocalPlayer();
 
-	if( structure->hasSpecialPower( SPECIAL_PARTICLE_UPLINK_CANNON ) ||
+	if( announcedAs( structure, SPECIAL_PARTICLE_UPLINK_CANNON ) ||
 			structure->hasSpecialPower( SUPW_SPECIAL_PARTICLE_UPLINK_CANNON ) ||
 			structure->hasSpecialPower( LAZR_SPECIAL_PARTICLE_UPLINK_CANNON ) )
   {
@@ -1696,7 +1713,7 @@ void Player::onStructureConstructionComplete( Object *builder, Object *structure
     }
   }
 
-	if( structure->hasSpecialPower( SPECIAL_NEUTRON_MISSILE ) ||
+	if( announcedAs( structure, SPECIAL_NEUTRON_MISSILE ) ||
 			structure->hasSpecialPower( NUKE_SPECIAL_NEUTRON_MISSILE ) ||
 			structure->hasSpecialPower( SUPW_SPECIAL_NEUTRON_MISSILE ) )
   {

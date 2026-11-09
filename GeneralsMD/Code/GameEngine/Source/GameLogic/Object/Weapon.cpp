@@ -199,6 +199,7 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "FireOCL",										parseAllVetLevelsAsciiString,					nullptr,							offsetof(WeaponTemplate, m_fireOCLNames) },
 	{ "TargetOCL",									INI::parseAsciiString,								nullptr,							offsetof(WeaponTemplate, m_targetOCLName) },	// Tiberium Project
 	{ "AttributeModifier",					AttributeModifierStore::parseModifierName,	nullptr,				offsetof(WeaponTemplate, m_victimModifier) },	// Tiberium Project
+	{ "AttributeModifierDuration",	INI::parseDurationUnsignedInt,	nullptr,				offsetof(WeaponTemplate, m_victimModifierDuration) },	// Tiberium Project
 	{ "FollowUp",									WeaponTemplate::parseFollowUp,						nullptr,							0 },	// Tiberium Project
 	{ "Scatter",									WeaponTemplate::parseScatter,						nullptr,							0 },	// Tiberium Project
 	{ "ScatterLaser",							INI::parseAsciiString,								nullptr,							offsetof(WeaponTemplate, m_scatterLaserName) },	// Tiberium Project
@@ -309,6 +310,7 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_projectileTmpl								= nullptr;
 	m_targetOCL										= nullptr;	// Tiberium Project
 	m_victimModifier							= NAMEKEY_INVALID;	// Tiberium Project
+	m_victimModifierDuration			= 0;	// Tiberium Project
 	m_impactFX = nullptr;	// Tiberium Project
 	m_scatterLaser = nullptr;	// Tiberium Project
 	m_scatterFX = nullptr;
@@ -2042,7 +2044,7 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 			// Tiberium Project @feature the weapon's attribute modifier on each object its damage reaches
 			// (C&C4's AttributeModifierNugget: a slow, an armour debuff, an ally's damage boost)
 			if (m_victimModifier != NAMEKEY_INVALID && !curVictim->isEffectivelyDead())
-				curVictim->applyAttributeModifier(TheAttributeModifierStore->find(m_victimModifier), sourceID);
+				curVictim->applyAttributeModifier(TheAttributeModifierStore->find(m_victimModifier), sourceID, m_victimModifierDuration);
 			// Tiberium Project @feature veterancy for each (C&C4's ExperienceNugget: Battle Hardening's two levels)
 			if (m_victimVeterancy > 0 && !curVictim->isEffectivelyDead())
 			{

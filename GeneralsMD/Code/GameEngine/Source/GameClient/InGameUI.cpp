@@ -3973,7 +3973,8 @@ void InGameUI::postDraw()
                 {
                   if ( TheGameLogic->getFrame() > 0 )
                   {
-                    SpecialPowerType type = module->getSpecialPowerTemplate()->getSpecialPowerType();
+                    // Tiberium Project @feature (as the superweapon it is announced as: EvaAs)
+                    SpecialPowerType type = module->getSpecialPowerTemplate()->getEvaType();
 
                     Player *localPlayer = ThePlayerList->getLocalPlayer();
 

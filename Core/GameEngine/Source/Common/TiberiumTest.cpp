@@ -1703,6 +1703,31 @@ void TiberiumTest::update()
 				msg->appendObjectIDArgument( INVALID_ID );
 				log( "frame %d: ui: power %s (no target)", (int)s_frame, f[0].c_str() );
 			}
+			else if ( button != nullptr && button->getSpecialPowerTemplate() != nullptr && f.size() > 1 && f[1].compare( 0, 5, "name:" ) == 0 )
+			{
+				// Tiberium Project @feature (the test) "power=Button,name:Template": the selection's power aimed at the first
+				// object of that kind (anyone's: a friendly Obelisk to charge, an enemy for the reflector attack)
+				const std::string kind = f[1].substr( 5 );
+				Object *target = nullptr;
+				for ( Object *o = TheGameLogic->getFirstObject(); o != nullptr && target == nullptr; o = o->getNextObject() )
+					if ( !o->isEffectivelyDead() && o->getTemplate()->getName().compareNoCase( kind.c_str() ) == 0 )
+						target = o;
+				const char *why = "";
+				if ( target != nullptr )
+				{
+					GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_DO_SPECIAL_POWER_AT_OBJECT );
+					msg->appendIntegerArgument( button->getSpecialPowerTemplate()->getID() );
+					msg->appendObjectIDArgument( target->getID() );
+					msg->appendIntegerArgument( button->getOptions() );
+					msg->appendObjectIDArgument( INVALID_ID );
+					// (what the player's order meets: the target out of sight, the power not ready)
+					const Player *me = ThePlayerList != nullptr ? ThePlayerList->getLocalPlayer() : nullptr;
+					if ( me != nullptr && target->getShroudedStatus( me->getPlayerIndex() ) >= OBJECTSHROUD_FOGGED )
+						why = " (out of sight: refused)";
+				}
+				log( "frame %d: ui: power %s at %s #%u%s%s", (int)s_frame, f[0].c_str(), kind.c_str(),
+					target != nullptr ? (unsigned)target->getID() : 0u, target != nullptr ? "" : " (none there)", why );
+			}
 			else if ( button != nullptr && button->getSpecialPowerTemplate() != nullptr && from != nullptr )
 			{
 				Coord3D at = *from->getPosition();
@@ -2064,7 +2089,7 @@ void TiberiumTest::update()
 					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_SPECIALPOWER1_READY ) ? ", SPECIALPOWER1_READY" : "",
 					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_SPECIAL_WEAPON_ONE ) ? ", SPECIAL_WEAPON_ONE" : "",
 					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_UNPACKING ) ? ", UNPACKING" : "" );
-				log( "frame %d: ui: state %s #%u player %d at %.0f %.0f (%s to me): health %.0f of %.0f%s%s%s, sight %.0f, dodge %.2f, reflect %.2f, %d modifiers%s, upgrades %s, veterancy %d%s",
+				log( "frame %d: ui: state %s #%u player %d at %.0f %.0f (%s to me): health %.0f of %.0f%s%s%s, sight %.0f (clears %.0f), dodge %.2f, reflect %.2f, %d modifiers%s, upgrades %s, veterancy %d%s",
 					(int)s_frame, step.arg.c_str(), (unsigned)obj->getID(),
 					obj->getControllingPlayer() != nullptr ? (int)obj->getControllingPlayer()->getPlayerIndex() : -1,
 					obj->getPosition()->x, obj->getPosition()->y,
@@ -2073,7 +2098,7 @@ void TiberiumTest::update()
 					obj->testStatus( OBJECT_STATUS_STEALTHED ) ? ", stealthed" : "",
 					obj->isDisabledByType( DISABLED_EMP ) ? ", EMP" : "",
 					obj->isResistingEMPByModifier() ? ", resists EMP" : "",
-					obj->getVisionRange(), obj->getDodgeChance(), obj->getAttributeModifierChance( MODIFIER_CHANCE_REFLECT ),
+					obj->getVisionRange(), obj->getShroudClearingRange(), obj->getDodgeChance(), obj->getAttributeModifierChance( MODIFIER_CHANCE_REFLECT ),
 					obj->hasAttributeModifiers() ? 1 : 0,
 					obj->getAttributeModifierScalar( MODIFIER_DAMAGE ) != 1.0f ? " (damage scaled)" : "",
 					obj->getObjectCompletedUpgradeMask().any() ? "some" : "none", (int)obj->getVeterancyLevel(), field );

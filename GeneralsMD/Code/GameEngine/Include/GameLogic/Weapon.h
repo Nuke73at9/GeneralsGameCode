@@ -589,6 +589,7 @@ private:
 	AsciiString m_targetOCLName;												///< Tiberium Project: OCL made where the weapon's damage lands
 	const ObjectCreationList* m_targetOCL;										///< Tiberium Project: post-loaded m_targetOCLName
 	NameKeyType m_victimModifier;													///< Tiberium Project: an attribute modifier put on each object the damage reaches (C&C4's AttributeModifierNugget)
+	UnsignedInt m_victimModifierDuration;									///< Tiberium Project: ... for so long each time (frames; 0: the modifier's own)
 	std::vector<WeaponFollowUp> m_followUps;										///< Tiberium Project: the further damage it sets off (FollowUp)
 	std::vector<WeaponScatterStage> m_scatterStages;									///< Tiberium Project: its chain's stages, in order (Scatter)
 	AsciiString m_scatterLaserName;													///< Tiberium Project: the beam drawn from each hop to the next (ScatterLaser)

@@ -26,6 +26,7 @@
 
 #include "Common/BezierSegment.h"
 #include "Common/GameAudio.h"
+#include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
 #include "GameClient/FXList.h"
 #include "GameLogic/AI.h"
@@ -37,6 +38,19 @@
 #include "GameLogic/Weapon.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature a beam's unit lets go of what its turrets took aim at by themselves (an idle unit's
+// attack of opportunity), so its own weapon is quiet while the beam is charged and fired
+//-------------------------------------------------------------------------------------------------
+static void clearTurretTargets( Object *obj )
+{
+	AIUpdateInterface *ai = obj->getAI();
+	if( ai == nullptr )
+		return;
+	for( Int t = 0; t < MAX_TURRETS; ++t )
+		ai->setTurretTargetObject( (WhichTurretType)t, nullptr );
+}
 
 //-------------------------------------------------------------------------------------------------
 // Shot = Weapon:<name> Delay:<ms> OffsetX:<ahead> OffsetY:<left>
@@ -81,8 +95,9 @@ FireWeaponAbilityUpdate::~FireWeaponAbilityUpdate()
 Bool FireWeaponAbilityUpdate::initiateIntentToDoSpecialPower( const SpecialPowerTemplate *specialPowerTemplate, const Object *targetObj, const Coord3D *targetPos, const Waypoint *way, UnsignedInt commandOptions )
 {
 	const FireWeaponAbilityUpdateModuleData *data = getFireWeaponAbilityUpdateModuleData();
-	// (a leap needs no shots: Tiberium Project)
-	if( specialPowerTemplate != data->m_specialPowerTemplate || ( data->m_shots.empty() && data->m_leapSpeed <= 0.0f ) )
+	// (a leap needs no shots, nor a beam: Tiberium Project)
+	if( specialPowerTemplate != data->m_specialPowerTemplate
+		|| ( data->m_shots.empty() && data->m_leapSpeed <= 0.0f && data->m_beamWeaponName.isEmpty() ) )
 		return FALSE;
 	Object *me = getObject();
 	if( me->isDisabled() || me->isEffectivelyDead() || m_stage == STAGE_LEAP )
@@ -100,6 +115,13 @@ Bool FireWeaponAbilityUpdate::initiateIntentToDoSpecialPower( const SpecialPower
 	m_moveIssued = FALSE;
 	m_leapSegments = 0;
 	m_leapSegment = 0;
+	// Tiberium Project @feature a beam holds the unit to it from the order on (no other target of its own while it
+	// goes, unpacks and fires)
+	if( !data->m_beamWeaponName.isEmpty() )
+	{
+		me->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_IS_USING_ABILITY ) );
+		clearTurretTargets( me );
+	}
 	enterStage( data->m_startAbilityRange > 0.0f && m_hasTarget ? STAGE_APPROACH : STAGE_UNPACK );
 	return TRUE;
 }
@@ -132,12 +154,22 @@ void FireWeaponAbilityUpdate::enterStage( Stage stage )
 	{
 		case STAGE_UNPACK:
 		{
-			// stand still and face the target
-			if( ai != nullptr && data->m_startAbilityRange > 0.0f )
+			// stand still and face the target (Tiberium Project: a beam's unit stops where it is ordered to fire it,
+			// as Kane's Wrath's Beam Cannon does)
+			if( ai != nullptr && ( data->m_startAbilityRange > 0.0f || !data->m_beamWeaponName.isEmpty() ) )
 				ai->aiIdle( CMD_FROM_AI );
+			if( !data->m_beamWeaponName.isEmpty() )
+				clearTurretTargets( me );
 			Coord3D pos;
 			if( data->m_faceTarget && m_hasTarget && targetPosition( &pos ) )
 			{
+				// Tiberium Project @feature a reflected beam is aimed at its reflector
+				if( !data->m_reflectorNames.empty() )
+				{
+					const Object *reflector = findReflector( m_targetID != INVALID_ID ? TheGameLogic->findObjectByID( m_targetID ) : nullptr );
+					if( reflector != nullptr )
+						pos = *reflector->getPosition();
+				}
 				const Coord3D *at = me->getPosition();
 				if( pos.x != at->x || pos.y != at->y )
 					me->setOrientation( WWMath::Atan2Origin( pos.y - at->y, pos.x - at->x ) );
@@ -178,8 +210,10 @@ void FireWeaponAbilityUpdate::finish()
 		endLeap();
 	}
 	me->clearModelConditionFlags( MAKE_MODELCONDITION_MASK2( MODELCONDITION_UNPACKING, MODELCONDITION_PACKING ) );
-	// Tiberium Project: the special weapon's state ends with the ability
+	// Tiberium Project: the special weapon's state ends with the ability (and a beam's hold on the unit)
 	const FireWeaponAbilityUpdateModuleData *data = getFireWeaponAbilityUpdateModuleData();
+	if( !data->m_beamWeaponName.isEmpty() )
+		me->clearStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_IS_USING_ABILITY ) );
 	if( data->m_whichSpecialWeapon >= 1 && data->m_whichSpecialWeapon <= 3 )
 		me->clearModelConditionState( (ModelConditionFlagType)( MODELCONDITION_SPECIAL_WEAPON_ONE + data->m_whichSpecialWeapon - 1 ) );
 	m_stage = STAGE_IDLE;
@@ -356,6 +390,53 @@ UpdateSleepTime FireWeaponAbilityUpdate::update()
 				startLeap();
 				return UPDATE_SLEEP_NONE;
 			}
+			// Tiberium Project @feature a beam: its weapon again and again while it lasts
+			if( !data->m_beamWeaponName.isEmpty() )
+			{
+				AIUpdateInterface *ai = me->getAI();
+				if( ai != nullptr && !ai->isIdle() )
+				{
+					finish();	// (told to do something else)
+					return UPDATE_SLEEP_FOREVER;
+				}
+				Object *target = m_targetID != INVALID_ID ? TheGameLogic->findObjectByID( m_targetID ) : nullptr;
+				Bool over = target == nullptr || target->isEffectivelyDead() || ( data->m_beamTime > 0 && since >= data->m_beamTime );
+				Object *reflector = nullptr;
+				if( !over && !data->m_reflectorNames.empty() )
+				{
+					reflector = findReflector( target );
+					over = reflector == nullptr;
+				}
+				if( !over && reflector == nullptr && data->m_abortRange > 0.0f )
+					over = ThePartitionManager->getDistanceSquared( me, target, FROM_CENTER_2D ) > data->m_abortRange * data->m_abortRange;
+				if( over )
+				{
+					if( data->m_packTime > 0 )
+					{
+						enterStage( STAGE_PACK );
+						return UPDATE_SLEEP_NONE;
+					}
+					finish();
+					return UPDATE_SLEEP_FOREVER;
+				}
+				const UnsignedInt interval = max( (UnsignedInt)1, data->m_beamInterval );
+				if( since >= (UnsignedInt)m_nextShot * interval )
+				{
+					++m_nextShot;
+					const WeaponTemplate *beam = TheWeaponStore->findWeaponTemplate( data->m_beamWeaponName );
+					if( reflector != nullptr )
+					{
+						const WeaponTemplate *toReflector = TheWeaponStore->findWeaponTemplate( data->m_reflectorWeaponName );
+						if( toReflector != nullptr )
+							TheWeaponStore->createAndFireTempWeapon( toReflector, me, reflector );
+						if( beam != nullptr )
+							TheWeaponStore->createAndFireTempWeapon( beam, reflector, target );
+					}
+					else if( beam != nullptr )
+						TheWeaponStore->createAndFireTempWeapon( beam, me, target );
+				}
+				return UPDATE_SLEEP_NONE;
+			}
 			while( m_nextShot < (Int)data->m_shots.size() && since >= data->m_shots[m_nextShot].m_delay )
 			{
 				const FireWeaponAbilityShot &shot = data->m_shots[m_nextShot++];
@@ -426,6 +507,31 @@ UpdateSleepTime FireWeaponAbilityUpdate::update()
 			break;
 	}
 	return UPDATE_SLEEP_FOREVER;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the beam's reflector (one of BeamReflector, the unit's or an ally's) nearest the target,
+// within BeamReflectorReach of it
+//-------------------------------------------------------------------------------------------------
+Object *FireWeaponAbilityUpdate::findReflector( const Object *target ) const
+{
+	const FireWeaponAbilityUpdateModuleData *data = getFireWeaponAbilityUpdateModuleData();
+	if( target == nullptr || data->m_reflectorReach <= 0.0f )
+		return nullptr;
+	PartitionFilterRelationship allies( getObject(), PartitionFilterRelationship::ALLOW_ALLIES );
+	PartitionFilterAlive alive;
+	PartitionFilter *filters[] = { &allies, &alive, nullptr };
+	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( target, data->m_reflectorReach, FROM_CENTER_2D, filters, ITER_SORTED_NEAR_TO_FAR );
+	MemoryPoolObjectHolder hold( iter );
+	for( Object *other = iter->first(); other != nullptr; other = iter->next() )
+	{
+		if( other == getObject() )
+			continue;
+		for( size_t i = 0; i < data->m_reflectorNames.size(); ++i )
+			if( other->getTemplate()->getName() == data->m_reflectorNames[i] )
+				return other;
+	}
+	return nullptr;
 }
 
 //-------------------------------------------------------------------------------------------------

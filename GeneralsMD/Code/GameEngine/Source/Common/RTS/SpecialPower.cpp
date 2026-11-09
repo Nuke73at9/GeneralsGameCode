@@ -310,6 +310,7 @@ void SpecialPowerStore::parseSpecialPowerDefinition( INI *ini )
 	{ "ShroudedTargetOK",					INI::parseBool,										nullptr, offsetof( SpecialPowerTemplate, m_shroudedTargetOK ) },
 	{ "AIUse",										SpecialPowerTemplate::parseAIUse,	nullptr, 0 },	// Tiberium Project @feature
 	{ "ForbiddenTargetObjectStatus",	ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( SpecialPowerTemplate, m_forbiddenTargetStatus ) },	// Tiberium Project @feature
+	{ "EvaAs",										INI::parseIndexList,							SpecialPowerMaskType::getBitNames(), offsetof( SpecialPowerTemplate, m_evaType ) },	// Tiberium Project @feature
 	{ nullptr,	nullptr, nullptr,	0 }
 
 };
@@ -337,6 +338,7 @@ SpecialPowerTemplate::SpecialPowerTemplate()
 	m_aiForbiddenKinds.clear();
 	m_aiDistance = 0.0f;
 	m_forbiddenTargetStatus.clear();
+	m_evaType = SPECIAL_INVALID;
 
 }
 

@@ -214,6 +214,12 @@ void SpecialPowerModule::onSpecialPowerCreation()
 	// start a power recharge going
 	startPowerRecharge();
 
+	// Tiberium Project @feature StartsReady: ready as it comes into being here too (its building built, by a
+	// SpecialPowerCreate), as a pre-built one is in the constructor: Kane's Wrath's support powers are ready once
+	// their building stands, while its superweapons count down from then
+	if( startsReady() )
+		m_availableOnFrame = TheGameLogic->getFrame();
+
 	// Dustin wants these special powers to start ready to fire,
 	// so here (and only here) we will expressly set them to ready-now.
 	if ( getSpecialPowerTemplate()->isSharedNSync())
@@ -606,7 +612,8 @@ void SpecialPowerModule::aboutToDoSpecialPower( const Coord3D *location )
 		getObject()->getID());
 
 	// Let EVA do her thing
-	SpecialPowerType type = getSpecialPowerModuleData()->m_specialPowerTemplate->getSpecialPowerType();
+	// Tiberium Project @feature (as the superweapon it is announced as: EvaAs)
+	SpecialPowerType type = getSpecialPowerModuleData()->m_specialPowerTemplate->getEvaType();
 
 	Player *localPlayer = rts::getObservedOrLocalPlayer();
 	Relationship relationship = localPlayer->getRelationship(getObject()->getTeam());

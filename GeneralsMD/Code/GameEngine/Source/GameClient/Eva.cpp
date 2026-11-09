@@ -32,6 +32,7 @@
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "GameLogic/GameLogic.h"
+#include "Common/TiberiumTest.h"
 
 
 //-------------------------------------------------------------------------------------------------
@@ -393,6 +394,9 @@ const EvaCheckInfo *Eva::getEvaCheckInfo(AsciiString name)
 void Eva::setShouldPlay(EvaMessage messageToPlay)
 {
 	m_shouldPlay[messageToPlay] = TRUE;
+	// Tiberium Project @feature (the test) which announcements the game asks for
+	if( TiberiumTest::isActive() && messageToPlay >= EVA_FIRST && messageToPlay < EVA_COUNT )
+		TiberiumTest::log( "frame %u: eva %s", TheGameLogic != nullptr ? TheGameLogic->getFrame() : 0u, TheEvaMessageNames[messageToPlay] );
 
   // DEBUG_LOG( ( "Eva message %s play requested", messageToName( messageToPlay).str() ) );
 }

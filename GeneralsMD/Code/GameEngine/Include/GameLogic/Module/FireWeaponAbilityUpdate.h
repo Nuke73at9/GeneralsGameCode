@@ -34,6 +34,13 @@
 // WhichSpecialWeapon (1 to 3): SAGE's SPECIAL_WEAPON_ONE to THREE while the ability is under way (Kane's
 // Wrath's Temple of Nod launches its missile in SPECIAL_WEAPON_ONE and UNPACKING).
 //
+// Tiberium Project @feature a beam (SAGE's BeamSpecialAbilityUpdate): BeamWeapon fired at the target object every
+// BeamInterval while the target stands, within AbilityAbortRange (0: any distance), the unit told nothing else, for
+// BeamTime (0: for as long). Kane's Wrath's Beam Cannon charges an Obelisk of Light so (its weapon's attribute
+// modifier, for a while each time: the weapon's AttributeModifierDuration). With BeamReflector the target must stand
+// within BeamReflectorReach of one of the unit's side's of those (Kane's Wrath's Venom): BeamReflectorWeapon is fired
+// at the reflector and BeamWeapon from it at the target (the Beam Cannon's reflector attack).
+//
 //   Behavior = SpecialAbility ModuleTag_SatchelPower
 //     SpecialPowerTemplate = C4SP_SatchelCharge
 //   End
@@ -95,10 +102,22 @@ public:
 	AudioEventRTS m_unpackSound;
 	AudioEventRTS m_triggerSound;
 	Int m_whichSpecialWeapon;				///< Tiberium Project: SPECIAL_WEAPON_ONE (1) to THREE (3) while it is under way (0: none)
+	// Tiberium Project @feature a beam
+	AsciiString m_beamWeaponName;
+	UnsignedInt m_beamTime;					///< frames (0: until the unit is told otherwise)
+	UnsignedInt m_beamInterval;			///< frames between its shots
+	Real m_abortRange;							///< 0: none
+	std::vector<AsciiString> m_reflectorNames;
+	Real m_reflectorReach;
+	AsciiString m_reflectorWeaponName;
 
 	FireWeaponAbilityUpdateModuleData()
 	{
 		m_whichSpecialWeapon = 0;
+		m_beamTime = 0;
+		m_beamInterval = LOGICFRAMES_PER_SECOND / 4;
+		m_abortRange = 0.0f;
+		m_reflectorReach = 0.0f;
 		m_specialPowerTemplate = nullptr;
 		m_startAbilityRange = 0.0f;
 		m_unpackTime = m_preparationTime = m_packTime = 0;
@@ -139,6 +158,13 @@ public:
 			{ "UnpackSound",				INI::parseAudioEventRTS,		nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_unpackSound ) },
 			{ "TriggerSound",			INI::parseAudioEventRTS,		nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_triggerSound ) },
 			{ "WhichSpecialWeapon",		INI::parseInt,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_whichSpecialWeapon ) },	// Tiberium Project
+			{ "BeamWeapon",				INI::parseAsciiString,			nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_beamWeaponName ) },	// Tiberium Project
+			{ "BeamTime",				INI::parseDurationUnsignedInt,	nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_beamTime ) },
+			{ "BeamInterval",			INI::parseDurationUnsignedInt,	nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_beamInterval ) },
+			{ "AbilityAbortRange",		INI::parseReal,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_abortRange ) },
+			{ "BeamReflector",			INI::parseAsciiStringVectorAppend,	nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_reflectorNames ) },
+			{ "BeamReflectorReach",		INI::parseReal,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_reflectorReach ) },
+			{ "BeamReflectorWeapon",		INI::parseAsciiString,			nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_reflectorWeaponName ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 		p.add( dataFieldParse );
@@ -171,6 +197,7 @@ public:
 	virtual Bool isPowerCurrentlyInUse( const CommandButton *command = nullptr ) const override { return m_stage != STAGE_IDLE; }
 
 	virtual UpdateSleepTime update() override;
+	Object *findReflector( const Object *target ) const;	///< Tiberium Project: the beam's reflector nearest the target
 	// Tiberium Project: in the air the unit is held (and may be disabled on the way), and still flies on
 	virtual DisabledMaskType getDisabledTypesToProcess() const override { return m_stage == STAGE_LEAP ? DISABLEDMASK_ALL : DISABLEDMASK_NONE; }
 
