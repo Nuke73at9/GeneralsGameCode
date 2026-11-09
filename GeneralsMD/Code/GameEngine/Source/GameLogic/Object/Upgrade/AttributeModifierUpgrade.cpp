@@ -44,6 +44,17 @@ void AttributeModifierUpgrade::upgradeImplementation()
 }
 
 //-------------------------------------------------------------------------------------------------
+// the upgrade taken off (UndoWhenRemoved): its modifier too
+//-------------------------------------------------------------------------------------------------
+void AttributeModifierUpgrade::undoUpgradeImplementation()
+{
+	Object *obj = getObject();
+	const AttributeModifierTemplate *tmpl = TheAttributeModifierStore->find( getAttributeModifierUpgradeModuleData()->m_modifier );
+	if( tmpl != nullptr )
+		obj->removeAttributeModifier( tmpl, obj->getID() );
+}
+
+//-------------------------------------------------------------------------------------------------
 void AttributeModifierUpgrade::crc( Xfer *xfer )
 {
 	UpgradeModule::crc( xfer );

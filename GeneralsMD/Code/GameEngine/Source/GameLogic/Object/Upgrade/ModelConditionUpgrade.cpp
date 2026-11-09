@@ -81,6 +81,17 @@ void ModelConditionUpgrade::upgradeImplementation()
 		me->setModelConditionState(data->m_conditionFlag);
 }
 
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the upgrade taken off (UndoWhenRemoved): its flag too (the look of Kane's
+// Wrath's building fields)
+//-------------------------------------------------------------------------------------------------
+void ModelConditionUpgrade::undoUpgradeImplementation()
+{
+	const ModelConditionUpgradeModuleData *data = getModelConditionUpgradeModuleData();
+	if( data->m_conditionFlag != MODELCONDITION_INVALID )
+		getObject()->clearModelConditionState(data->m_conditionFlag);
+}
+
 // ------------------------------------------------------------------------------------------------
 /** CRC */
 // ------------------------------------------------------------------------------------------------

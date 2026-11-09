@@ -1647,6 +1647,13 @@ Bool ActionManager::canDoSpecialPowerAtObject( const Object *obj, const Object *
 		return FALSE;
 	}
 
+	// Tiberium Project @feature SAGE's target filter's rejected statuses: Kane's Wrath's satchel charges are
+	// not placed on a building inside its Sonic Repulsion Field or Laser Fencing
+	if( spTemplate->getForbiddenTargetStatus().any() && target->getStatusBits().testForAny( spTemplate->getForbiddenTargetStatus() ) )
+	{
+		return FALSE;
+	}
+
 	Relationship r = obj->getRelationship(target);
 
 	SpecialPowerModuleInterface *mod = obj->getSpecialPowerModule( spTemplate );

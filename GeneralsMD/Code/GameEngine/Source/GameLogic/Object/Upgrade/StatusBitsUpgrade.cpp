@@ -107,6 +107,17 @@ void StatusBitsUpgrade::upgradeImplementation()
 	obj->clearStatus( getStatusBitsUpgradeModuleData()->m_statusToClear );
 }
 
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the upgrade taken off (UndoWhenRemoved): the statuses as they were (Kane's
+// Wrath's building fields, whose status turns satchel charges away)
+//-------------------------------------------------------------------------------------------------
+void StatusBitsUpgrade::undoUpgradeImplementation()
+{
+	Object *obj = getObject();
+	obj->clearStatus( getStatusBitsUpgradeModuleData()->m_statusToSet );
+	obj->setStatus( getStatusBitsUpgradeModuleData()->m_statusToClear );
+}
+
 // ------------------------------------------------------------------------------------------------
 /** CRC */
 // ------------------------------------------------------------------------------------------------

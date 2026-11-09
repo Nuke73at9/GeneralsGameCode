@@ -36,6 +36,7 @@
 #include "Common/SubsystemInterface.h"
 #include "Common/BitFlags.h"
 #include "Common/KindOf.h"
+#include "Common/ObjectStatusTypes.h"	// Tiberium Project
 #include "Common/Overridable.h"
 #include "Common/Override.h"
 
@@ -152,6 +153,7 @@ public:
 	const KindOfMaskType &getAIKinds() const { return getFO()->m_aiKinds; }
 	const KindOfMaskType &getAIForbiddenKinds() const { return getFO()->m_aiForbiddenKinds; }
 	Real getAIDistance() const { return getFO()->m_aiDistance; }
+	const ObjectStatusMaskType &getForbiddenTargetStatus() const { return getFO()->m_forbiddenTargetStatus; }	///< Tiberium Project: not aimed at an object with any of these
 
 	static void parseAIUse( INI *ini, void *instance, void *store, const void *userData );
 
@@ -182,6 +184,7 @@ private:
 	KindOfMaskType		m_aiKinds;					///< ... the kinds it is used on (any of them)
 	KindOfMaskType		m_aiForbiddenKinds;	///< ... and not on
 	Real							m_aiDistance;				///< ... how far back from a fight reinforcements come
+	ObjectStatusMaskType	m_forbiddenTargetStatus;	///< Tiberium Project: SAGE's target filter's rejected statuses (Kane's Wrath's satchel charges and a building's field)
 
 	static const FieldParse m_specialPowerFieldParse[];		///< the parse table
 

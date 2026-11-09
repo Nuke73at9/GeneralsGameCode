@@ -1238,6 +1238,49 @@ void TiberiumTest::update()
 				obj->getAIUpdateInterface()->aiEnter( into, CMD_FROM_PLAYER );
 			log( "frame %d: ui: enter %s%s", (int)s_frame, step.arg.c_str(), obj != nullptr && into != nullptr ? "" : " (no such object)" );
 		}
+		else if ( step.action == "hurt" && TheGameLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) "hurt=k,amount,TYPE": the k-th spawned object takes that much
+			// damage of the type (its armour applies), from nobody
+			Int k = -1;
+			Real amount = 0.0f;
+			char type[64] = "EXPLOSION";
+			sscanf( step.arg.c_str(), "%d,%f,%63s", &k, &amount, type );
+			Object *obj = k >= 0 && k < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[k] ) : nullptr;
+			Int t = 0;
+			while ( DamageTypeFlags::s_bitNameList[t] != nullptr && stricmp( DamageTypeFlags::s_bitNameList[t], type ) != 0 )
+				++t;
+			BodyModuleInterface *body = obj != nullptr ? obj->getBodyModule() : nullptr;
+			const Real before = body != nullptr ? body->getHealth() : 0.0f;
+			if ( body != nullptr && DamageTypeFlags::s_bitNameList[t] != nullptr )
+			{
+				DamageInfo damage;
+				damage.in.m_damageType = (DamageType)t;
+				damage.in.m_deathType = DEATH_NORMAL;
+				damage.in.m_sourceID = INVALID_ID;
+				damage.in.m_amount = amount;
+				obj->attemptDamage( &damage );
+			}
+			log( "frame %d: ui: hurt %s: health %.0f to %.0f%s", (int)s_frame, step.arg.c_str(), before,
+				body != nullptr ? body->getHealth() : 0.0f, body != nullptr && DamageTypeFlags::s_bitNameList[t] != nullptr ? "" : " (no such object or type)" );
+		}
+		else if ( step.action == "grant" && TheGameLogic != nullptr && TheUpgradeCenter != nullptr )
+		{
+			// Tiberium Project @feature (the test) "grant=k,Upgrade[,target]": the k-th spawned object (or the fight
+			// target made for it) is given the object upgrade (a building's field, as its power gives it)
+			Int k = -1;
+			char name[128] = "";
+			char which[16] = "";
+			sscanf( step.arg.c_str(), "%d,%127[^,],%15s", &k, name, which );
+			ObjectID id = INVALID_ID;
+			if ( k >= 0 && k < (Int)s_spawned.size() )
+				id = strcmp( which, "target" ) == 0 ? ( k < (Int)s_spawnTargets.size() ? s_spawnTargets[k] : INVALID_ID ) : s_spawned[k];
+			Object *obj = TheGameLogic->findObjectByID( id );
+			const UpgradeTemplate *upgrade = TheUpgradeCenter->findUpgrade( AsciiString( name ) );
+			if ( obj != nullptr && upgrade != nullptr )
+				obj->giveUpgrade( upgrade );
+			log( "frame %d: ui: grant %s%s", (int)s_frame, step.arg.c_str(), obj != nullptr && upgrade != nullptr ? "" : " (no such object or upgrade)" );
+		}
 		else if ( ( step.action == "moveto" || step.action == "kill" ) && TheGameLogic != nullptr )
 		{
 			// "moveto=k,x,y": the k-th spawned object told to move there; "kill=k": it is destroyed (killed)
@@ -1976,7 +2019,15 @@ void TiberiumTest::update()
 				const BodyModuleInterface *body = obj->getBodyModule();
 				const Player *me = ThePlayerList != nullptr ? ThePlayerList->getLocalPlayer() : nullptr;
 				const CellShroudStatus seen = me != nullptr ? ThePartitionManager->getShroudStatusForPlayer( me->getPlayerIndex(), obj->getPosition() ) : CELLSHROUD_SHROUDED;
-				log( "frame %d: ui: state %s #%u player %d at %.0f %.0f (%s to me): health %.0f of %.0f%s%s%s, sight %.0f, dodge %.2f, reflect %.2f, %d modifiers%s, upgrades %s, veterancy %d",
+				// (Kane's Wrath's building fields: the upgraded armour, the field's status and its look)
+				BodyModuleInterface *armourBody = obj->getBodyModule();
+				const Drawable *look = obj->getDrawable();
+				char field[96];
+				snprintf( field, sizeof( field ), "%s%s%s",
+					armourBody != nullptr && armourBody->testArmorSetFlag( ARMORSET_PLAYER_UPGRADE ) ? ", armour upgraded" : "",
+					obj->testStatus( OBJECT_STATUS_RIDER1 ) ? ", RIDER1" : "",
+					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_USER_6 ) ? ", USER_6" : "" );
+				log( "frame %d: ui: state %s #%u player %d at %.0f %.0f (%s to me): health %.0f of %.0f%s%s%s, sight %.0f, dodge %.2f, reflect %.2f, %d modifiers%s, upgrades %s, veterancy %d%s",
 					(int)s_frame, step.arg.c_str(), (unsigned)obj->getID(),
 					obj->getControllingPlayer() != nullptr ? (int)obj->getControllingPlayer()->getPlayerIndex() : -1,
 					obj->getPosition()->x, obj->getPosition()->y,
@@ -1988,7 +2039,7 @@ void TiberiumTest::update()
 					obj->getVisionRange(), obj->getDodgeChance(), obj->getAttributeModifierChance( MODIFIER_CHANCE_REFLECT ),
 					obj->hasAttributeModifiers() ? 1 : 0,
 					obj->getAttributeModifierScalar( MODIFIER_DAMAGE ) != 1.0f ? " (damage scaled)" : "",
-					obj->getObjectCompletedUpgradeMask().any() ? "some" : "none", (int)obj->getVeterancyLevel() );
+					obj->getObjectCompletedUpgradeMask().any() ? "some" : "none", (int)obj->getVeterancyLevel(), field );
 			}
 			if ( shown == 0 )
 				log( "frame %d: ui: state %s: none", (int)s_frame, step.arg.c_str() );

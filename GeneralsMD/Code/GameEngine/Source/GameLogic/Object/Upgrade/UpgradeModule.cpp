@@ -214,6 +214,10 @@ Bool UpgradeMux::resetUpgrade( const UpgradeMaskType& keyMask )
 	if( keyMask.testForAny( activation ) && m_upgradeExecuted )
 	{
 		m_upgradeExecuted = false;
+		// Tiberium Project @feature and what it did, when the module says so (UndoWhenRemoved): Kane's
+		// Wrath's building fields go as the building falls below two thirds of its health
+		if( undoesWhenRemoved() )
+			undoUpgradeImplementation();
 		return true;
 	}
 	return false;

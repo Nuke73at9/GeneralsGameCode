@@ -104,6 +104,18 @@ void ArmorUpgrade::upgradeImplementation()
 	}
 }
 
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the upgrade taken off (UndoWhenRemoved): its armour too (Kane's Wrath's
+// building fields)
+//-------------------------------------------------------------------------------------------------
+void ArmorUpgrade::undoUpgradeImplementation()
+{
+	Object *obj = getObject();
+	BodyModuleInterface* body = obj ? obj->getBodyModule() : nullptr;
+	if ( body )
+		body->clearArmorSetFlag( ARMORSET_PLAYER_UPGRADE );
+}
+
 // ------------------------------------------------------------------------------------------------
 /** CRC */
 // ------------------------------------------------------------------------------------------------

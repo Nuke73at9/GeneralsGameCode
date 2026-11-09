@@ -39,6 +39,7 @@
 #include "Common/Team.h"
 #include "Common/Thing.h"
 #include "Common/ThingTemplate.h"
+#include "Common/Upgrade.h"	// Tiberium Project
 #include "Common/Xfer.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/Drawable.h"
@@ -155,9 +156,25 @@ void ActiveBodyModuleData::buildFieldParse(MultiIniFieldParse& p)
 		// Tiberium Project @feature C&C4's dodge: the chance a shot at it misses, and the most modifiers make it
 		{ "DodgePercentage",					INI::parsePercentToReal,				nullptr,		offsetof( ActiveBodyModuleData, m_dodgePercentage ) },
 		{ "DodgePercentageMax",				INI::parsePercentToReal,				nullptr,		offsetof( ActiveBodyModuleData, m_dodgePercentageMax ) },
+		// Tiberium Project @feature SAGE's DamageTrigger: "DamageTrigger = 66% Upgrade [Upgrade ...]"
+		{ "DamageTrigger",						ActiveBodyModuleData::parseDamageTrigger,	nullptr,	0 },
 		{ nullptr, nullptr, nullptr, 0 }
 	};
   p.add(dataFieldParse);
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature SAGE's DamageTrigger (HealthLevelBelowPercent, RemoveUpgrade): the health
+// level, then the object upgrades that come off below it; one line each
+//-------------------------------------------------------------------------------------------------
+void ActiveBodyModuleData::parseDamageTrigger( INI *ini, void *instance, void * /*store*/, const void * /*userData*/ )
+{
+	ActiveBodyModuleData *self = (ActiveBodyModuleData *)instance;
+	DamageTrigger trigger;
+	trigger.m_healthBelow = INI::scanPercentToReal( ini->getNextToken() );
+	for( const char *token = ini->getNextTokenOrNull(); token != nullptr; token = ini->getNextTokenOrNull() )
+		trigger.m_removeUpgrades.push_back( AsciiString( token ) );
+	self->m_damageTriggers.push_back( trigger );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -636,6 +653,9 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 
 				d->onDamage( damageInfo );
 			}
+
+			// Tiberium Project @feature SAGE's DamageTrigger: the upgrades its health has now fallen below
+			checkDamageTriggers();
 		}
 
 		if (m_curDamageState != oldState)
@@ -811,6 +831,32 @@ Bool ActiveBody::shouldRetaliate(Object *obj)
 }
 
 //-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature SAGE's DamageTrigger: below a trigger's health level, the object upgrades it
+// names come off the object, with what their modules did where they say so (UndoWhenRemoved): Kane's
+// Wrath's Sonic Repulsion Field and Laser Fencing fall as their building drops below two thirds
+//-------------------------------------------------------------------------------------------------
+void ActiveBody::checkDamageTriggers()
+{
+	const ActiveBodyModuleData *data = getActiveBodyModuleData();
+	if( data->m_damageTriggers.empty() || m_maxHealth <= 0.0f )
+		return;
+
+	Object *obj = getObject();
+	const Real level = m_currentHealth / m_maxHealth;
+	for( std::vector<ActiveBodyModuleData::DamageTrigger>::const_iterator it = data->m_damageTriggers.begin(); it != data->m_damageTriggers.end(); ++it )
+	{
+		if( level >= it->m_healthBelow )
+			continue;
+		for( std::vector<AsciiString>::const_iterator name = it->m_removeUpgrades.begin(); name != it->m_removeUpgrades.end(); ++name )
+		{
+			const UpgradeTemplate *upgrade = TheUpgradeCenter->findUpgrade( *name );
+			if( upgrade != nullptr && upgrade->getUpgradeType() == UPGRADE_TYPE_OBJECT && obj->hasUpgrade( upgrade ) )
+				obj->removeUpgrade( upgrade );
+		}
+	}
+}
+
 //-------------------------------------------------------------------------------------------------
 void ActiveBody::attemptHealing( DamageInfo *damageInfo )
 {

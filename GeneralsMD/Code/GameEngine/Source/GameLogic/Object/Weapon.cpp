@@ -205,6 +205,7 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "ScatterFX",								INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_scatterFX) },	// Tiberium Project
 	{ "VictimKindOf",								KindOfMaskType::parseFromINI,						nullptr,							offsetof(WeaponTemplate, m_victimKindOf) },	// Tiberium Project
 	{ "VictimForbiddenKindOf",						KindOfMaskType::parseFromINI,						nullptr,							offsetof(WeaponTemplate, m_victimForbiddenKindOf) },	// Tiberium Project
+	{ "ForbiddenTargetObjectStatus",			ObjectStatusMaskType::parseFromINI,			nullptr,							offsetof(WeaponTemplate, m_forbiddenTargetStatus) },	// Tiberium Project
 	{ "ImpactFX",										INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_impactFX) },	// Tiberium Project
 	{ "ParalyzeType",								INI::parseIndexList,									DisabledMaskType::s_bitNameList,	offsetof(WeaponTemplate, m_paralyzeType) },	// Tiberium Project
 	{ "ParalyzeTime",								INI::parseDurationUnsignedInt,				nullptr,							offsetof(WeaponTemplate, m_paralyzeFrames) },	// Tiberium Project
@@ -317,6 +318,7 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_paralyzeFX = nullptr;
 	m_victimFX[0] = m_victimFX[1] = m_victimFX[2] = nullptr;	// Tiberium Project
 	m_canBeDodged = TRUE;	// Tiberium Project
+	m_forbiddenTargetStatus.clear();
 	m_victimVeterancy = 0;
 	m_jamRadarFrames = 0;
 	for (Int i = LEVEL_FIRST; i <= LEVEL_LAST; ++i)
@@ -631,6 +633,11 @@ Real WeaponTemplate::estimateWeaponTemplateDamage(
 	const WeaponBonus& bonus
 ) const
 {
+	// Tiberium Project @feature not aimed at what it may not be (SAGE's ForbiddenTargetObjectStatus: Kane's
+	// Wrath's commandos' satchel charges and a building inside its Sonic Repulsion Field or Laser Fencing)
+	if (victimObj != nullptr && !isTargetStatusAllowed(victimObj))
+		return 0.0f;
+
 	// Tiberium Project @feature its own damage where it may hurt the victim's kind, and its follow-ups' (a weapon whose
 	// damage comes later or over time is still one that hurts: C&C4's depth charges, its flames)
 	Real total = (victimObj == nullptr || isVictimKindAllowed(victimObj)) ? estimateOwnDamage(sourceObj, victimObj, victimPos, bonus) : 0.0f;
@@ -650,6 +657,13 @@ Bool WeaponTemplate::isVictimKindAllowed(const Object *victim) const
 	if (m_victimKindOf.any() && !victim->isAnyKindOf(m_victimKindOf))
 		return false;
 	return !victim->isAnyKindOf(m_victimForbiddenKindOf);
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature
+Bool WeaponTemplate::isTargetStatusAllowed(const Object *victim) const
+{
+	return !m_forbiddenTargetStatus.any() || !victim->getStatusBits().testForAny(m_forbiddenTargetStatus);
 }
 
 //-------------------------------------------------------------------------------------------------

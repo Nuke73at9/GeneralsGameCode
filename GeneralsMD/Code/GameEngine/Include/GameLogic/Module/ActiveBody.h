@@ -58,9 +58,19 @@ public:
 	Real m_dodgePercentage;									///< Tiberium Project: the chance a shot at it misses (C&C4's)
 	Real m_dodgePercentageMax;							///< ... and the most its modifiers may make it
 
+	/// Tiberium Project @feature SAGE's DamageTrigger: once damage leaves its health below the level, the
+	/// object upgrades named come off it (Kane's Wrath's building fields fall below two thirds)
+	struct DamageTrigger
+	{
+		Real m_healthBelow;											///< of its most health (0..1)
+		std::vector<AsciiString> m_removeUpgrades;
+	};
+	std::vector<DamageTrigger> m_damageTriggers;
+
 	ActiveBodyModuleData();
 
 	static void buildFieldParse(MultiIniFieldParse& p);
+	static void parseDamageTrigger( INI *ini, void *instance, void *store, const void *userData );
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -146,6 +156,8 @@ protected:
 	Bool shouldRetaliateAgainstAggressor(Object *obj, Object *damager);
 
 	virtual void internalAddSubdualDamage( Real delta );								///< change health
+
+	void checkDamageTriggers();	///< Tiberium Project: the upgrades its health has fallen below keeping
 
 private:
 

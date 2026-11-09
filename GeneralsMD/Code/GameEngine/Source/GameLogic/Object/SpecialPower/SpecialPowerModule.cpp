@@ -738,6 +738,13 @@ Bool SpecialPowerModule::canPayForPower() const
 //-------------------------------------------------------------------------------------------------
 Bool SpecialPowerModule::isRefusedByUpdate( const Object *targetObj, const Coord3D *targetPos )
 {
+	// Tiberium Project @feature SAGE's target filter's rejected statuses (ForbiddenTargetObjectStatus): Kane's
+	// Wrath's satchel charges are not placed on a building inside its field
+	const SpecialPowerTemplate *sp = getSpecialPowerModuleData()->m_specialPowerTemplate;
+	if( targetObj != nullptr && sp != nullptr && sp->getForbiddenTargetStatus().any()
+			&& targetObj->getStatusBits().testForAny( sp->getForbiddenTargetStatus() ) )
+		return TRUE;
+
 	for( BehaviorModule** u = getObject()->getBehaviorModules(); *u; ++u )
 	{
 		const SpecialPowerUpdateInterface* spu = (*u)->getSpecialPowerUpdateInterface();

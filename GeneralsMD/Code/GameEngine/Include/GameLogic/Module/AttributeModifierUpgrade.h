@@ -71,6 +71,7 @@ public:
 
 protected:
 	virtual void upgradeImplementation() override;
+	virtual void undoUpgradeImplementation() override;	///< the modifier off again (UndoWhenRemoved)
 	virtual Bool isSubObjectsUpgrade() override { return false; }
 
 };

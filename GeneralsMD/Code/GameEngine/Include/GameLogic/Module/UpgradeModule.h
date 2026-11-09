@@ -73,6 +73,7 @@ public:
 	mutable UpgradeMaskType						m_activationMask;				///< Activation only supports a single name currently
 	mutable UpgradeMaskType						m_conflictingMask;			///< Conflicts support multiple listings, and they are an OR
 	mutable Bool											m_requiresAllTriggers;
+	mutable Bool											m_undoWhenRemoved;			///< Tiberium Project: its effect comes off with its upgrade (SAGE's)
 
 	UpgradeMuxData()
 	{
@@ -85,6 +86,7 @@ public:
 		m_activationMask.clear();
 		m_conflictingMask.clear();
 		m_requiresAllTriggers = false;
+		m_undoWhenRemoved = false;
 	}
 
 	static const FieldParse* getFieldParse()
@@ -96,6 +98,9 @@ public:
 			{ "RemovesUpgrades",INI::parseAsciiStringVector, nullptr, offsetof( UpgradeMuxData, m_removalUpgradeNames ) },
 			{ "FXListUpgrade",	INI::parseFXList, nullptr, offsetof( UpgradeMuxData, m_fxListUpgrade ) },
 			{ "RequiresAllTriggers", INI::parseBool, nullptr, offsetof( UpgradeMuxData, m_requiresAllTriggers ) },
+			// Tiberium Project @feature SAGE's upgrades that end: when the upgrade is taken off the object
+			// (a DamageTrigger, RemovesUpgrades), so is what the module did (Kane's Wrath's building fields)
+			{ "UndoWhenRemoved",	INI::parseBool, nullptr, offsetof( UpgradeMuxData, m_undoWhenRemoved ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 		return dataFieldParse;
@@ -132,6 +137,9 @@ protected:
 	virtual void performUpgradeFX() = 0;	///< perform the associated fx list
 	virtual Bool requiresAllActivationUpgrades() const = 0;
 	virtual void processUpgradeRemoval() = 0;
+	// Tiberium Project @feature what the upgrade did, taken back off as it is removed (UndoWhenRemoved)
+	virtual Bool undoesWhenRemoved() const { return false; }
+	virtual void undoUpgradeImplementation() { }
 
 	void giveSelfUpgrade();
 
@@ -194,6 +202,11 @@ protected:
 	virtual Bool requiresAllActivationUpgrades() const override
 	{
 		return getUpgradeModuleData()->m_upgradeMuxData.m_requiresAllTriggers;
+	}
+
+	virtual Bool undoesWhenRemoved() const override	// Tiberium Project
+	{
+		return getUpgradeModuleData()->m_upgradeMuxData.m_undoWhenRemoved;
 	}
 
 	virtual void getUpgradeActivationMasks(UpgradeMaskType& activation, UpgradeMaskType& conflicting) const override
