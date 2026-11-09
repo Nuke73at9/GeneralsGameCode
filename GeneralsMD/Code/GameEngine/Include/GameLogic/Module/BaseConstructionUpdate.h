@@ -40,6 +40,7 @@
 #include <vector>
 
 class ThingTemplate;
+class Team;
 
 //-------------------------------------------------------------------------------------------------
 class BaseConstructionUpdateModuleData : public UpdateModuleData
@@ -89,6 +90,13 @@ public:
 	Bool isWithinBuildRadius( const Coord3D *where ) const;
 
 	virtual UpdateSleepTime update() override;
+
+	/// a structure that rises where it stands with nobody building it (a placed one of the yard's, a Nod hub's
+	/// turret: CompositeStructureUpdate): made unbuilt at the spot with 1 health, its build-up's first frame;
+	/// null if it could not be made
+	static Object *startRising( const ThingTemplate *what, Team *team, Object *producer, const Coord3D *where, Real angle );
+	/// one frame of its rising over `frames`: TRUE once it is done (finished as a dozer's building is)
+	static Bool riseStep( Object *obj, UnsignedInt frames, Object *producer );
 
 private:
 

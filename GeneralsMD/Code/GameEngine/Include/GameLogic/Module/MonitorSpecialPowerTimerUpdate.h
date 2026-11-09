@@ -59,6 +59,8 @@ public:
 	// virtual destructor prototype provided by memory pool declaration
 
 	virtual UpdateSleepTime update() override;
+	// (also while the building is unpowered or otherwise disabled: what it shows follows the power's timer)
+	virtual DisabledMaskType getDisabledTypesToProcess() const override { return DISABLEDMASK_ALL; }
 
 private:
 

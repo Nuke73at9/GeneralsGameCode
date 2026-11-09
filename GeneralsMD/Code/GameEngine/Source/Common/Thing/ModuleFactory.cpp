@@ -147,6 +147,7 @@
 #include "GameLogic/Module/ModifierAbilityUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/DecoyArmyUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/MonitorSpecialPowerTimerUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/CompositeStructureUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/SupportMeterUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/StrafeAreaUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/AttributeModifierAuraUpdate.h"	// Tiberium Project
@@ -428,6 +429,7 @@ void ModuleFactory::init()
 	addModule( ModifierAbilityUpdate );	// Tiberium Project
 	addModule( DecoyArmyUpdate );	// Tiberium Project
 	addModule( MonitorSpecialPowerTimerUpdate );	// Tiberium Project
+	addModule( CompositeStructureUpdate );	// Tiberium Project
 	addModule( SupportMeterUpdate );	// Tiberium Project
 	addModule( StrafeAreaUpdate );	// Tiberium Project
 	addModule( AttributeModifierAuraUpdate );	// Tiberium Project

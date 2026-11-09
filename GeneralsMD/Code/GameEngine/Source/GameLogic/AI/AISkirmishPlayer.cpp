@@ -580,7 +580,9 @@ void AISkirmishPlayer::buildAIBaseDefense(Bool flank)
 		resInfo = resInfo->m_next;
 	}
 	if (resInfo) {
-		buildAIBaseDefenseStructure(resInfo->m_baseDefenseStructure1, flank);
+		// Tiberium Project @feature the AI's stand-ins (AIData UnitStandIn) for a defence the mod's builders no
+		// longer build (Kane's Wrath's in Zero Hour's place: each defence the next of them)
+		buildAIBaseDefenseStructure(TheAI->getUnitStandIn(resInfo->m_baseDefenseStructure1, m_curFrontBaseDefense + m_curFlankBaseDefense), flank);
 	}
 }
 
@@ -1095,6 +1097,11 @@ void AISkirmishPlayer::newMap()
 	while (build) {
 		if (build->m_side == mySide) {
 			BuildListInfo *buildList = build->m_buildList->duplicate();
+			// Tiberium Project @feature the AI's stand-ins (AIData UnitStandIn) for the structures of its build list
+			// the mod's builders no longer build (Zero Hour's defences: Kane's Wrath's in their place)
+			Int standIn = 0;
+			for( BuildListInfo *info = buildList; info; info = info->getNext() )
+				info->setTemplateName( TheAI->getUnitStandIn( info->getTemplateName(), standIn++ ) );
 			adjustBuildList(buildList); // adjust to  our start position.
 			m_player->setBuildList(buildList);
 			computeCenterAndRadiusOfBase(&m_baseCenter, &m_baseRadius);

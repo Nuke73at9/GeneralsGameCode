@@ -497,10 +497,13 @@ namespace
 	/** a construction yard's structures (BaseConstructionUpdate's command set) on the Base tab */
 	void collectYard( Object *obj, BaseConstructionUpdate *base )
 	{
+		// (its set and the pages its page buttons lead to)
 		const CommandSet *set = TheControlBar->findCommandSet( base->getCommandSetName() );
-		for( Int i = 0; set != nullptr && i < MAX_COMMANDS_PER_SET; ++i )
+		const CommandSet *pages[ ControlBar::MAX_COMMAND_SET_PAGES ];
+		const Int pageCount = TheControlBar->getCommandSetPages( set, pages, ControlBar::MAX_COMMAND_SET_PAGES );
+		for( Int i = 0; i < MAX_COMMANDS_PER_SET * pageCount; ++i )
 		{
-			const CommandButton *b = set->getCommandButton( i );
+			const CommandButton *b = pages[ i / MAX_COMMANDS_PER_SET ]->getCommandButton( i % MAX_COMMANDS_PER_SET );
 			if( b == nullptr || b->getCommandType() != GUI_COMMAND_DOZER_CONSTRUCT || !base->builds( b->getThingTemplate() ) )
 				continue;
 			SidebarItem item = { b, b->getThingTemplate(), nullptr };

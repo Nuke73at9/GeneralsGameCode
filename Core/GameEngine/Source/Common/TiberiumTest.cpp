@@ -1304,11 +1304,23 @@ void TiberiumTest::update()
 		}
 		else if ( ( step.action == "moveto" || step.action == "kill" ) && TheGameLogic != nullptr )
 		{
-			// "moveto=k,x,y": the k-th spawned object told to move there; "kill=k": it is destroyed (killed)
+			// "moveto=k,x,y": the k-th spawned object told to move there; "kill=k": it is destroyed (killed);
+			// Tiberium Project @feature (the test) "kill=name:Template": the first of the local player's objects of
+			// that kind (what a structure made: a Nod hub's turret)
 			Int k = -1;
 			Real x = 0.0f, y = 0.0f;
 			sscanf( step.arg.c_str(), "%d,%f,%f", &k, &x, &y );
 			Object *obj = k >= 0 && k < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[k] ) : nullptr;
+			if ( step.arg.compare( 0, 5, "name:" ) == 0 && ThePlayerList != nullptr )
+			{
+				const std::string kind = step.arg.substr( 5 );
+				for ( Object *o = TheGameLogic->getFirstObject(); o != nullptr && obj == nullptr; o = o->getNextObject() )
+				{
+					if ( o->getControllingPlayer() == ThePlayerList->getLocalPlayer() && !o->isEffectivelyDead()
+						&& o->getTemplate()->getName().compareNoCase( kind.c_str() ) == 0 )
+						obj = o;
+				}
+			}
 			if ( obj != nullptr && step.action == "kill" )
 				obj->kill();
 			else if ( obj != nullptr && obj->getAIUpdateInterface() != nullptr )

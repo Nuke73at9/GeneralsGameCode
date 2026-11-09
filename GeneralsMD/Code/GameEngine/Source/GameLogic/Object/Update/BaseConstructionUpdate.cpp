@@ -27,6 +27,7 @@
 #include "Common/BuildAssistant.h"
 #include "Common/NameKeyGenerator.h"
 #include "Common/Player.h"
+#include "Common/Team.h"
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Upgrade.h"
@@ -96,10 +97,13 @@ const CommandButton *BaseConstructionUpdate::findButton( const ThingTemplate *wh
 	const BaseConstructionUpdateModuleData *d = getBaseConstructionUpdateModuleData();
 	if( what == nullptr || TheControlBar == nullptr || what->isAnyKindOf( d->m_excludeKindOf ) )
 		return nullptr;
+	// (the set and the pages its page buttons lead to: a dozer's set with more structures than one page holds)
 	const CommandSet *set = TheControlBar->findCommandSet( d->m_commandSetName );
-	for( Int i = 0; set != nullptr && i < MAX_COMMANDS_PER_SET; ++i )
+	const CommandSet *pages[ ControlBar::MAX_COMMAND_SET_PAGES ];
+	const Int pageCount = TheControlBar->getCommandSetPages( set, pages, ControlBar::MAX_COMMAND_SET_PAGES );
+	for( Int i = 0; i < MAX_COMMANDS_PER_SET * pageCount; ++i )
 	{
-		const CommandButton *b = set->getCommandButton( i );
+		const CommandButton *b = pages[ i / MAX_COMMANDS_PER_SET ]->getCommandButton( i % MAX_COMMANDS_PER_SET );
 		if( b != nullptr && b->getCommandType() == GUI_COMMAND_DOZER_CONSTRUCT && b->getThingTemplate() != nullptr
 			&& b->getThingTemplate()->isEquivalentTo( what ) )
 			return b;
@@ -195,6 +199,70 @@ Bool BaseConstructionUpdate::isWithinBuildRadius( const Coord3D *where ) const
 }
 
 //-------------------------------------------------------------------------------------------------
+// unbuilt at the spot, its build-up's first frame, with nobody building it (as a dozer starts one)
+//-------------------------------------------------------------------------------------------------
+Object *BaseConstructionUpdate::startRising( const ThingTemplate *what, Team *team, Object *producer, const Coord3D *where, Real angle )
+{
+	if( what == nullptr || team == nullptr || where == nullptr )
+		return nullptr;
+	Object *obj = TheThingFactory->newObject( what, team, MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_UNDER_CONSTRUCTION ) );
+	if( obj == nullptr )
+		return nullptr;
+	obj->setProducer( producer );
+	obj->setBuilder( producer );
+	obj->setPosition( where );
+	obj->setOrientation( angle );
+	TheTerrainLogic->flattenTerrain( obj );
+	Coord3D ground = *where;
+	ground.z = TheTerrainLogic->getGroundHeight( ground.x, ground.y );
+	obj->setPosition( &ground );
+	TheAI->pathfinder()->addObjectToPathfindMap( obj );
+	Player *player = team->getControllingPlayer();
+	if( player != nullptr )
+		player->onStructureCreated( producer, obj );
+	obj->setConstructionPercent( 0.0f );
+	BodyModuleInterface *body = obj->getBodyModule();
+	if( body != nullptr )
+		body->internalChangeHealth( -body->getHealth() + 1.0f );
+	obj->clearAndSetModelConditionFlags( MAKE_MODELCONDITION_MASK( MODELCONDITION_AWAITING_CONSTRUCTION ),
+		MAKE_MODELCONDITION_MASK2( MODELCONDITION_PARTIALLY_CONSTRUCTED, MODELCONDITION_ACTIVELY_BEING_CONSTRUCTED ) );
+	return obj;
+}
+
+//-------------------------------------------------------------------------------------------------
+// one frame of the rising over `frames`; done, it is finished as a dozer's building is
+//-------------------------------------------------------------------------------------------------
+Bool BaseConstructionUpdate::riseStep( Object *obj, UnsignedInt frames, Object *producer )
+{
+	const UnsignedInt unpack = max( (UnsignedInt)1, frames );
+	obj->setConstructionPercent( obj->getConstructionPercent() + 100.0f / (Real)unpack );
+	BodyModuleInterface *body = obj->getBodyModule();
+	if( body != nullptr )
+		body->internalChangeHealth( body->getMaxHealth() / (Real)unpack );
+	if( obj->getConstructionPercent() < 100.0f )
+		return FALSE;
+	obj->clearStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_UNDER_CONSTRUCTION ) );
+	obj->clearModelConditionFlags( MAKE_MODELCONDITION_MASK3( MODELCONDITION_AWAITING_CONSTRUCTION, MODELCONDITION_PARTIALLY_CONSTRUCTED, MODELCONDITION_ACTIVELY_BEING_CONSTRUCTED ) );
+	obj->setConstructionPercent( CONSTRUCTION_COMPLETE );
+	if( body != nullptr )
+		body->evaluateVisualCondition();
+	Player *owner = obj->getControllingPlayer();
+	if( owner != nullptr )
+	{
+		owner->onStructureConstructionComplete( producer, obj, FALSE );
+		for( BehaviorModule **m = obj->getBehaviorModules(); *m; ++m )
+		{
+			CreateModuleInterface *create = (*m)->getCreate();
+			if( create != nullptr )
+				create->onBuildComplete();
+		}
+	}
+	obj->handlePartitionCellMaintenance();
+	obj->updateUpgradeModules();
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
 Bool BaseConstructionUpdate::place( const Coord3D *where, Real angle )
 {
 	Object *me = getObject();
@@ -209,23 +277,9 @@ Bool BaseConstructionUpdate::place( const Coord3D *where, Real angle )
 		return FALSE;
 
 	// unbuilt, at the spot, rising (as a dozer starts one, with nobody building it)
-	Object *obj = TheThingFactory->newObject( m_building, player->getDefaultTeam(), MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_UNDER_CONSTRUCTION ) );
-	obj->setProducer( me );
-	obj->setBuilder( me );
-	obj->setPosition( &spot );
-	obj->setOrientation( angle );
-	TheTerrainLogic->flattenTerrain( obj );
-	Coord3D ground = spot;
-	ground.z = TheTerrainLogic->getGroundHeight( ground.x, ground.y );
-	obj->setPosition( &ground );
-	TheAI->pathfinder()->addObjectToPathfindMap( obj );
-	player->onStructureCreated( me, obj );
-	obj->setConstructionPercent( 0.0f );
-	BodyModuleInterface *body = obj->getBodyModule();
-	if( body != nullptr )
-		body->internalChangeHealth( -body->getHealth() + 1.0f );
-	obj->clearAndSetModelConditionFlags( MAKE_MODELCONDITION_MASK( MODELCONDITION_AWAITING_CONSTRUCTION ),
-		MAKE_MODELCONDITION_MASK2( MODELCONDITION_PARTIALLY_CONSTRUCTED, MODELCONDITION_ACTIVELY_BEING_CONSTRUCTED ) );
+	Object *obj = startRising( m_building, player->getDefaultTeam(), me, &spot, angle );
+	if( obj == nullptr )
+		return FALSE;
 	m_rising.push_back( obj->getID() );
 
 	m_building = nullptr;
@@ -260,34 +314,11 @@ UpdateSleepTime BaseConstructionUpdate::update()
 			m_rising.erase( m_rising.begin() + i );
 			continue;
 		}
-		obj->setConstructionPercent( obj->getConstructionPercent() + 100.0f / (Real)unpack );
-		BodyModuleInterface *body = obj->getBodyModule();
-		if( body != nullptr )
-			body->internalChangeHealth( body->getMaxHealth() / (Real)unpack );
-		if( obj->getConstructionPercent() < 100.0f )
+		if( !riseStep( obj, unpack, me ) )
 		{
 			++i;
 			continue;
 		}
-		// done (as a dozer's building is)
-		obj->clearStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_UNDER_CONSTRUCTION ) );
-		obj->clearModelConditionFlags( MAKE_MODELCONDITION_MASK3( MODELCONDITION_AWAITING_CONSTRUCTION, MODELCONDITION_PARTIALLY_CONSTRUCTED, MODELCONDITION_ACTIVELY_BEING_CONSTRUCTED ) );
-		obj->setConstructionPercent( CONSTRUCTION_COMPLETE );
-		if( body != nullptr )
-			body->evaluateVisualCondition();
-		Player *owner = obj->getControllingPlayer();
-		if( owner != nullptr )
-		{
-			owner->onStructureConstructionComplete( me, obj, FALSE );
-			for( BehaviorModule **m = obj->getBehaviorModules(); *m; ++m )
-			{
-				CreateModuleInterface *create = (*m)->getCreate();
-				if( create != nullptr )
-					create->onBuildComplete();
-			}
-		}
-		obj->handlePartitionCellMaintenance();
-		obj->updateUpgradeModules();
 		m_rising.erase( m_rising.begin() + i );
 	}
 

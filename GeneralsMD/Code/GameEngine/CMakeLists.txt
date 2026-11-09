@@ -409,6 +409,7 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/ModifierAbilityUpdate.h
     Include/GameLogic/Module/DecoyArmyUpdate.h
     Include/GameLogic/Module/MonitorSpecialPowerTimerUpdate.h
+    Include/GameLogic/Module/CompositeStructureUpdate.h
     Include/GameLogic/Module/SupportMeterUpdate.h
     Include/GameLogic/Module/StrafeAreaUpdate.h
     Include/GameLogic/Module/OrderAbilityUpdate.h
@@ -1082,6 +1083,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Update/ModifierAbilityUpdate.cpp
     Source/GameLogic/Object/Update/DecoyArmyUpdate.cpp
     Source/GameLogic/Object/Update/MonitorSpecialPowerTimerUpdate.cpp
+    Source/GameLogic/Object/Update/CompositeStructureUpdate.cpp
     Source/GameLogic/Object/Update/SupportMeterUpdate.cpp
     Source/GameLogic/Object/Update/StrafeAreaUpdate.cpp
     Source/GameLogic/Object/Update/OrderAbilityUpdate.cpp
