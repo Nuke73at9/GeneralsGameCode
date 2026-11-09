@@ -52,6 +52,9 @@ public:
 	// Tiberium Project @feature a use it would not go through with (a decoy army with nothing to copy): refused
 	// before it is paid for and its recharge starts
 	virtual Bool refusesSpecialPower( const SpecialPowerTemplate * /*specialPowerTemplate*/, const Object * /*targetObj*/, const Coord3D * /*targetPos*/ ) const { return FALSE; }
+	// Tiberium Project @feature a power it cannot use now, whatever the target (a toggle's power into the state it is
+	// in): its button shows it
+	virtual Bool isSpecialPowerUnavailable( const SpecialPowerTemplate * /*specialPowerTemplate*/ ) const { return FALSE; }
 };
 
 //-------------------------------------------------------------------------------------------------

@@ -27,6 +27,12 @@
 // differs), the unit standing still; with AutoRevertTime the second state ends by itself. The second
 // state can carry an attribute modifier (ToggledAttributeModifier: a burrowed unit's armour).
 //
+// Tiberium Project @feature SAGE's SwitchLocomotorsSpecialAbilityUpdate (Kane's Wrath's Shadow taking off on its
+// glider and landing): with OffSpecialPowerTemplate, the power switches into the second state only, and that one
+// only back; aimed at a spot, the unit first goes within OffStartAbilityRange of it (told to go elsewhere meanwhile,
+// it does not switch back). With LandOnSwitchBack, a unit above the ground as it switches back comes down to it,
+// held, over the switch.
+//
 //   Behavior = SpecialAbility ModuleTag_DeployPower
 //     SpecialPowerTemplate = C4SP_Deploy
 //   End
@@ -70,6 +76,9 @@ public:
 	Bool m_toggledWeaponSet;			///< WEAPONSET_ABILITY_TOGGLED in the second
 	Bool m_toggledLocomotor;			///< SET_NORMAL_UPGRADED in the second
 	NameKeyType m_toggledModifier;		///< an attribute modifier the second carries (AttributeModifier.h)
+	SpecialPowerTemplate *m_offSpecialPowerTemplate;	///< Tiberium Project: the power that only switches back (or none)
+	Real m_offStartAbilityRange;		///< how near the spot it goes first (0: it switches back where it is)
+	Bool m_landOnSwitchBack;			///< comes down to the ground as it switches back
 
 	ToggleAbilityUpdateModuleData()
 	{
@@ -81,6 +90,9 @@ public:
 		m_toggledWeaponSet = FALSE;
 		m_toggledLocomotor = FALSE;
 		m_toggledModifier = NAMEKEY_INVALID;
+		m_offSpecialPowerTemplate = nullptr;
+		m_offStartAbilityRange = 0.0f;
+		m_landOnSwitchBack = FALSE;
 	}
 
 	static void parseBackTime( INI *ini, void *instance, void *store, const void *userData )
@@ -107,6 +119,9 @@ public:
 			{ "ToggledWeaponSet",		INI::parseBool,					nullptr, offsetof( ToggleAbilityUpdateModuleData, m_toggledWeaponSet ) },
 			{ "ToggledLocomotor",		INI::parseBool,					nullptr, offsetof( ToggleAbilityUpdateModuleData, m_toggledLocomotor ) },
 			{ "ToggledAttributeModifier",	AttributeModifierStore::parseModifierName,	nullptr, offsetof( ToggleAbilityUpdateModuleData, m_toggledModifier ) },
+			{ "OffSpecialPowerTemplate",	INI::parseSpecialPowerTemplate,	nullptr, offsetof( ToggleAbilityUpdateModuleData, m_offSpecialPowerTemplate ) },
+			{ "OffStartAbilityRange",	INI::parseReal,					nullptr, offsetof( ToggleAbilityUpdateModuleData, m_offStartAbilityRange ) },
+			{ "LandOnSwitchBack",		INI::parseBool,					nullptr, offsetof( ToggleAbilityUpdateModuleData, m_landOnSwitchBack ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 		p.add( dataFieldParse );
@@ -139,6 +154,10 @@ public:
 	virtual Bool isPowerCurrentlyInUse( const CommandButton *command = nullptr ) const override { return m_switching; }
 	// Tiberium Project: held while it switches (it neither moves nor fires), and still switching on
 	virtual DisabledMaskType getDisabledTypesToProcess() const override { return m_switching ? DISABLEDMASK_ALL : DISABLEDMASK_NONE; }
+	// Tiberium Project @feature its power that switches in, or back, refused when it would do nothing (in that state
+	// already, or switching)
+	virtual Bool refusesSpecialPower( const SpecialPowerTemplate *specialPowerTemplate, const Object *targetObj, const Coord3D *targetPos ) const override;
+	virtual Bool isSpecialPowerUnavailable( const SpecialPowerTemplate *specialPowerTemplate ) const override;
 
 	virtual UpdateSleepTime update() override;
 
@@ -154,5 +173,11 @@ private:
 	UnsignedInt m_switchEndFrame;
 	UnsignedInt m_revertFrame;	///< when an auto-reverting second state ends (0: none)
 	Bool m_heldNoAttack;		///< Tiberium Project: it set NO_ATTACK for the switch (so clears it after)
+	Bool m_approaching;			///< Tiberium Project: going to the spot where it switches back
+	Bool m_moveIssued;
+	UnsignedInt m_approachStartFrame;
+	Coord3D m_offTarget;		///< that spot
+	Coord3D m_landFrom;			///< where it was as it began to come down (LandOnSwitchBack)
+	UnsignedInt m_switchStartFrame;
 
 };

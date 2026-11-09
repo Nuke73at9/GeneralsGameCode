@@ -641,6 +641,8 @@ protected:
 public:
 
 	StateID getCurrentStateID() const { return getStateMachine()->getCurrentStateID(); }	///< return the id of the current state of the machine
+	// Tiberium Project @feature its update at once (another module changed its locomotor: an idle unit's AI sleeps)
+	void friend_wakeUp() { wakeUpNow(); }
 /// @ todo -- srj sez: JBA NUKE THIS CODE, IT IS EVIL
 	void friend_addToWaypointGoalPath( const Coord3D *pathPoint ) { getStateMachine()->addToGoalPath(pathPoint); }
 

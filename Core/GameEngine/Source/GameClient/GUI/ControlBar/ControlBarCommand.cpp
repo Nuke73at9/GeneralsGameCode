@@ -1010,6 +1010,21 @@ const Image* ControlBar::calculateVeterancyOverlayForObject( const Object *obj )
 }
 
 //-------------------------------------------------------------------------------------------------
+#if RTS_ZEROHOUR
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature whether one of the object's abilities says it cannot use that power now
+static Bool isSpecialPowerUnavailable( const Object *obj, const SpecialPowerTemplate *power )
+{
+	for( BehaviorModule **m = obj->getBehaviorModules(); *m != nullptr; ++m )
+	{
+		const SpecialPowerUpdateInterface *spu = (*m)->getSpecialPowerUpdateInterface();
+		if( spu != nullptr && spu->isSpecialPowerUnavailable( power ) )
+			return TRUE;
+	}
+	return FALSE;
+}
+#endif
+
 static Int getRappellerCount(Object* obj)
 {
 	Int num = 0;
@@ -1448,6 +1463,13 @@ CommandAvailability ControlBar::getCommandAvailability( const CommandButton *com
 				GadgetButtonDrawInverseClock( applyToWin, percent, m_buildUpClockColor );
 				return COMMAND_NOT_READY;
 			}
+#if RTS_ZEROHOUR
+			// Tiberium Project @feature a power its ability cannot use now (a glider's landing while on the ground)
+			else if( isSpecialPowerUnavailable( obj, command->getSpecialPowerTemplate() ) )
+			{
+				return COMMAND_RESTRICTED;
+			}
+#endif
 			else if( SpecialAbilityUpdate *spUpdate = obj->findSpecialAbilityUpdate( command->getSpecialPowerTemplate()->getSpecialPowerType() ) )
 			{
 				if( spUpdate && spUpdate->isPowerCurrentlyInUse( command ) )
