@@ -237,7 +237,11 @@ Bool ShieldSphereUpdate::takeHit( Object *victim, Object *source, DamageType typ
 				return FALSE;
 		}
 	}
-	if( d->m_reactChance < 1.0f && GameLogicRandomValueReal( 0.0f, 1.0f ) > d->m_reactChance )
+	// (and what its modifiers add: C&C4's SPHERE_MODULE_REACT_CHANCE, its Mirror Plating)
+	Real react = d->m_reactChance;
+	if( me->hasAttributeModifiers() )
+		react += me->getAttributeModifierChance( MODIFIER_CHANCE_SHIELD_REACT );
+	if( react < 1.0f && GameLogicRandomValueReal( 0.0f, 1.0f ) > react )
 		return FALSE;
 
 	// taken

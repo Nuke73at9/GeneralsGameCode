@@ -366,6 +366,8 @@ public:
 	void disableRadar();	///< No matter how many radar producers I have, I do not have radar
 	void enableRadar();	///< remove the restriction imposed by disableRadar
 	Bool hasRadar() const;///< A positive number of radar producers, plus my radar is not disabled
+	void jamRadar( UnsignedInt frames );	///< Tiberium Project @feature its radar goes dark this long (Kane's Wrath's Radar Jamming Missile, C&C4's Hack Radar)
+	Bool isRadarJammed() const;	///< Tiberium Project
 	Bool okToPlayRadarEdgeSound();///< just like it "sounds"
 	//Battle plans effect the players abilities... so may as well add it here. Also
 	//it's possible for multiple strategy centers to have the same plan, so we need
@@ -798,6 +800,7 @@ private:
 	Int										m_supportProgress;				///< (SAVE) toward the next point, in 1/1800 of one (a point a minute adds 1 a frame)
 	Int										m_supportPointsMax;				///< (SAVE) the meter's top (0: no meter yet)
 	UnsignedInt						m_supportFedFrame;				///< (SAVE) the frame the meter last filled on
+	UnsignedInt						m_radarJammedUntil;				///< (SAVE) Tiberium Project: its radar is dark until this frame (Kane's Wrath's Radar Jamming Missile)
 	Int										m_levelUp, m_levelDown;			///< (NO-SAVE) skill points to go up/down a level (runtime only)
 	UnicodeString					m_generalName;		///< (SAVE) This is the name of the general the player is allowed to change.
 

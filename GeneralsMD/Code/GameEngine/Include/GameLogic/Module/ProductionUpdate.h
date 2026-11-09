@@ -274,5 +274,6 @@ protected:
 	ModelConditionFlags m_clearFlags;										///< flags to clear from model
 	ModelConditionFlags m_setFlags;											///< flags to set in model
 	Bool								m_flagsDirty;										///< clearFlags/setFlags needs to be set into the model
+	Real								m_productionCarry;							///< Tiberium Project: the part of a frame its modifiers' faster or slower building has gained or lost
 
 };

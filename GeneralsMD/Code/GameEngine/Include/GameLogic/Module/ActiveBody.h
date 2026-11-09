@@ -55,6 +55,9 @@ public:
 	UnsignedInt m_subdualDamageHealRate;		///< Every this often, we drop subdual damage...
 	Real m_subdualDamageHealAmount;					///< by this much.
 
+	Real m_dodgePercentage;									///< Tiberium Project: the chance a shot at it misses (C&C4's)
+	Real m_dodgePercentageMax;							///< ... and the most its modifiers may make it
+
 	ActiveBodyModuleData();
 
 	static void buildFieldParse(MultiIniFieldParse& p);
@@ -114,6 +117,9 @@ public:
 
 	virtual void setIndestructible( Bool indestructible ) override;
 	virtual Bool isIndestructible() const override { return m_indestructible; }
+
+	virtual Real getDodgePercentage() const override { return getActiveBodyModuleData()->m_dodgePercentage; }	///< Tiberium Project
+	virtual Real getDodgePercentageMax() const override { return getActiveBodyModuleData()->m_dodgePercentageMax; }	///< Tiberium Project
 
 	virtual void internalChangeHealth( Real delta ) override;								///< change health
 

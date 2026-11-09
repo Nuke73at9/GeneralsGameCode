@@ -197,6 +197,7 @@ ProductionUpdate::ProductionUpdate( Thing *thing, const ModuleData* moduleData )
 	m_setFlags.clear();
 	m_flagsDirty = FALSE;
 	m_specialPowerConstructionCommandButton = nullptr;
+	m_productionCarry = 0.0f;	// Tiberium Project
 
 }
 
@@ -699,6 +700,27 @@ UpdateSleepTime ProductionUpdate::update()
 
 	// increase the frames we've been under production for
 	production->m_framesUnderConstruction++;
+
+	// Tiberium Project @feature its modifiers build faster or slower (SAGE's PRODUCTION: C&C4's Enhanced
+	// Construction doubles a Crawler's pace): the frames it gains or loses, a part of one carried to the next
+	if( us->hasAttributeModifiers() )
+	{
+		const Real pace = us->getAttributeModifierScalar( MODIFIER_PRODUCTION );
+		if( pace >= 0.0f && !(pace == 1.0f) )
+		{
+			m_productionCarry += pace - 1.0f;
+			while( m_productionCarry >= 1.0f )
+			{
+				production->m_framesUnderConstruction++;
+				m_productionCarry -= 1.0f;
+			}
+			while( m_productionCarry <= -1.0f && production->m_framesUnderConstruction > 0 )
+			{
+				production->m_framesUnderConstruction--;
+				m_productionCarry += 1.0f;
+			}
+		}
+	}
 
 	// how many total logic frames does it take to produce this unit
 	Int totalProductionFrames;
@@ -1295,12 +1317,12 @@ void ProductionUpdate::crc( Xfer *xfer )
 	* Version Info:
 	* 1: Initial version */
 // ------------------------------------------------------------------------------------------------
-// Tiberium Project: 2: an entry's hold
+// Tiberium Project: 2: an entry's hold; 3: the part of a frame its modifiers have gained or lost
 void ProductionUpdate::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1472,6 +1494,12 @@ void ProductionUpdate::xfer( Xfer *xfer )
 
 	// flags dirty
 	xfer->xferBool( &m_flagsDirty );
+
+	// Tiberium Project @feature 3: the part of a frame its modifiers have gained or lost
+	if( version >= 3 )
+		xfer->xferReal( &m_productionCarry );
+	else
+		m_productionCarry = 0.0f;
 
 }
 

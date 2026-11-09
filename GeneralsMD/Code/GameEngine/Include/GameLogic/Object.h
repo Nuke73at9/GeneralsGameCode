@@ -638,6 +638,9 @@ public:
 	void removeAttributeModifier( const AttributeModifierTemplate *tmpl, ObjectID source );	///< INVALID_ID: from every source
 	Int purgeAttributeModifiers( UnsignedInt buffMask, Int maxCount );	///< of those classes (1 << buff), latest first; maxCount 0: all; returns how many
 	Real getAttributeModifierScalar( AttributeModifierAttribute what ) const;	///< the product of those in force (1: none)
+	Real getAttributeModifierChance( AttributeModifierChance what ) const;	///< Tiberium Project: the sum of those in force (may be less than 0)
+	Real getDodgeChance() const;	///< Tiberium Project: its body's dodge and its modifiers', within its body's most
+	Bool isResistingEMPByModifier() const;	///< Tiberium Project: one in force keeps EMP off it
 	Bool hasAttributeModifiers() const { return !m_attributeModifiers.empty(); }
 	Bool hasAttributeModifier( const AttributeModifierTemplate *tmpl ) const;	///< Tiberium Project: that one in force, from any source
 	void updateAttributeModifiers();	///< takes off those whose time is up (GameLogic, each frame)
@@ -840,7 +843,11 @@ private:
 	};
 	std::vector<AttributeModifierEntry>	m_attributeModifiers;
 	ModelConditionFlags						m_attributeModifierConditions;	///< what they show
-	void refreshAttributeModifierConditions();
+	ObjectStatusMaskType					m_attributeModifierStatus;			///< Tiberium Project: the status they set
+	Real													m_attributeModifierHealth;			///< Tiberium Project: the maximum health scale they have put on (1: none)
+	Real													m_attributeModifierVision;			///< ... the vision range scale
+	Real													m_attributeModifierShroud;			///< ... the shroud clearing range scale
+	void refreshAttributeModifierConditions();	///< (and the status, health and sight they change)
 
 };
 

@@ -335,6 +335,7 @@ Player::Player( Int playerIndex )
 	m_supportProgress = 0;
 	m_supportPointsMax = 0;
 	m_supportFedFrame = 0;
+	m_radarJammedUntil = 0;	// Tiberium Project
 	m_side = nullptr;
 	m_baseSide = nullptr;
 	m_skillPoints = 0;
@@ -366,6 +367,7 @@ void Player::init(const PlayerTemplate* pt)
 	m_supportProgress = 0;
 	m_supportPointsMax = 0;
 	m_supportFedFrame = 0;
+	m_radarJammedUntil = 0;	// Tiberium Project
 
 	m_isPreorder = FALSE;
 	m_isPlayerDead = FALSE;
@@ -3362,8 +3364,37 @@ Bool Player::hasRadar() const
 	if( m_radarDisabled  && (m_disableProofRadarCount == 0) )
 		return FALSE;// Nope, no matter how many you have, if I say no, you don't have it
 
+	// Tiberium Project @feature jammed (Kane's Wrath's Radar Jamming Missile)
+	if( isRadarJammed() )
+		return FALSE;
+
 	// Otherwise, check if I actually do have it.
 	return m_radarCount > 0;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature its radar dark for a while (Kane's Wrath's Radar Jamming Missile: all enemy radars,
+// ten seconds; C&C4's Hack Radar), with the radar-offline sound as it goes
+//-------------------------------------------------------------------------------------------------
+Bool Player::isRadarJammed() const
+{
+	return m_radarJammedUntil != 0 && TheGameLogic != nullptr && TheGameLogic->getFrame() < m_radarJammedUntil;
+}
+
+void Player::jamRadar( UnsignedInt frames )
+{
+	if( frames == 0 )
+		return;
+	const Bool hadRadar = hasRadar();
+	const UnsignedInt until = TheGameLogic->getFrame() + frames;
+	if( until > m_radarJammedUntil )
+		m_radarJammedUntil = until;
+	if( hadRadar && !hasRadar() && okToPlayRadarEdgeSound() )
+	{
+		AudioEventRTS soundToPlay = TheAudio->getMiscAudio()->m_radarOfflineSound;
+		soundToPlay.setPlayerIndex( getPlayerIndex() );
+		TheAudio->addAudioEvent( &soundToPlay );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -4145,7 +4176,7 @@ void Player::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 10;	// Tiberium Project @feature 9: 32 players (attacked by); 10: C&C4's support meter
+	const XferVersion currentVersion = 11;	// Tiberium Project @feature 9: 32 players (attacked by); 10: C&C4's support meter; 11: radar jammed
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -4694,6 +4725,12 @@ void Player::xfer( Xfer *xfer )
 		m_supportPointsMax = 0;
 		m_supportFedFrame = 0;
 	}
+
+	// Tiberium Project @feature 11: the radar jammed until
+	if( version >= 11 )
+		xfer->xferUnsignedInt( &m_radarJammedUntil );
+	else
+		m_radarJammedUntil = 0;
 
 }
 

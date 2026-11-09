@@ -45,11 +45,16 @@ static_assert(ARRAY_SIZE(TheAttributeModifierBuffNames) == MODIFIER_BUFF_COUNT +
 AttributeModifierTemplate::AttributeModifierTemplate() :
 	m_nameKey( NAMEKEY_INVALID ),
 	m_duration( 0 ),
+	m_resistEMP( FALSE ),
+	m_killOnExpire( FALSE ),
 	m_buff( MODIFIER_BUFF_NONE ),
 	m_stackingLimit( 1 )
 {
 	for( Int i = 0; i < MODIFIER_ATTRIBUTE_COUNT; ++i )
 		m_scalar[i] = 1.0f;
+	for( Int i = 0; i < MODIFIER_CHANCE_COUNT; ++i )
+		m_chance[i] = 0.0f;
+	m_status.clear();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -69,6 +74,21 @@ const FieldParse *AttributeModifierTemplate::getFieldParse()
 		{ "Damage",						INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_scalar[MODIFIER_DAMAGE] ) },
 		{ "RateOfFire",				INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_scalar[MODIFIER_RATE_OF_FIRE] ) },
 		{ "Range",						INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_scalar[MODIFIER_RANGE] ) },
+		{ "Health",						INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_scalar[MODIFIER_HEALTH] ) },
+		{ "Vision",						INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_scalar[MODIFIER_VISION] ) },
+		{ "ShroudClearing",		INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_scalar[MODIFIER_SHROUD_CLEARING] ) },
+		{ "Recharge",					INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_scalar[MODIFIER_RECHARGE] ) },
+		{ "Production",				INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_scalar[MODIFIER_PRODUCTION] ) },
+		{ "ClipReload",				INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_scalar[MODIFIER_CLIP_RELOAD] ) },
+		{ "PreAttack",				INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_scalar[MODIFIER_PRE_ATTACK] ) },
+		{ "Area",							INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_scalar[MODIFIER_AREA] ) },
+		{ "Dodge",						INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_chance[MODIFIER_CHANCE_DODGE] ) },
+		{ "Reflect",					INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_chance[MODIFIER_CHANCE_REFLECT] ) },
+		{ "Hit",							INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_chance[MODIFIER_CHANCE_HIT] ) },
+		{ "ShieldReact",			INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_chance[MODIFIER_CHANCE_SHIELD_REACT] ) },
+		{ "ResistEMP",				INI::parseBool,									nullptr,	offsetof( AttributeModifierTemplate, m_resistEMP ) },
+		{ "KillOnExpire",			INI::parseBool,									nullptr,	offsetof( AttributeModifierTemplate, m_killOnExpire ) },
+		{ "Status",						ObjectStatusMaskType::parseFromINI,	nullptr,	offsetof( AttributeModifierTemplate, m_status ) },
 		{ "Buff",							INI::parseIndexList,						TheAttributeModifierBuffNames,	offsetof( AttributeModifierTemplate, m_buff ) },
 		{ "ModelConditions",	ModelConditionFlags::parseFromINI,	nullptr,	offsetof( AttributeModifierTemplate, m_modelConditions ) },
 		{ "StackingLimit",		INI::parseInt,									nullptr,	offsetof( AttributeModifierTemplate, m_stackingLimit ) },

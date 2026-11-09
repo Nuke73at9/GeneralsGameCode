@@ -196,6 +196,11 @@ public:
 	virtual void setIndestructible( Bool indestructible ) = 0;
 	virtual Bool isIndestructible() const = 0;
 
+	// Tiberium Project @feature the chance a shot at it misses, and the most its modifiers may make it (C&C4's
+	// ActiveBody DodgePercentage and DodgePercentageMax)
+	virtual Real getDodgePercentage() const { return 0.0f; }
+	virtual Real getDodgePercentageMax() const { return 0.5f; }
+
 	virtual void evaluateVisualCondition() = 0;
 	virtual void updateBodyParticleSystems() = 0; // made public for topple and building collapse updates -ML
 

@@ -134,6 +134,8 @@ ActiveBodyModuleData::ActiveBodyModuleData()
 	m_subdualDamageCap = 0;
 	m_subdualDamageHealRate = 0;
 	m_subdualDamageHealAmount = 0;
+	m_dodgePercentage = 0.0f;			// Tiberium Project
+	m_dodgePercentageMax = 0.5f;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -150,6 +152,9 @@ void ActiveBodyModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "SubdualDamageCap",					INI::parseReal,									nullptr,		offsetof( ActiveBodyModuleData, m_subdualDamageCap ) },
 		{ "SubdualDamageHealRate",		INI::parseDurationUnsignedInt,	nullptr,		offsetof( ActiveBodyModuleData, m_subdualDamageHealRate ) },
 		{ "SubdualDamageHealAmount",	INI::parseReal,									nullptr,		offsetof( ActiveBodyModuleData, m_subdualDamageHealAmount ) },
+		// Tiberium Project @feature C&C4's dodge: the chance a shot at it misses, and the most modifiers make it
+		{ "DodgePercentage",					INI::parsePercentToReal,				nullptr,		offsetof( ActiveBodyModuleData, m_dodgePercentage ) },
+		{ "DodgePercentageMax",				INI::parsePercentToReal,				nullptr,		offsetof( ActiveBodyModuleData, m_dodgePercentageMax ) },
 		{ nullptr, nullptr, nullptr, 0 }
 	};
   p.add(dataFieldParse);

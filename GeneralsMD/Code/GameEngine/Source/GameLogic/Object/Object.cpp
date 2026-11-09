@@ -259,7 +259,10 @@ Object::Object( const ThingTemplate *tt, const ObjectStatusMaskType &objectStatu
 	m_scriptStatus(0),
 	m_enteredOrExitedFrame(0),
 	m_visionSpiedMask (PLAYERMASK_NONE),
-	m_numTriggerAreasActive(0)
+	m_numTriggerAreasActive(0),
+	m_attributeModifierHealth(1.0f),
+	m_attributeModifierVision(1.0f),
+	m_attributeModifierShroud(1.0f)
 {
 #if defined(RTS_DEBUG)
 	m_hasDiedAlready = false;
@@ -2198,6 +2201,11 @@ void Object::setDisabledUntil( DisabledType type, UnsignedInt frame )
 		DEBUG_CRASH( ("Invalid disabled type value %d specified -- doesn't not exist!", type ) );
 		return;
 	}
+
+	// Tiberium Project @feature a modifier in force that resists EMP (SAGE's RESIST_EMP: C&C4's EMP Reset,
+	// the deployed Reckoner) keeps it off
+	if( type == DISABLED_EMP && !m_attributeModifiers.empty() && isResistingEMPByModifier() )
+		return;
 
 	//Handle audio events!
  	AudioEventRTS sound;
@@ -4166,7 +4174,7 @@ void Object::xfer( Xfer *xfer )
 	// version
 	// Tiberium Project @feature version 10: the attribute modifiers; 11: eight weapon slots' last
 	// conditions (three before)
-	const XferVersion currentVersion = 12;	// Tiberium Project @feature 12: 32 players (vision spied by)
+	const XferVersion currentVersion = 13;	// Tiberium Project @feature 12: 32 players (vision spied by); 13: what the attribute modifiers set and scale
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -4606,6 +4614,19 @@ void Object::xfer( Xfer *xfer )
 		m_attributeModifiers.clear();
 		m_attributeModifierConditions.clear();
 	}
+	// Tiberium Project @feature 13: what the modifiers have set and scaled
+	if (version >= 13)
+	{
+		m_attributeModifierStatus.xfer(xfer);
+		xfer->xferReal(&m_attributeModifierHealth);
+		xfer->xferReal(&m_attributeModifierVision);
+		xfer->xferReal(&m_attributeModifierShroud);
+	}
+	else
+	{
+		m_attributeModifierStatus.clear();
+		m_attributeModifierHealth = m_attributeModifierVision = m_attributeModifierShroud = 1.0f;
+	}
 
 }
 
@@ -4652,6 +4673,10 @@ void Object::applyAttributeModifier(const AttributeModifierTemplate *tmpl, Objec
 	entry.expireFrame = expire;
 	m_attributeModifiers.push_back(entry);
 	refreshAttributeModifierConditions();
+
+	// Tiberium Project @feature one that resists EMP lifts it too (C&C4's EMP Reset)
+	if (tmpl->isResistingEMP() && isDisabledByType(DISABLED_EMP))
+		clearDisabled(DISABLED_EMP);
 
 	const FXList *fx = tmpl->getStartFX();
 	if (fx != nullptr)
@@ -4711,6 +4736,54 @@ Real Object::getAttributeModifierScalar(AttributeModifierAttribute what) const
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the chances the modifiers in force add (a dodge, a deflection), summed: a
+// debuff's takes from a buff's (C&C4's DODGE_PERCENTAGE_ADD -50% on a sprinting soldier)
+//-------------------------------------------------------------------------------------------------
+Real Object::getAttributeModifierChance(AttributeModifierChance what) const
+{
+	if (m_attributeModifiers.empty())
+		return 0.0f;
+	const UnsignedInt now = TheGameLogic->getFrame();
+	Real chance = 0.0f;
+	for (size_t i = 0; i < m_attributeModifiers.size(); ++i)
+	{
+		const AttributeModifierEntry &entry = m_attributeModifiers[i];
+		if (entry.expireFrame == 0 || entry.expireFrame > now)
+			chance += entry.tmpl->getChance(what);
+	}
+	return chance;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the chance a shot at it misses (C&C4's dodge): its body's own (ActiveBody's
+// DodgePercentage) and its modifiers', no more than its body's DodgePercentageMax (C&C4's 50%)
+//-------------------------------------------------------------------------------------------------
+Real Object::getDodgeChance() const
+{
+	const BodyModuleInterface *body = getBodyModule();
+	Real chance = body != nullptr ? body->getDodgePercentage() : 0.0f;
+	if (!m_attributeModifiers.empty())
+		chance += getAttributeModifierChance(MODIFIER_CHANCE_DODGE);
+	if (chance <= 0.0f)
+		return 0.0f;
+	const Real most = body != nullptr ? body->getDodgePercentageMax() : 0.5f;
+	return chance > most ? most : chance;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool Object::isResistingEMPByModifier() const
+{
+	const UnsignedInt now = TheGameLogic->getFrame();
+	for (size_t i = 0; i < m_attributeModifiers.size(); ++i)
+	{
+		const AttributeModifierEntry &entry = m_attributeModifiers[i];
+		if (entry.tmpl->isResistingEMP() && (entry.expireFrame == 0 || entry.expireFrame > now))
+			return TRUE;
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
 // Tiberium Project @feature whether that modifier is in force on it (an aura that works only while its
 // holder's toggle has put its own modifier on: C&C4's Kodiak shields its allies while it is armoured up)
 //-------------------------------------------------------------------------------------------------
@@ -4733,10 +4806,13 @@ void Object::updateAttributeModifiers()
 {
 	const UnsignedInt now = TheGameLogic->getFrame();
 	Bool removed = FALSE;
+	Bool dies = FALSE;
 	for (size_t i = 0; i < m_attributeModifiers.size(); )
 	{
 		if (m_attributeModifiers[i].expireFrame != 0 && m_attributeModifiers[i].expireFrame <= now)
 		{
+			if (m_attributeModifiers[i].tmpl->isKillOnExpire())
+				dies = TRUE;
 			m_attributeModifiers.erase(m_attributeModifiers.begin() + i);
 			removed = TRUE;
 		}
@@ -4745,6 +4821,9 @@ void Object::updateAttributeModifiers()
 	}
 	if (removed)
 		refreshAttributeModifierConditions();
+	// Tiberium Project @feature its time up (a decoy's lifetime: KillOnExpire)
+	if (dies && !isEffectivelyDead())
+		kill();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -4753,12 +4832,49 @@ void Object::updateAttributeModifiers()
 void Object::refreshAttributeModifierConditions()
 {
 	ModelConditionFlags shown;
+	ObjectStatusMaskType status;
 	for (size_t i = 0; i < m_attributeModifiers.size(); ++i)
+	{
 		shown.set(m_attributeModifiers[i].tmpl->getModelConditions());
-	if (shown == m_attributeModifierConditions)
-		return;
-	clearAndSetModelConditionFlags(m_attributeModifierConditions, shown);
-	m_attributeModifierConditions = shown;
+		status.set(m_attributeModifiers[i].tmpl->getStatus());
+	}
+	if (!(shown == m_attributeModifierConditions))
+	{
+		clearAndSetModelConditionFlags(m_attributeModifierConditions, shown);
+		m_attributeModifierConditions = shown;
+	}
+	// Tiberium Project @feature the status the modifiers set (SAGE's ObjectStatusToSet: KW's Redemption marks the
+	// militants it will raise), and the maximum health and sight they scale (C&C4's decoys: 1% of the health and
+	// half the sight of what they copy; the Eyes of the People: a quarter more sight); the health keeps its share
+	if (!(status == m_attributeModifierStatus))
+	{
+		ObjectStatusMaskType gone = m_attributeModifierStatus;
+		gone.clear(status);
+		if (gone.any())
+			setStatus(gone, FALSE);
+		if (status.any())
+			setStatus(status, TRUE);
+		m_attributeModifierStatus = status;
+	}
+	const Real health = getAttributeModifierScalar(MODIFIER_HEALTH);
+	BodyModuleInterface *body = getBodyModule();
+	if (body != nullptr && health > 0.0f && m_attributeModifierHealth > 0.0f && !(health == m_attributeModifierHealth))
+	{
+		body->setMaxHealth(body->getMaxHealth() * health / m_attributeModifierHealth, PRESERVE_RATIO);
+		m_attributeModifierHealth = health;
+	}
+	const Real vision = getAttributeModifierScalar(MODIFIER_VISION);
+	if (vision > 0.0f && m_attributeModifierVision > 0.0f && !(vision == m_attributeModifierVision))
+	{
+		setVisionRange(m_visionRange * vision / m_attributeModifierVision);
+		m_attributeModifierVision = vision;
+	}
+	const Real shroud = getAttributeModifierScalar(MODIFIER_SHROUD_CLEARING);
+	if (shroud > 0.0f && m_attributeModifierShroud > 0.0f && !(shroud == m_attributeModifierShroud))
+	{
+		setShroudClearingRange(m_shroudClearingRange * shroud / m_attributeModifierShroud);
+		m_attributeModifierShroud = shroud;
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

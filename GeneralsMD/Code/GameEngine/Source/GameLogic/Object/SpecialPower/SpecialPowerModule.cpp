@@ -106,6 +106,7 @@ SpecialPowerModule::SpecialPowerModule( Thing *thing, const ModuleData *moduleDa
 	m_pausedCount = 0;
 	m_pausedOnFrame = 0;
 	m_pausedPercent = 0.0f;
+	m_rechargeFrames = 0;	// Tiberium Project
 
 	// we won't be able to use the power for X number of frames now
 
@@ -370,8 +371,19 @@ Real SpecialPowerModule::getPercentReady() const
 	}
 
 	// calculate the percent
+	// Tiberium Project @feature over the recharge its object's modifiers made (RECHARGE_TIME), and within 0 to 1
+	// (a recharge longer than its reload time)
+	const UnsignedInt reload = (m_rechargeFrames != 0 && !modData->m_specialPowerTemplate->isSharedNSync()) ?
+		m_rechargeFrames : modData->m_specialPowerTemplate->getReloadTime();
 	Real percent = 1.0f - ((readyFrame - TheGameLogic->getFrame()) /
-												 (Real)modData->m_specialPowerTemplate->getReloadTime());
+												 (Real)reload);
+	if( m_rechargeFrames != 0 )
+	{
+		if( percent < 0.0f )
+			percent = 0.0f;
+		else if( percent > 1.0f )
+			percent = 1.0f;
+	}
 
 	return percent;
 }
@@ -437,8 +449,37 @@ void SpecialPowerModule::startPowerRecharge()
 	else
 	{
 		// set the frame we will be 100% available on now
-		m_availableOnFrame = TheGameLogic->getFrame() + getSpecialPowerTemplate()->getReloadTime();
+		// Tiberium Project @feature its object's modifiers scale an ability's recharge (SAGE's RECHARGE_TIME: C&C4's
+		// Voice of Kane quarters it); not a player power's (C&C4's are the player's, not a unit's)
+		UnsignedInt reload = getSpecialPowerTemplate()->getReloadTime();
+		m_rechargeFrames = 0;
+		if( obj->hasAttributeModifiers() && !getSpecialPowerTemplate()->isShortcutPower() )
+		{
+			const Real scale = obj->getAttributeModifierScalar( MODIFIER_RECHARGE );
+			if( scale >= 0.0f && !(scale == 1.0f) )
+			{
+				reload = REAL_TO_UNSIGNEDINT( reload * scale );
+				m_rechargeFrames = reload > 0 ? reload : 1;
+			}
+		}
+		m_availableOnFrame = TheGameLogic->getFrame() + reload;
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature ready now: C&C4's SpecialPowerTimerRefreshSpecialPower (the Voice of Kane) ends
+	* the recharges of its allies' abilities under way (a unit's, not a player power nor a superweapon) */
+//-------------------------------------------------------------------------------------------------
+void SpecialPowerModule::refreshRecharge()
+{
+	const SpecialPowerTemplate *power = getSpecialPowerTemplate();
+	if( power == nullptr || power->isSharedNSync() || power->isShortcutPower() || power->hasPublicTimer() )
+		return;
+	const UnsignedInt now = TheGameLogic->getFrame();
+	if( m_availableOnFrame > now && m_availableOnFrame != 0xFFFFFFFF )
+		m_availableOnFrame = now;
+	if( m_pausedCount > 0 )
+		m_pausedPercent = 1.0f;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -692,6 +733,21 @@ Bool SpecialPowerModule::canPayForPower() const
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature a use its update module would not go through with (a decoy army with nothing to
+// copy) is refused before it is paid for
+//-------------------------------------------------------------------------------------------------
+Bool SpecialPowerModule::isRefusedByUpdate( const Object *targetObj, const Coord3D *targetPos )
+{
+	for( BehaviorModule** u = getObject()->getBehaviorModules(); *u; ++u )
+	{
+		const SpecialPowerUpdateInterface* spu = (*u)->getSpecialPowerUpdateInterface();
+		if( spu != nullptr && spu->refusesSpecialPower( getSpecialPowerModuleData()->m_specialPowerTemplate, targetObj, targetPos ) )
+			return TRUE;
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
 void SpecialPowerModule::payForPower()
 {
 	Player *player = getObject()->getControllingPlayer();
@@ -710,7 +766,7 @@ void SpecialPowerModule::doSpecialPower( UnsignedInt commandOptions )
 	if (m_pausedCount > 0 || getObject()->isDisabled()) {
 		return;
 	}
-	if( !canPayForPower() )	// Tiberium Project @feature
+	if( !canPayForPower() || isRefusedByUpdate( nullptr, nullptr ) )	// Tiberium Project @feature
 		return;
 
 	//This tells the update module that we want to do our special power. The update modules
@@ -735,7 +791,7 @@ void SpecialPowerModule::doSpecialPowerAtObject( Object *obj, UnsignedInt comman
 	if (m_pausedCount > 0 || getObject()->isDisabled()) {
 		return;
 	}
-	if( !canPayForPower() )	// Tiberium Project @feature
+	if( !canPayForPower() || isRefusedByUpdate( obj, nullptr ) )	// Tiberium Project @feature
 		return;
 
 	//This tells the update module that we want to do our special power. The update modules
@@ -760,7 +816,7 @@ void SpecialPowerModule::doSpecialPowerAtLocation( const Coord3D *loc, Real angl
 	if (m_pausedCount > 0 || getObject()->isDisabled()) {
 		return;
 	}
-	if( !canPayForPower() )	// Tiberium Project @feature
+	if( !canPayForPower() || isRefusedByUpdate( nullptr, loc ) )	// Tiberium Project @feature
 		return;
 
 	//This tells the update module that we want to do our special power. The update modules
@@ -875,13 +931,14 @@ void SpecialPowerModule::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer method
 	* Version Info:
-	* 1: Initial version */
+	* 1: Initial version
+	* 2: Tiberium Project: the recharge its object's modifiers made */
 // ------------------------------------------------------------------------------------------------
 void SpecialPowerModule::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -899,6 +956,12 @@ void SpecialPowerModule::xfer( Xfer *xfer )
 
 	// paused percent
 	xfer->xferReal( &m_pausedPercent );
+
+	// Tiberium Project @feature 2: the recharge its object's modifiers made
+	if( version >= 2 )
+		xfer->xferUnsignedInt( &m_rechargeFrames );
+	else
+		m_rechargeFrames = 0;
 
 }
 

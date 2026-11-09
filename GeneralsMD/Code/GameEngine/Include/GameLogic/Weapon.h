@@ -267,6 +267,7 @@ public:
 		RANGE,
 		RATE_OF_FIRE,
 		PRE_ATTACK,
+		CLIP_RELOAD,	///< Tiberium Project: the clip reload time (SAGE's CLIP_RELOAD_TIME)
 
 		FIELD_COUNT
 	};
@@ -300,6 +301,7 @@ static const char *const TheWeaponBonusFieldNames[] =
 	"RANGE",
 	"RATE_OF_FIRE",
 	"PRE_ATTACK",
+	"CLIP_RELOAD",
 	nullptr
 };
 static_assert(ARRAY_SIZE(TheWeaponBonusFieldNames) == WeaponBonus::FIELD_COUNT + 1, "Incorrect array size");
@@ -489,6 +491,7 @@ public:
 	const ObjectCreationList* getTargetOCL() const { return m_targetOCL; }	///< Tiberium Project
 	const std::vector<WeaponFollowUp>& getFollowUps() const { return m_followUps; }	///< Tiberium Project
 	Bool isParalyzer() const { return m_paralyzeFrames > 0 && !m_paralyzeRemove; }	///< Tiberium Project: disables what it reaches
+	Bool canBeDodged() const { return m_canBeDodged; }	///< Tiberium Project: a dodge may make it miss (C&C4's CanBeDodged)
 	const ObjectCreationList* getProjectileDetonationOCL(VeterancyLevel v) const { return m_projectileDetonationOCLs[v]; }
 	const ParticleSystemTemplate* getProjectileExhaust(VeterancyLevel v) const { return m_projectileExhausts[v]; }
 
@@ -597,6 +600,9 @@ private:
 	Bool m_paralyzeRemove;															///< Tiberium Project: frees them of it instead (C&C4's EMP countermeasures)
 	const FXList* m_paralyzeFX;														///< Tiberium Project: shown on each object it disables
 	const FXList* m_victimFX[3];													///< Tiberium Project: the hit shown on each object the damage reaches (C&C4's DamageFX): anything, a soldier, a structure
+	Bool m_canBeDodged;																///< Tiberium Project: its target's dodge may make it miss (C&C4's CanBeDodged; default Yes)
+	Int m_victimVeterancy;															///< Tiberium Project: veterancy levels each object its damage reaches gains (C&C4's ExperienceNugget)
+	UnsignedInt m_jamRadarFrames;													///< Tiberium Project: as it is dealt, the radars of its firer's enemies go dark this long (C&C4's InformationWarfareNugget)
 	const FXList* m_fireFXs[LEVEL_COUNT];															///< weapon is fired fx
 	const FXList* m_projectileDetonateFXs[LEVEL_COUNT];								///< if we have a projectile, fx for projectile blowing up
 	AudioEventRTS m_fireSound;							///< weapon is fired sound

@@ -45,6 +45,8 @@
 #include "Common/INI.h"
 #include "Common/PerfTimer.h"
 #include "Common/Player.h"
+#include "Common/PlayerList.h"	// Tiberium Project
+#include "Common/Team.h"	// Tiberium Project
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
@@ -208,6 +210,9 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "ParalyzeTime",								INI::parseDurationUnsignedInt,				nullptr,							offsetof(WeaponTemplate, m_paralyzeFrames) },	// Tiberium Project
 	{ "ParalyzeRemove",							INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_paralyzeRemove) },	// Tiberium Project
 	{ "ParalyzeFX",									INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_paralyzeFX) },	// Tiberium Project
+	{ "CanBeDodged",								INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_canBeDodged) },	// Tiberium Project
+	{ "VictimVeterancy",						INI::parseInt,												nullptr,							offsetof(WeaponTemplate, m_victimVeterancy) },	// Tiberium Project
+	{ "JamEnemyRadar",							INI::parseDurationUnsignedInt,				nullptr,							offsetof(WeaponTemplate, m_jamRadarFrames) },	// Tiberium Project
 	{ "VictimFX",										INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[0]) },	// Tiberium Project
 	{ "VictimFXInfantry",						INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[1]) },	// Tiberium Project
 	{ "VictimFXStructure",					INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[2]) },	// Tiberium Project
@@ -311,6 +316,9 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_paralyzeRemove = FALSE;
 	m_paralyzeFX = nullptr;
 	m_victimFX[0] = m_victimFX[1] = m_victimFX[2] = nullptr;	// Tiberium Project
+	m_canBeDodged = TRUE;	// Tiberium Project
+	m_victimVeterancy = 0;
+	m_jamRadarFrames = 0;
 	for (Int i = LEVEL_FIRST; i <= LEVEL_LAST; ++i)
 	{
 		m_fireOCLNames[i].clear();
@@ -566,7 +574,8 @@ Int WeaponTemplate::getClipReloadTime(const WeaponBonus& bonus) const
 {
 	// yes, divide, not multiply; the larger the rate-of-fire bonus, the shorter
 	// we want the reload time to be.
-	return REAL_TO_INT_FLOOR(m_clipReloadTime / bonus.getField(WeaponBonus::RATE_OF_FIRE));
+	// Tiberium Project @feature and times the clip reload bonus (SAGE's CLIP_RELOAD_TIME: C&C4's reload upgrades halve it)
+	return REAL_TO_INT_FLOOR(m_clipReloadTime / bonus.getField(WeaponBonus::RATE_OF_FIRE) * bonus.getField(WeaponBonus::CLIP_RELOAD));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1094,6 +1103,31 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 		projectileDestination.z = TheTerrainLogic->getLayerHeight( projectileDestination.x, projectileDestination.y, targetLayer );
 	}
 
+	// Tiberium Project @feature a shot that misses (C&C4's dodge and aim): its target's dodge (DodgePercentage and its
+	// DODGE_PERCENTAGE_ADD modifiers) less what the firer's modifiers add to its aim (HIT_PERCENTAGE_ADD: an accuracy
+	// boost beats a dodge; a berserk Hammerhead misses outright), but for a weapon that cannot be dodged
+	// (CanBeDodged = No) and a friend's shot (a heal). It lands just beside its target, as a scattered shot does
+	Bool missed = FALSE;
+	if( victimObj != nullptr && !isProjectileDetonation && m_canBeDodged && getDamageType() != DAMAGE_HEALING &&
+			sourceObj->getRelationship( victimObj ) != ALLIES )
+	{
+		Real miss = victimObj->getDodgeChance();
+		if( sourceObj->hasAttributeModifiers() )
+			miss -= sourceObj->getAttributeModifierChance( MODIFIER_CHANCE_HIT );
+		if( miss > 0.0f && GameLogicRandomValueReal( 0.0f, 1.0f ) < miss )
+		{
+			missed = TRUE;
+			const Real off = victimObj->getGeometryInfo().getBoundingCircleRadius() + 5.0f;
+			const Real side = GameLogicRandomValueReal( 0.0f, 2.0f * PI );
+			projectileDestination = *victimObj->getPosition();
+			projectileDestination.x += off * Cos( side );
+			projectileDestination.y += off * Sin( side );
+			projectileDestination.z = TheTerrainLogic->getLayerHeight( projectileDestination.x, projectileDestination.y, victimObj->getLayer() );
+			if( scatterRadius < off )
+				scatterRadius = off;	// (a laser draws to the ground; a projectile flies to the spot, following nothing)
+		}
+	}
+
 	if (getProjectileTemplate() == nullptr || isProjectileDetonation)
 	{
 		// see if we need to be called back at a later point to deal the damage.
@@ -1132,6 +1166,12 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 		}
 
 		const Coord3D* damagePos = getDamageDealtAtSelfPosition() ? sourcePos : victimPos;
+		// Tiberium Project @feature a missed shot's damage is dealt where it lands, at nothing in particular
+		if( missed && !getDamageDealtAtSelfPosition() )
+		{
+			damageID = INVALID_ID;
+			damagePos = &projectileDestination;
+		}
 		if (delayInFrames < 1.0f)
 		{
 			// go ahead and do it now
@@ -1638,6 +1678,29 @@ void WeaponTemplate::scheduleFollowUps(ObjectID sourceID, const Object *primaryV
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the damage types a reflection sends back (C&C4's: all but its DamageTypesNotToReflect,
+// BLAST and ROCKET, here EXPLOSION and the missiles, and what is no shot at all)
+static Bool isReflectableDamage(DamageType type)
+{
+	switch (type)
+	{
+		case DAMAGE_SMALL_ARMS:
+		case DAMAGE_GATTLING:
+		case DAMAGE_COMANCHE_VULCAN:
+		case DAMAGE_ARMOR_PIERCING:
+		case DAMAGE_LASER:
+		case DAMAGE_PARTICLE_BEAM:
+		case DAMAGE_SNIPER:
+		case DAMAGE_FLAME:
+		case DAMAGE_MICROWAVE:
+		case DAMAGE_POISON:
+			return TRUE;
+		default:
+			return FALSE;
+	}
+}
+static Bool s_reflecting = FALSE;	///< Tiberium Project: a reflected shot under way is not reflected again
+
 void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, const Coord3D *pos, const WeaponBonus& bonus, Bool isProjectileDetonation) const
 {
 	if (sourceID == 0)	// must have a source
@@ -1719,6 +1782,22 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 		if (m_impactFX != nullptr)
 			FXList::doFXPos(m_impactFX, pos);
 
+		// Tiberium Project @feature the radars of its firer's enemies dark (C&C4's InformationWarfareNugget: Hack Radar)
+		if (m_jamRadarFrames > 0 && source != nullptr)
+		{
+			const Object *firer = source;
+			if (source->isKindOf(KINDOF_PROJECTILE) && source->getProducerID() != INVALID_ID)
+				firer = TheGameLogic->findObjectByID(source->getProducerID());
+			Player *owner = firer != nullptr ? firer->getControllingPlayer() : nullptr;
+			for (Int i = 0; owner != nullptr && i < ThePlayerList->getPlayerCount(); ++i)
+			{
+				Player *other = ThePlayerList->getNthPlayer(i);
+				if (other != nullptr && other != owner && other->getDefaultTeam() != nullptr &&
+						owner->getRelationship(other->getDefaultTeam()) == ENEMIES)
+					other->jamRadar(m_jamRadarFrames);
+			}
+		}
+
 		Real primaryRadius = getPrimaryDamageRadius(bonus);
 		Real secondaryRadius = getSecondaryDamageRadius(bonus);
 		Real primaryDamage = getPrimaryDamage(bonus);
@@ -1758,6 +1837,8 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 			}
 		}
 		MemoryPoolObjectHolder hold(iter);
+		Object *reflector = nullptr;	// Tiberium Project: the target that sends the shot back, and to whom
+		Object *reflectTo = nullptr;
 
 		for (; curVictim != nullptr; curVictim = iter ? iter->nextWithNumeric(&curVictimDistSqr) : nullptr)
 		{
@@ -1826,6 +1907,27 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 							//Skip if we aren't affected by this weapon.
 							continue;
 						}
+					}
+				}
+			}
+
+			// Tiberium Project @feature a shot that hits its target may go back to its firer instead (C&C4's
+			// REFLECTION_CHANCE: Mirror Coat), a shot of a kind that reflects (isReflectableDamage) and not one
+			// already sent back
+			if (curVictim == primaryVictim && reflector == nullptr && !s_reflecting && source != nullptr &&
+					curVictim->hasAttributeModifiers() && isReflectableDamage(damageType))
+			{
+				const Real chance = curVictim->getAttributeModifierChance(MODIFIER_CHANCE_REFLECT);
+				if (chance > 0.0f && GameLogicRandomValueReal(0.0f, 1.0f) < chance)
+				{
+					Object *firer = source;
+					if (source->isKindOf(KINDOF_PROJECTILE) && source->getProducerID() != INVALID_ID)
+						firer = TheGameLogic->findObjectByID(source->getProducerID());
+					if (firer != nullptr && firer != curVictim && !firer->isEffectivelyDead())
+					{
+						reflector = curVictim;
+						reflectTo = firer;
+						continue;
 					}
 				}
 			}
@@ -1927,6 +2029,18 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 			// (C&C4's AttributeModifierNugget: a slow, an armour debuff, an ally's damage boost)
 			if (m_victimModifier != NAMEKEY_INVALID && !curVictim->isEffectivelyDead())
 				curVictim->applyAttributeModifier(TheAttributeModifierStore->find(m_victimModifier), sourceID);
+			// Tiberium Project @feature veterancy for each (C&C4's ExperienceNugget: Battle Hardening's two levels)
+			if (m_victimVeterancy > 0 && !curVictim->isEffectivelyDead())
+			{
+				ExperienceTracker *xp = curVictim->getExperienceTracker();
+				if (xp != nullptr && xp->isTrainable())
+				{
+					Int level = (Int)xp->getVeterancyLevel() + m_victimVeterancy;
+					if (level > (Int)LEVEL_LAST)
+						level = (Int)LEVEL_LAST;
+					xp->setMinVeterancyLevel((VeterancyLevel)level, TRUE);
+				}
+			}
 			// Tiberium Project @feature SAGE's ParalyzeNugget: each object its damage reaches is disabled for
 			// ParalyzeTime (an EMP stops vehicles and structures, a stasis field holds what is in it), or freed
 			// of it (ParalyzeRemove: C&C4's EMP countermeasures)
@@ -1935,6 +2049,10 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 				const DisabledType disable = (DisabledType)m_paralyzeType;
 				if (m_paralyzeRemove)
 					curVictim->clearDisabled(disable);
+				else if (disable == DISABLED_EMP && curVictim->hasAttributeModifiers() && curVictim->isResistingEMPByModifier())
+				{
+					// Tiberium Project @feature resisted (RESIST_EMP)
+				}
 				else
 				{
 					const UnsignedInt until = TheGameLogic->getFrame() + m_paralyzeFrames;
@@ -1969,6 +2087,14 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 			//DEBUG_ASSERTLOG(damageInfo.out.m_noEffect, ("WeaponTemplate::dealDamageInternal: dealt to %s %08lx: attempted %f, actual %f (%f)",
 			//	curVictim->getTemplate()->getName().str(),curVictim,
 			//	damageInfo.in.m_amount, damageInfo.out.m_actualDamageDealt, damageInfo.out.m_actualDamageClipped));
+		}
+
+		// Tiberium Project @feature the reflected shot: the same damage, dealt by its target to its firer
+		if (reflector != nullptr && reflectTo != nullptr && !reflectTo->isEffectivelyDead() && !reflector->isEffectivelyDead())
+		{
+			s_reflecting = TRUE;
+			dealDamageInternal(reflector->getID(), reflectTo->getID(), reflectTo->getPosition(), bonus, getProjectileTemplate() != nullptr);
+			s_reflecting = FALSE;
 		}
 	}
 	else
@@ -2389,12 +2515,16 @@ void Weapon::computeBonus(const Object *source, WeaponBonusConditionFlags extraB
 	if (extra)
 		extra->appendBonuses(flags, bonus);
 
-	// Tiberium Project @feature the shooter's attribute modifiers (C&C4's damage, rate of fire and range buffs)
+	// Tiberium Project @feature the shooter's attribute modifiers (C&C4's damage, rate of fire and range buffs, its
+	// reload upgrades' shorter clip reloads and pre-attack delays, its crate upgrades' wider blasts)
 	if (source->hasAttributeModifiers())
 	{
 		bonus.setField(WeaponBonus::DAMAGE, bonus.getField(WeaponBonus::DAMAGE) * source->getAttributeModifierScalar(MODIFIER_DAMAGE));
 		bonus.setField(WeaponBonus::RATE_OF_FIRE, bonus.getField(WeaponBonus::RATE_OF_FIRE) * source->getAttributeModifierScalar(MODIFIER_RATE_OF_FIRE));
 		bonus.setField(WeaponBonus::RANGE, bonus.getField(WeaponBonus::RANGE) * source->getAttributeModifierScalar(MODIFIER_RANGE));
+		bonus.setField(WeaponBonus::CLIP_RELOAD, bonus.getField(WeaponBonus::CLIP_RELOAD) * source->getAttributeModifierScalar(MODIFIER_CLIP_RELOAD));
+		bonus.setField(WeaponBonus::PRE_ATTACK, bonus.getField(WeaponBonus::PRE_ATTACK) * source->getAttributeModifierScalar(MODIFIER_PRE_ATTACK));
+		bonus.setField(WeaponBonus::RADIUS, bonus.getField(WeaponBonus::RADIUS) * source->getAttributeModifierScalar(MODIFIER_AREA));
 	}
 }
 

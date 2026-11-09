@@ -48,6 +48,10 @@ public:
 	virtual Bool doesSpecialPowerHaveOverridableDestination() const = 0;	//Does it have it, even if it's not active?
 	virtual void setSpecialPowerOverridableDestination( const Coord3D *loc ) = 0;
 	virtual Bool isPowerCurrentlyInUse( const CommandButton *command = nullptr ) const = 0;
+
+	// Tiberium Project @feature a use it would not go through with (a decoy army with nothing to copy): refused
+	// before it is paid for and its recharge starts
+	virtual Bool refusesSpecialPower( const SpecialPowerTemplate * /*specialPowerTemplate*/, const Object * /*targetObj*/, const Coord3D * /*targetPos*/ ) const { return FALSE; }
 };
 
 //-------------------------------------------------------------------------------------------------

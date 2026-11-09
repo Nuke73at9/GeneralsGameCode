@@ -71,6 +71,9 @@ public:
 
 	//If the special power launches a construction site, we need to know the final product for placement purposes.
 	virtual const ThingTemplate* getReferenceThingTemplate() const = 0;
+
+	// Tiberium Project @feature its recharge under way ends (C&C4's Voice of Kane)
+	virtual void refreshRecharge() { }
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -157,6 +160,7 @@ public:
 	/** start the recharge process for this special power. public because some powers call it repeatedly.
 	*/
 	virtual void startPowerRecharge() override;
+	virtual void refreshRecharge() override;	///< Tiberium Project @feature ready now (C&C4's SpecialPowerTimerRefreshSpecialPower)
 	virtual const AudioEventRTS& getInitiateSound() const override;
 
 	virtual Bool startsReady() const override;
@@ -173,11 +177,13 @@ protected:
 	void resolveSpecialPower();
 	void aboutToDoSpecialPower( const Coord3D *location );
 	Bool canPayForPower() const;	///< Tiberium Project @feature the power's price (Cost, SupportPoints)
+	Bool isRefusedByUpdate( const Object *targetObj, const Coord3D *targetPos );	///< Tiberium Project @feature its update module would not go through with it
 	void payForPower();
 
 	UnsignedInt m_availableOnFrame;			///< on this frame, this special power is available
 	Int m_pausedCount;									///< Reference count of sources pausing me
 	UnsignedInt m_pausedOnFrame;
 	Real m_pausedPercent;
+	UnsignedInt m_rechargeFrames;				///< Tiberium Project: how long its recharge under way takes, when its object's modifiers change it (0: its reload time)
 
 };
