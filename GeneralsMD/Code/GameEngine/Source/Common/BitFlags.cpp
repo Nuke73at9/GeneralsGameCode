@@ -223,6 +223,12 @@ const char* const ModelConditionFlags::s_bitNameList[] =
 	"CLIFF_TRANSITION_LAND",
 	"ABOUT_TO_HIT",
 	"SPHERE_MODULE_ACTIVE",	// Tiberium Project
+	"SPECIALPOWER1_READY",	// Tiberium Project
+	"SPECIALPOWER2_READY",
+	"SPECIALPOWER3_READY",
+	"SPECIAL_WEAPON_ONE",
+	"SPECIAL_WEAPON_TWO",
+	"SPECIAL_WEAPON_THREE",
 
 
 	nullptr

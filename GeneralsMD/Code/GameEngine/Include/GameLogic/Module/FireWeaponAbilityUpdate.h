@@ -31,6 +31,8 @@
 // UNPACKING (UnpackTime) is its takeoff and PACKING (PackTime) its landing, LeapLandingFX where it lands.
 // With LeapPackInFlight it packs as it takes off instead (Kane's Wrath's jump jets: PACKING is the jump),
 // for PackTime of its flight. UnpackSound plays as the unit unpacks, TriggerSound as it fires (or takes off).
+// WhichSpecialWeapon (1 to 3): SAGE's SPECIAL_WEAPON_ONE to THREE while the ability is under way (Kane's
+// Wrath's Temple of Nod launches its missile in SPECIAL_WEAPON_ONE and UNPACKING).
 //
 //   Behavior = SpecialAbility ModuleTag_SatchelPower
 //     SpecialPowerTemplate = C4SP_SatchelCharge
@@ -92,9 +94,11 @@ public:
 	Bool m_leapPackInFlight;
 	AudioEventRTS m_unpackSound;
 	AudioEventRTS m_triggerSound;
+	Int m_whichSpecialWeapon;				///< Tiberium Project: SPECIAL_WEAPON_ONE (1) to THREE (3) while it is under way (0: none)
 
 	FireWeaponAbilityUpdateModuleData()
 	{
+		m_whichSpecialWeapon = 0;
 		m_specialPowerTemplate = nullptr;
 		m_startAbilityRange = 0.0f;
 		m_unpackTime = m_preparationTime = m_packTime = 0;
@@ -134,6 +138,7 @@ public:
 			{ "LeapPackInFlight",			INI::parseBool,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_leapPackInFlight ) },
 			{ "UnpackSound",				INI::parseAudioEventRTS,		nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_unpackSound ) },
 			{ "TriggerSound",			INI::parseAudioEventRTS,		nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_triggerSound ) },
+			{ "WhichSpecialWeapon",		INI::parseInt,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_whichSpecialWeapon ) },	// Tiberium Project
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 		p.add( dataFieldParse );

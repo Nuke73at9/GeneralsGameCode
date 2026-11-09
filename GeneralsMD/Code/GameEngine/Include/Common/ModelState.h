@@ -299,6 +299,15 @@ enum ModelConditionFlagType CPP_11(: Int)
 	// Tiberium Project @feature SAGE 2's shield sphere is up (ShieldSphereUpdate): C&C4's Crawlers and
 	// structures show their dome
 	MODELCONDITION_SPHERE_MODULE_ACTIVE,
+	// Tiberium Project @feature SAGE's special power states: a power ready to use (MonitorSpecialPowerTimerUpdate:
+	// Kane's Wrath's superweapons raise their missile or emitter), and the special weapon an ability is firing
+	// (FireWeaponAbilityUpdate's WhichSpecialWeapon: the Temple of Nod's launch)
+	MODELCONDITION_SPECIALPOWER1_READY,
+	MODELCONDITION_SPECIALPOWER2_READY,
+	MODELCONDITION_SPECIALPOWER3_READY,
+	MODELCONDITION_SPECIAL_WEAPON_ONE,
+	MODELCONDITION_SPECIAL_WEAPON_TWO,
+	MODELCONDITION_SPECIAL_WEAPON_THREE,
 //
 // Note: these values are saved in save files, so you MUST NOT REMOVE OR CHANGE
 // existing values!

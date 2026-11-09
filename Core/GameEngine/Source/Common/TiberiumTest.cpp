@@ -1264,6 +1264,27 @@ void TiberiumTest::update()
 			log( "frame %d: ui: hurt %s: health %.0f to %.0f%s", (int)s_frame, step.arg.c_str(), before,
 				body != nullptr ? body->getHealth() : 0.0f, body != nullptr && DamageTypeFlags::s_bitNameList[t] != nullptr ? "" : " (no such object or type)" );
 		}
+		else if ( step.action == "ready" && TheGameLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) "ready=Template": the special powers of every object of the
+			// template ready now (a superweapon's seven minutes skipped)
+			Int count = 0;
+			for ( Object *obj = TheGameLogic->getFirstObject(); obj != nullptr; obj = obj->getNextObject() )
+			{
+				if ( obj->getTemplate()->getName().compareNoCase( step.arg.c_str() ) != 0 )
+					continue;
+				for ( BehaviorModule **m = obj->getBehaviorModules(); *m != nullptr; ++m )
+				{
+					SpecialPowerModuleInterface *sp = (*m)->getSpecialPower();
+					if ( sp != nullptr )
+					{
+						sp->setReadyFrame( TheGameLogic->getFrame() );
+						++count;
+					}
+				}
+			}
+			log( "frame %d: ui: ready %s: %d powers", (int)s_frame, step.arg.c_str(), (int)count );
+		}
 		else if ( step.action == "grant" && TheGameLogic != nullptr && TheUpgradeCenter != nullptr )
 		{
 			// Tiberium Project @feature (the test) "grant=k,Upgrade[,target]": the k-th spawned object (or the fight
@@ -2022,11 +2043,15 @@ void TiberiumTest::update()
 				// (Kane's Wrath's building fields: the upgraded armour, the field's status and its look)
 				BodyModuleInterface *armourBody = obj->getBodyModule();
 				const Drawable *look = obj->getDrawable();
-				char field[96];
-				snprintf( field, sizeof( field ), "%s%s%s",
+				char field[160];
+				snprintf( field, sizeof( field ), "%s%s%s%s%s%s",
 					armourBody != nullptr && armourBody->testArmorSetFlag( ARMORSET_PLAYER_UPGRADE ) ? ", armour upgraded" : "",
 					obj->testStatus( OBJECT_STATUS_RIDER1 ) ? ", RIDER1" : "",
-					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_USER_6 ) ? ", USER_6" : "" );
+					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_USER_6 ) ? ", USER_6" : "",
+					// (a superweapon: ready, launching)
+					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_SPECIALPOWER1_READY ) ? ", SPECIALPOWER1_READY" : "",
+					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_SPECIAL_WEAPON_ONE ) ? ", SPECIAL_WEAPON_ONE" : "",
+					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_UNPACKING ) ? ", UNPACKING" : "" );
 				log( "frame %d: ui: state %s #%u player %d at %.0f %.0f (%s to me): health %.0f of %.0f%s%s%s, sight %.0f, dodge %.2f, reflect %.2f, %d modifiers%s, upgrades %s, veterancy %d%s",
 					(int)s_frame, step.arg.c_str(), (unsigned)obj->getID(),
 					obj->getControllingPlayer() != nullptr ? (int)obj->getControllingPlayer()->getPlayerIndex() : -1,

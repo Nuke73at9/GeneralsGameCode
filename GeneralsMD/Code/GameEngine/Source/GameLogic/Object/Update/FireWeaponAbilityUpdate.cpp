@@ -145,6 +145,9 @@ void FireWeaponAbilityUpdate::enterStage( Stage stage )
 			if( data->m_unpackTime > 0 )
 				me->setModelConditionState( MODELCONDITION_UNPACKING );
 			playSound( data->m_unpackSound );	// Tiberium Project
+			// Tiberium Project @feature SAGE's special weapon state, until the ability is over
+			if( data->m_whichSpecialWeapon >= 1 && data->m_whichSpecialWeapon <= 3 )
+				me->setModelConditionState( (ModelConditionFlagType)( MODELCONDITION_SPECIAL_WEAPON_ONE + data->m_whichSpecialWeapon - 1 ) );
 			break;
 		}
 		case STAGE_FIRE:
@@ -175,6 +178,10 @@ void FireWeaponAbilityUpdate::finish()
 		endLeap();
 	}
 	me->clearModelConditionFlags( MAKE_MODELCONDITION_MASK2( MODELCONDITION_UNPACKING, MODELCONDITION_PACKING ) );
+	// Tiberium Project: the special weapon's state ends with the ability
+	const FireWeaponAbilityUpdateModuleData *data = getFireWeaponAbilityUpdateModuleData();
+	if( data->m_whichSpecialWeapon >= 1 && data->m_whichSpecialWeapon <= 3 )
+		me->clearModelConditionState( (ModelConditionFlagType)( MODELCONDITION_SPECIAL_WEAPON_ONE + data->m_whichSpecialWeapon - 1 ) );
 	m_stage = STAGE_IDLE;
 	m_targetID = INVALID_ID;
 }
