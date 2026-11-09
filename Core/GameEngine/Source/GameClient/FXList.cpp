@@ -724,7 +724,10 @@ public:
 
 	virtual void doFXPos(const Coord3D *primary, const Matrix3D* primaryMtx, const Real /*primarySpeed*/, const Coord3D * /*secondary*/, const Real /*overrideRadius*/ ) const override
 	{
-		DEBUG_CRASH(("You must use the object form for this effect"));
+		// Tiberium Project @tweak no object, so no bones: the effect where it is played (C&C4's effects name a bone
+		// for their particles, and the same effect may be played at a spot)
+		if (primary)
+			FXList::doFXPos(m_fx, primary, primaryMtx, 0.0f, nullptr, 0.0f);
 	}
 
 	virtual void doFXObj(const Object* primary, const Object* /*secondary*/) const override

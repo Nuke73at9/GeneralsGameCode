@@ -79,6 +79,10 @@ void FireWeaponAbilityUpdateModuleData::parseShot( INI *ini, void *instance, voi
 	shot.m_delay = (UnsignedInt)WWMath::Ceil( ConvertDurationFromMsecsToFrames( delayMs ) );
 	shot.m_offsetX = INI::scanReal( INI::getNextSubToken( "OffsetX" ) );
 	shot.m_offsetY = INI::scanReal( INI::getNextSubToken( "OffsetY" ) );
+	// Tiberium Project @feature FX:<FXList> (optional)
+	const char *more = ini->getNextTokenOrNull( ini->getSepsColon() );
+	if( more != nullptr && stricmp( more, "FX" ) == 0 )
+		shot.m_fxName = ini->getNextToken( ini->getSepsColon() );
 	self->m_shots.push_back( shot );
 }
 
@@ -237,6 +241,9 @@ void FireWeaponAbilityUpdate::enterStage( Stage stage )
 			if( data->m_unpackTime > 0 )
 				me->setModelConditionState( MODELCONDITION_UNPACKING );
 			playSound( data->m_unpackSound );	// Tiberium Project
+			// Tiberium Project @feature its looks while it is at work (SAGE's ActiveModelCondition)
+			if( data->m_activeConditions.any() )
+				me->setModelConditionFlags( data->m_activeConditions );
 			// Tiberium Project @feature SAGE's special weapon state, until the ability is over
 			if( data->m_whichSpecialWeapon >= 1 && data->m_whichSpecialWeapon <= 3 )
 				me->setModelConditionState( (ModelConditionFlagType)( MODELCONDITION_SPECIAL_WEAPON_ONE + data->m_whichSpecialWeapon - 1 ) );
@@ -355,6 +362,8 @@ void FireWeaponAbilityUpdate::finish()
 		me->clearStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_IS_USING_ABILITY ) );
 	if( data->m_whichSpecialWeapon >= 1 && data->m_whichSpecialWeapon <= 3 )
 		me->clearModelConditionState( (ModelConditionFlagType)( MODELCONDITION_SPECIAL_WEAPON_ONE + data->m_whichSpecialWeapon - 1 ) );
+	if( data->m_activeConditions.any() )
+		me->clearModelConditionFlags( data->m_activeConditions );
 	m_stage = STAGE_IDLE;
 	m_targetID = INVALID_ID;
 }
@@ -602,6 +611,9 @@ UpdateSleepTime FireWeaponAbilityUpdate::update()
 			while( m_nextShot < (Int)data->m_shots.size() && since >= data->m_shots[m_nextShot].m_delay )
 			{
 				const FireWeaponAbilityShot &shot = data->m_shots[m_nextShot++];
+				// Tiberium Project @feature the shot's FX at the unit (SAGE's FXListSelf)
+				if( shot.m_fxName.isNotEmpty() )
+					FXList::doFXObj( TheFXListStore->findFXList( shot.m_fxName.str() ), me );
 				const WeaponTemplate *weapon = TheWeaponStore->findWeaponTemplate( shot.m_weaponName );
 				if( weapon == nullptr || !targetPosition( &pos ) )
 					continue;

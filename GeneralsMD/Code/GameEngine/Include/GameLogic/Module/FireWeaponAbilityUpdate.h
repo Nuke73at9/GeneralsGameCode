@@ -41,6 +41,10 @@
 // within BeamReflectorReach of one of the unit's side's of those (Kane's Wrath's Venom): BeamReflectorWeapon is fired
 // at the reflector and BeamWeapon from it at the target (the Beam Cannon's reflector attack).
 //
+// Tiberium Project @feature a shot may end with FX:<FXList>, played at the unit as the shot is fired (SAGE's FXListSelf: C&C4's
+// Nod aircraft spraying its purification); ActiveConditions are shown from the unpacking to the end (SAGE's
+// ActiveModelCondition).
+//
 // Tiberium Project @feature a teleport (SAGE's TeleportSpecialAbilityUpdate: Kane's Wrath's Firehawk Stratofighter): with
 // TeleportHeight > 0 the unit climbs that high above the ground as it unpacks (held, firing nothing), is gone for
 // TeleportTime (not drawn, nothing can see or target it), and comes back at the target spot at that height, its
@@ -85,6 +89,7 @@ struct FireWeaponAbilityShot
 	AsciiString m_weaponName;	///< found when it fires (the weapons load before the objects)
 	UnsignedInt m_delay;		///< frames after the first shot
 	Real m_offsetX, m_offsetY;	///< from the target: ahead of the unit, to its left
+	AsciiString m_fxName;		///< Tiberium Project: played at the unit as it fires (FX:<FXList>, SAGE's FXListSelf)
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -101,6 +106,7 @@ public:
 	SpecialPowerTemplate *m_specialPowerTemplate;
 	std::vector<FireWeaponAbilityShot> m_shots;
 	std::vector<FireWeaponAbilityTargetUpgrade> m_targetUpgrades;	///< Tiberium Project: the objects it takes over
+	ModelConditionFlags m_activeConditions;	///< Tiberium Project: shown while it is at work
 	Real m_teleportHeight;					///< Tiberium Project: above the ground (0: no teleport)
 	UnsignedInt m_teleportTime;			///< frames gone
 	Real m_teleportMaxDistance;			///< 0: any
@@ -191,6 +197,7 @@ public:
 			{ "BeamReflectorReach",		INI::parseReal,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_reflectorReach ) },
 			{ "BeamReflectorWeapon",		INI::parseAsciiString,			nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_reflectorWeaponName ) },
 			{ "TargetUpgrade",			parseTargetUpgrade,				nullptr, 0 },	// Tiberium Project
+			{ "ActiveConditions",		ModelConditionFlags::parseFromINI,	nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_activeConditions ) },
 			{ "TeleportHeight",			INI::parseReal,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_teleportHeight ) },
 			{ "TeleportTime",				INI::parseDurationUnsignedInt,	nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_teleportTime ) },
 			{ "TeleportMaxDistance",		INI::parseReal,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_teleportMaxDistance ) },
