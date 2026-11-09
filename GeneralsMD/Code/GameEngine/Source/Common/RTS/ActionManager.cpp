@@ -1679,7 +1679,17 @@ Bool ActionManager::canDoSpecialPowerAtObject( const Object *obj, const Object *
 		switch( spTemplate->getSpecialPowerType() )
 		{
 			case SPECIAL_ABILITY_AT_OBJECT:	// Tiberium Project @feature converted C&C4 abilities: the button's options pick the targets
+			{
+				// Tiberium Project @feature ... unless the ability's own module refuses this one (Kane's Wrath's Avatar
+				// takes over only its side's Beam Cannons, Flame Tanks, Attack Bikes and Stealth Tanks)
+				for( BehaviorModule **u = obj->getBehaviorModules(); *u; ++u )
+				{
+					const SpecialPowerUpdateInterface *spu = (*u)->getSpecialPowerUpdateInterface();
+					if( spu != nullptr && spu->refusesSpecialPower( spTemplate, target, nullptr ) )
+						return FALSE;
+				}
 				return TRUE;
+			}
 
 			case SPECIAL_CASH_BOUNTY:
 				return false;

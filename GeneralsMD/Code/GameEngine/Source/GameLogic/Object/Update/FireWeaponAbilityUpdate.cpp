@@ -27,6 +27,7 @@
 #include "Common/BezierSegment.h"
 #include "Common/GameAudio.h"
 #include "Common/ThingTemplate.h"
+#include "Common/Upgrade.h"
 #include "Common/Xfer.h"
 #include "GameClient/FXList.h"
 #include "GameLogic/AI.h"
@@ -53,6 +54,19 @@ static void clearTurretTargets( Object *obj )
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @bugfix an ability's shot at its target object, wherever the target stands: the ability has
+// brought the unit within its StartAbilityRange already (SAGE measures that from the unit's edge, a weapon's range
+// check from its centre), and the Avatar's take-over shots, short-ranged, were not fired at all
+//-------------------------------------------------------------------------------------------------
+static void fireAbilityShot( const WeaponTemplate *weapon, const Object *source, Object *target )
+{
+	Weapon *w = TheWeaponStore->allocateNewWeapon( weapon, PRIMARY_WEAPON );
+	w->loadAmmoNow( source );
+	w->forceFireWeapon( source, target );
+	deleteInstance( w );
+}
+
+//-------------------------------------------------------------------------------------------------
 // Shot = Weapon:<name> Delay:<ms> OffsetX:<ahead> OffsetY:<left>
 //-------------------------------------------------------------------------------------------------
 void FireWeaponAbilityUpdateModuleData::parseShot( INI *ini, void *instance, void * /*store*/, const void * /*userData*/ )
@@ -65,6 +79,18 @@ void FireWeaponAbilityUpdateModuleData::parseShot( INI *ini, void *instance, voi
 	shot.m_offsetX = INI::scanReal( INI::getNextSubToken( "OffsetX" ) );
 	shot.m_offsetY = INI::scanReal( INI::getNextSubToken( "OffsetY" ) );
 	self->m_shots.push_back( shot );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature TargetUpgrade = <object> <upgrade>
+//-------------------------------------------------------------------------------------------------
+void FireWeaponAbilityUpdateModuleData::parseTargetUpgrade( INI *ini, void *instance, void * /*store*/, const void * /*userData*/ )
+{
+	FireWeaponAbilityUpdateModuleData *self = (FireWeaponAbilityUpdateModuleData *)instance;
+	FireWeaponAbilityTargetUpgrade entry;
+	entry.m_thingName = ini->getNextToken();
+	entry.m_upgradeName = ini->getNextToken();
+	self->m_targetUpgrades.push_back( entry );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -102,6 +128,13 @@ Bool FireWeaponAbilityUpdate::initiateIntentToDoSpecialPower( const SpecialPower
 	Object *me = getObject();
 	if( me->isDisabled() || me->isEffectivelyDead() || m_stage == STAGE_LEAP )
 		return FALSE;
+	// Tiberium Project @feature not an object it cannot take over
+	if( refusesSpecialPower( specialPowerTemplate, targetObj, targetPos ) )
+		return FALSE;
+	// Tiberium Project @bugfix ordered again before the last use was over (still packing): that one ends first, its
+	// looks and hold with it (the Avatar kept its SPECIAL_WEAPON_ONE through its next take-over)
+	if( m_stage != STAGE_IDLE )
+		finish();
 
 	m_targetID = targetObj != nullptr ? targetObj->getID() : INVALID_ID;
 	m_hasTarget = targetObj != nullptr || targetPos != nullptr;
@@ -180,12 +213,31 @@ void FireWeaponAbilityUpdate::enterStage( Stage stage )
 			// Tiberium Project @feature SAGE's special weapon state, until the ability is over
 			if( data->m_whichSpecialWeapon >= 1 && data->m_whichSpecialWeapon <= 3 )
 				me->setModelConditionState( (ModelConditionFlagType)( MODELCONDITION_SPECIAL_WEAPON_ONE + data->m_whichSpecialWeapon - 1 ) );
+			// Tiberium Project @feature the object taken over is held still until it is done (Kane's Wrath paralyses it)
+			if( !data->m_targetUpgrades.empty() && m_targetID != INVALID_ID )
+			{
+				Object *target = TheGameLogic->findObjectByID( m_targetID );
+				UnsignedInt last = 0;
+				for( size_t i = 0; i < data->m_shots.size(); ++i )
+					last = max( last, data->m_shots[i].m_delay );
+				if( target != nullptr && !target->isEffectivelyDead() )
+					target->setDisabledUntil( DISABLED_HELD, TheGameLogic->getFrame() + data->m_unpackTime + data->m_preparationTime + last + LOGICFRAMES_PER_SECOND );
+			}
 			break;
 		}
 		case STAGE_FIRE:
 			// Tiberium Project: as it fires, or takes off (not again as it fires on landing)
 			if( m_leapSegments == 0 )
 				playSound( data->m_triggerSound );
+			// Tiberium Project @feature the object taken over: its upgrade the unit's (its shots destroy it)
+			if( !data->m_targetUpgrades.empty() && m_leapSegments == 0 )
+			{
+				const Object *target = m_targetID != INVALID_ID ? TheGameLogic->findObjectByID( m_targetID ) : nullptr;
+				const FireWeaponAbilityTargetUpgrade *entry = target != nullptr && !target->isEffectivelyDead() ? targetUpgradeFor( target ) : nullptr;
+				const UpgradeTemplate *up = entry != nullptr ? TheUpgradeCenter->findUpgrade( entry->m_upgradeName ) : nullptr;
+				if( up != nullptr && !me->hasUpgrade( up ) )
+					me->giveUpgrade( up );
+			}
 			break;
 		case STAGE_PACK:
 			if( data->m_packTime > 0 )
@@ -348,9 +400,14 @@ UpdateSleepTime FireWeaponAbilityUpdate::update()
 				finish();
 				return UPDATE_SLEEP_FOREVER;
 			}
+			// Tiberium Project @tweak to an object, the reach is from the unit's edge to the object's (as Zero Hour's
+			// own SpecialAbilityUpdate measures it, and SAGE's StartAbilityRange is meant): the Avatar, taking over a
+			// vehicle 15 away, came up against it and stopped short of its centre
+			Object *targetObj = m_targetID != INVALID_ID ? TheGameLogic->findObjectByID( m_targetID ) : nullptr;
 			const Coord3D *at = me->getPosition();
 			const Real dx = pos.x - at->x, dy = pos.y - at->y;
-			if( dx * dx + dy * dy <= data->m_startAbilityRange * data->m_startAbilityRange )
+			const Real distSqr = targetObj != nullptr ? ThePartitionManager->getDistanceSquared( me, targetObj, FROM_BOUNDINGSPHERE_2D ) : dx * dx + dy * dy;
+			if( distSqr <= data->m_startAbilityRange * data->m_startAbilityRange )
 			{
 				enterStage( STAGE_UNPACK );
 				return UPDATE_SLEEP_NONE;
@@ -363,7 +420,11 @@ UpdateSleepTime FireWeaponAbilityUpdate::update()
 			}
 			if( !m_moveIssued )
 			{
-				ai->aiMoveToPosition( &pos, CMD_FROM_AI );
+				// (to an object: after it, to beside it, not to the spot it stands on)
+				if( targetObj != nullptr )
+					ai->aiMoveToObject( targetObj, CMD_FROM_AI );
+				else
+					ai->aiMoveToPosition( &pos, CMD_FROM_AI );
 				m_moveIssued = TRUE;
 			}
 			else if( since > LOGICFRAMES_PER_SECOND && ai->isIdle() )
@@ -446,7 +507,7 @@ UpdateSleepTime FireWeaponAbilityUpdate::update()
 				Object *target = m_targetID != INVALID_ID ? TheGameLogic->findObjectByID( m_targetID ) : nullptr;
 				if( target != nullptr && shot.m_offsetX == 0.0f && shot.m_offsetY == 0.0f )
 				{
-					TheWeaponStore->createAndFireTempWeapon( weapon, me, target );
+					fireAbilityShot( weapon, me, target );
 					continue;
 				}
 				// the offset turns with the unit: ahead of it, then to its left
@@ -507,6 +568,40 @@ UpdateSleepTime FireWeaponAbilityUpdate::update()
 			break;
 	}
 	return UPDATE_SLEEP_FOREVER;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the TargetUpgrade entry for that object's kind (or nullptr)
+//-------------------------------------------------------------------------------------------------
+const FireWeaponAbilityTargetUpgrade *FireWeaponAbilityUpdate::targetUpgradeFor( const Object *target ) const
+{
+	const FireWeaponAbilityUpdateModuleData *data = getFireWeaponAbilityUpdateModuleData();
+	if( target == nullptr )
+		return nullptr;
+	for( size_t i = 0; i < data->m_targetUpgrades.size(); ++i )
+		if( target->getTemplate()->getName().compareNoCase( data->m_targetUpgrades[i].m_thingName ) == 0 )
+			return &data->m_targetUpgrades[i];
+	return nullptr;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature what the unit takes over: the player's own objects of TargetUpgrade's kinds, not one whose
+// upgrade it has already (Kane's Wrath's Avatar takes a Beam Cannon's laser once); refused before it is paid for, and
+// the player's cursor shows it (ActionManager)
+//-------------------------------------------------------------------------------------------------
+Bool FireWeaponAbilityUpdate::refusesSpecialPower( const SpecialPowerTemplate *specialPowerTemplate, const Object *targetObj, const Coord3D * /*targetPos*/ ) const
+{
+	const FireWeaponAbilityUpdateModuleData *data = getFireWeaponAbilityUpdateModuleData();
+	if( specialPowerTemplate != data->m_specialPowerTemplate || data->m_targetUpgrades.empty() )
+		return FALSE;
+	const Object *me = getObject();
+	if( targetObj == nullptr || targetObj == me || targetObj->isEffectivelyDead() || targetObj->getControllingPlayer() != me->getControllingPlayer() )
+		return TRUE;
+	const FireWeaponAbilityTargetUpgrade *entry = targetUpgradeFor( targetObj );
+	if( entry == nullptr )
+		return TRUE;
+	const UpgradeTemplate *up = TheUpgradeCenter->findUpgrade( entry->m_upgradeName );
+	return up == nullptr || me->hasUpgrade( up );
 }
 
 //-------------------------------------------------------------------------------------------------

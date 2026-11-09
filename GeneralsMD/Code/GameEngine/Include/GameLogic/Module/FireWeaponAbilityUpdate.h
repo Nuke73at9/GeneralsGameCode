@@ -41,6 +41,11 @@
 // within BeamReflectorReach of one of the unit's side's of those (Kane's Wrath's Venom): BeamReflectorWeapon is fired
 // at the reflector and BeamWeapon from it at the target (the Beam Cannon's reflector attack).
 //
+// Tiberium Project @feature taking a vehicle over (Kane's Wrath's Avatar commandeering a Beam Cannon, a Flame
+// Tank, an Attack Bike or a Stealth Tank): with TargetUpgrade = <object> <upgrade> (any number), only the
+// player's own objects of those kinds are taken (and not one whose upgrade the unit has already); on reaching it
+// the unit holds it still, and as it fires (its shots: the one that destroys it) it gets that object's upgrade.
+//
 //   Behavior = SpecialAbility ModuleTag_SatchelPower
 //     SpecialPowerTemplate = C4SP_SatchelCharge
 //   End
@@ -78,11 +83,19 @@ struct FireWeaponAbilityShot
 };
 
 //-------------------------------------------------------------------------------------------------
+struct FireWeaponAbilityTargetUpgrade
+{
+	AsciiString m_thingName;	///< an object of this kind is taken over...
+	AsciiString m_upgradeName;	///< ... and the unit gets this
+};
+
+//-------------------------------------------------------------------------------------------------
 class FireWeaponAbilityUpdateModuleData : public UpdateModuleData
 {
 public:
 	SpecialPowerTemplate *m_specialPowerTemplate;
 	std::vector<FireWeaponAbilityShot> m_shots;
+	std::vector<FireWeaponAbilityTargetUpgrade> m_targetUpgrades;	///< Tiberium Project: the objects it takes over
 	Real m_startAbilityRange;		///< closes to this distance of the target first (0: fires from where it is)
 	UnsignedInt m_unpackTime;		///< frames
 	UnsignedInt m_preparationTime;	///< frames
@@ -132,6 +145,7 @@ public:
 	}
 
 	static void parseShot( INI *ini, void *instance, void *store, const void *userData );
+	static void parseTargetUpgrade( INI *ini, void *instance, void *store, const void *userData );	///< Tiberium Project
 
 	static void buildFieldParse( MultiIniFieldParse& p )
 	{
@@ -165,6 +179,7 @@ public:
 			{ "BeamReflector",			INI::parseAsciiStringVectorAppend,	nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_reflectorNames ) },
 			{ "BeamReflectorReach",		INI::parseReal,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_reflectorReach ) },
 			{ "BeamReflectorWeapon",		INI::parseAsciiString,			nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_reflectorWeaponName ) },
+			{ "TargetUpgrade",			parseTargetUpgrade,				nullptr, 0 },	// Tiberium Project
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 		p.add( dataFieldParse );
@@ -195,9 +210,12 @@ public:
 	virtual SpecialPowerUpdateInterface* getSpecialPowerUpdateInterface() override { return this; }
 	virtual CommandOption getCommandOption() const override { return (CommandOption)0; }
 	virtual Bool isPowerCurrentlyInUse( const CommandButton *command = nullptr ) const override { return m_stage != STAGE_IDLE; }
+	// Tiberium Project @feature an object it cannot take over (TargetUpgrade)
+	virtual Bool refusesSpecialPower( const SpecialPowerTemplate *specialPowerTemplate, const Object *targetObj, const Coord3D *targetPos ) const override;
 
 	virtual UpdateSleepTime update() override;
 	Object *findReflector( const Object *target ) const;	///< Tiberium Project: the beam's reflector nearest the target
+	const FireWeaponAbilityTargetUpgrade *targetUpgradeFor( const Object *target ) const;	///< Tiberium Project: or nullptr
 	// Tiberium Project: in the air the unit is held (and may be disabled on the way), and still flies on
 	virtual DisabledMaskType getDisabledTypesToProcess() const override { return m_stage == STAGE_LEAP ? DISABLEDMASK_ALL : DISABLEDMASK_NONE; }
 

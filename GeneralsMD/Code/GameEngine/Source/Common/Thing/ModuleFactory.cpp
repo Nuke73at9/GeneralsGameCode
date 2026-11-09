@@ -230,6 +230,7 @@
 #include "GameLogic/Module/StatusBitsUpgrade.h"
 #include "GameLogic/Module/SubObjectsUpgrade.h"
 #include "GameLogic/Module/StealthUpgrade.h"
+#include "GameLogic/Module/StealthDetectorUpgrade.h"	// Tiberium Project
 #include "GameLogic/Module/UnpauseSpecialPowerUpgrade.h"
 #include "GameLogic/Module/WeaponBonusUpgrade.h"
 #include "GameLogic/Module/WeaponSetUpgrade.h"
@@ -530,6 +531,7 @@ void ModuleFactory::init()
 	addModule( StatusBitsUpgrade );
 	addModule( SubObjectsUpgrade );
 	addModule( StealthUpgrade );
+	addModule( StealthDetectorUpgrade );	// Tiberium Project
 	addModule( RadarUpgrade );
 	addModule( PowerPlantUpgrade );
 	addModule( LocomotorSetUpgrade );

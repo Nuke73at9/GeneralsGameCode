@@ -359,6 +359,7 @@ static PoolSizeRec PoolSizes[] =
 	{ "StealthDetectorUpdate", 256, 32 },
 	{ "StealthUpdate", 512, 128 },
 	{ "StealthUpgrade", 256, 32 },
+	{ "StealthDetectorUpgrade", 32, 32 },	// Tiberium Project
 	{ "StatusBitsUpgrade", 128, 128 },
 	{ "SubObjectsUpgrade", 128, 128 },
 	{ "ExperienceScalarUpgrade", 256, 128 },

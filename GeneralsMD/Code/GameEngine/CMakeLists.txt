@@ -469,6 +469,7 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/StatusDamageHelper.h
     Include/GameLogic/Module/StealthDetectorUpdate.h
     Include/GameLogic/Module/StealthUpdate.h
+    Include/GameLogic/Module/StealthDetectorUpgrade.h
     Include/GameLogic/Module/StealthUpgrade.h
     Include/GameLogic/Module/StickyBombUpdate.h
     Include/GameLogic/Module/StructureBody.h
@@ -1133,6 +1134,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Upgrade/RadarUpgrade.cpp
     Source/GameLogic/Object/Upgrade/ReplaceObjectUpgrade.cpp
     Source/GameLogic/Object/Upgrade/StatusBitsUpgrade.cpp
+    Source/GameLogic/Object/Upgrade/StealthDetectorUpgrade.cpp
     Source/GameLogic/Object/Upgrade/StealthUpgrade.cpp
     Source/GameLogic/Object/Upgrade/SubObjectsUpgrade.cpp
     Source/GameLogic/Object/Upgrade/UnpauseSpecialPowerUpgrade.cpp
