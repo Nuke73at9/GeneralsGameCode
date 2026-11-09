@@ -56,6 +56,15 @@ void WeaponSetUpgrade::upgradeImplementation()
 	obj->setWeaponSetFlag( (WeaponSetType)getWeaponSetUpgradeModuleData()->m_weaponCondition );	// Tiberium Project: WeaponCondition
 }
 
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the condition taken off with the upgrade (UndoWhenRemoved): Kane's Wrath's Firehawk
+// trades its bomb load for its missiles (each load's upgrade removes the other's)
+//-------------------------------------------------------------------------------------------------
+void WeaponSetUpgrade::undoUpgradeImplementation()
+{
+	getObject()->clearWeaponSetFlag( (WeaponSetType)getWeaponSetUpgradeModuleData()->m_weaponCondition );
+}
+
 // ------------------------------------------------------------------------------------------------
 /** CRC */
 // ------------------------------------------------------------------------------------------------

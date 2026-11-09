@@ -843,8 +843,9 @@ void TiberiumTest::update()
 			obj->setOrientation( PI * 0.5f );
 			s_spawned.push_back( obj->getID() );
 			// a structure that is not to be built up is as one the map placed: built (a supply center
-			// takes deliveries only once it is)
-			if ( s_spawnBuildFrames <= 0 && obj->isKindOf( KINDOF_STRUCTURE ) )
+			// takes deliveries only once it is); Tiberium Project @tweak a unit as one a factory made (what it is
+			// given as it is made: GrantUpgradeCreate, the Firehawk's bomb load)
+			if ( s_spawnBuildFrames <= 0 || !obj->isKindOf( KINDOF_STRUCTURE ) )
 			{
 				for ( BehaviorModule **m = obj->getBehaviorModules(); *m != nullptr; ++m )
 				{
