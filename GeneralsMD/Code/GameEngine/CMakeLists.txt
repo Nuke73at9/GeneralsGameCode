@@ -457,6 +457,7 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/SpecialAbility.h
     Include/GameLogic/Module/RadarHackSpecialPower.h
     Include/GameLogic/Module/AssignSlavesTargetObjectSpecialPower.h
+    Include/GameLogic/Module/FireGroupCenterUpdate.h
     Include/GameLogic/Module/SpecialAbilityUpdate.h
     Include/GameLogic/Module/SpecialPowerCompletionDie.h
     Include/GameLogic/Module/SpecialPowerCreate.h
@@ -1056,6 +1057,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Update/FireOCLAfterWeaponCooldownUpdate.cpp
     Source/GameLogic/Object/Update/FireSpreadUpdate.cpp
     Source/GameLogic/Object/Update/FirestormDynamicGeometryInfoUpdate.cpp
+    Source/GameLogic/Object/Update/FireGroupCenterUpdate.cpp
     Source/GameLogic/Object/Update/FireWeaponUpdate.cpp
     Source/GameLogic/Object/Update/FlammableUpdate.cpp
     Source/GameLogic/Object/Update/FloatUpdate.cpp

@@ -194,6 +194,32 @@ void ToggleAbilityUpdate::applyState( Bool toggled )
 }
 
 //-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature forced back to the first state (see the header): only from the second, once it is in it
+//-------------------------------------------------------------------------------------------------
+Bool ToggleAbilityUpdate::forceToDefault( const ModelConditionFlags &ifShows )
+{
+	const ToggleAbilityUpdateModuleData *data = getToggleAbilityUpdateModuleData();
+	if( !m_toggled || m_switching )
+		return FALSE;
+	if( ifShows.any() && !data->m_toggledConditions.anyIntersectionWith( ifShows ) )
+		return FALSE;
+	beginSwitch();
+	return TRUE;
+}
+
+void ToggleAbilityUpdate::forceAllToDefault( Object *obj, const ModelConditionFlags &ifShows )
+{
+	static const NameKeyType key = NAMEKEY( "ToggleAbilityUpdate" );
+	if( obj == nullptr || obj->isEffectivelyDead() )
+		return;
+	for( BehaviorModule **m = obj->getBehaviorModules(); *m != nullptr; ++m )
+	{
+		if( (*m)->getModuleNameKey() == key )
+			static_cast<ToggleAbilityUpdate *>( *m )->forceToDefault( ifShows );
+	}
+}
+
 UpdateSleepTime ToggleAbilityUpdate::update()
 {
 	const ToggleAbilityUpdateModuleData *data = getToggleAbilityUpdateModuleData();

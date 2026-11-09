@@ -46,6 +46,11 @@ public:
 	const ObjectCreationList* m_ocl;			///< object creaton list to make
 	Bool m_transferPreviousHealth; ///< Transfers previous health before death to the new object created.
 	Bool m_transferSelection;      ///< Transfers selection state before death to the new object created.
+	/// Tiberium Project @feature its list made ShareCount times for every ShareOf such deaths of its owner's (a running
+	/// tally kept by object and module): Kane's Wrath's squad deaths, its squads being their soldiers here (the Redemption:
+	/// 3 of 9 for a Militant, the three Awakened of one squad for each nine)
+	Int m_shareCount;
+	Int m_shareOf;
 
 	CreateObjectDieModuleData();
 

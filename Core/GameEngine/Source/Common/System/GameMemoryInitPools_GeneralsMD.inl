@@ -260,6 +260,7 @@ static PoolSizeRec PoolSizes[] =
 	{ "SpecialAbility", 512, 32 },
 	{ "RadarHackSpecialPower", 32, 32 },	// Tiberium Project
 	{ "AssignSlavesTargetObjectSpecialPower", 32, 32 },	// Tiberium Project
+	{ "FireGroupCenterUpdate", 64, 64 },	// Tiberium Project
 	{ "SpecialAbilityUpdate", 512, 32 },
 	{ "MissileLauncherBuildingUpdate", 32, 32 },
 	{ "SquishCollide", 512, 32 },

@@ -88,6 +88,8 @@ enum ObjectStatusTypes CPP_11(: Int)
 	OBJECT_STATUS_IMMOBILE,							///< Do not move!
 	OBJECT_STATUS_DISGUISED,						///< Object is disguised (a type of stealth)
 	OBJECT_STATUS_DEPLOYED,							///< Object is deployed.
+	OBJECT_STATUS_REDEMPTION,						///< Tiberium Project: marked by Kane's Wrath's Redemption (SAGE's PARACHUTING there): killed, it rises again (CreateObjectDie RequiredStatus)
+	OBJECT_STATUS_FIRESTORM_PLAYERPOWER_ACTIVE,	///< Tiberium Project: under C&C4's Firestorm Ignition: its flames make firestorms (a weapon's TargetOCLWithStatus)
 	// add more status types here and don't forget to add to the string table ObjectStatusMaskType::s_bitNameList[]
 
 	OBJECT_STATUS_COUNT

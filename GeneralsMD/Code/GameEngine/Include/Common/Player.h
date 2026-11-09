@@ -367,6 +367,10 @@ public:
 	void enableRadar();	///< remove the restriction imposed by disableRadar
 	Bool hasRadar() const;///< A positive number of radar producers, plus my radar is not disabled
 	void jamRadar( UnsignedInt frames );	///< Tiberium Project @feature its radar goes dark this long (Kane's Wrath's Radar Jamming Missile, C&C4's Hack Radar)
+	/// Tiberium Project @feature a death that earns a share of what a die module makes: count shares of every "of" deaths
+	/// counted under that key, running; returns how many whole ones are due now (Kane's Wrath's Redemption: a squad of
+	/// nine Militants, each a soldier here, makes the three Awakened of one squad)
+	Int addDeathShare( const AsciiString& key, Int count, Int of );
 	Bool isRadarJammed() const;	///< Tiberium Project
 	Bool okToPlayRadarEdgeSound();///< just like it "sounds"
 	//Battle plans effect the players abilities... so may as well add it here. Also
@@ -801,6 +805,7 @@ private:
 	Int										m_supportPointsMax;				///< (SAVE) the meter's top (0: no meter yet)
 	UnsignedInt						m_supportFedFrame;				///< (SAVE) the frame the meter last filled on
 	UnsignedInt						m_radarJammedUntil;				///< (SAVE) Tiberium Project: its radar is dark until this frame (Kane's Wrath's Radar Jamming Missile)
+	std::map<AsciiString, Int>	m_deathShares;				///< (SAVE) Tiberium Project: addDeathShare's running tallies, in shares
 	Int										m_levelUp, m_levelDown;			///< (NO-SAVE) skill points to go up/down a level (runtime only)
 	UnicodeString					m_generalName;		///< (SAVE) This is the name of the general the player is allowed to change.
 

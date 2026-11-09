@@ -65,6 +65,7 @@
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/LaserUpdate.h"
 #include "GameLogic/Module/LifetimeUpdate.h"
+#include "GameLogic/Module/ToggleAbilityUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/UpdateModule.h"
 #include "GameLogic/Module/SpecialPowerCompletionDie.h"
 #include "GameLogic/Module/AssaultTransportAIUpdate.h"
@@ -198,6 +199,12 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "ProjectileDetonationFX",			parseAllVetLevelsFXList,							nullptr,							offsetof(WeaponTemplate, m_projectileDetonateFXs) },
 	{ "FireOCL",										parseAllVetLevelsAsciiString,					nullptr,							offsetof(WeaponTemplate, m_fireOCLNames) },
 	{ "TargetOCL",									INI::parseAsciiString,								nullptr,							offsetof(WeaponTemplate, m_targetOCLName) },	// Tiberium Project
+	{ "TargetOCLWithStatus",				INI::parseAsciiString,								nullptr,							offsetof(WeaponTemplate, m_targetStatusOCLName) },	// Tiberium Project
+	{ "TargetOCLStatus",						ObjectStatusMaskType::parseFromINI,			nullptr,							offsetof(WeaponTemplate, m_targetOCLStatus) },	// Tiberium Project
+	{ "VictimNames",								INI::parseAsciiStringVectorAppend,		nullptr,							offsetof(WeaponTemplate, m_victimNames) },	// Tiberium Project
+	{ "VictimForbiddenNames",				INI::parseAsciiStringVectorAppend,		nullptr,							offsetof(WeaponTemplate, m_victimForbiddenNames) },	// Tiberium Project
+	{ "ForceToggleToDefault",				INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_forceToggleToDefault) },	// Tiberium Project
+	{ "ForceToggleConditions",			ModelConditionFlags::parseFromINI,			nullptr,							offsetof(WeaponTemplate, m_forceToggleConditions) },	// Tiberium Project
 	{ "AttributeModifier",					AttributeModifierStore::parseModifierName,	nullptr,				offsetof(WeaponTemplate, m_victimModifier) },	// Tiberium Project
 	{ "AttributeModifierDuration",	INI::parseDurationUnsignedInt,	nullptr,				offsetof(WeaponTemplate, m_victimModifierDuration) },	// Tiberium Project
 	{ "FollowUp",									WeaponTemplate::parseFollowUp,						nullptr,							0 },	// Tiberium Project
@@ -309,6 +316,8 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_projectileName.clear();					// no projectile
 	m_projectileTmpl								= nullptr;
 	m_targetOCL										= nullptr;	// Tiberium Project
+	m_targetStatusOCL							= nullptr;	// Tiberium Project
+	m_forceToggleToDefault				= FALSE;	// Tiberium Project
 	m_victimModifier							= NAMEKEY_INVALID;	// Tiberium Project
 	m_victimModifierDuration			= 0;	// Tiberium Project
 	m_impactFX = nullptr;	// Tiberium Project
@@ -510,6 +519,8 @@ void WeaponTemplate::postProcessLoad()
 	// OCL nugget: the fire a flamethrower leaves, an ion cannon called down on its target)
 	m_targetOCL = m_targetOCLName.isEmpty() ? nullptr : TheObjectCreationListStore->findObjectCreationList(m_targetOCLName.str());
 	DEBUG_ASSERTCRASH(m_targetOCLName.isEmpty() || m_targetOCL, ("OCL %s not found in a weapon!", m_targetOCLName.str()));
+	m_targetStatusOCL = m_targetStatusOCLName.isEmpty() ? nullptr : TheObjectCreationListStore->findObjectCreationList(m_targetStatusOCLName.str());
+	DEBUG_ASSERTCRASH(m_targetStatusOCLName.isEmpty() || m_targetStatusOCL, ("OCL %s not found in a weapon!", m_targetStatusOCLName.str()));
 
 	// Tiberium Project @feature the beam a chain draws from hop to hop (Scatter)
 	m_scatterLaser = m_scatterLaserName.isEmpty() ? nullptr : TheThingFactory->findTemplate(m_scatterLaserName);
@@ -658,7 +669,26 @@ Bool WeaponTemplate::isVictimKindAllowed(const Object *victim) const
 {
 	if (m_victimKindOf.any() && !victim->isAnyKindOf(m_victimKindOf))
 		return false;
-	return !victim->isAnyKindOf(m_victimForbiddenKindOf);
+	if (victim->isAnyKindOf(m_victimForbiddenKindOf))
+		return false;
+	// Tiberium Project @feature only the objects it names (VictimNames: C&C4's IncludeThing, the Firestorm Ignition's
+	// flame units) and none it spares (VictimForbiddenNames: C&C4's ExcludeThing, the Black Hand in his own fire)
+	const AsciiString &name = victim->getTemplate()->getName();
+	for (size_t i = 0; i < m_victimForbiddenNames.size(); ++i)
+	{
+		if (m_victimForbiddenNames[i] == name)
+			return false;
+	}
+	if (!m_victimNames.empty())
+	{
+		for (size_t i = 0; i < m_victimNames.size(); ++i)
+		{
+			if (m_victimNames[i] == name)
+				return true;
+		}
+		return false;
+	}
+	return true;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1739,7 +1769,7 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 	}
 
 	// Tiberium Project @feature TargetOCL: made where the damage lands, by the weapon's owner
-	if (m_targetOCL != nullptr && source != nullptr && pos != nullptr)
+	if ((m_targetOCL != nullptr || m_targetStatusOCL != nullptr) && source != nullptr && pos != nullptr)
 	{
 		const Object* owner = source;
 		if (source->isKindOf(KINDOF_PROJECTILE) && source->getProducerID() != INVALID_ID)
@@ -1748,11 +1778,14 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 			if (launcher != nullptr)
 				owner = launcher;
 		}
+		// Tiberium Project @feature another while the owner has a status (TargetOCLWithStatus: C&C4's flames make
+		// firestorms while its Firestorm Ignition is on), none when there is no list for how it stands
+		const ObjectCreationList *targetOCL = m_targetStatusOCL != nullptr && owner->getStatusBits().testForAny(m_targetOCLStatus) ? m_targetStatusOCL : m_targetOCL;
 		// Tiberium Project @feature what it makes with a StickyBombUpdate sticks to the victim (C&C4's AttachToTarget); a shot that bursts
 		// where it lands (a projectile) has none named: what it burst on, the nearest soldier, vehicle or
 		// structure within its radius but its firer
 		Object *stickTo = primaryVictim;
-		if (stickTo == nullptr && m_targetOCL != nullptr)
+		if (stickTo == nullptr && targetOCL != nullptr)
 		{
 			const Real reach = max(getPrimaryDamageRadius(bonus), 5.0f);
 			SimpleObjectIterator *closest = ThePartitionManager->iterateObjectsInRange(pos, reach, DAMAGE_RANGE_CALC_TYPE, nullptr, ITER_SORTED_NEAR_TO_FAR);
@@ -1775,7 +1808,8 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 			}
 		}
 		ObjectCreationList::setStickTarget(stickTo != nullptr && !stickTo->isEffectivelyDead() ? stickTo : nullptr);
-		ObjectCreationList::create(m_targetOCL, owner, pos, pos, owner->getOrientation());
+		if (targetOCL != nullptr)
+			ObjectCreationList::create(targetOCL, owner, pos, pos, owner->getOrientation());
 		ObjectCreationList::setStickTarget(nullptr);
 	}
 
@@ -2045,6 +2079,10 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 			// (C&C4's AttributeModifierNugget: a slow, an armour debuff, an ally's damage boost)
 			if (m_victimModifier != NAMEKEY_INVALID && !curVictim->isEffectivelyDead())
 				curVictim->applyAttributeModifier(TheAttributeModifierStore->find(m_victimModifier), sourceID, m_victimModifierDuration);
+			// Tiberium Project @feature its toggles back to their first state (C&C4's ForceToggleToDefaultNugget: a burrowed
+			// unit dug out)
+			if (m_forceToggleToDefault)
+				ToggleAbilityUpdate::forceAllToDefault(curVictim, m_forceToggleConditions);
 			// Tiberium Project @feature veterancy for each (C&C4's ExperienceNugget: Battle Hardening's two levels)
 			if (m_victimVeterancy > 0 && !curVictim->isEffectivelyDead())
 			{

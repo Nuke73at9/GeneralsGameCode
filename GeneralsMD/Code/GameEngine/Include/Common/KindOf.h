@@ -174,6 +174,8 @@ enum KindOfType CPP_11(: Int)
 	// TheSuperHackers @info New kinds for Mods
 
 	KINDOF_NO_ATTACK_WARNING,				///< does not trigger the under attack radar/EVA warning when taking damage
+	KINDOF_FIRESTORM,								///< Tiberium Project: C&C4's firestorm (a fire near one catches)
+	KINDOF_HAS_FIRE_GROUP_CENTER_UPDATE,	///< Tiberium Project: C&C4's fire that joins others into a firestorm (FireGroupCenterUpdate)
 
 	KINDOF_COUNT,										// total number of kindofs
 	KINDOF_FIRST = 0,

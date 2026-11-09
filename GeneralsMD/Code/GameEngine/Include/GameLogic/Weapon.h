@@ -33,6 +33,7 @@
 #include "Common/AudioEventRTS.h"
 #include "Common/GameCommon.h"
 #include "Common/ObjectStatusTypes.h"	// Tiberium Project
+#include "Common/ModelState.h"	// Tiberium Project
 
 #include "GameLogic/Damage.h"
 
@@ -588,6 +589,13 @@ private:
 	const ObjectCreationList* m_projectileDetonationOCLs[LEVEL_COUNT];	///< Post-loaded lookup of name string for ease and speed (and subsystem init order)
 	AsciiString m_targetOCLName;												///< Tiberium Project: OCL made where the weapon's damage lands
 	const ObjectCreationList* m_targetOCL;										///< Tiberium Project: post-loaded m_targetOCLName
+	AsciiString m_targetStatusOCLName;										///< Tiberium Project: made instead while its firer has any of m_targetOCLStatus (C&C4's firestorm while Firestorm Ignition is on)
+	const ObjectCreationList* m_targetStatusOCL;							///< Tiberium Project: post-loaded m_targetStatusOCLName
+	ObjectStatusMaskType m_targetOCLStatus;									///< Tiberium Project: the firer's statuses that pick m_targetStatusOCL
+	std::vector<AsciiString> m_victimNames;									///< Tiberium Project: its damage reaches only these objects (C&C4's IncludeThing; none: any)
+	std::vector<AsciiString> m_victimForbiddenNames;						///< Tiberium Project: and none of these (C&C4's ExcludeThing: a Black Hand in his own fire)
+	Bool m_forceToggleToDefault;													///< Tiberium Project: its victims' toggles go back to their first state (C&C4's ForceToggleToDefaultNugget)
+	ModelConditionFlags m_forceToggleConditions;								///< Tiberium Project: ... those whose second state shows any of these (none: all)
 	NameKeyType m_victimModifier;													///< Tiberium Project: an attribute modifier put on each object the damage reaches (C&C4's AttributeModifierNugget)
 	UnsignedInt m_victimModifierDuration;									///< Tiberium Project: ... for so long each time (frames; 0: the modifier's own)
 	std::vector<WeaponFollowUp> m_followUps;										///< Tiberium Project: the further damage it sets off (FollowUp)

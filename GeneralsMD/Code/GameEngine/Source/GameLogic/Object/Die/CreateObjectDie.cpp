@@ -39,6 +39,8 @@
 #include "GameLogic/ObjectCreationList.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameClient/InGameUI.h"
+#include "Common/Player.h"	// Tiberium Project
+#include "Common/ThingTemplate.h"	// Tiberium Project
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
@@ -48,6 +50,8 @@ CreateObjectDieModuleData::CreateObjectDieModuleData()
 	m_ocl = nullptr;
 	m_transferPreviousHealth = FALSE;
 	m_transferSelection = FALSE;
+	m_shareCount = 1;
+	m_shareOf = 1;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -61,6 +65,8 @@ CreateObjectDieModuleData::CreateObjectDieModuleData()
 		{ "CreationList",	INI::parseObjectCreationList,		nullptr,											offsetof( CreateObjectDieModuleData, m_ocl ) },
 		{ "TransferPreviousHealth", INI::parseBool, nullptr	,offsetof( CreateObjectDieModuleData, m_transferPreviousHealth ) },
 		{ "TransferSelection", INI::parseBool, nullptr, offsetof( CreateObjectDieModuleData, m_transferSelection ) },
+		{ "ShareCount", INI::parseInt, nullptr, offsetof( CreateObjectDieModuleData, m_shareCount ) },	// Tiberium Project
+		{ "ShareOf", INI::parseInt, nullptr, offsetof( CreateObjectDieModuleData, m_shareOf ) },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
 	p.add(dataFieldParse);
@@ -94,6 +100,22 @@ void CreateObjectDie::onDie( const DamageInfo * damageInfo )
 		return;
 
 	Object *damageDealer = TheGameLogic->findObjectByID( damageInfo->in.m_sourceID );
+
+	// Tiberium Project @feature a share of what the list makes (ShareCount of every ShareOf deaths): run that many times
+	// now, by the dying object's player's tally for this object and module
+	if( data->m_shareCount != 1 || data->m_shareOf > 1 )
+	{
+		Player *owner = getObject()->getControllingPlayer();
+		if( owner == nullptr )
+			return;
+		AsciiString key = getObject()->getTemplate()->getName();
+		key.concat( ':' );
+		key.concat( TheNameKeyGenerator->keyToName( getModuleTagNameKey() ) );
+		const Int due = owner->addDeathShare( key, data->m_shareCount, data->m_shareOf );
+		for( Int i = 0; i < due; ++i )
+			ObjectCreationList::create( data->m_ocl, getObject(), damageDealer );
+		return;
+	}
 
 	Object *newObject = ObjectCreationList::create( data->m_ocl, getObject(), damageDealer );
 	if (!newObject)

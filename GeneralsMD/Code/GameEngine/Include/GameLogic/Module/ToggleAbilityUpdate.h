@@ -161,6 +161,15 @@ public:
 
 	virtual UpdateSleepTime update() override;
 
+	/// Tiberium Project @feature forced back to its first state (C&C4's ForceToggleToDefaultNugget: the Seismic Disturbance
+	/// and the Rhino's sonic pound dig burrowed units out), when its second state shows any of ifShows (none given: any
+	/// toggle); returns whether it switches back
+	Bool forceToDefault( const ModelConditionFlags &ifShows );
+	/// ... each of the object's toggles
+	static void forceAllToDefault( Object *obj, const ModelConditionFlags &ifShows );
+	/// Tiberium Project: the power that switches it (the test harness's toggle)
+	const SpecialPowerTemplate *friend_getSpecialPowerTemplate() const { return getToggleAbilityUpdateModuleData()->m_specialPowerTemplate; }
+
 private:
 
 	void beginSwitch();

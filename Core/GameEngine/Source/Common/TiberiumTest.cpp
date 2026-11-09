@@ -78,6 +78,7 @@
 #include "GameLogic/TiberiumZones.h"
 #endif
 #include "GameLogic/Module/BaseConstructionUpdate.h"
+#include "GameLogic/Module/ToggleAbilityUpdate.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 #include "GameLogic/Module/SupplyTruckAIUpdate.h"
 #include "GameLogic/Module/DockUpdate.h"
@@ -1215,6 +1216,30 @@ void TiberiumTest::update()
 			}
 			log( "frame %d: ui: selected %d", (int)s_frame, (int)picked );
 		}
+#if RTS_ZEROHOUR
+		else if ( step.action == "toggle" && TheGameLogic != nullptr && TheThingFactory != nullptr )
+		{
+			// Tiberium Project @feature (the test) "toggle=Template": the first object of that template, any player's
+			// (an AI's too), switches each of its toggles (ToggleAbilityUpdate: a C&C4 unit burrowing)
+			const ThingTemplate *tmpl = TheThingFactory->findTemplate( step.arg.c_str() );
+			Object *found = nullptr;
+			for ( Object *obj = TheGameLogic->getFirstObject(); obj != nullptr && found == nullptr; obj = obj->getNextObject() )
+				if ( tmpl != nullptr && obj->getTemplate()->isEquivalentTo( tmpl ) && !obj->isEffectivelyDead() )
+					found = obj;
+			Int switched = 0;
+			static const NameKeyType key = NAMEKEY( "ToggleAbilityUpdate" );
+			for ( BehaviorModule **m = found != nullptr ? found->getBehaviorModules() : nullptr; m != nullptr && *m != nullptr; ++m )
+			{
+				if ( (*m)->getModuleNameKey() != key )
+					continue;
+				ToggleAbilityUpdate *t = static_cast<ToggleAbilityUpdate *>( *m );
+				const SpecialPowerTemplate *sp = t->friend_getSpecialPowerTemplate();
+				if ( t->initiateIntentToDoSpecialPower( sp, nullptr, nullptr, nullptr, 0 ) )
+					++switched;
+			}
+			log( "frame %d: ui: toggle %s: %d switched%s", (int)s_frame, step.arg.c_str(), (int)switched, found == nullptr ? " (none found)" : "" );
+		}
+#endif
 		else if ( step.action == "vet" && TheGameLogic != nullptr )
 		{
 			// the spawned objects' ranks
@@ -1921,8 +1946,12 @@ void TiberiumTest::update()
 		}
 		else if ( step.action == "count" && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
 		{
-			// how many of an object the local player has (what a factory made)
-			const ThingTemplate *tmpl = TheThingFactory != nullptr ? TheThingFactory->findTemplate( step.arg.c_str() ) : nullptr;
+			// how many of an object the local player has (what a factory made); "Template,all": and where each stands
+			std::string countName = step.arg;
+			const Bool listAll = countName.size() > 4 && countName.compare( countName.size() - 4, 4, ",all" ) == 0;
+			if ( listAll )
+				countName.resize( countName.size() - 4 );
+			const ThingTemplate *tmpl = TheThingFactory != nullptr ? TheThingFactory->findTemplate( countName.c_str() ) : nullptr;
 			Int count = 0;
 			if ( tmpl != nullptr )
 				ThePlayerList->getLocalPlayer()->countObjectsByThingTemplate( 1, &tmpl, FALSE, &count );
@@ -1945,7 +1974,24 @@ void TiberiumTest::update()
 				snprintf( where, sizeof( where ), ", the first at %.0f %.0f (%.0f%% built)", first.pos.x, first.pos.y, first.built );
 			else if ( first.found )
 				snprintf( where, sizeof( where ), ", the first at %.0f %.0f", first.pos.x, first.pos.y );
-			log( "frame %d: ui: %d of %s%s%s", (int)s_frame, (int)count, step.arg.c_str(), tmpl != nullptr ? "" : " (no such object)", where );
+			log( "frame %d: ui: %d of %s%s%s", (int)s_frame, (int)count, countName.c_str(), tmpl != nullptr ? "" : " (no such object)", where );
+			if ( listAll && tmpl != nullptr )
+			{
+				struct Each { const ThingTemplate *tmpl; std::string text; Int n; static void each( Object *obj, void *data )
+				{
+					Each *me = (Each *)data;
+					if ( me->n >= 24 || !obj->getTemplate()->isEquivalentTo( me->tmpl ) )
+						return;
+					char one[64];
+					snprintf( one, sizeof( one ), " %.0f %.0f%s;", obj->getPosition()->x, obj->getPosition()->y,
+						obj->getVeterancyLevel() > LEVEL_REGULAR ? " (veteran+)" : "" );
+					me->text += one;
+					++me->n;
+				} };
+				Each each = { tmpl, std::string(), 0 };
+				ThePlayerList->getLocalPlayer()->iterateObjects( Each::each, &each );
+				log( "frame %d: ui: %s at%s", (int)s_frame, countName.c_str(), each.text.c_str() );
+			}
 		}
 		else if ( step.action == "cash" && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
 		{
@@ -2087,7 +2133,9 @@ void TiberiumTest::update()
 				char returns[32] = "";
 				if ( falseReturns > 0 )
 					snprintf( returns, sizeof( returns ), ", %d false returns", (int)falseReturns );
-				snprintf( field, sizeof( field ), "%s%s%s%s%s%s%s%s%s%s%s",
+				snprintf( field, sizeof( field ), "%s%s%s%s%s%s%s%s%s%s%s%s",
+					// (a burrowed unit, C&C4's: dug out by the Seismic Disturbance)
+					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_BURROWING ) ? ", BURROWING" : "",
 					armourBody != nullptr && armourBody->testArmorSetFlag( ARMORSET_PLAYER_UPGRADE ) ? ", armour upgraded" : "",
 					obj->testStatus( OBJECT_STATUS_RIDER1 ) ? ", RIDER1" : "",
 					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_USER_6 ) ? ", USER_6" : "",

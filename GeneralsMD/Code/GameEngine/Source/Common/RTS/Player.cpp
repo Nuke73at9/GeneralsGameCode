@@ -336,6 +336,7 @@ Player::Player( Int playerIndex )
 	m_supportPointsMax = 0;
 	m_supportFedFrame = 0;
 	m_radarJammedUntil = 0;	// Tiberium Project
+	m_deathShares.clear();	// Tiberium Project
 	m_side = nullptr;
 	m_baseSide = nullptr;
 	m_skillPoints = 0;
@@ -368,6 +369,7 @@ void Player::init(const PlayerTemplate* pt)
 	m_supportPointsMax = 0;
 	m_supportFedFrame = 0;
 	m_radarJammedUntil = 0;	// Tiberium Project
+	m_deathShares.clear();	// Tiberium Project
 
 	m_isPreorder = FALSE;
 	m_isPlayerDead = FALSE;
@@ -3398,6 +3400,19 @@ Bool Player::isRadarJammed() const
 	return m_radarJammedUntil != 0 && TheGameLogic != nullptr && TheGameLogic->getFrame() < m_radarJammedUntil;
 }
 
+Int Player::addDeathShare( const AsciiString& key, Int count, Int of )
+{
+	if( count <= 0 )
+		return 0;
+	if( of <= 1 )
+		return count;
+	Int &tally = m_deathShares[ key ];
+	tally += count;
+	const Int due = tally / of;
+	tally -= due * of;
+	return due;
+}
+
 void Player::jamRadar( UnsignedInt frames )
 {
 	if( frames == 0 )
@@ -4174,6 +4189,10 @@ void Player::crc( Xfer *xfer )
 		xfer->xferInt( &m_supportProgress );
 	}
 
+	// Tiberium Project @feature the death shares' tallies (none in a game without them: its CRC kept)
+	for( std::map<AsciiString, Int>::iterator it = m_deathShares.begin(); it != m_deathShares.end(); ++it )
+		xfer->xferInt( &it->second );
+
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -4193,7 +4212,7 @@ void Player::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 11;	// Tiberium Project @feature 9: 32 players (attacked by); 10: C&C4's support meter; 11: radar jammed
+	const XferVersion currentVersion = 12;	// Tiberium Project @feature 9: 32 players (attacked by); 10: C&C4's support meter; 11: radar jammed; 12: death shares
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -4748,6 +4767,36 @@ void Player::xfer( Xfer *xfer )
 		xfer->xferUnsignedInt( &m_radarJammedUntil );
 	else
 		m_radarJammedUntil = 0;
+
+	// Tiberium Project @feature 12: the death shares' tallies (addDeathShare)
+	if( version >= 12 )
+	{
+		UnsignedShort count = (UnsignedShort)m_deathShares.size();
+		xfer->xferUnsignedShort( &count );
+		if( xfer->getXferMode() == XFER_LOAD )
+		{
+			m_deathShares.clear();
+			for( UnsignedShort i = 0; i < count; ++i )
+			{
+				AsciiString key;
+				Int tally = 0;
+				xfer->xferAsciiString( &key );
+				xfer->xferInt( &tally );
+				m_deathShares[ key ] = tally;
+			}
+		}
+		else
+		{
+			for( std::map<AsciiString, Int>::iterator it = m_deathShares.begin(); it != m_deathShares.end(); ++it )
+			{
+				AsciiString key = it->first;
+				xfer->xferAsciiString( &key );
+				xfer->xferInt( &it->second );
+			}
+		}
+	}
+	else
+		m_deathShares.clear();
 
 }
 

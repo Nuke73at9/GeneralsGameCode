@@ -803,7 +803,9 @@ public:
 		m_fxFinal(nullptr),
 		m_preserveLayer(true),
 		m_objectCount(0),
-		m_orderAfterCreation(ORDER_AFTER_CREATION_NONE)
+		m_orderAfterCreation(ORDER_AFTER_CREATION_NONE),
+		m_veterancyLevel(LEVEL_REGULAR),
+		m_createFX(nullptr)
 	{
 		m_offset.zero();
 	}
@@ -899,6 +901,8 @@ public:
 			{ "MaxHealth",					INI::parsePercentToReal, nullptr, offsetof(GenericObjectCreationNugget, m_maxHealth) },
 			{ "RequiresLivePlayer",	INI::parseBool, nullptr, offsetof(GenericObjectCreationNugget, m_requiresLivePlayer) },
 			{ "OrderAfterCreation",	INI::parseIndexList, OrderAfterCreationNames, offsetof(GenericObjectCreationNugget, m_orderAfterCreation) },	// Tiberium Project
+			{ "VeterancyLevel",	INI::parseIndexList, TheVeterancyNames, offsetof(GenericObjectCreationNugget, m_veterancyLevel) },	// Tiberium Project
+			{ "CreateFX",	INI::parseFXList, nullptr, offsetof(GenericObjectCreationNugget, m_createFX) },	// Tiberium Project
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 
@@ -1401,6 +1405,20 @@ protected:
 		}
 	}
 
+	//-------------------------------------------------------------------------------------------------
+	/** Tiberium Project @feature what was made, once it stands where it was put: at its VeterancyLevel (C&C4's
+		SetVeterancyLevel: the Engineer's and the Hacker's Elite), with its CreateFX played there (Kane's Wrath's
+		CreateFX, C&C4's TriggerFX after the object it makes) */
+	void finishCreation( Object *obj ) const
+	{
+		if( obj == nullptr )
+			return;
+		if( m_veterancyLevel > LEVEL_REGULAR && obj->getExperienceTracker() != nullptr && obj->getExperienceTracker()->isTrainable() )
+			obj->getExperienceTracker()->setMinVeterancyLevel( (VeterancyLevel)m_veterancyLevel, FALSE );
+		if( m_createFX != nullptr )
+			FXList::doFXObj( m_createFX, obj );
+	}
+
 	Object* reallyCreate(const Coord3D *pos, const Matrix3D *mtx, Real orientation, const Object *sourceObj, UnsignedInt lifetimeFrames, const Coord3D *target = nullptr ) const
 	{
 		static const ThingTemplate* debrisTemplate = TheThingFactory->findTemplate("GenericDebris");
@@ -1510,6 +1528,7 @@ protected:
 				doStuffToObj( debris, m_names[pick], pos, mtx, orientation, sourceObj, lifetimeFrames );
 			}
 			orderAfterCreation( debris, target );	// Tiberium Project
+			finishCreation( debris );	// Tiberium Project
 
 			if (m_fadeIn)
 			{
@@ -1596,6 +1615,8 @@ private:
 	Bool											m_containInsideSourceObject; ///< The created stuff will be added to the Contain module of the SourceObject
 	Bool											m_preserveLayer;
 	Int												m_orderAfterCreation;		///< Tiberium Project: OrderAfterCreationType
+	Int												m_veterancyLevel;				///< Tiberium Project: VeterancyLevel what it makes starts at (at least)
+	const FXList*							m_createFX;							///< Tiberium Project: played at each object it makes
 	Bool											m_nameAreObjects;
 	Bool											m_okToChangeModelColor;
 	Bool											m_orientInForceDirection;

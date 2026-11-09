@@ -294,6 +294,7 @@
 #include "GameLogic/Module/SpecialAbility.h"
 #include "GameLogic/Module/RadarHackSpecialPower.h"	// Tiberium Project
 #include "GameLogic/Module/AssignSlavesTargetObjectSpecialPower.h"	// Tiberium Project
+#include "GameLogic/Module/FireGroupCenterUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/SpyVisionSpecialPower.h"
 #include "GameLogic/Module/CashBountyPower.h"
 #include "GameLogic/Module/CleanupAreaPower.h"
@@ -604,6 +605,7 @@ void ModuleFactory::init()
 	addModule( SpecialAbility );
 	addModule( RadarHackSpecialPower );	// Tiberium Project
 	addModule( AssignSlavesTargetObjectSpecialPower );	// Tiberium Project
+	addModule( FireGroupCenterUpdate );	// Tiberium Project
 	addModule( SpyVisionSpecialPower );
 	addModule( CashBountyPower );
 	addModule( CleanupAreaPower );
