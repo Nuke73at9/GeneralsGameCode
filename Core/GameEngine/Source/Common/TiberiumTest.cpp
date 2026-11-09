@@ -1892,6 +1892,22 @@ void TiberiumTest::update()
 					source->getTemplate()->getName().str(), (unsigned)me->getMoney()->countMoney(), (int)me->getSupportPoints() );
 			}
 		}
+		else if ( step.action == "presspower" )
+		{
+			// Tiberium Project @feature (the test) a click on the Powers bar's power with that button (its targeting)
+			const Bool took = TiberiumHUD::testPressPower( step.arg.c_str() );
+			const CommandButton *pending = TheInGameUI != nullptr ? TheInGameUI->getGUICommand() : nullptr;
+			log( "frame %d: ui: press power %s%s, aiming %s", (int)s_frame, step.arg.c_str(), took ? "" : " (not on the bar)",
+				pending != nullptr ? pending->getName().str() : "nothing" );
+		}
+		else if ( step.action == "points" && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
+		{
+			// Tiberium Project @feature (the test) support points for the local player (C&C4's meter, up to its top
+			// once it fills again)
+			Player *me = ThePlayerList->getLocalPlayer();
+			me->spendSupportPoints( -atoi( step.arg.c_str() ) );
+			log( "frame %d: ui: points %d of %d", (int)s_frame, (int)me->getSupportPoints(), (int)me->getSupportPointsMax() );
+		}
 		else if ( step.action == "shortcutat" && TheControlBar != nullptr && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
 		{
 			// Tiberium Project @feature (the test) "shortcutat=Button,Template": a shortcut bar power aimed at the local
@@ -1960,7 +1976,7 @@ void TiberiumTest::update()
 				const BodyModuleInterface *body = obj->getBodyModule();
 				const Player *me = ThePlayerList != nullptr ? ThePlayerList->getLocalPlayer() : nullptr;
 				const CellShroudStatus seen = me != nullptr ? ThePartitionManager->getShroudStatusForPlayer( me->getPlayerIndex(), obj->getPosition() ) : CELLSHROUD_SHROUDED;
-				log( "frame %d: ui: state %s #%u player %d at %.0f %.0f (%s to me): health %.0f of %.0f%s%s%s, sight %.0f, dodge %.2f, reflect %.2f, %d modifiers%s, upgrades %s",
+				log( "frame %d: ui: state %s #%u player %d at %.0f %.0f (%s to me): health %.0f of %.0f%s%s%s, sight %.0f, dodge %.2f, reflect %.2f, %d modifiers%s, upgrades %s, veterancy %d",
 					(int)s_frame, step.arg.c_str(), (unsigned)obj->getID(),
 					obj->getControllingPlayer() != nullptr ? (int)obj->getControllingPlayer()->getPlayerIndex() : -1,
 					obj->getPosition()->x, obj->getPosition()->y,
@@ -1972,7 +1988,7 @@ void TiberiumTest::update()
 					obj->getVisionRange(), obj->getDodgeChance(), obj->getAttributeModifierChance( MODIFIER_CHANCE_REFLECT ),
 					obj->hasAttributeModifiers() ? 1 : 0,
 					obj->getAttributeModifierScalar( MODIFIER_DAMAGE ) != 1.0f ? " (damage scaled)" : "",
-					obj->getObjectCompletedUpgradeMask().any() ? "some" : "none" );
+					obj->getObjectCompletedUpgradeMask().any() ? "some" : "none", (int)obj->getVeterancyLevel() );
 			}
 			if ( shown == 0 )
 				log( "frame %d: ui: state %s: none", (int)s_frame, step.arg.c_str() );

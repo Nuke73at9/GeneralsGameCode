@@ -58,6 +58,7 @@ public:
 	/// 3 general), "row" or "slot" (the commands above the panel and the abilities in it, in order), "group"
 	/// (several kinds selected: the kinds, in order) or "portrait"; whether something took it
 	static Bool testClickPart( const char *part, Int index, Bool right );
+	static Bool testPressPower( const char *buttonName );	///< (the test) a click on the Powers bar's power with that button
 	/// test runs: what the HUD shows, for the log
 	static void describe( char *buffer, Int size );
 };

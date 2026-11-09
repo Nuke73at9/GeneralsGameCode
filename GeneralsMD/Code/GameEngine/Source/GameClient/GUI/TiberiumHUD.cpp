@@ -1823,6 +1823,24 @@ void TiberiumHUD::reset()
 }
 
 //-------------------------------------------------------------------------------------------------
+Bool TiberiumHUD::testPressPower( const char *buttonName )
+{
+	// Tiberium Project @feature (the test) a click on the Powers bar's power with that button, wherever it stands
+	if( !powersWanted() || buttonName == nullptr )
+		return FALSE;
+	collectPowers();
+	for( size_t i = 0; i < s_powerList.size(); ++i )
+	{
+		if( s_powerList[i].button != nullptr && s_powerList[i].button->getName().compareNoCase( buttonName ) == 0 )
+		{
+			pressPower( (Int)i );
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
 Bool TiberiumHUD::testClickPart( const char *part, Int index, Bool right )
 {
 	if( !s_on || part == nullptr || index < 0 )
