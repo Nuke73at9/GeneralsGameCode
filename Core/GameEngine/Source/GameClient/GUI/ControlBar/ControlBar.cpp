@@ -125,10 +125,29 @@ const FieldParse CommandButton::s_commandButtonFieldParseTable[] =
 	{ "RadiusCursorType",			INI::parseIndexList,				 TheRadiusCursorNames, offsetof( CommandButton, m_radiusCursor ) },
 	{ "UnitSpecificSound",		INI::parseAudioEventRTS,		 nullptr, offsetof( CommandButton, m_unitSpecificSound ) },
 	{ "PageCommandSet",			INI::parseAsciiString,			 nullptr, offsetof( CommandButton, m_pageCommandSetName ) },	// Tiberium Project @feature
+	{ "LeadCommand",				INI::parseAsciiString,			 nullptr, offsetof( CommandButton, m_leadCommandName ) },	// Tiberium Project @feature
+	{ "FollowUpCommand",		INI::parseAsciiString,			 nullptr, offsetof( CommandButton, m_followUpCommandName ) },	// Tiberium Project @feature
 
 	{ nullptr,						nullptr,												 nullptr, 0 }
 
 };
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature a power used in steps: the step a press starts with, the step after one
+//-------------------------------------------------------------------------------------------------
+const CommandButton* CommandButton::getLeadCommand() const
+{
+	if( m_leadCommandName.isEmpty() || TheControlBar == nullptr )
+		return nullptr;
+	return TheControlBar->findCommandButton( m_leadCommandName );
+}
+
+const CommandButton* CommandButton::getFollowUpCommand() const
+{
+	if( m_followUpCommandName.isEmpty() || TheControlBar == nullptr )
+		return nullptr;
+	return TheControlBar->findCommandButton( m_followUpCommandName );
+}
+
 static void commandButtonTooltip(GameWindow *window,
 													WinInstanceData *instData,
 													UnsignedInt mouse)

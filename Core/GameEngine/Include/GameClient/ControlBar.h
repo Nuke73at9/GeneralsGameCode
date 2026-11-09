@@ -351,6 +351,11 @@ public:
 	CommandButtonMappedBorderType getCommandButtonMappedBorderType() const { return m_commandButtonBorder; }
 	// Tiberium Project @feature the command set a COMMAND_SET_PAGE button shows
 	const AsciiString& getPageCommandSetName() const { return m_pageCommandSetName; }
+	// Tiberium Project @feature a power used in steps (SAGE's PlayerMultiplePowersTargetedPower: Kane's Wrath's and
+	// C&C4's Decoy Army, which first chooses the units and then where their copies go): the button pressed starts
+	// with its LeadCommand's targeting; a step used goes on to its FollowUpCommand's
+	const CommandButton* getLeadCommand() const;
+	const CommandButton* getFollowUpCommand() const;
 	const Image* getButtonImage() const { return m_buttonImage;	}
 	void cacheButtonImage();
 
@@ -402,6 +407,8 @@ private:
 	GameWindow*										m_window;											///< used during the run-time assignment of a button to a gadget button window
 	AudioEventRTS									m_unitSpecificSound;					///< Unit sound played whenever button is clicked.
 	AsciiString										m_pageCommandSetName;					///< Tiberium Project @feature PageCommandSet: the set a COMMAND_SET_PAGE button shows
+	AsciiString										m_leadCommandName;						///< Tiberium Project @feature LeadCommand: the step its press starts with
+	AsciiString										m_followUpCommandName;				///< Tiberium Project @feature FollowUpCommand: the step after it
 
 	// bleah. shouldn't be mutable, but is. sue me. (srj)
 	mutable const Image*					m_buttonImage;								///< button image

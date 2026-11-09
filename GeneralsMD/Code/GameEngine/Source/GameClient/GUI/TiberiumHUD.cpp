@@ -1029,7 +1029,9 @@ namespace
 			return;
 		if( BitIsSet( e.button->getOptions(), COMMAND_OPTION_NEED_TARGET ) )
 		{
-			TheInGameUI->setGUICommand( e.button );
+			// (a power used in steps starts with its first: the Decoy Army's choice of units)
+			const CommandButton *lead = e.button->getLeadCommand();
+			TheInGameUI->setGUICommand( lead != nullptr ? lead : e.button );
 			return;
 		}
 		GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_DO_SPECIAL_POWER );

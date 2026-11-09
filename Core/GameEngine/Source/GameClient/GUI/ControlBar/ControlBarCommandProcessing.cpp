@@ -225,7 +225,9 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 		//with. For example, the terrorist can jack a car and convert it into a carbomb, but he has to
 		//click on a valid car. In this case the doCommandOrHint code will determine if the mode is valid
 		//or not and the cursor modes will be set appropriately.
-		TheInGameUI->setGUICommand( commandButton );
+		// Tiberium Project @feature a power used in steps starts with its first (the Decoy Army's choice of units)
+		const CommandButton *lead = commandButton->getLeadCommand();
+		TheInGameUI->setGUICommand( lead != nullptr ? lead : commandButton );
 	}
 	else switch( commandButton->getCommandType() )
 	{

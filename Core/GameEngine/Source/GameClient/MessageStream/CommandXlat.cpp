@@ -1790,9 +1790,12 @@ GameMessage::Type CommandTranslator::handleGuiCommand( const CommandButton *comm
 			}
 
 			// null out the GUI command if we're actually doing something
+			// Tiberium Project @feature (or go on to the next step of a power used in steps: where the Decoy Army's
+			// copies go, once its units are chosen)
 			if( type == DO_COMMAND )
 			{
-				TheInGameUI->setGUICommand( nullptr );
+				const CommandButton *next = msgType != GameMessage::MSG_INVALID ? command->getFollowUpCommand() : nullptr;
+				TheInGameUI->setGUICommand( next );
 			}
 
 		}
@@ -2607,9 +2610,12 @@ GameMessage::Type CommandTranslator::evaluateContextCommand( Drawable *draw,
 					}
 
 					// null out the GUI command if we're actually doing something
+					// Tiberium Project @feature (or go on to the next step of a power used in steps: where the Decoy
+					// Army's copies go, once its units are chosen)
 					if( type == DO_COMMAND )
 					{
-						TheInGameUI->setGUICommand( nullptr );
+						const CommandButton *next = msgType != GameMessage::MSG_INVALID ? command->getFollowUpCommand() : nullptr;
+						TheInGameUI->setGUICommand( next );
 					}
 
 				}

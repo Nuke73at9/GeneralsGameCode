@@ -40,7 +40,26 @@
 //   End
 //
 // KindOf and ForbiddenKindOf narrow what it reaches in an area (C&C4's and Kane's Wrath's player powers'
-// ObjectFilter: Include and Exclude).
+// ObjectFilter: Include and Exclude); SamePlayerOnly keeps to its own player's (SAGE's SAME_PLAYER);
+// Global reaches what is anywhere on the map (C&C4's Voice of Kane, Kane's Wrath's scans).
+//
+// The SAGE 2 area powers do more to what they reach (Tiberium Project): UpgradeToGrant gives each an
+// object upgrade (Kane's Wrath's GrantUpgradeAreaOfEffectSpecialPower: the Sonic Repulsion Field, Laser
+// Fencing); GrantStealth hides each (with a StealthUpdate) for StealthTime, or for good (the Cloaking
+// Fields); RefreshRecharge ends the recharges under way of each one's abilities (C&C4's Voice of Kane);
+// RevealTime lifts the shroud over each for its player, RevealRadius past its edge (Kane's Wrath's
+// Power Signature Scan). JamEnemyRadar darkens the radars of its player's enemies for that long (the
+// Radar Jamming Missile); Weapon is fired at the spot (the infantry the Cloaking Field kills); Delay
+// makes it act that long after its power is used (Kane's Wrath's unpacking).
+//
+//   Behavior = ModifierAbilityUpdate ModuleTag_LaserFencing
+//     SpecialPowerTemplate = KWSP_SpecialPower_LaserFencing
+//     Radius               = 10
+//     Affects              = ALLIES
+//     SamePlayerOnly       = Yes
+//     KindOf               = STRUCTURE
+//     UpgradeToGrant       = KWUpgrade_LaserFencing
+//   End
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #pragma once
@@ -74,6 +93,18 @@ public:
 	const FXList *m_targetFX;					///< on each object it reaches
 	KindOfMaskType m_kindOf;					///< in an area: any of these (none: all)
 	KindOfMaskType m_forbiddenKindOf;	///< in an area: none of these
+	// Tiberium Project @feature the SAGE 2 area powers
+	Bool m_global;										///< what is anywhere on the map, not in an area
+	Bool m_samePlayerOnly;						///< only its own player's
+	std::vector<AsciiString> m_upgradeNames;	///< object upgrades given to each object it reaches
+	AsciiString m_weaponName;					///< fired at the spot as it acts
+	Bool m_grantStealth;							///< each object it reaches hidden (with a StealthUpdate) ...
+	UnsignedInt m_stealthFrames;			///< ... this long (0: for good)
+	Bool m_refreshRecharge;						///< the recharges under way of each one's abilities end
+	UnsignedInt m_jamRadarFrames;			///< the radars of its player's enemies dark this long
+	UnsignedInt m_revealFrames;				///< the shroud lifted over each object it reaches this long, for its player
+	Real m_revealRadius;							///< ... this far past its edge
+	UnsignedInt m_delayFrames;				///< it acts this long after its power is used
 
 	ModifierAbilityUpdateModuleData()
 	{
@@ -89,7 +120,18 @@ public:
 		m_targetFX = nullptr;
 		m_kindOf.clear();
 		m_forbiddenKindOf.clear();
+		m_global = FALSE;
+		m_samePlayerOnly = FALSE;
+		m_grantStealth = FALSE;
+		m_stealthFrames = 0;
+		m_refreshRecharge = FALSE;
+		m_jamRadarFrames = 0;
+		m_revealFrames = 0;
+		m_revealRadius = 0.0f;
+		m_delayFrames = 0;
 	}
+
+	static void parseUpgradeNames( INI *ini, void *instance, void *store, const void *userData );
 
 	static void buildFieldParse( MultiIniFieldParse& p )
 	{
@@ -108,6 +150,17 @@ public:
 			{ "TargetFX",								INI::parseFXList,								nullptr, offsetof( ModifierAbilityUpdateModuleData, m_targetFX ) },
 			{ "KindOf",									KindOfMaskType::parseFromINI,		nullptr, offsetof( ModifierAbilityUpdateModuleData, m_kindOf ) },
 			{ "ForbiddenKindOf",				KindOfMaskType::parseFromINI,		nullptr, offsetof( ModifierAbilityUpdateModuleData, m_forbiddenKindOf ) },
+			{ "Global",									INI::parseBool,									nullptr, offsetof( ModifierAbilityUpdateModuleData, m_global ) },
+			{ "SamePlayerOnly",					INI::parseBool,									nullptr, offsetof( ModifierAbilityUpdateModuleData, m_samePlayerOnly ) },
+			{ "UpgradeToGrant",					parseUpgradeNames,							nullptr, offsetof( ModifierAbilityUpdateModuleData, m_upgradeNames ) },
+			{ "Weapon",									INI::parseAsciiString,					nullptr, offsetof( ModifierAbilityUpdateModuleData, m_weaponName ) },
+			{ "GrantStealth",						INI::parseBool,									nullptr, offsetof( ModifierAbilityUpdateModuleData, m_grantStealth ) },
+			{ "StealthTime",						INI::parseDurationUnsignedInt,	nullptr, offsetof( ModifierAbilityUpdateModuleData, m_stealthFrames ) },
+			{ "RefreshRecharge",				INI::parseBool,									nullptr, offsetof( ModifierAbilityUpdateModuleData, m_refreshRecharge ) },
+			{ "JamEnemyRadar",					INI::parseDurationUnsignedInt,	nullptr, offsetof( ModifierAbilityUpdateModuleData, m_jamRadarFrames ) },
+			{ "RevealTime",							INI::parseDurationUnsignedInt,	nullptr, offsetof( ModifierAbilityUpdateModuleData, m_revealFrames ) },
+			{ "RevealRadius",						INI::parseReal,									nullptr, offsetof( ModifierAbilityUpdateModuleData, m_revealRadius ) },
+			{ "Delay",									INI::parseDurationUnsignedInt,	nullptr, offsetof( ModifierAbilityUpdateModuleData, m_delayFrames ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 		p.add( dataFieldParse );
@@ -140,15 +193,23 @@ public:
 	virtual Bool isPowerCurrentlyInUse( const CommandButton *command = nullptr ) const override { return m_approaching; }
 
 	virtual UpdateSleepTime update() override;
+	virtual void onDelete() override;
 
 private:
 
 	void act();
 	Bool targetSpot( Coord3D *spot ) const;	///< where it acts; FALSE when its target is gone
+	Bool reaches( const Object *other ) const;	///< Tiberium Project: an object it takes in (Affects, SamePlayerOnly, KindOf)
+	void lowerReveals();	///< Tiberium Project: the shroud it lifted falls again
+	UpdateSleepTime nextWake() const;
 
 	Bool m_approaching;			///< on its way to within StartAbilityRange of its target
 	Bool m_hasTarget;				///< an object or a spot was given (not itself)
 	ObjectID m_targetID;		///< the object given
 	Coord3D m_targetPos;		///< the spot given
+	UnsignedInt m_actFrame;	///< Tiberium Project: when it acts (Delay); 0: not waiting
+	UnsignedInt m_revealUntil;	///< Tiberium Project: when the shroud it lifted falls again; 0: none lifted
+	UnsignedInt m_revealMask;		///< ... for whom (a player mask)
+	std::vector<Coord3D> m_reveals;	///< ... where: x, y and the radius (as z)
 
 };

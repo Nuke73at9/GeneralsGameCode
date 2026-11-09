@@ -1525,6 +1525,35 @@ void TiberiumTest::update()
 			log( "frame %d: ui: ground click at %d,%d (world %.0f %.0f)%s", (int)s_frame, (int)at.x, (int)at.y,
 				onGround ? world.x : 0.0f, onGround ? world.y : 0.0f, onGround ? "" : " (off the ground)" );
 		}
+		else if ( step.action == "groundat" && TheMessageStream != nullptr && TheTacticalView != nullptr && TheGameLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) a player's left click on the ground dx,dy from the first spawned
+			// object, at where the view shows that spot (the second click of a power used in steps)
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			Object *from = !s_spawned.empty() ? TheGameLogic->findObjectByID( s_spawned[0] ) : nullptr;
+			if ( from != nullptr )
+			{
+				Coord3D world = *from->getPosition();
+				world.x += f.size() > 0 ? (Real)atof( f[0].c_str() ) : 0.0f;
+				world.y += f.size() > 1 ? (Real)atof( f[1].c_str() ) : 0.0f;
+				world.z = TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( world.x, world.y ) : world.z;
+				ICoord2D at;
+				TheTacticalView->worldToScreen( &world, &at );
+				if ( TheMouse != nullptr )
+					TheMouse->setPosition( at.x, at.y );
+				GameMessage *down = TheMessageStream->appendMessage( GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_DOWN );
+				down->appendPixelArgument( at );
+				down->appendIntegerArgument( 0 );
+				down->appendIntegerArgument( 0 );
+				GameMessage *up = TheMessageStream->appendMessage( GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_UP );
+				up->appendPixelArgument( at );
+				up->appendIntegerArgument( 0 );
+				up->appendIntegerArgument( 0 );
+				const CommandButton *pending = TheInGameUI != nullptr ? TheInGameUI->getGUICommand() : nullptr;
+				log( "frame %d: ui: ground click at %d,%d (world %.0f %.0f), aiming %s", (int)s_frame, (int)at.x, (int)at.y,
+					world.x, world.y, pending != nullptr ? pending->getName().str() : "nothing" );
+			}
+		}
 		else if ( step.action == "mouse" )
 		{
 			s_uiMouse = TRUE;
@@ -1863,6 +1892,38 @@ void TiberiumTest::update()
 					source->getTemplate()->getName().str(), (unsigned)me->getMoney()->countMoney(), (int)me->getSupportPoints() );
 			}
 		}
+		else if ( step.action == "shortcutat" && TheControlBar != nullptr && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
+		{
+			// Tiberium Project @feature (the test) "shortcutat=Button,Template": a shortcut bar power aimed at the local
+			// player's first object of that template (a power aimed at an object: the Sonic Repulsion Field)
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			const CommandButton *button = f.empty() ? nullptr : TheControlBar->findCommandButton( AsciiString( f[0].c_str() ) );
+			Player *me = ThePlayerList->getLocalPlayer();
+			const SpecialPowerTemplate *power = button != nullptr ? button->getSpecialPowerTemplate() : nullptr;
+			Object *source = power != nullptr ? me->findMostReadyShortcutSpecialPowerOfType( power->getSpecialPowerType() ) : nullptr;
+			const ThingTemplate *tmpl = f.size() > 1 && TheThingFactory != nullptr ? TheThingFactory->findTemplate( f[1].c_str() ) : nullptr;
+			struct First { const ThingTemplate *tmpl; Object *obj; static void each( Object *obj, void *data )
+			{
+				First *me = (First *)data;
+				if ( me->obj == nullptr && obj->getTemplate()->isEquivalentTo( me->tmpl ) )
+					me->obj = obj;
+			} };
+			First first = { tmpl, nullptr };
+			if ( tmpl != nullptr )
+				me->iterateObjects( First::each, &first );
+			if ( power == nullptr || source == nullptr || first.obj == nullptr )
+				log( "frame %d: ui: shortcutat %s: no such button, power, source or target", (int)s_frame, step.arg.c_str() );
+			else
+			{
+				GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_DO_SPECIAL_POWER_AT_OBJECT );
+				msg->appendIntegerArgument( power->getID() );
+				msg->appendObjectIDArgument( first.obj->getID() );
+				msg->appendIntegerArgument( button->getOptions() );
+				msg->appendObjectIDArgument( source->getID() );
+				log( "frame %d: ui: shortcutat %s at %s #%u from %s ($%u)", (int)s_frame, f[0].c_str(), f[1].c_str(),
+					(unsigned)first.obj->getID(), source->getTemplate()->getName().str(), (unsigned)me->getMoney()->countMoney() );
+			}
+		}
 		else if ( step.action == "powers" && TheControlBar != nullptr && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
 		{
 			// the local player's shortcut bar: each power's source and how ready it is; the money and the support meter
@@ -1885,6 +1946,51 @@ void TiberiumTest::update()
 			}
 			log( "frame %d: ui: powers: $%u, %d of %d points, GP %d;%s", (int)s_frame, (unsigned)me->getMoney()->countMoney(),
 				(int)me->getSupportPoints(), (int)me->getSupportPointsMax(), (int)me->getSciencePurchasePoints(), all.c_str() );
+		}
+		else if ( step.action == "state" && TheGameLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) every object of a template: its owner, health, stealth, EMP, sight,
+			// dodge and the attribute modifiers on it (the area powers' effects)
+			Int shown = 0;
+			for ( Object *obj = TheGameLogic->getFirstObject(); obj != nullptr && shown < 12; obj = obj->getNextObject() )
+			{
+				if ( obj->getTemplate()->getName().compareNoCase( step.arg.c_str() ) != 0 )
+					continue;
+				++shown;
+				const BodyModuleInterface *body = obj->getBodyModule();
+				const Player *me = ThePlayerList != nullptr ? ThePlayerList->getLocalPlayer() : nullptr;
+				const CellShroudStatus seen = me != nullptr ? ThePartitionManager->getShroudStatusForPlayer( me->getPlayerIndex(), obj->getPosition() ) : CELLSHROUD_SHROUDED;
+				log( "frame %d: ui: state %s #%u player %d at %.0f %.0f (%s to me): health %.0f of %.0f%s%s%s, sight %.0f, dodge %.2f, reflect %.2f, %d modifiers%s, upgrades %s",
+					(int)s_frame, step.arg.c_str(), (unsigned)obj->getID(),
+					obj->getControllingPlayer() != nullptr ? (int)obj->getControllingPlayer()->getPlayerIndex() : -1,
+					obj->getPosition()->x, obj->getPosition()->y,
+					seen == CELLSHROUD_CLEAR ? "clear" : ( seen == CELLSHROUD_FOGGED ? "fogged" : "shrouded" ),
+					body != nullptr ? body->getHealth() : 0.0f, body != nullptr ? body->getMaxHealth() : 0.0f,
+					obj->testStatus( OBJECT_STATUS_STEALTHED ) ? ", stealthed" : "",
+					obj->isDisabledByType( DISABLED_EMP ) ? ", EMP" : "",
+					obj->isResistingEMPByModifier() ? ", resists EMP" : "",
+					obj->getVisionRange(), obj->getDodgeChance(), obj->getAttributeModifierChance( MODIFIER_CHANCE_REFLECT ),
+					obj->hasAttributeModifiers() ? 1 : 0,
+					obj->getAttributeModifierScalar( MODIFIER_DAMAGE ) != 1.0f ? " (damage scaled)" : "",
+					obj->getObjectCompletedUpgradeMask().any() ? "some" : "none" );
+			}
+			if ( shown == 0 )
+				log( "frame %d: ui: state %s: none", (int)s_frame, step.arg.c_str() );
+		}
+		else if ( step.action == "radar" && ThePlayerList != nullptr )
+		{
+			// Tiberium Project @feature (the test) each player's radar: had, jammed
+			std::string all;
+			for ( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
+			{
+				Player *p = ThePlayerList->getNthPlayer( i );
+				if ( p == nullptr || !p->isPlayerActive() )
+					continue;
+				char one[96];
+				snprintf( one, sizeof( one ), " %d:%s%s", (int)i, p->hasRadar() ? "radar" : "none", p->isRadarJammed() ? "(jammed)" : "" );
+				all += one;
+			}
+			log( "frame %d: ui: radar%s", (int)s_frame, all.c_str() );
 		}
 		else if ( step.action == "census" && TheGameLogic != nullptr )
 		{
