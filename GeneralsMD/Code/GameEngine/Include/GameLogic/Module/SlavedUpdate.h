@@ -61,6 +61,7 @@ public:
 	Real m_repairMaxAltitude;
 
 	Real m_repairRatePerSecond;	//How fast I can repair
+	Real m_repairOthersRange;	///< Tiberium Project: its owner's damaged vehicles within this of its master are repaired too (0: only the master)
 	Int m_repairWhenHealthBelowPercentage; //When should I prioritize repairing my master.
 	Int m_minReadyFrames;
 	Int m_maxReadyFrames;
@@ -81,6 +82,7 @@ public:
 		m_scoutWanderRange = 0;
 		m_distToTargetToGrantRangeBonus = 0;
 		m_repairRatePerSecond = 0.0f;
+		m_repairOthersRange = 0.0f;
 		m_repairWhenHealthBelowPercentage = 0;
 		m_repairMinAltitude = 0.0f;
 		m_repairMaxAltitude = 0.0f;
@@ -107,6 +109,7 @@ public:
 			{ "RepairMaxAltitude",		  INI::parseReal, nullptr, offsetof( SlavedUpdateModuleData, m_repairMaxAltitude ) },
 			{ "DistToTargetToGrantRangeBonus", INI::parseInt, nullptr, offsetof( SlavedUpdateModuleData, m_distToTargetToGrantRangeBonus ) },
 			{ "RepairRatePerSecond", INI::parseReal, nullptr, offsetof( SlavedUpdateModuleData, m_repairRatePerSecond ) },
+			{ "RepairOthersRange", INI::parseReal, nullptr, offsetof( SlavedUpdateModuleData, m_repairOthersRange ) },	// Tiberium Project
 			{ "RepairWhenBelowHealth%", INI::parseInt, nullptr, offsetof( SlavedUpdateModuleData, m_repairWhenHealthBelowPercentage ) },
 			{ "RepairMinReadyTime", INI::parseDurationUnsignedInt, nullptr, offsetof( SlavedUpdateModuleData, m_minReadyFrames ) },
 			{ "RepairMaxReadyTime", INI::parseDurationUnsignedInt, nullptr, offsetof( SlavedUpdateModuleData, m_maxReadyFrames ) },
@@ -157,8 +160,11 @@ public:
 	void doScoutLogic( const Coord3D *mastersDestination );
 	void doAttackLogic( const Object *target );
 	void doGuardLogic( Coord3D *pinnedPosition );
-	void doRepairLogic();
+	void doRepairLogic( Object *target = nullptr );	///< (Tiberium Project: another than the master)
 	void endRepair();
+	// Tiberium Project @feature the object it repairs next, until it is healed (Kane's Wrath's Repair APC told to send its
+	// drone to a vehicle: AssignSlavesTargetObjectSpecialPower)
+	virtual void setRepairTarget( ObjectID target ) override { m_repairTargetID = target; }
 	void setRepairState( RepairStates repairState );
 	void setRepairModelConditionStates( ModelConditionFlagType flag );
 	void moveToNewRepairSpot();
@@ -174,4 +180,8 @@ private:
 	Int m_framesToWait;
 	RepairStates m_repairState;
 	Bool m_repairing;
+	ObjectID m_repairTargetID;	///< Tiberium Project: the other object it repairs (or INVALID_ID)
+	Bool m_repairingOther;		///< Tiberium Project: at that one now, set by each doRepairLogic (its repair spots go about it)
+
+	Object *findRepairTarget( const Object *master );	///< Tiberium Project
 };

@@ -65,6 +65,8 @@ SlavedUpdate::SlavedUpdate( Thing *thing, const ModuleData* moduleData ) : Updat
 	m_framesToWait = 0;
 	m_repairState = REPAIRSTATE_NONE;
 	m_repairing = false;
+	m_repairTargetID = INVALID_ID;
+	m_repairingOther = false;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -248,10 +250,23 @@ UpdateSleepTime SlavedUpdate::update()
 
 	//NOTE: Health percentage will always be 100 should the drone be incapable of
 	//repairing.
+	// Tiberium Project @feature the vehicle it was sent to comes before its master's scratches
+	Object *other = data->m_repairOthersRange > 0.0f && data->m_repairRatePerSecond > 0.0f ? findRepairTarget( master ) : nullptr;
+	if( other != nullptr && m_repairTargetID != INVALID_ID && other->getID() == m_repairTargetID )
+	{
+		doRepairLogic( other );
+		return UPDATE_SLEEP_NONE;
+	}
 	if( healthPercentage < 100 )
 	{
 		//3RD PRIORITY: Go to the master's position to repair him (because we're idle)
 		doRepairLogic();
+		return UPDATE_SLEEP_NONE;
+	}
+	// Tiberium Project @feature then its owner's other damaged vehicles near its master (Kane's Wrath's Repair APC's drone)
+	if( other != nullptr )
+	{
+		doRepairLogic( other );
 		return UPDATE_SLEEP_NONE;
 	}
 
@@ -430,10 +445,12 @@ void SlavedUpdate::doGuardLogic( Coord3D *pinnedPosition )
 //-------------------------------------------------------------------------------------------------
 // We are ordered to repair our master
 //-------------------------------------------------------------------------------------------------
-void SlavedUpdate::doRepairLogic()
+void SlavedUpdate::doRepairLogic( Object *target )
 {
 	Object *me = getObject();
-	Object *master = TheGameLogic->findObjectByID( m_slaver );
+	// (Tiberium Project: the object it repairs, its master unless told another)
+	Object *master = target != nullptr ? target : TheGameLogic->findObjectByID( m_slaver );
+	m_repairingOther = target != nullptr;
 	const SlavedUpdateModuleData* data = getSlavedUpdateModuleData();
 	AIUpdateInterface *ai = me->getAIUpdateInterface();
 	if( !ai )
@@ -513,6 +530,52 @@ void SlavedUpdate::doRepairLogic()
 			body->attemptHealing( &healingInfo );
 		}
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the other object it repairs (RepairOthersRange): the one it was sent to, while it is alive,
+// damaged and near its master; else the one it is at, until healed; else its owner's most damaged vehicle (not an
+// aircraft) within RepairOthersRange of its master (or nullptr)
+//-------------------------------------------------------------------------------------------------
+Object *SlavedUpdate::findRepairTarget( const Object *master )
+{
+	const SlavedUpdateModuleData *data = getSlavedUpdateModuleData();
+	const Real range = data->m_repairOthersRange;
+	if( m_repairTargetID != INVALID_ID )
+	{
+		Object *was = TheGameLogic->findObjectByID( m_repairTargetID );
+		const BodyModuleInterface *body = was != nullptr ? was->getBodyModule() : nullptr;
+		// (a little farther while it is at one: it does not let go at the edge)
+		if( was != nullptr && was != master && !was->isEffectivelyDead() && body != nullptr && body->getHealth() < body->getMaxHealth()
+			&& ThePartitionManager->getDistanceSquared( master, was, FROM_CENTER_2D ) <= sqr( range * 2.0f ) )
+			return was;
+		m_repairTargetID = INVALID_ID;
+	}
+	PartitionFilterSamePlayer samePlayer( master->getControllingPlayer() );
+	PartitionFilterAcceptByKindOf vehicles( MAKE_KINDOF_MASK( KINDOF_VEHICLE ), MAKE_KINDOF_MASK( KINDOF_AIRCRAFT ) );
+	PartitionFilterAlive alive;
+	PartitionFilter *filters[] = { &samePlayer, &vehicles, &alive, nullptr };
+	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( master, range, FROM_CENTER_2D, filters, ITER_SORTED_NEAR_TO_FAR );
+	MemoryPoolObjectHolder hold( iter );
+	Object *best = nullptr;
+	Real bestFraction = 1.0f;
+	for( Object *other = iter->first(); other != nullptr; other = iter->next() )
+	{
+		if( other == master || other == getObject() )
+			continue;
+		const BodyModuleInterface *body = other->getBodyModule();
+		if( body == nullptr || body->getMaxHealth() <= 0.0f )
+			continue;
+		const Real fraction = body->getHealth() / body->getMaxHealth();
+		if( fraction < bestFraction )
+		{
+			best = other;
+			bestFraction = fraction;
+		}
+	}
+	if( best != nullptr )
+		m_repairTargetID = best->getID();
+	return best;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -671,7 +734,11 @@ void SlavedUpdate::moveToNewRepairSpot()
 {
 	const SlavedUpdateModuleData* data = getSlavedUpdateModuleData();
 	Object *me = getObject();
-	Object *master = TheGameLogic->findObjectByID( m_slaver );
+	// Tiberium Project @bugfix about the object it repairs, not its master, when that is another one (else after each
+	// weld it flies back to its master and the other one barely heals)
+	Object *master = TheGameLogic->findObjectByID( m_repairingOther ? m_repairTargetID : m_slaver );
+	if( master == nullptr )
+		return;
 
 	//Finally, if we have a wander distance, then randomly select a point within
 	//the wander range radius of the pinned position, and we'll go there.
@@ -766,7 +833,8 @@ void SlavedUpdate::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	// 2: Tiberium Project: the other object it repairs
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -787,6 +855,9 @@ void SlavedUpdate::xfer( Xfer *xfer )
 
 	// repairing
 	xfer->xferBool( &m_repairing );
+
+	if( version >= 2 )
+		xfer->xferObjectID( &m_repairTargetID );
 
 }
 

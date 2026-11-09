@@ -249,6 +249,7 @@ public:
 	virtual void onSlaverDie( const DamageInfo *info ) = 0;
 	virtual void onSlaverDamage( const DamageInfo *info ) = 0;
 	virtual	Bool isSelfTasking() const = 0;
+	virtual void setRepairTarget( ObjectID /*target*/ ) {}	///< Tiberium Project: the object a repair drone mends next
 
 };
 

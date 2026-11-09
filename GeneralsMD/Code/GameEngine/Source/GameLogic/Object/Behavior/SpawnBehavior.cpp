@@ -369,6 +369,25 @@ void SpawnBehavior::orderSlavesToGoIdle( CommandSourceType cmdSource )
 }
 
 // ------------------------------------------------------------------------------------------------
+// Tiberium Project @feature its repair drones sent to that object (Kane's Wrath's Repair APC: SlavedUpdate's
+// RepairOthersRange, AssignSlavesTargetObjectSpecialPower)
+void SpawnBehavior::orderSlavesToRepair( ObjectID target )
+{
+	for( objectIDListIterator it = m_spawnIDs.begin(); it != m_spawnIDs.end(); ++it )
+	{
+		Object *obj = TheGameLogic->findObjectByID( *it );
+		if( obj == nullptr )
+			continue;
+		for( BehaviorModule **m = obj->getBehaviorModules(); *m != nullptr; ++m )
+		{
+			SlavedUpdateInterface *slaved = (*m)->getSlavedUpdateInterface();
+			if( slaved != nullptr )
+				slaved->setRepairTarget( target );
+		}
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
 void SpawnBehavior::orderSlavesDisabledUntil( DisabledType type, UnsignedInt frame )
 {
 	for( objectIDListIterator it = m_spawnIDs.begin(); it != m_spawnIDs.end(); ++it )

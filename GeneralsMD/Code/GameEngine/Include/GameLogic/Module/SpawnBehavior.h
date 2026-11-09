@@ -118,6 +118,7 @@ public:
 	virtual CanAttackResult getCanAnySlavesUseWeaponAgainstTarget( AbleToAttackType attackType, const Object *victim, const Coord3D *pos, CommandSourceType cmdSource ) = 0;
 	virtual Bool canAnySlavesAttack() = 0;
 	virtual void orderSlavesToGoIdle( CommandSourceType cmdSource ) = 0;
+	virtual void orderSlavesToRepair( ObjectID target ) = 0;	///< Tiberium Project: its repair drones to that object
 	virtual void orderSlavesDisabledUntil( DisabledType type, UnsignedInt frame ) = 0;
 	virtual void orderSlavesToClearDisabled( DisabledType type ) = 0;
 	virtual void giveSlavesStealthUpgrade( Bool grantStealth ) = 0;
@@ -174,6 +175,7 @@ public:
 	virtual CanAttackResult getCanAnySlavesUseWeaponAgainstTarget( AbleToAttackType attackType, const Object *victim, const Coord3D *pos, CommandSourceType cmdSource ) override;
 	virtual Bool canAnySlavesAttack() override;
 	virtual void orderSlavesToGoIdle( CommandSourceType cmdSource ) override;
+	virtual void orderSlavesToRepair( ObjectID target ) override;	///< Tiberium Project
 	virtual void orderSlavesDisabledUntil( DisabledType type, UnsignedInt frame ) override;
 	virtual void orderSlavesToClearDisabled( DisabledType type ) override;
 	virtual void giveSlavesStealthUpgrade( Bool grantStealth ) override;
