@@ -1332,11 +1332,23 @@ void TiberiumTest::update()
 		{
 			// "moveto=k,x,y": the k-th spawned object told to move there; "kill=k": it is destroyed (killed);
 			// Tiberium Project @feature (the test) "kill=name:Template": the first of the local player's objects of
-			// that kind (what a structure made: a Nod hub's turret)
+			// that kind (what a structure made: a Nod hub's turret); "moveto=k,@j": to where the j-th spawned object
+			// stands (a crate it picks up)
 			Int k = -1;
 			Real x = 0.0f, y = 0.0f;
 			sscanf( step.arg.c_str(), "%d,%f,%f", &k, &x, &y );
 			Object *obj = k >= 0 && k < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[k] ) : nullptr;
+			const size_t at = step.arg.find( ",@" );
+			if ( at != std::string::npos )
+			{
+				const Int j = atoi( step.arg.c_str() + at + 2 );
+				const Object *there = j >= 0 && j < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[j] ) : nullptr;
+				if ( there != nullptr )
+				{
+					x = there->getPosition()->x;
+					y = there->getPosition()->y;
+				}
+			}
 			if ( step.arg.compare( 0, 5, "name:" ) == 0 && ThePlayerList != nullptr )
 			{
 				const std::string kind = step.arg.substr( 5 );
@@ -1974,7 +1986,14 @@ void TiberiumTest::update()
 				snprintf( where, sizeof( where ), ", the first at %.0f %.0f (%.0f%% built)", first.pos.x, first.pos.y, first.built );
 			else if ( first.found )
 				snprintf( where, sizeof( where ), ", the first at %.0f %.0f", first.pos.x, first.pos.y );
-			log( "frame %d: ui: %d of %s%s%s", (int)s_frame, (int)count, countName.c_str(), tmpl != nullptr ? "" : " (no such object)", where );
+			// (Tiberium Project: and how many there are of anyone's, a crate no one's)
+			Int anyone = 0;
+			for ( Object *o = TheGameLogic != nullptr && tmpl != nullptr ? TheGameLogic->getFirstObject() : nullptr; o != nullptr; o = o->getNextObject() )
+			{
+				if ( !o->isDestroyed() && o->getTemplate()->isEquivalentTo( tmpl ) )	// (a crate is ever dead: InactiveBody)
+					++anyone;
+			}
+			log( "frame %d: ui: %d of %s%s%s (%d of anyone's)", (int)s_frame, (int)count, countName.c_str(), tmpl != nullptr ? "" : " (no such object)", where, (int)anyone );
 			if ( listAll && tmpl != nullptr )
 			{
 				struct Each { const ThingTemplate *tmpl; std::string text; Int n; static void each( Object *obj, void *data )
@@ -2127,7 +2146,38 @@ void TiberiumTest::update()
 				// (Kane's Wrath's building fields: the upgraded armour, the field's status and its look)
 				BodyModuleInterface *armourBody = obj->getBodyModule();
 				const Drawable *look = obj->getDrawable();
-				char field[256];
+				char field[512];
+				// (SAGE's general-purpose statuses, and the weapon set conditions following them: a crate's upgrade, a
+				// cannon broken)
+				char statuses[192] = "";
+#if RTS_ZEROHOUR
+				{
+					static const ObjectStatusTypes s_shown[] = { OBJECT_STATUS_USER_1, OBJECT_STATUS_USER_2, OBJECT_STATUS_USER_3,
+						OBJECT_STATUS_USER_4, OBJECT_STATUS_WEAPON_UPGRADED_01, OBJECT_STATUS_WEAPON_UPGRADED_02,
+						OBJECT_STATUS_WEAPON_UPGRADED_03, OBJECT_STATUS_HAS_CRATE_UPGRADE };
+					AsciiString had, sets;
+					for ( size_t k = 0; k < ARRAY_SIZE( s_shown ); ++k )
+					{
+						if ( obj->testStatus( s_shown[ k ] ) )
+						{
+							had.concat( ' ' );
+							had.concat( ObjectStatusMaskType::getBitNames()[ s_shown[ k ] ] );
+						}
+					}
+					for ( Int k = 0; k < WEAPONSET_COUNT; ++k )
+					{
+						if ( obj->testWeaponSetFlag( (WeaponSetType)k ) )
+						{
+							sets.concat( ' ' );
+							sets.concat( WeaponSetFlags::getBitNames()[ k ] );
+						}
+					}
+					// (and how fast it goes: a modifier's speed, the Mantis's as it loses its cannons)
+					const Real speed = obj->getAttributeModifierScalar( MODIFIER_SPEED );
+					if ( had.isNotEmpty() || sets.isNotEmpty() || speed != 1.0f )
+						snprintf( statuses, sizeof( statuses ), ", status%s, weapon sets%s, speed x%.2f", had.str(), sets.str(), speed );
+				}
+#endif
 				// (Tiberium Project: its false returns on the radar, a Signature Generator's)
 				const Int falseReturns = look != nullptr ? look->getRadarFalseReturns( TheGameLogic->getFrame(), nullptr ) : 0;
 				char returns[32] = "";
@@ -2138,8 +2188,8 @@ void TiberiumTest::update()
 				const Object *goal = obj->getAI() != nullptr ? obj->getAI()->getGoalObject() : nullptr;
 				if ( goal != nullptr )
 					snprintf( aiming, sizeof( aiming ), ", after #%u", (unsigned)goal->getID() );
-				snprintf( field, sizeof( field ), "%s%s%s%s%s%s%s%s%s%s%s%s%s",
-					aiming,
+				snprintf( field, sizeof( field ), "%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+					statuses, aiming,
 					// (a burrowed unit, C&C4's: dug out by the Seismic Disturbance)
 					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_BURROWING ) ? ", BURROWING" : "",
 					armourBody != nullptr && armourBody->testArmorSetFlag( ARMORSET_PLAYER_UPGRADE ) ? ", armour upgraded" : "",

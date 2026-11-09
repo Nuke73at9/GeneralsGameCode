@@ -25,7 +25,7 @@
 // Tiberium Project @feature AffectContainedOnly: only on what rides inside it (C&C4's Armadillo and
 // Reckoner: their passengers fire further); Radius 0: only on itself (SELF in Affects). RequiredStatus,
 // RequiredModifier: only while the object has all of those status bits, or carries that modifier itself
-// (a toggled state's: C&C4's Kodiak shields its allies only while armoured up).
+// (a toggled state's: C&C4's Kodiak shields its allies only while armoured up); ForbiddenStatus: none of these.
 //
 //   Behavior = AttributeModifierAuraUpdate ModuleTag_ArmorAura
 //     AttributeModifier   = C4AM_Modifier_ArmorUp_Aura
@@ -56,6 +56,8 @@ public:
 	KindOfMaskType m_forbiddenKindOf;
 	Bool m_affectContainedOnly;					///< Tiberium Project @feature only its passengers
 	ObjectStatusMaskType m_requiredStatus;	///< Tiberium Project @feature only while it has all of these
+	ObjectStatusMaskType m_forbiddenStatus;	///< Tiberium Project @feature and none of these (C&C4's Nod structures: its plain aura
+																					///< stops as its upgraded one takes over)
 	NameKeyType m_requiredModifier;			///< Tiberium Project @feature only while it carries this modifier
 
 	AttributeModifierAuraUpdateModuleData()
@@ -81,6 +83,7 @@ public:
 			{ "ForbiddenKindOf",			KindOfMaskType::parseFromINI,		nullptr, offsetof( AttributeModifierAuraUpdateModuleData, m_forbiddenKindOf ) },
 			{ "AffectContainedOnly",	INI::parseBool,									nullptr, offsetof( AttributeModifierAuraUpdateModuleData, m_affectContainedOnly ) },
 			{ "RequiredStatus",				ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( AttributeModifierAuraUpdateModuleData, m_requiredStatus ) },
+			{ "ForbiddenStatus",			ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( AttributeModifierAuraUpdateModuleData, m_forbiddenStatus ) },
 			{ "RequiredModifier",			AttributeModifierStore::parseModifierName,	nullptr, offsetof( AttributeModifierAuraUpdateModuleData, m_requiredModifier ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};

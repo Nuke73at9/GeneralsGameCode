@@ -27,7 +27,8 @@
 //     (more for each wave, less on a harder AI) they attack-move on its enemy's nearest building;
 //   - pushes: a unit idle out in the field attack-moves on the enemy building nearest it;
 // and every three seconds it keeps a factory that has had no work for a while building fighting units
-// it can afford (leaving money for its scripts), and deploys a Crawler that is not deployed. Units its
+// it can afford (leaving money for its scripts), buying first a tier its units wait on (C&C4's tech ranks),
+// and deploys a Crawler that is not deployed. Units its
 // scripts are still gathering into a team are left alone. The AI's units use their own abilities
 // (AIAbilityUseUpdate).
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,6 +44,7 @@
 #include "Common/TiberiumTest.h"
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
+#include "Common/Upgrade.h"
 #include "GameClient/ControlBar.h"
 #include "GameLogic/AI.h"
 #include "GameLogic/AISkirmishPlayer.h"
@@ -535,11 +537,50 @@ void AISkirmishPlayer::commandProduction()
 			continue;
 		const CommandSet *pages[ ControlBar::MAX_COMMAND_SET_PAGES ];
 		const Int pageCount = TheControlBar->getCommandSetPages( set, pages, ControlBar::MAX_COMMAND_SET_PAGES );
+
+		// Tiberium Project @feature a tier the factory's units wait on (C&C4's tech ranks, bought at a Crawler: its units, and
+		// its Crawlers' weapons, follow them): bought once the money allows, before more units
+		const UpgradeTemplate *tier = nullptr;
+		for( Int b = 0; b < MAX_COMMANDS_PER_SET * pageCount && tier == nullptr; ++b )
+		{
+			const CommandButton *button = pages[ b / MAX_COMMANDS_PER_SET ]->getCommandButton( b % MAX_COMMANDS_PER_SET );
+			if( button == nullptr || button->getCommandType() != GUI_COMMAND_PLAYER_UPGRADE || button->getUpgradeTemplate() == nullptr )
+				continue;
+			const UpgradeTemplate *up = button->getUpgradeTemplate();
+			if( m_player->hasUpgradeComplete( up ) || m_player->hasUpgradeInProduction( up ) )
+				continue;
+			const UpgradeTemplate *before = up->getNeededUpgradeName().isEmpty() ? nullptr : TheUpgradeCenter->findUpgrade( up->getNeededUpgradeName() );
+			if( before != nullptr && !m_player->hasUpgradeComplete( before ) )
+				continue;
+			// (only what opens up more of the factory's units)
+			Bool opens = FALSE;
+			for( Int u = 0; u < MAX_COMMANDS_PER_SET * pageCount && !opens; ++u )
+			{
+				const CommandButton *other = pages[ u / MAX_COMMANDS_PER_SET ]->getCommandButton( u % MAX_COMMANDS_PER_SET );
+				opens = other != nullptr && other->getCommandType() == GUI_COMMAND_UNIT_BUILD && ( other->getOptions() & NEED_UPGRADE )
+					&& other->getUpgradeTemplate() == up;
+			}
+			if( !opens || (Int)money->countMoney() - up->calcCostToBuild( m_player ) < RESERVE || pu->canQueueUpgrade( up ) != CANMAKE_OK )
+				continue;
+			tier = up;
+		}
+		if( tier != nullptr && pu->queueUpgrade( tier ) )
+		{
+			m_factoryIdleSince.erase( factory->getID() );
+			if( TiberiumTest::isActive() )
+				TiberiumTest::log( "frame %u: AI player %d's %s buys %s", now, (Int)m_player->getPlayerIndex(),
+					factory->getTemplate()->getName().str(), tier->getUpgradeName().str() );
+			continue;
+		}
+
 		std::vector<const ThingTemplate *> choices;
 		for( Int b = 0; b < MAX_COMMANDS_PER_SET * pageCount; ++b )
 		{
 			const CommandButton *button = pages[ b / MAX_COMMANDS_PER_SET ]->getCommandButton( b % MAX_COMMANDS_PER_SET );
 			if( button == nullptr || button->getCommandType() != GUI_COMMAND_UNIT_BUILD || button->getThingTemplate() == nullptr )
+				continue;
+			// (Tiberium Project: not one whose tier it has yet to buy)
+			if( ( button->getOptions() & NEED_UPGRADE ) && button->getUpgradeTemplate() != nullptr && !m_player->hasUpgradeComplete( button->getUpgradeTemplate() ) )
 				continue;
 			const ThingTemplate *unit = button->getThingTemplate();
 			if( unit->isKindOf( KINDOF_DOZER ) || unit->isKindOf( KINDOF_HARVESTER ) || unit->isKindOf( KINDOF_STRUCTURE )

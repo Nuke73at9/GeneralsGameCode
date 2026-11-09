@@ -54,7 +54,7 @@ UpdateSleepTime AttributeModifierAuraUpdate::update()
 	if( me->isDisabled() || me->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || me->testStatus( OBJECT_STATUS_SOLD ) )
 		return UPDATE_SLEEP( delay );
 	// Tiberium Project @feature only in the state given (its status bits, a toggle's own modifier on it)
-	if( !me->getStatusBits().testForAll( data->m_requiredStatus ) )
+	if( !me->getStatusBits().testForAll( data->m_requiredStatus ) || me->getStatusBits().testForAny( data->m_forbiddenStatus ) )
 		return UPDATE_SLEEP( delay );
 	if( data->m_requiredModifier != NAMEKEY_INVALID &&
 			!me->hasAttributeModifier( TheAttributeModifierStore->find( data->m_requiredModifier ) ) )

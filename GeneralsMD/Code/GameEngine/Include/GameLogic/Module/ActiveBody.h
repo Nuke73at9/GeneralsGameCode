@@ -67,10 +67,25 @@ public:
 	};
 	std::vector<DamageTrigger> m_damageTriggers;
 
+	/// Tiberium Project @feature SAGE 2's DamageRangeModifier: while its health is within the range (percent of its most,
+	/// above Min, at most Max) the object carries the modifier, which comes off as it leaves it (C&C4's Mantis loses a
+	/// cannon at each fifth of its health, the cannon's status choosing its weapons); NEGATIVE_ONLY: put on only as damage
+	/// brings it into the range, then left to wear off (the cannon breaking, played once). One line each:
+	///   DamageRangeModifier = 0 20.1 C4AM_Modifier_NODVehicleACCannon4Destroyed
+	struct DamageRangeModifier
+	{
+		Real m_min;
+		Real m_max;
+		NameKeyType m_modifier;
+		Bool m_negativeOnly;
+	};
+	std::vector<DamageRangeModifier> m_damageRangeModifiers;
+
 	ActiveBodyModuleData();
 
 	static void buildFieldParse(MultiIniFieldParse& p);
 	static void parseDamageTrigger( INI *ini, void *instance, void *store, const void *userData );
+	static void parseDamageRangeModifier( INI *ini, void *instance, void *store, const void *userData );
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -158,6 +173,7 @@ protected:
 	virtual void internalAddSubdualDamage( Real delta );								///< change health
 
 	void checkDamageTriggers();	///< Tiberium Project: the upgrades its health has fallen below keeping
+	void checkDamageRangeModifiers( Real delta );	///< Tiberium Project: the modifiers its health level carries
 
 private:
 

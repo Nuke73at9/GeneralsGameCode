@@ -100,6 +100,8 @@
 #include "GameLogic/Module/ToppleUpdate.h"
 #include "GameLogic/Module/UpdateModule.h"
 #include "GameLogic/Module/UpgradeModule.h"
+#include "GameLogic/Module/StatusBitsUpgrade.h"	// Tiberium Project
+#include "GameLogic/Module/WeaponSetUpgrade.h"	// Tiberium Project
 
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
@@ -1053,6 +1055,9 @@ void Object::setStatus( ObjectStatusMaskType objectStatus, Bool set )
 
 	if (m_status != oldStatus)
 	{
+		// Tiberium Project @feature the weapons follow SAGE 2's weapon statuses (followStatusWeaponSets)
+		followStatusWeaponSets( oldStatus );
+
 		if( set && objectStatus.test( OBJECT_STATUS_REPULSOR ) && m_repulsorHelper != nullptr )
 		{
 			// Damaged repulsable civilians scare (repulse) other civs, but only
@@ -4827,6 +4832,65 @@ void Object::updateAttributeModifiers()
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature C&C4 chooses a unit's weapons by the statuses its upgrades, crates and abilities set (a
+	weapon slot's ObjectStatus): each of those statuses sets a weapon set condition here as it comes and goes:
+	WEAPON_UPGRADED_01 to 03 PLAYER_UPGRADE, CRATEUPGRADE_TWO and CRATEUPGRADE_ONE (as the converter writes the weapon
+	sets an upgrade's statuses arm, WeaponSetUpgrade setting them on the upgrade), USER_1 to 4 and HAS_CRATE_UPGRADE their
+	own. A condition an applied upgrade set as well stays as the status goes. */
+//-------------------------------------------------------------------------------------------------
+void Object::followStatusWeaponSets( const ObjectStatusMaskType& oldStatus )
+{
+	static const struct { ObjectStatusTypes status; WeaponSetType set; } s_follow[] =
+	{
+		{ OBJECT_STATUS_WEAPON_UPGRADED_01, WEAPONSET_PLAYER_UPGRADE },
+		{ OBJECT_STATUS_WEAPON_UPGRADED_02, WEAPONSET_CRATEUPGRADE_TWO },
+		{ OBJECT_STATUS_WEAPON_UPGRADED_03, WEAPONSET_CRATEUPGRADE_ONE },
+		{ OBJECT_STATUS_USER_1, WEAPONSET_USER_1 },
+		{ OBJECT_STATUS_USER_2, WEAPONSET_USER_2 },
+		{ OBJECT_STATUS_USER_3, WEAPONSET_USER_3 },
+		{ OBJECT_STATUS_USER_4, WEAPONSET_USER_4 },
+		{ OBJECT_STATUS_HAS_CRATE_UPGRADE, WEAPONSET_HAS_CRATE_UPGRADE },
+	};
+	for (size_t i = 0; i < ARRAY_SIZE(s_follow); ++i)
+	{
+		const Bool now = m_status.test(s_follow[i].status);
+		if (now == oldStatus.test(s_follow[i].status))
+			continue;
+		if (now)
+		{
+			if (!m_curWeaponSetFlags.test(s_follow[i].set))
+				setWeaponSetFlag(s_follow[i].set);
+		}
+		else if (m_curWeaponSetFlags.test(s_follow[i].set) && !upgradeKeeps(s_follow[i].status, s_follow[i].set))
+			clearWeaponSetFlag(s_follow[i].set);
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature whether an applied upgrade of the object's sets this status (StatusBitsUpgrade) or this
+	weapon set condition (WeaponSetUpgrade; -1: none asked) */
+//-------------------------------------------------------------------------------------------------
+Bool Object::upgradeKeeps( ObjectStatusTypes status, Int weaponSet ) const
+{
+	static const NameKeyType statusKey = NAMEKEY( "StatusBitsUpgrade" );
+	static const NameKeyType weaponKey = NAMEKEY( "WeaponSetUpgrade" );
+	for (BehaviorModule **m = m_behaviors; m != nullptr && *m != nullptr; ++m)
+	{
+		const NameKeyType key = (*m)->getModuleNameKey();
+		if (key != statusKey && key != weaponKey)
+			continue;
+		UpgradeModuleInterface *up = (*m)->getUpgrade();
+		if (up == nullptr || !up->isAlreadyUpgraded())
+			continue;
+		if (key == statusKey && static_cast<const StatusBitsUpgrade *>(*m)->getStatusToSet().test(status))
+			return TRUE;
+		if (key == weaponKey && weaponSet >= 0 && static_cast<const WeaponSetUpgrade *>(*m)->getWeaponCondition() == weaponSet)
+			return TRUE;
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** the model conditions the modifiers on it show */
 //-------------------------------------------------------------------------------------------------
 void Object::refreshAttributeModifierConditions()
@@ -4850,6 +4914,13 @@ void Object::refreshAttributeModifierConditions()
 	{
 		ObjectStatusMaskType gone = m_attributeModifierStatus;
 		gone.clear(status);
+		// (Tiberium Project: not what an applied upgrade set as well: a C&C4 crate's weapon status, the same one a Crawler's
+		// passing boost sets for a while)
+		for (Int k = 0; k < OBJECT_STATUS_COUNT && gone.any(); ++k)
+		{
+			if (gone.test((ObjectStatusTypes)k) && upgradeKeeps((ObjectStatusTypes)k, -1))
+				gone.set((ObjectStatusTypes)k, FALSE);
+		}
 		if (gone.any())
 			setStatus(gone, FALSE);
 		if (status.any())

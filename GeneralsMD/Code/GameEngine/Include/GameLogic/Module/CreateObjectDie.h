@@ -51,6 +51,9 @@ public:
 	/// 3 of 9 for a Militant, the three Awakened of one squad for each nine)
 	Int m_shareCount;
 	Int m_shareOf;
+	/// Tiberium Project @feature how likely its list is made at all (SAGE's ChanceCreateObjectDie: C&C4's units leave a crate
+	/// a quarter to three quarters of the time)
+	Real m_chance;
 
 	CreateObjectDieModuleData();
 

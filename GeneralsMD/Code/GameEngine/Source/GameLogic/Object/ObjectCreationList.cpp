@@ -805,7 +805,8 @@ public:
 		m_objectCount(0),
 		m_orderAfterCreation(ORDER_AFTER_CREATION_NONE),
 		m_veterancyLevel(LEVEL_REGULAR),
-		m_createFX(nullptr)
+		m_createFX(nullptr),
+		m_neutralOwner(false)
 	{
 		m_offset.zero();
 	}
@@ -903,6 +904,7 @@ public:
 			{ "OrderAfterCreation",	INI::parseIndexList, OrderAfterCreationNames, offsetof(GenericObjectCreationNugget, m_orderAfterCreation) },	// Tiberium Project
 			{ "VeterancyLevel",	INI::parseIndexList, TheVeterancyNames, offsetof(GenericObjectCreationNugget, m_veterancyLevel) },	// Tiberium Project
 			{ "CreateFX",	INI::parseFXList, nullptr, offsetof(GenericObjectCreationNugget, m_createFX) },	// Tiberium Project
+			{ "NeutralOwner",	INI::parseBool, nullptr, offsetof(GenericObjectCreationNugget, m_neutralOwner) },	// Tiberium Project
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 
@@ -1432,7 +1434,7 @@ protected:
 		// Object type debris might need this information to process visual UpgradeModules.
 		Team *debrisOwner = ThePlayerList->getNeutralPlayer() ? ThePlayerList->getNeutralPlayer()->getDefaultTeam() : nullptr;
 
-		if( sourceObj && sourceObj->getControllingPlayer() )
+		if( sourceObj && sourceObj->getControllingPlayer() && !m_neutralOwner )	// Tiberium Project: NeutralOwner
 			debrisOwner = sourceObj->getControllingPlayer()->getDefaultTeam();
 
 		Object* container = nullptr;
@@ -1617,6 +1619,7 @@ private:
 	Int												m_orderAfterCreation;		///< Tiberium Project: OrderAfterCreationType
 	Int												m_veterancyLevel;				///< Tiberium Project: VeterancyLevel what it makes starts at (at least)
 	const FXList*							m_createFX;							///< Tiberium Project: played at each object it makes
+	Bool											m_neutralOwner;					///< Tiberium Project: what it makes is no one's (C&C4's crates, as Zero Hour's)
 	Bool											m_nameAreObjects;
 	Bool											m_okToChangeModelColor;
 	Bool											m_orientInForceDirection;

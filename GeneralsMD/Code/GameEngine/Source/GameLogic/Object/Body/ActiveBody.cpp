@@ -158,6 +158,7 @@ void ActiveBodyModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "DodgePercentageMax",				INI::parsePercentToReal,				nullptr,		offsetof( ActiveBodyModuleData, m_dodgePercentageMax ) },
 		// Tiberium Project @feature SAGE's DamageTrigger: "DamageTrigger = 66% Upgrade [Upgrade ...]"
 		{ "DamageTrigger",						ActiveBodyModuleData::parseDamageTrigger,	nullptr,	0 },
+		{ "DamageRangeModifier",			ActiveBodyModuleData::parseDamageRangeModifier,	nullptr,	0 },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
   p.add(dataFieldParse);
@@ -175,6 +176,26 @@ void ActiveBodyModuleData::parseDamageTrigger( INI *ini, void *instance, void * 
 	for( const char *token = ini->getNextTokenOrNull(); token != nullptr; token = ini->getNextTokenOrNull() )
 		trigger.m_removeUpgrades.push_back( AsciiString( token ) );
 	self->m_damageTriggers.push_back( trigger );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature SAGE 2's DamageRangeModifier (see the header): Min, Max (percent of its most health), the
+// modifier, then NEGATIVE_ONLY if given
+//-------------------------------------------------------------------------------------------------
+void ActiveBodyModuleData::parseDamageRangeModifier( INI *ini, void *instance, void * /*store*/, const void * /*userData*/ )
+{
+	ActiveBodyModuleData *self = (ActiveBodyModuleData *)instance;
+	DamageRangeModifier range;
+	range.m_min = INI::scanReal( ini->getNextToken() ) / 100.0f;
+	range.m_max = INI::scanReal( ini->getNextToken() ) / 100.0f;
+	range.m_modifier = NAMEKEY( ini->getNextToken() );
+	range.m_negativeOnly = FALSE;
+	for( const char *token = ini->getNextTokenOrNull(); token != nullptr; token = ini->getNextTokenOrNull() )
+	{
+		if( stricmp( token, "NEGATIVE_ONLY" ) == 0 )
+			range.m_negativeOnly = TRUE;
+	}
+	self->m_damageRangeModifiers.push_back( range );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1317,6 +1338,45 @@ void ActiveBody::internalChangeHealth( Real delta )
 	// still re-flag this bit in the AIDeadState every frame.)
 	getObject()->setEffectivelyDead(m_currentHealth <= 0);
 
+	// Tiberium Project @feature the modifiers its health level carries (DamageRangeModifier)
+	checkDamageRangeModifiers( delta );
+
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature SAGE 2's DamageRangeModifier: each modifier on while the health is within its range, off as
+	it leaves (one only put on by damage, NEGATIVE_ONLY, is left to wear off) */
+//-------------------------------------------------------------------------------------------------
+void ActiveBody::checkDamageRangeModifiers( Real delta )
+{
+	const ActiveBodyModuleData *data = getActiveBodyModuleData();
+	if( data->m_damageRangeModifiers.empty() || m_maxHealth <= 0.0f || TheAttributeModifierStore == nullptr )
+		return;
+	Object *obj = getObject();
+	if( obj->isEffectivelyDead() )
+		return;
+	const Real level = m_currentHealth / m_maxHealth;
+	const Real before = m_prevHealth / m_maxHealth;
+	for( std::vector<ActiveBodyModuleData::DamageRangeModifier>::const_iterator it = data->m_damageRangeModifiers.begin(); it != data->m_damageRangeModifiers.end(); ++it )
+	{
+		const AttributeModifierTemplate *tmpl = TheAttributeModifierStore->find( it->m_modifier );
+		if( tmpl == nullptr )
+			continue;
+		const Bool inside = level > it->m_min && level <= it->m_max;
+		if( it->m_negativeOnly )
+		{
+			// (as damage brings it in: it was not inside before)
+			const Bool wasInside = before > it->m_min && before <= it->m_max;
+			if( inside && !wasInside && delta < 0.0f )
+				obj->applyAttributeModifier( tmpl, obj->getID() );
+			continue;
+		}
+		const Bool has = obj->hasAttributeModifier( tmpl );
+		if( inside && !has )
+			obj->applyAttributeModifier( tmpl, obj->getID() );
+		else if( !inside && has )
+			obj->removeAttributeModifier( tmpl, obj->getID() );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

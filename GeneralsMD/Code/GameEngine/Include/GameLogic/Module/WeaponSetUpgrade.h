@@ -74,6 +74,9 @@ public:
 	WeaponSetUpgrade( Thing *thing, const ModuleData* moduleData );
 	// virtual destructor prototype defined by MemoryPoolObject
 
+	/// Tiberium Project @feature the condition it sets (a status going keeps that of an applied upgrade)
+	Int getWeaponCondition() const { return getWeaponSetUpgradeModuleData()->m_weaponCondition; }
+
 protected:
 	virtual void upgradeImplementation( ) override; ///< Here's the actual work of Upgrading
 	virtual void undoUpgradeImplementation() override;	///< Tiberium Project: the condition off again (UndoWhenRemoved)

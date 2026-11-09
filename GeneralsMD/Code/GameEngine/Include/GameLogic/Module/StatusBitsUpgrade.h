@@ -90,6 +90,9 @@ public:
 	StatusBitsUpgrade( Thing *thing, const ModuleData* moduleData );
 	// virtual destructor prototype defined by MemoryPoolObject
 
+	/// Tiberium Project @feature the statuses it sets (a modifier wearing off keeps those of an applied upgrade)
+	const ObjectStatusMaskType& getStatusToSet() const { return getStatusBitsUpgradeModuleData()->m_statusToSet; }
+
 protected:
 	virtual void upgradeImplementation( ) override; ///< Here's the actual work of Upgrading
 	virtual void undoUpgradeImplementation() override;	///< Tiberium Project: the statuses back (UndoWhenRemoved)

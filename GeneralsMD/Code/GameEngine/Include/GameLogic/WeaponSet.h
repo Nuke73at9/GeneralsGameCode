@@ -115,6 +115,11 @@ static const ModelConditionFlagType TheWeaponSetTypeToModelConditionTypeMap[WEAP
 	/*WEAPONSET_RIDER7*/								MODELCONDITION_RIDER7,
 	/*WEAPONSET_RIDER8*/								MODELCONDITION_RIDER8,
 	/*WEAPONSET_ABILITY_TOGGLED*/			MODELCONDITION_INVALID,	// Tiberium Project: the ability sets its own looks
+	/*WEAPONSET_USER_1*/							MODELCONDITION_INVALID,	// Tiberium Project: what sets the status sets its own looks
+	/*WEAPONSET_USER_2*/							MODELCONDITION_INVALID,
+	/*WEAPONSET_USER_3*/							MODELCONDITION_INVALID,
+	/*WEAPONSET_USER_4*/							MODELCONDITION_INVALID,
+	/*WEAPONSET_HAS_CRATE_UPGRADE*/		MODELCONDITION_INVALID,
 };
 #endif
 

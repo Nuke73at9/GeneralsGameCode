@@ -57,6 +57,11 @@ enum WeaponSetType CPP_11(: Int)
 	WEAPONSET_RIDER7,
 	WEAPONSET_RIDER8,
 	WEAPONSET_ABILITY_TOGGLED,	///< Tiberium Project @feature a unit ability's second state (ToggleAbilityUpdate)
+	WEAPONSET_USER_1,						///< Tiberium Project @feature the object has status USER_1 (Object::setStatus sets these)
+	WEAPONSET_USER_2,
+	WEAPONSET_USER_3,
+	WEAPONSET_USER_4,
+	WEAPONSET_HAS_CRATE_UPGRADE,		///< Tiberium Project @feature the object has status HAS_CRATE_UPGRADE
 
 	WEAPONSET_COUNT
 };

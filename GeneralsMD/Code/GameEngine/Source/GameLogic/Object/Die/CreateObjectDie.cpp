@@ -52,6 +52,7 @@ CreateObjectDieModuleData::CreateObjectDieModuleData()
 	m_transferSelection = FALSE;
 	m_shareCount = 1;
 	m_shareOf = 1;
+	m_chance = 1.0f;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -67,6 +68,7 @@ CreateObjectDieModuleData::CreateObjectDieModuleData()
 		{ "TransferSelection", INI::parseBool, nullptr, offsetof( CreateObjectDieModuleData, m_transferSelection ) },
 		{ "ShareCount", INI::parseInt, nullptr, offsetof( CreateObjectDieModuleData, m_shareCount ) },	// Tiberium Project
 		{ "ShareOf", INI::parseInt, nullptr, offsetof( CreateObjectDieModuleData, m_shareOf ) },	// Tiberium Project
+		{ "Chance", INI::parsePercentToReal, nullptr, offsetof( CreateObjectDieModuleData, m_chance ) },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
 	p.add(dataFieldParse);
@@ -100,6 +102,10 @@ void CreateObjectDie::onDie( const DamageInfo * damageInfo )
 		return;
 
 	Object *damageDealer = TheGameLogic->findObjectByID( damageInfo->in.m_sourceID );
+
+	// Tiberium Project @feature made only so often (Chance)
+	if( data->m_chance < 1.0f && GameLogicRandomValueReal( 0.0f, 1.0f ) >= data->m_chance )
+		return;
 
 	// Tiberium Project @feature a share of what the list makes (ShareCount of every ShareOf deaths): run that many times
 	// now, by the dying object's player's tally for this object and module

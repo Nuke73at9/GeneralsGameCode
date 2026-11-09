@@ -271,6 +271,7 @@
 #include "GameLogic/Module/ShroudCrateCollide.h"
 #include "GameLogic/Module/UnitCrateCollide.h"
 #include "GameLogic/Module/VeterancyCrateCollide.h"
+#include "GameLogic/Module/UpgradeCrateCollide.h"	// Tiberium Project
 
 // body includes
 #include "GameLogic/Module/InactiveBody.h"
@@ -570,6 +571,7 @@ void ModuleFactory::init()
 	addModule( ShroudCrateCollide );
 	addModule( UnitCrateCollide );
 	addModule( VeterancyCrateCollide );
+	addModule( UpgradeCrateCollide );	// Tiberium Project
 	addModule( ConvertToCarBombCrateCollide );
 	addModule( ConvertToHijackedVehicleCrateCollide );
 	addModule( SabotageCommandCenterCrateCollide );

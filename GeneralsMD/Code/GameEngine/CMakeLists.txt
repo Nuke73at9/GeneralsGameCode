@@ -502,6 +502,7 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/UpgradeDie.h
     Include/GameLogic/Module/UpgradeModule.h
     Include/GameLogic/Module/VeterancyCrateCollide.h
+    Include/GameLogic/Module/UpgradeCrateCollide.h
     Include/GameLogic/Module/VeterancyGainCreate.h
     Include/GameLogic/Module/WanderAIUpdate.h
     Include/GameLogic/Module/WaveGuideUpdate.h
@@ -943,6 +944,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Collide/CrateCollide/ShroudCrateCollide.cpp
     Source/GameLogic/Object/Collide/CrateCollide/UnitCrateCollide.cpp
     Source/GameLogic/Object/Collide/CrateCollide/VeterancyCrateCollide.cpp
+    Source/GameLogic/Object/Collide/CrateCollide/UpgradeCrateCollide.cpp
     Source/GameLogic/Object/Collide/FireWeaponCollide.cpp
     Source/GameLogic/Object/Collide/SquishCollide.cpp
     Source/GameLogic/Object/Contain/CaveContain.cpp

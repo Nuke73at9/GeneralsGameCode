@@ -292,6 +292,7 @@ static PoolSizeRec PoolSizes[] =
 	{ "UnitCrateCollide", 32, 32 },
 	{ "UnpauseSpecialPowerUpgrade", 32, 32 },
 	{ "VeterancyCrateCollide", 32, 32 },
+	{ "UpgradeCrateCollide", 128, 64 },	// Tiberium Project
 	{ "VeterancyGainCreate", 512, 128 },
 	{ "ConvertToCarBombCrateCollide", 256, 128 },
 	{ "ConvertToHijackedVehicleCrateCollide", 256, 128 },

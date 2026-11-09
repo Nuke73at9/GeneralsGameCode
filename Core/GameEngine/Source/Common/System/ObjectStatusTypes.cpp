@@ -83,6 +83,14 @@ const char* const ObjectStatusMaskType::s_bitNameList[] =
 	"DEPLOYED",
 	"REDEMPTION",	// Tiberium Project
 	"FIRESTORM_PLAYERPOWER_ACTIVE",	// Tiberium Project
+	"USER_1",	// Tiberium Project
+	"USER_2",	// Tiberium Project
+	"USER_3",	// Tiberium Project
+	"USER_4",	// Tiberium Project
+	"WEAPON_UPGRADED_01",	// Tiberium Project
+	"WEAPON_UPGRADED_02",	// Tiberium Project
+	"WEAPON_UPGRADED_03",	// Tiberium Project
+	"HAS_CRATE_UPGRADE",	// Tiberium Project
 	nullptr
 };
 static_assert(ARRAY_SIZE(ObjectStatusMaskType::s_bitNameList) == ObjectStatusMaskType::NumBits + 1, "Incorrect array size");

@@ -848,6 +848,8 @@ private:
 	Real													m_attributeModifierVision;			///< ... the vision range scale
 	Real													m_attributeModifierShroud;			///< ... the shroud clearing range scale
 	void refreshAttributeModifierConditions();	///< (and the status, health and sight they change)
+	void followStatusWeaponSets( const ObjectStatusMaskType& oldStatus );	///< Tiberium Project: the weapons follow the statuses
+	Bool upgradeKeeps( ObjectStatusTypes status, Int weaponSet ) const;	///< Tiberium Project: an applied upgrade sets it too
 
 };
 

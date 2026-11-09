@@ -90,6 +90,18 @@ enum ObjectStatusTypes CPP_11(: Int)
 	OBJECT_STATUS_DEPLOYED,							///< Object is deployed.
 	OBJECT_STATUS_REDEMPTION,						///< Tiberium Project: marked by Kane's Wrath's Redemption (SAGE's PARACHUTING there): killed, it rises again (CreateObjectDie RequiredStatus)
 	OBJECT_STATUS_FIRESTORM_PLAYERPOWER_ACTIVE,	///< Tiberium Project: under C&C4's Firestorm Ignition: its flames make firestorms (a weapon's TargetOCLWithStatus)
+	// Tiberium Project @feature SAGE 2's general-purpose statuses: what an upgrade, a modifier or an ability sets for the
+	// object's other modules to follow (C&C4's crate upgrades and abilities choose weapons by them; auras, timed weapons and
+	// toggles wait on them). The object's weapons follow the WEAPON_UPGRADED ones and the first four USER ones on their own
+	// (Object::setStatus: the weapon sets of the same conditions)
+	OBJECT_STATUS_USER_1,
+	OBJECT_STATUS_USER_2,
+	OBJECT_STATUS_USER_3,
+	OBJECT_STATUS_USER_4,
+	OBJECT_STATUS_WEAPON_UPGRADED_01,
+	OBJECT_STATUS_WEAPON_UPGRADED_02,
+	OBJECT_STATUS_WEAPON_UPGRADED_03,
+	OBJECT_STATUS_HAS_CRATE_UPGRADE,		///< Tiberium Project: C&C4's crate upgrade taken (it arms the Mantis's other two cannons)
 	// add more status types here and don't forget to add to the string table ObjectStatusMaskType::s_bitNameList[]
 
 	OBJECT_STATUS_COUNT
