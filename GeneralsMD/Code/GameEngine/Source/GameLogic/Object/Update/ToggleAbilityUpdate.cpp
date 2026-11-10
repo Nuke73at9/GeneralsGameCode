@@ -23,6 +23,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
 #include "GameLogic/Module/ToggleAbilityUpdate.h"
+#include "GameLogic/Module/FireWeaponUpdate.h"	// Tiberium Project
 
 #include "Common/Xfer.h"
 #include "GameLogic/GameLogic.h"
@@ -121,6 +122,9 @@ void ToggleAbilityUpdate::beginSwitch()
 	m_switchStartFrame = TheGameLogic->getFrame();
 	m_switchEndFrame = TheGameLogic->getFrame() + time;
 	m_landFrom = *me->getPosition();	// (Tiberium Project: where it comes down from, LandOnSwitchBack)
+	// Tiberium Project @feature the timed weapons the state it goes into switches on (its InitialDelay from now)
+	if( m_toggled ? data->m_normalArmsTimedWeapons : data->m_toggledArmsTimedWeapons )
+		FireWeaponUpdate::armAll( me );
 	if( time > 0 )
 	{
 		// it stands still while it switches

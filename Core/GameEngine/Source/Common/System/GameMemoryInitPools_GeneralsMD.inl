@@ -198,6 +198,7 @@ static PoolSizeRec PoolSizes[] =
 	{ "TiberiumCrystalUpdate", 1024, 256 },
 	{ "TiberiumFieldUpdate", 64, 16 },
 	{ "ClusterBombUpdate", 32, 16 },
+	{ "RunOffMapUpdate", 32, 16 },
 	{ "TiberiumPickupUpdate", 32, 16 },
 	{ "TiberiumZoneNodeUpdate", 32, 16 },
 	{ "TiberiumArrivalUpdate", 32, 16 },

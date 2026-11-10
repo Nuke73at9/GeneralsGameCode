@@ -424,6 +424,7 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/TiberiumCrystalUpdate.h
     Include/GameLogic/Module/TiberiumFieldUpdate.h
     Include/GameLogic/Module/ClusterBombUpdate.h
+    Include/GameLogic/Module/RunOffMapUpdate.h
     Include/GameLogic/Module/TiberiumPickupUpdate.h
     Include/GameLogic/Module/TiberiumArrivalUpdate.h
     Include/GameLogic/Module/TiberiumZoneNodeUpdate.h
@@ -1111,6 +1112,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Update/TiberiumCrystalUpdate.cpp
     Source/GameLogic/Object/Update/TiberiumFieldUpdate.cpp
     Source/GameLogic/Object/Update/ClusterBombUpdate.cpp
+    Source/GameLogic/Object/Update/RunOffMapUpdate.cpp
     Source/GameLogic/Object/Update/TiberiumPickupUpdate.cpp
     Source/GameLogic/Object/Update/TiberiumArrivalUpdate.cpp
     Source/GameLogic/Object/Update/TiberiumZoneNodeUpdate.cpp

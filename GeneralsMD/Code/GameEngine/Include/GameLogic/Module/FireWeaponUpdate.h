@@ -51,6 +51,9 @@ public:
 	UnsignedInt m_requiredObjectRelationship;
 	KindOfMaskType m_requiredObjectKindOf;
 	KindOfMaskType m_requiredObjectForbiddenKindOf;
+	/// Tiberium Project @feature SAGE's INITIALLY_INACTIVE: it fires only once something switches it on (arm: a toggle's
+	/// ArmsTimedWeapons, C&C4's ACTIVATE_FIRE_WEAPON_UPDATE_MODULES), its InitialDelay counted from then
+	Bool m_startsInactive;
 
 	FireWeaponUpdateModuleData();
 
@@ -75,6 +78,12 @@ public:
 
 	virtual UpdateSleepTime update() override;
 
+	/** Tiberium Project @feature switched on (StartsInactive): it fires its InitialDelay from now, its weapon ready again
+		(C&C4's Thunderhead's slam as it lands) */
+	void arm();
+	/// Tiberium Project: every FireWeaponUpdate of the object that starts inactive, switched on
+	static void armAll( Object *obj );
+
 protected:
 
 	Bool isOkayToFire();
@@ -82,5 +91,6 @@ protected:
 
 	Weapon* m_weapon;
   UnsignedInt m_initialDelayFrame;
+	Bool m_active;	///< Tiberium Project: switched on (StartsInactive: not until armed)
 
 };

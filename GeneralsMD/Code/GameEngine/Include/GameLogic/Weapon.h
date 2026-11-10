@@ -618,6 +618,10 @@ private:
 	Bool m_paralyzeRemove;															///< Tiberium Project: frees them of it instead (C&C4's EMP countermeasures)
 	const FXList* m_paralyzeFX;														///< Tiberium Project: shown on each object it disables
 	const FXList* m_victimFX[3];													///< Tiberium Project: the hit shown on each object the damage reaches (C&C4's DamageFX): anything, a soldier, a structure
+	RGBColor m_victimTint;																///< Tiberium Project: each object the damage reaches tinted this colour (C&C4's TintObjectsNugget: a stasis field's blue); black: none
+	UnsignedInt m_victimTintAttack;													///< Tiberium Project: ... coming on over this long
+	UnsignedInt m_victimTintSustain;												///< Tiberium Project: ... held this long
+	UnsignedInt m_victimTintDecay;													///< Tiberium Project: ... and fading over this long
 	Bool m_canBeDodged;																///< Tiberium Project: its target's dodge may make it miss (C&C4's CanBeDodged; default Yes)
 	Int m_victimVeterancy;															///< Tiberium Project: veterancy levels each object its damage reaches gains (C&C4's ExperienceNugget)
 	UnsignedInt m_jamRadarFrames;													///< Tiberium Project: as it is dealt, the radars of its firer's enemies go dark this long (C&C4's InformationWarfareNugget)

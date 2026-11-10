@@ -31,7 +31,9 @@
 // glider and landing): with OffSpecialPowerTemplate, the power switches into the second state only, and that one
 // only back; aimed at a spot, the unit first goes within OffStartAbilityRange of it (told to go elsewhere meanwhile,
 // it does not switch back). With LandOnSwitchBack, a unit above the ground as it switches back comes down to it,
-// held, over the switch.
+// held, over the switch. NormalArmsTimedWeapons (ToggledArmsTimedWeapons) switches on the object's StartsInactive
+// FireWeaponUpdates as it begins switching into the first (second) state (C&C4's ACTIVATE_FIRE_WEAPON_UPDATE_MODULES:
+// the Thunderhead's slam as it lands).
 //
 //   Behavior = SpecialAbility ModuleTag_DeployPower
 //     SpecialPowerTemplate = C4SP_Deploy
@@ -79,6 +81,8 @@ public:
 	SpecialPowerTemplate *m_offSpecialPowerTemplate;	///< Tiberium Project: the power that only switches back (or none)
 	Real m_offStartAbilityRange;		///< how near the spot it goes first (0: it switches back where it is)
 	Bool m_landOnSwitchBack;			///< comes down to the ground as it switches back
+	Bool m_normalArmsTimedWeapons;		///< Tiberium Project: switching into the first state arms its StartsInactive FireWeaponUpdates (C&C4's ACTIVATE_FIRE_WEAPON_UPDATE_MODULES: the Thunderhead's slam as it lands)
+	Bool m_toggledArmsTimedWeapons;		///< Tiberium Project: switching into the second state does
 
 	ToggleAbilityUpdateModuleData()
 	{
@@ -93,6 +97,8 @@ public:
 		m_offSpecialPowerTemplate = nullptr;
 		m_offStartAbilityRange = 0.0f;
 		m_landOnSwitchBack = FALSE;
+		m_normalArmsTimedWeapons = FALSE;
+		m_toggledArmsTimedWeapons = FALSE;
 	}
 
 	static void parseBackTime( INI *ini, void *instance, void *store, const void *userData )
@@ -122,6 +128,8 @@ public:
 			{ "OffSpecialPowerTemplate",	INI::parseSpecialPowerTemplate,	nullptr, offsetof( ToggleAbilityUpdateModuleData, m_offSpecialPowerTemplate ) },
 			{ "OffStartAbilityRange",	INI::parseReal,					nullptr, offsetof( ToggleAbilityUpdateModuleData, m_offStartAbilityRange ) },
 			{ "LandOnSwitchBack",		INI::parseBool,					nullptr, offsetof( ToggleAbilityUpdateModuleData, m_landOnSwitchBack ) },
+			{ "NormalArmsTimedWeapons",	INI::parseBool,				nullptr, offsetof( ToggleAbilityUpdateModuleData, m_normalArmsTimedWeapons ) },
+			{ "ToggledArmsTimedWeapons",	INI::parseBool,			nullptr, offsetof( ToggleAbilityUpdateModuleData, m_toggledArmsTimedWeapons ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 		p.add( dataFieldParse );

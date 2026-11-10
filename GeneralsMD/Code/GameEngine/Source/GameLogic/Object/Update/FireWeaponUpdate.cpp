@@ -49,6 +49,7 @@ FireWeaponUpdateModuleData::FireWeaponUpdateModuleData()
 	m_exclusiveWeaponDelay = 0;
 	m_requiredObjectRange = 0.0f;	// Tiberium Project
 	m_requiredObjectRelationship = 0;
+	m_startsInactive = FALSE;	// Tiberium Project
 }
 
 // Tiberium Project: the relationships RequiredObjectRelationship names
@@ -71,6 +72,7 @@ enum { REQUIRED_ALLIES = 1, REQUIRED_ENEMIES = 2, REQUIRED_NEUTRALS = 4 };
 		{ "RequiredObjectRelationship",	INI::parseBitString32,	RequiredObjectRelationshipNames, offsetof( FireWeaponUpdateModuleData, m_requiredObjectRelationship ) },	// Tiberium Project
 		{ "RequiredObjectKindOf",	KindOfMaskType::parseFromINI,		nullptr, offsetof( FireWeaponUpdateModuleData, m_requiredObjectKindOf ) },	// Tiberium Project
 		{ "RequiredObjectForbiddenKindOf",	KindOfMaskType::parseFromINI,	nullptr, offsetof( FireWeaponUpdateModuleData, m_requiredObjectForbiddenKindOf ) },	// Tiberium Project
+		{ "StartsInactive",				INI::parseBool,									nullptr, offsetof( FireWeaponUpdateModuleData, m_startsInactive ) },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
   p.add(dataFieldParse);
@@ -92,6 +94,37 @@ FireWeaponUpdate::FireWeaponUpdate( Thing *thing, const ModuleData* moduleData )
 
   m_initialDelayFrame = TheGameLogic->getFrame() + getFireWeaponUpdateModuleData()->m_initialDelayFrames;
 
+	// Tiberium Project @feature StartsInactive: asleep until armed
+	m_active = !getFireWeaponUpdateModuleData()->m_startsInactive;
+	if( !m_active )
+		setWakeFrame( getObject(), UPDATE_SLEEP_FOREVER );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature switched on: its InitialDelay from now, its weapon ready
+void FireWeaponUpdate::arm()
+{
+	m_active = TRUE;
+	m_initialDelayFrame = TheGameLogic->getFrame() + getFireWeaponUpdateModuleData()->m_initialDelayFrames;
+	if( m_weapon != nullptr )
+		m_weapon->loadAmmoNow( getObject() );
+	setWakeFrame( getObject(), UPDATE_SLEEP_NONE );
+}
+
+//-------------------------------------------------------------------------------------------------
+void FireWeaponUpdate::armAll( Object *obj )
+{
+	static const NameKeyType key = NAMEKEY( "FireWeaponUpdate" );
+	if( obj == nullptr )
+		return;
+	for( BehaviorModule **m = obj->getBehaviorModules(); *m != nullptr; ++m )
+	{
+		if( (*m)->getModuleNameKey() != key )
+			continue;
+		FireWeaponUpdate *update = static_cast<FireWeaponUpdate *>( *m );
+		if( update->getFireWeaponUpdateModuleData()->m_startsInactive )
+			update->arm();
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -105,6 +138,8 @@ FireWeaponUpdate::~FireWeaponUpdate()
 //-------------------------------------------------------------------------------------------------
 UpdateSleepTime FireWeaponUpdate::update()
 {
+	if( !m_active )
+		return UPDATE_SLEEP_FOREVER;	// Tiberium Project: not yet armed (StartsInactive)
 
   if ( TheGameLogic->getFrame() < m_initialDelayFrame )
     return UPDATE_SLEEP_NONE;
@@ -201,13 +236,15 @@ void FireWeaponUpdate::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer method
 	* Version Info:
-	* 1: Initial version */
+	* 1: Initial version
+	* 2: m_initialDelayFrame
+	* 3: Tiberium Project: m_active */
 // ------------------------------------------------------------------------------------------------
 void FireWeaponUpdate::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -219,6 +256,10 @@ void FireWeaponUpdate::xfer( Xfer *xfer )
 
   if ( version >= 2 )
     xfer->xferUnsignedInt( &m_initialDelayFrame );
+
+	// Tiberium Project @feature switched on (StartsInactive)
+	if( version >= 3 )
+		xfer->xferBool( &m_active );
 
 }
 

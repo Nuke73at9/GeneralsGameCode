@@ -239,6 +239,10 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "VictimFX",										INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[0]) },	// Tiberium Project
 	{ "VictimFXInfantry",						INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[1]) },	// Tiberium Project
 	{ "VictimFXStructure",					INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[2]) },	// Tiberium Project
+	{ "VictimTint",									INI::parseRGBColor,										nullptr,							offsetof(WeaponTemplate, m_victimTint) },	// Tiberium Project
+	{ "VictimTintAttack",						INI::parseDurationUnsignedInt,				nullptr,							offsetof(WeaponTemplate, m_victimTintAttack) },	// Tiberium Project
+	{ "VictimTintTime",							INI::parseDurationUnsignedInt,				nullptr,							offsetof(WeaponTemplate, m_victimTintSustain) },	// Tiberium Project
+	{ "VictimTintDecay",						INI::parseDurationUnsignedInt,				nullptr,							offsetof(WeaponTemplate, m_victimTintDecay) },	// Tiberium Project
 	{ "ProjectileDetonationOCL",		parseAllVetLevelsAsciiString,					nullptr,							offsetof(WeaponTemplate, m_projectileDetonationOCLNames) },
 	{ "ProjectileExhaust",					parseAllVetLevelsPSys,								nullptr,							offsetof(WeaponTemplate, m_projectileExhausts) },
 	{ "VeterancyFireFX",										parsePerVetLevelFXList,				nullptr,							offsetof(WeaponTemplate, m_fireFXs) },
@@ -332,6 +336,10 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_targetOCL										= nullptr;	// Tiberium Project
 	m_targetStatusOCL							= nullptr;	// Tiberium Project
 	m_victimOCL										= nullptr;	// Tiberium Project
+	m_victimTint.red = m_victimTint.green = m_victimTint.blue = 0.0f;	// Tiberium Project
+	m_victimTintAttack = 0;
+	m_victimTintSustain = 0;
+	m_victimTintDecay = 0;
 	m_victimForbiddenStatus.clear();	// Tiberium Project
 	m_forceToggleToDefault				= FALSE;	// Tiberium Project
 	m_hijackVictim								= FALSE;	// Tiberium Project
@@ -2178,6 +2186,9 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 			// (C&C4's AttributeModifierNugget: a slow, an armour debuff, an ally's damage boost)
 			if (m_victimModifier != NAMEKEY_INVALID && !curVictim->isEffectivelyDead())
 				curVictim->applyAttributeModifier(TheAttributeModifierStore->find(m_victimModifier), sourceID, m_victimModifierDuration);
+			// Tiberium Project @feature its tint on each (C&C4's TintObjectsNugget: what a stasis field holds turns blue); the look only
+			if (m_victimTint.red + m_victimTint.green + m_victimTint.blue > 0.0f && curVictim->getDrawable() != nullptr && !curVictim->isEffectivelyDead())
+				curVictim->getDrawable()->colorFlash(&m_victimTint, m_victimTintDecay, m_victimTintAttack, m_victimTintSustain);
 			// Tiberium Project @feature an OCL made on each object its damage reaches, by the weapon's owner, what it makes with a
 			// StickyBombUpdate stuck to that object (C&C4's FireOnObjectsNugget's weapon with a WeaponOCLNugget TargetAsPrimaryObject:
 			// the Personal Shields' shield on each friend), none on what cannot be attacked (a shield itself)
