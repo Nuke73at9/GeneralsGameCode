@@ -45,6 +45,7 @@
 #include "WW3D2/mesh.h"
 #include "WW3D2/meshmdl.h"
 #include "WW3D2/vertmaterial.h"
+#include "WW3D2/w3d_file.h"
 #include "WW3D2/ww3d.h"
 #ifdef RTS_RENDERER_D3D9
 #include <math.h>
@@ -202,6 +203,9 @@ W3DParticleSystemManager::ModelCopy *W3DParticleSystemManager::takeModelCopy(Mod
 		MeshModelClass *model = mesh->Peek_Model();
 		if (model == nullptr)
 			continue;
+		// (drawn now, with the particles: W3D's static sort lists were drawn before them)
+		if (mesh->Get_Sort_Level() != SORT_LEVEL_NONE)
+			mesh->Set_Sort_Level(SORT_LEVEL_NONE);
 		const ShaderClass shader = model->Has_Shader_Array(0) ? model->Get_Shader(0, 0) : model->Get_Single_Shader(0);
 		Int blend = MODEL_BLEND_OPAQUE;
 		if (shader.Get_Dst_Blend_Func() == ShaderClass::DSTBLEND_ONE)

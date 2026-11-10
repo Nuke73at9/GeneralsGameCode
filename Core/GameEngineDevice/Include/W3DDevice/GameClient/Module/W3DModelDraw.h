@@ -323,6 +323,11 @@ public:
 		Real m_driveSpeedFraction;
 	};
 	std::vector<TreadScrollInfo>			m_treadScrolls;
+	/// Tiberium Project @feature spotlights (C&C3's and Kane's Wrath's SpotlightDraw: the stealth detectors'
+	/// searchlights): the model turns about its own up axis to a new heading every SpotlightRefreshTime,
+	/// taking SpotlightSweepTime to get there (0: not a spotlight)
+	UnsignedInt												m_spotlightRefreshFrames;
+	UnsignedInt												m_spotlightSweepFrames;
 	Bool															m_animationsRequirePower;///< Should UnderPowered disable type pause animations in this draw module?
 #ifdef CACHE_ATTACH_BONE
 	mutable Bool											m_attachToDrawableBoneOffsetValid;
@@ -540,6 +545,7 @@ private:
 	const RenderObjClass*									m_treadScrollRobj;		///< Tiberium Project: the render object the bones were found in
 	Real													m_treadScrollLastAngle;	///< Tiberium Project: the facing at the last draw
 	void updateTreadScroll();	///< Tiberium Project @feature C&C4's scrolling treads
+	void adjustSpotlight(Matrix3D& mtx) const;	///< Tiberium Project @feature a spotlight's sweep
 
 	void adjustAnimation(const ModelConditionInfo* prevState, Real prevAnimFraction);
 	Real getCurrentAnimFraction() const;

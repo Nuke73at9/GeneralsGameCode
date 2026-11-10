@@ -47,6 +47,7 @@
 #include "Common/Xfer.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/FXList.h"
+#include "GameClient/GameClient.h"	// Tiberium Project @feature spotlights (the client frame)
 #include "GameClient/Shadow.h"
 #include "GameLogic/GameLogic.h"		// for real-time frame
 #include "GameLogic/Object.h"
@@ -1135,6 +1136,8 @@ W3DModelDrawModuleData::W3DModelDrawModuleData() :
 	m_validated(0),
 	m_okToChangeModelColor(false),
 	m_proceduralDamage(false),
+	m_spotlightRefreshFrames(0),
+	m_spotlightSweepFrames(0),
   m_particlesAttachedToAnimatedBones(false),
 	m_animationsRequirePower(true),
 #ifdef CACHE_ATTACH_BONE
@@ -1341,6 +1344,8 @@ void W3DModelDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "OkToChangeModelColor",	INI::parseBool, nullptr, offsetof(W3DModelDrawModuleData, m_okToChangeModelColor) },
 		{ "ProceduralDamage",	INI::parseBool, nullptr, offsetof(W3DModelDrawModuleData, m_proceduralDamage) },	// Tiberium Project
 		{ "TreadScroll",	W3DModelDrawModuleData::parseTreadScroll, nullptr, 0 },	// Tiberium Project
+		{ "SpotlightRefreshTime",	INI::parseDurationUnsignedInt, nullptr, offsetof(W3DModelDrawModuleData, m_spotlightRefreshFrames) },	// Tiberium Project
+		{ "SpotlightSweepTime",	INI::parseDurationUnsignedInt, nullptr, offsetof(W3DModelDrawModuleData, m_spotlightSweepFrames) },	// Tiberium Project
 		{ "AnimationsRequirePower",	INI::parseBool, nullptr, offsetof(W3DModelDrawModuleData, m_animationsRequirePower) },
 		{ "ParticlesAttachedToAnimatedBones",	INI::parseBool, nullptr, offsetof(W3DModelDrawModuleData, m_particlesAttachedToAnimatedBones) },
 		{ "MinLODRequired",		INI::parseStaticGameLODLevel,	nullptr,	offsetof(W3DModelDrawModuleData, m_minLODRequired) },
@@ -2310,6 +2315,53 @@ void W3DModelDraw::adjustTransformMtx(Matrix3D& mtx) const
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature a spotlight (C&C3's and Kane's Wrath's SpotlightDraw: the searchlights of their stealth
+// detectors) stands at its bone as the bone is turned (the beam's tilt; the logic's cached offset keeps only where
+// the bone is) and sweeps round the world's up axis there: every SpotlightRefreshTime it turns to a new heading,
+// easing there over SpotlightSweepTime by the shorter way round. Each heading is picked from the drawable and the
+// sweep's count, so no random number is drawn and no state is kept. Visual only.
+static Real spotlightHeading(UnsignedInt drawableID, UnsignedInt sweep)
+{
+	UnsignedInt seed = drawableID * 2654435761u + sweep * 0x9E3779B9u;
+	seed ^= seed >> 16;
+	seed *= 0x85EBCA6Bu;
+	seed ^= seed >> 13;
+	return (Real)(seed & 0xFFFF) / 65536.0f * 2.0f * PI;
+}
+
+void W3DModelDraw::adjustSpotlight(Matrix3D& mtx) const
+{
+	const W3DModelDrawModuleData* d = getW3DModelDrawModuleData();
+	const UnsignedInt refresh = d->m_spotlightRefreshFrames;
+	const UnsignedInt frame = TheGameClient != nullptr ? TheGameClient->getFrame() : 0;
+	const UnsignedInt id = (UnsignedInt)getDrawable()->getID();
+	const UnsignedInt sweep = frame / refresh;
+	const UnsignedInt into = frame - sweep * refresh;
+	const Real from = spotlightHeading(id, sweep - 1);
+	const Real to = spotlightHeading(id, sweep);
+	Real t = d->m_spotlightSweepFrames > 0 ? (Real)into / (Real)d->m_spotlightSweepFrames : 1.0f;
+	if (t > 1.0f)
+		t = 1.0f;
+	t = t * t * (3.0f - 2.0f * t);
+	Real turn = to - from;
+	while (turn > PI)
+		turn -= 2.0f * PI;
+	while (turn < -PI)
+		turn += 2.0f * PI;
+	Matrix3D boneMtx;
+	if (d->m_attachToDrawableBone.isNotEmpty() && getDrawable()->getCurrentWorldspaceClientBonePositions(d->m_attachToDrawableBone.str(), boneMtx))
+		mtx = boneMtx;
+	// turned about the world's up axis where it stands
+	const Vector3 at = mtx.Get_Translation();
+	Matrix3D orientation = mtx;
+	orientation.Set_Translation(Vector3(0.0f, 0.0f, 0.0f));
+	Matrix3D sweepMtx(true);
+	sweepMtx.Rotate_Z(from + turn * t);
+	Matrix3D::Multiply(sweepMtx, orientation, &mtx);
+	mtx.Set_Translation(at);
+}
+
+//-------------------------------------------------------------------------------------------------
 void W3DModelDraw::doDrawModule(const Matrix3D* transformMtx)
 {
 	// update whether or not we should be animating.
@@ -2370,6 +2422,8 @@ void W3DModelDraw::doDrawModule(const Matrix3D* transformMtx)
 	{
 		Matrix3D mtx = *transformMtx;
 		adjustTransformMtx(mtx);
+		if (getW3DModelDrawModuleData()->m_spotlightRefreshFrames > 0)
+			adjustSpotlight(mtx);
 		m_renderObject->Set_Transform(mtx);
 	}
 
