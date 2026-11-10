@@ -558,6 +558,9 @@ private:
 	const FXList* getScatterFX() const { return m_scatterFX; }	///< Tiberium Project
 	/// Tiberium Project @feature whether its damage reaches the victim's kind (VictimKindOf, VictimForbiddenKindOf)
 	Bool isVictimKindAllowed(const Object *victim) const;
+	/// Tiberium Project @feature whether the victim's armour is one its kind of weapon counters (C&C4's CombatChain: its
+	/// CounterCategory among the armour's CounteredBy)
+	Bool isStrongCounterAgainst(const Object *victim) const;
 	Bool isTargetStatusAllowed(const Object *victim) const;	///< Tiberium Project: none of the statuses it may not be aimed at (SAGE's ForbiddenTargetObjectStatus)
 	/// the damage of its own (estimateWeaponTemplateDamage adds its follow-ups': Tiberium Project)
 	Real estimateOwnDamage(const Object *sourceObj, const Object *victimObj, const Coord3D* victimPos, const WeaponBonus& bonus) const;
@@ -628,6 +631,8 @@ private:
 	const FXList* m_scatterFX;														///< Tiberium Project: played from each hop to the next (ScatterFX: a bolt between them)
 	KindOfMaskType m_victimKindOf;												///< Tiberium Project: its damage reaches only these kinds (any of them; none: all)
 	KindOfMaskType m_victimForbiddenKindOf;										///< Tiberium Project: and none of these
+	Int m_counterCategory;																			///< Tiberium Project: its kind of weapon (CounterCategory: C&C4's WeaponCategory; -1: none)
+	const FXList* m_fireStrongCounterFX;															///< Tiberium Project: its fire effect at what its kind counters (FireStrongCounterFX)
 	ObjectStatusMaskType m_forbiddenTargetStatus;									///< Tiberium Project: not aimed at an object with any of these (Kane's Wrath's satchel charges and a building's field)
 	const FXList* m_impactFX;														///< Tiberium Project: shown where the damage is dealt (a sweep's wave, at each of its steps)
 	Int m_paralyzeType;																///< Tiberium Project: the DisabledType ParalyzeTime puts on each object the damage reaches

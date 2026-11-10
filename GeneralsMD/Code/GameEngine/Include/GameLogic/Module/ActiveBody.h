@@ -145,6 +145,7 @@ public:
 
 	virtual Real getDodgePercentage() const override { return getActiveBodyModuleData()->m_dodgePercentage; }	///< Tiberium Project
 	virtual Real getDodgePercentageMax() const override { return getActiveBodyModuleData()->m_dodgePercentageMax; }	///< Tiberium Project
+	virtual const ArmorTemplate *getCurrentArmorTemplate() const override { validateArmorAndDamageFX(); return m_curArmor.getTemplate(); }	///< Tiberium Project
 
 	virtual void internalChangeHealth( Real delta ) override;								///< change health
 

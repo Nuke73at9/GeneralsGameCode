@@ -43,6 +43,18 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ArmorStore* TheArmorStore = nullptr;					///< the ArmorTemplate store definition
 
+// Tiberium Project: C&C4's WeaponCategory values, in its order
+const char *const TheWeaponCounterCategoryNames[] =
+{
+	"GUN",
+	"BLAST",
+	"CANNON",
+	"MISSILE",
+	"LIGHTNING",
+	"LASER",
+	nullptr
+};
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // PRIVATE DATA ///////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,6 +77,7 @@ void ArmorTemplate::clear()
 	}
 	m_sideDamageScalar = 1.0f;
 	m_rearDamageScalar = 1.0f;
+	m_counteredBy = 0;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -179,6 +192,7 @@ const ArmorTemplate* ArmorStore::findArmorTemplate(const char* name) const
 		{ "Armor", ArmorTemplate::parseArmorCoefficients, nullptr, 0 },
 		{ "SideDamageScalar", INI::parsePercentToReal, nullptr, offsetof(ArmorTemplate, m_sideDamageScalar) },	// Tiberium Project
 		{ "RearDamageScalar", INI::parsePercentToReal, nullptr, offsetof(ArmorTemplate, m_rearDamageScalar) },	// Tiberium Project
+		{ "CounteredBy", INI::parseBitString32, TheWeaponCounterCategoryNames, offsetof(ArmorTemplate, m_counteredBy) },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
 

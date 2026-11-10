@@ -45,6 +45,10 @@ class ArmorStore;
 //-------------------------------------------------------------------------------------------------
 class Object;
 
+// Tiberium Project @feature C&C4's weapon categories (its WeaponCategory), for its strong counters (CombatChain: a gun is
+// strong against light armour, a laser against heavy): a weapon's CounterCategory, an armour's CounteredBy
+extern const char *const TheWeaponCounterCategoryNames[];
+
 //-------------------------------------------------------------------------------------------------
 class ArmorTemplate
 {
@@ -68,6 +72,7 @@ public:
 
 	Real						m_sideDamageScalar;		///< Tiberium Project: hits from the sides
 	Real						m_rearDamageScalar;		///< Tiberium Project: hits from behind
+	UnsignedInt			m_counteredBy;				///< Tiberium Project: the weapon categories strong against it (CounteredBy: bits of TheWeaponCounterCategoryNames)
 
 protected:
 
@@ -99,6 +104,8 @@ public:
 	{
 		m_template = nullptr;
 	}
+
+	inline const ArmorTemplate *getTemplate() const { return m_template; }	///< Tiberium Project
 
 private:
 	const ArmorTemplate* m_template;		///< the kind of armor this is

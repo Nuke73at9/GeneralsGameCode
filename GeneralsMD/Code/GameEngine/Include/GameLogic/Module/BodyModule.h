@@ -200,6 +200,8 @@ public:
 	// ActiveBody DodgePercentage and DodgePercentageMax)
 	virtual Real getDodgePercentage() const { return 0.0f; }
 	virtual Real getDodgePercentageMax() const { return 0.5f; }
+	/// Tiberium Project @feature the armour it wears now (its armour set's for its state), or none (C&C4's strong counters)
+	virtual const ArmorTemplate *getCurrentArmorTemplate() const { return nullptr; }
 
 	virtual void evaluateVisualCondition() = 0;
 	virtual void updateBodyParticleSystems() = 0; // made public for topple and building collapse updates -ML

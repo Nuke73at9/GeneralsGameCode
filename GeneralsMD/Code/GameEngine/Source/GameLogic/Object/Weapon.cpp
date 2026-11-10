@@ -50,6 +50,7 @@
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Upgrade.h"	// Tiberium Project
+#include "Common/TiberiumTest.h"	// Tiberium Project
 #include "Common/Xfer.h"
 
 #include "GameClient/Drawable.h"
@@ -81,6 +82,7 @@
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Weapon.h"
 #include "GameLogic/AttributeModifier.h"	// Tiberium Project
+#include "GameLogic/Armor.h"	// Tiberium Project
 
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/AssistedTargetingUpdate.h"
@@ -226,6 +228,8 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "ScatterLaser",							INI::parseAsciiString,								nullptr,							offsetof(WeaponTemplate, m_scatterLaserName) },	// Tiberium Project
 	{ "ScatterFX",								INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_scatterFX) },	// Tiberium Project
 	{ "VictimKindOf",								KindOfMaskType::parseFromINI,						nullptr,							offsetof(WeaponTemplate, m_victimKindOf) },	// Tiberium Project
+	{ "CounterCategory",						INI::parseIndexList,										TheWeaponCounterCategoryNames,	offsetof(WeaponTemplate, m_counterCategory) },	// Tiberium Project
+	{ "FireStrongCounterFX",				INI::parseFXList,												nullptr,							offsetof(WeaponTemplate, m_fireStrongCounterFX) },	// Tiberium Project
 	{ "VictimForbiddenKindOf",						KindOfMaskType::parseFromINI,						nullptr,							offsetof(WeaponTemplate, m_victimForbiddenKindOf) },	// Tiberium Project
 	{ "ForbiddenTargetObjectStatus",			ObjectStatusMaskType::parseFromINI,			nullptr,							offsetof(WeaponTemplate, m_forbiddenTargetStatus) },	// Tiberium Project
 	{ "ImpactFX",										INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_impactFX) },	// Tiberium Project
@@ -378,6 +382,8 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 		m_fireFXs[i]										= nullptr;
 		m_projectileDetonateFXs[i]			= nullptr;
 	}
+	m_counterCategory								= -1;	// Tiberium Project
+	m_fireStrongCounterFX						= nullptr;	// Tiberium Project
 	m_damageDealtAtSelfPosition			= false;
 	m_affectsMask										= (WEAPON_AFFECTS_ALLIES | WEAPON_AFFECTS_ENEMIES | WEAPON_AFFECTS_NEUTRALS);
 	// most projectile weapons don't want to collide with nontargeted enemies/allies or trees...
@@ -700,6 +706,19 @@ Real WeaponTemplate::estimateWeaponTemplateDamage(
 			total += m_followUps[i].m_count * weapon->estimateOwnDamage(sourceObj, victimObj, victimPos, bonus);
 	}
 	return total;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature C&C4's strong counters (CombatChain): the victim wears an armour its kind of weapon is strong
+// against (its CounterCategory among the armour's CounteredBy: a gun at light armour, a laser at heavy); for the look
+//-------------------------------------------------------------------------------------------------
+Bool WeaponTemplate::isStrongCounterAgainst(const Object *victim) const
+{
+	if (m_counterCategory < 0 || victim == nullptr)
+		return false;
+	const BodyModuleInterface *body = victim->getBodyModule();
+	const ArmorTemplate *armor = body != nullptr ? body->getCurrentArmorTemplate() : nullptr;
+	return armor != nullptr && (armor->m_counteredBy & (1u << m_counterCategory)) != 0;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1116,6 +1135,15 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 		Real reDir = reAngle != 0.0f ? (WWMath::Atan2Origin(victimPos->y - sourcePos->y, victimPos->x - sourcePos->x)) : 0.0f;
 		VeterancyLevel v = sourceObj->getVeterancyLevel();
 		const FXList* fx = isProjectileDetonation ? getProjectileDetonateFX(v) : getFireFX(v);
+		// Tiberium Project @feature C&C4's strong counters: its other fire effect at what its kind of weapon is strong against
+		// (FireStrongCounterFX: a laser tank's brighter flash at a heavy tank); the look only
+		if( !isProjectileDetonation && m_fireStrongCounterFX != nullptr && victimObj != nullptr && isStrongCounterAgainst( victimObj ) )
+		{
+			fx = m_fireStrongCounterFX;
+			if( TiberiumTest::isActive() )
+				TiberiumTest::log( "frame %u: %s fires %s at %s: strong counter", TheGameLogic->getFrame(),
+					sourceObj->getTemplate()->getName().str(), getName().str(), victimObj->getTemplate()->getName().str() );
+		}
 
 		if ( TheGameLogic->getFrame() < firingWeapon->getSuspendFXFrame() )
 			fx = nullptr;
