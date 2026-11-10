@@ -302,6 +302,13 @@ void FireWeaponAbilityUpdate::enterStage( Stage stage )
 			// Tiberium Project: as it fires, or takes off (not again as it fires on landing)
 			if( m_leapSegments == 0 )
 				playSound( data->m_triggerSound );
+			// Tiberium Project @feature its modifier on itself as it fires (SelfModifier: the Flame Tank's Trail of Flame)
+			if( m_leapSegments == 0 && data->m_selfModifier != NAMEKEY_INVALID && TheAttributeModifierStore != nullptr )
+			{
+				const AttributeModifierTemplate *self = TheAttributeModifierStore->find( data->m_selfModifier );
+				if( self != nullptr )
+					me->applyAttributeModifier( self, me->getID() );
+			}
 			// Tiberium Project @feature the object taken over: its upgrade the unit's (its shots destroy it)
 			if( !data->m_targetUpgrades.empty() && m_leapSegments == 0 )
 			{

@@ -32,6 +32,7 @@
 
 #include "Common/Xfer.h"
 #include "GameLogic/Object.h"
+#include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/FireWeaponUpdate.h"
 #include "GameLogic/Module/StickyBombUpdate.h"
 #include "GameLogic/ObjectIter.h"
@@ -52,6 +53,7 @@ FireWeaponUpdateModuleData::FireWeaponUpdateModuleData()
 	m_requiredObjectRelationship = 0;
 	m_startsInactive = FALSE;	// Tiberium Project
 	m_fireOffset.zero();	// Tiberium Project
+	m_requiresMoving = FALSE;	// Tiberium Project
 }
 
 // Tiberium Project: the relationships RequiredObjectRelationship names
@@ -76,6 +78,7 @@ enum { REQUIRED_ALLIES = 1, REQUIRED_ENEMIES = 2, REQUIRED_NEUTRALS = 4 };
 		{ "RequiredObjectForbiddenKindOf",	KindOfMaskType::parseFromINI,	nullptr, offsetof( FireWeaponUpdateModuleData, m_requiredObjectForbiddenKindOf ) },	// Tiberium Project
 		{ "StartsInactive",				INI::parseBool,									nullptr, offsetof( FireWeaponUpdateModuleData, m_startsInactive ) },	// Tiberium Project
 		{ "FireOffset",						INI::parseCoord3D,							nullptr, offsetof( FireWeaponUpdateModuleData, m_fireOffset ) },	// Tiberium Project
+		{ "RequiresMoving",				INI::parseBool,									nullptr, offsetof( FireWeaponUpdateModuleData, m_requiresMoving ) },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
   p.add(dataFieldParse);
@@ -210,6 +213,9 @@ Bool FireWeaponUpdate::isOkayToFire()
 	if( data->m_requiredStatus.any() && !me->getStatusBits().testForAll( data->m_requiredStatus ) )
 		return FALSE;
 	if( me->getStatusBits().testForAny( data->m_forbiddenStatus ) )
+		return FALSE;
+	// Tiberium Project @feature only on the move (RequiresMoving: the Flame Tank's trail of flame), and alive
+	if( data->m_requiresMoving && ( me->isEffectivelyDead() || me->getAI() == nullptr || !me->getAI()->isMoving() ) )
 		return FALSE;
 
 	// Firing a real weapon suppresses this module

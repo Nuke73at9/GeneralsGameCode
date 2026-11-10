@@ -57,6 +57,9 @@ public:
 	/// Tiberium Project @feature SAGE's FireWeaponNugget Offset: it fires at this spot from the object, turned with it (C&C4's
 	/// Subterranean Strike: its drills in rings round where it was aimed); none: at its own feet
 	Coord3D m_fireOffset;
+	/// Tiberium Project @feature it fires only while the object is on the move (SAGE's RequiredModelConditions MOVING: C&C4's
+	/// Flame Tank's trail of flame)
+	Bool m_requiresMoving;
 
 	FireWeaponUpdateModuleData();
 

@@ -85,6 +85,7 @@ class FXList;
 class SpecialPowerTemplate;
 class Waypoint;
 
+#include "GameLogic/AttributeModifier.h"
 #include "GameLogic/Module/SpecialPowerUpdateModule.h"
 
 //-------------------------------------------------------------------------------------------------
@@ -132,6 +133,7 @@ public:
 	ModelConditionFlags m_leapLandingConditions;
 	const FXList *m_leapLandingFX;
 	Bool m_leapPackInFlight;
+	NameKeyType m_selfModifier;		///< Tiberium Project: put on the unit itself as it fires (C&C4's SpecialPower AttributeModifier with AttributeModifierAffectsSelf)
 	AudioEventRTS m_unpackSound;
 	AudioEventRTS m_triggerSound;
 	Int m_whichSpecialWeapon;				///< Tiberium Project: SPECIAL_WEAPON_ONE (1) to THREE (3) while it is under way (0: none)
@@ -166,6 +168,7 @@ public:
 		m_leapLandingTime = 0;
 		m_leapLandingFX = nullptr;
 		m_leapPackInFlight = FALSE;
+		m_selfModifier = NAMEKEY_INVALID;
 	}
 
 	static void parseShot( INI *ini, void *instance, void *store, const void *userData );
@@ -211,6 +214,8 @@ public:
 			{ "TeleportHeight",			INI::parseReal,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_teleportHeight ) },
 			{ "TeleportTime",				INI::parseDurationUnsignedInt,	nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_teleportTime ) },
 			{ "TeleportMaxDistance",		INI::parseReal,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_teleportMaxDistance ) },
+			// Tiberium Project @feature a modifier on the unit itself as it fires (C&C4's Flame Tank's Trail of Flame: faster, its trail lit)
+			{ "SelfModifier",				AttributeModifierStore::parseModifierName,	nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_selfModifier ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 		p.add( dataFieldParse );
