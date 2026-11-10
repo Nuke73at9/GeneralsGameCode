@@ -40,6 +40,10 @@
 #include "GameLogic/Weapon.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
+#include "GameLogic/Module/SpecialPowerModule.h"	// Tiberium Project
+
+// Tiberium Project: how often an idle approach ability looks at the unit's attack (ApproachVictimKindOf)
+static const UnsignedInt APPROACH_LOOK_FRAMES = LOGICFRAMES_PER_SECOND / 3;
 
 //-------------------------------------------------------------------------------------------------
 // Tiberium Project @feature a beam's unit lets go of what its turrets took aim at by themselves (an idle unit's
@@ -143,7 +147,9 @@ FireWeaponAbilityUpdate::FireWeaponAbilityUpdate( Thing *thing, const ModuleData
 	m_leapSegment = 0;
 	m_leapLook = 0;
 	m_leapNoAttack = FALSE;
-	setWakeFrame( getObject(), UPDATE_SLEEP_FOREVER );
+	m_resumeVictimID = INVALID_ID;	// Tiberium Project
+	// (Tiberium Project: with ApproachVictimKindOf it looks now and then whether the unit's attack wants it)
+	setWakeFrame( getObject(), getFireWeaponAbilityUpdateModuleData()->m_approachKindOf.any() ? UPDATE_SLEEP( APPROACH_LOOK_FRAMES ) : UPDATE_SLEEP_FOREVER );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -167,7 +173,9 @@ Bool FireWeaponAbilityUpdate::initiateIntentToDoSpecialPower( const SpecialPower
 	if( refusesSpecialPower( specialPowerTemplate, targetObj, targetPos ) )
 		return FALSE;
 	// Tiberium Project @bugfix ordered again before the last use was over (still packing): that one ends first, its
-	// looks and hold with it (the Avatar kept its SPECIAL_WEAPON_ONE through its next take-over)
+	// looks and hold with it (the Avatar kept its SPECIAL_WEAPON_ONE through its next take-over); an attack its approach
+	// had taken over does not go on (ApproachVictimKindOf: tryApproach sets it anew)
+	m_resumeVictimID = INVALID_ID;
 	if( m_stage != STAGE_IDLE )
 		finish();
 
@@ -410,8 +418,52 @@ void FireWeaponAbilityUpdate::finish()
 		me->clearModelConditionState( (ModelConditionFlagType)( MODELCONDITION_SPECIAL_WEAPON_ONE + data->m_whichSpecialWeapon - 1 ) );
 	if( data->m_activeConditions.any() )
 		me->clearModelConditionFlags( data->m_activeConditions );
+	// Tiberium Project @feature ApproachVictimKindOf: done (down from its leap, or its shots fired), the attack its approach
+	// took over goes on while its target stands; not when it was stopped short, nor died
+	const Bool done = m_stage == STAGE_FIRE || m_stage == STAGE_PACK;
 	m_stage = STAGE_IDLE;
 	m_targetID = INVALID_ID;
+	if( m_resumeVictimID != INVALID_ID )
+	{
+		Object *victim = done ? TheGameLogic->findObjectByID( m_resumeVictimID ) : nullptr;
+		m_resumeVictimID = INVALID_ID;
+		AIUpdateInterface *ai = me->getAI();
+		if( victim != nullptr && !victim->isEffectivelyDead() && ai != nullptr && !me->isEffectivelyDead() )
+			ai->aiAttackObject( victim, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature ApproachVictimKindOf: the unit attacking an object of those kinds (an enemy) beyond its weapon's
+// reach and within StartAbilityRange, the power is used at it by itself when it is ready (its upgrade, its recharge), and
+// the attack goes on after it (finish). C&C4's Zone Raider with its Assault Jump leaps to the building it attacks, and
+// sets its satchel charge there (its weapon handed the attack to both abilities: SpecialPowerNugget)
+//-------------------------------------------------------------------------------------------------
+void FireWeaponAbilityUpdate::tryApproach()
+{
+	const FireWeaponAbilityUpdateModuleData *data = getFireWeaponAbilityUpdateModuleData();
+	Object *me = getObject();
+	AIUpdateInterface *ai = me->getAI();
+	if( ai == nullptr || data->m_specialPowerTemplate == nullptr || me->isEffectivelyDead() || me->isDisabled() )
+		return;
+	Object *victim = ai->getCurrentVictim();
+	if( victim == nullptr || victim->isEffectivelyDead() || !victim->isAnyKindOf( data->m_approachKindOf )
+		|| me->getRelationship( victim ) != ENEMIES )
+		return;
+	const Real reach = data->m_objectStartAbilityRange > 0.0f ? data->m_objectStartAbilityRange : data->m_startAbilityRange;
+	const Real distSqr = ThePartitionManager->getDistanceSquared( me, victim, FROM_BOUNDINGSPHERE_2D );
+	if( reach <= 0.0f || distSqr > reach * reach || distSqr < data->m_approachMinRange * data->m_approachMinRange )
+		return;
+	// (within its weapon's reach: the attack as it is)
+	const Weapon *weapon = me->getCurrentWeapon();
+	if( weapon != nullptr && weapon->isWithinAttackRange( me, victim ) )
+		return;
+	SpecialPowerModuleInterface *power = me->getSpecialPowerModule( data->m_specialPowerTemplate );
+	if( power == nullptr || !power->isReady() )
+		return;
+	power->doSpecialPowerAtObject( victim, 0 );
+	if( m_stage != STAGE_IDLE )
+		m_resumeVictimID = victim->getID();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -436,6 +488,21 @@ void FireWeaponAbilityUpdate::startLeap()
 	Coord3D dest;
 	if( !targetPosition( &dest ) )
 		dest = m_targetPos;		// (the target died: where it was)
+	// Tiberium Project @feature at a structure, beside it on the unit's side, not on top of it (SAGE's
+	// OffsetTargetLocationFromObject: C&C4's Zone Raider lands at the building it leaps to)
+	const Object *targetObj = m_targetID != INVALID_ID ? TheGameLogic->findObjectByID( m_targetID ) : nullptr;
+	if( targetObj != nullptr && targetObj->isKindOf( KINDOF_STRUCTURE ) )
+	{
+		const Real dx = me->getPosition()->x - dest.x;
+		const Real dy = me->getPosition()->y - dest.y;
+		const Real len = WWMath::Sqrt( dx * dx + dy * dy );
+		const Real off = targetObj->getGeometryInfo().getBoundingCircleRadius() + me->getGeometryInfo().getBoundingCircleRadius();
+		if( len > off )
+		{
+			dest.x += dx / len * off;
+			dest.y += dy / len * off;
+		}
+	}
 	AIUpdateInterface *ai = me->getAI();
 	if( ai != nullptr )
 	{
@@ -520,6 +587,19 @@ void FireWeaponAbilityUpdate::setLeapLook( Int look )
 
 //-------------------------------------------------------------------------------------------------
 UpdateSleepTime FireWeaponAbilityUpdate::update()
+{
+	// Tiberium Project @feature ApproachVictimKindOf: idle, it looks now and then whether the unit's attack wants it
+	const Bool approach = getFireWeaponAbilityUpdateModuleData()->m_approachKindOf.any();
+	if( approach && m_stage == STAGE_IDLE )
+		tryApproach();
+	const UpdateSleepTime sleep = updateStages();
+	if( approach && m_stage == STAGE_IDLE && sleep == UPDATE_SLEEP_FOREVER )
+		return UPDATE_SLEEP( APPROACH_LOOK_FRAMES );
+	return sleep;
+}
+
+//-------------------------------------------------------------------------------------------------
+UpdateSleepTime FireWeaponAbilityUpdate::updateStages()
 {
 	const FireWeaponAbilityUpdateModuleData *data = getFireWeaponAbilityUpdateModuleData();
 	Object *me = getObject();
@@ -827,10 +907,11 @@ void FireWeaponAbilityUpdate::crc( Xfer *xfer )
 // Version Info:
 // 1: Initial version
 // 2: Tiberium Project: the leap
+// 3: Tiberium Project: the attack an approach took over (ApproachVictimKindOf)
 //-------------------------------------------------------------------------------------------------
 void FireWeaponAbilityUpdate::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -854,6 +935,8 @@ void FireWeaponAbilityUpdate::xfer( Xfer *xfer )
 		xfer->xferInt( &m_leapLook );
 		xfer->xferBool( &m_leapNoAttack );
 	}
+	if( version >= 3 )
+		xfer->xferObjectID( &m_resumeVictimID );
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -54,6 +54,12 @@
 // ObjectStartAbilityRange (0: StartAbilityRange): SAGE's SpecialPowerDispatchSpecialPower handing a power on by what it is
 // aimed at (Kane's Wrath's Orca drops its sensor pod on the ground, or fires one that sticks to a unit).
 //
+// Tiberium Project @feature an approach (C&C4's weapon that hands its attack on to an ability with SpecialPowerNugget: the
+// Zone Raider's satchel charge, with the Assault Jump a leap to the building first): with ApproachVictimKindOf, while the
+// unit attacks an object of those kinds beyond its weapon's reach and within StartAbilityRange (and no nearer than
+// ApproachMinRange: SAGE's MinCastRange), any player's unit, the power is used at it by itself when it is ready (its
+// upgrade, its recharge), and the attack goes on after.
+//
 // Tiberium Project @feature taking a vehicle over (Kane's Wrath's Avatar commandeering a Beam Cannon, a Flame
 // Tank, an Attack Bike or a Stealth Tank): with TargetUpgrade = <object> <upgrade> (any number), only the
 // player's own objects of those kinds are taken (and not one whose upgrade the unit has already); on reaching it
@@ -134,6 +140,8 @@ public:
 	const FXList *m_leapLandingFX;
 	Bool m_leapPackInFlight;
 	NameKeyType m_selfModifier;		///< Tiberium Project: put on the unit itself as it fires (C&C4's SpecialPower AttributeModifier with AttributeModifierAffectsSelf)
+	KindOfMaskType m_approachKindOf;	///< Tiberium Project: used by itself on the way to what the unit attacks of these kinds (ApproachVictimKindOf)
+	Real m_approachMinRange;					///< Tiberium Project: ... no nearer to it than this (ApproachMinRange)
 	AudioEventRTS m_unpackSound;
 	AudioEventRTS m_triggerSound;
 	Int m_whichSpecialWeapon;				///< Tiberium Project: SPECIAL_WEAPON_ONE (1) to THREE (3) while it is under way (0: none)
@@ -169,6 +177,7 @@ public:
 		m_leapLandingFX = nullptr;
 		m_leapPackInFlight = FALSE;
 		m_selfModifier = NAMEKEY_INVALID;
+		m_approachMinRange = 0.0f;	// Tiberium Project
 	}
 
 	static void parseShot( INI *ini, void *instance, void *store, const void *userData );
@@ -216,6 +225,9 @@ public:
 			{ "TeleportMaxDistance",		INI::parseReal,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_teleportMaxDistance ) },
 			// Tiberium Project @feature a modifier on the unit itself as it fires (C&C4's Flame Tank's Trail of Flame: faster, its trail lit)
 			{ "SelfModifier",				AttributeModifierStore::parseModifierName,	nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_selfModifier ) },
+			// Tiberium Project @feature used by itself on the way to what the unit attacks (C&C4's Zone Raider's jump to a building)
+			{ "ApproachVictimKindOf",	KindOfMaskType::parseFromINI,	nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_approachKindOf ) },
+			{ "ApproachMinRange",			INI::parseReal,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_approachMinRange ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 		p.add( dataFieldParse );
@@ -250,6 +262,8 @@ public:
 	virtual Bool refusesSpecialPower( const SpecialPowerTemplate *specialPowerTemplate, const Object *targetObj, const Coord3D *targetPos ) const override;
 
 	virtual UpdateSleepTime update() override;
+	UpdateSleepTime updateStages();	///< Tiberium Project: the ability under way (update: and the approach's look while idle)
+	void tryApproach();						///< Tiberium Project: ApproachVictimKindOf, the power used on the way to what the unit attacks
 	Object *findReflector( const Object *target ) const;	///< Tiberium Project: the beam's reflector nearest the target
 	const FireWeaponAbilityTargetUpgrade *targetUpgradeFor( const Object *target ) const;	///< Tiberium Project: or nullptr
 	// Tiberium Project: in the air the unit is held (and may be disabled on the way), and still flies on
@@ -297,5 +311,6 @@ private:
 	Int m_leapSegment;
 	Int m_leapLook;
 	Bool m_leapNoAttack;	///< it set NO_ATTACK for the flight (so clears it on landing)
+	ObjectID m_resumeVictimID;	///< Tiberium Project: what the unit attacked when the approach took it (its attack goes on after)
 
 };
