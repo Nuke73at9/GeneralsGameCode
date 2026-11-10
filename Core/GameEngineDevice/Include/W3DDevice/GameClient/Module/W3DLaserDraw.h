@@ -57,6 +57,8 @@ public:
 	Real m_segmentOverlapRatio;
 	Real m_tilingScalar;
 	Real m_tileLength;				///< Tiberium Project: the texture once every this far along the beam (TileLength), 0 for TilingScalar's way
+	RGBColor m_lightColor;		///< Tiberium Project: the beam lights where it hits in this colour (C&C4's LaserDraw LightColor); black: none
+	Real m_lightRadius;				///< Tiberium Project: ... this far round (C&C4's LightMax); 0: none
 
 	W3DLaserDrawModuleData();
 	virtual ~W3DLaserDrawModuleData() override;
@@ -99,5 +101,6 @@ protected:
 	TextureClass *m_texture;
 	Real m_textureAspectRatio;			///< aspect ratio of texture
 	Bool m_selfDirty;								// not saved
+	UnsignedInt m_nextLightFrame;		///< Tiberium Project: the next client frame its light may pulse again (not saved)
 
 };

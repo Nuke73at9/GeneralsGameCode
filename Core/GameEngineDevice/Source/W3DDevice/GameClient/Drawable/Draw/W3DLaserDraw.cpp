@@ -70,6 +70,8 @@ W3DLaserDrawModuleData::W3DLaserDrawModuleData()
 	m_arcHeight = 0.0f;
 	m_arcHeightFactor = 0.0f;	// Tiberium Project
 	m_tileLength = 0.0f;			// Tiberium Project
+	m_lightColor.red = m_lightColor.green = m_lightColor.blue = 0.0f;	// Tiberium Project: no light
+	m_lightRadius = 0.0f;
 	m_segmentOverlapRatio = 0.0f;
 	m_tilingScalar = 1.0f;
 }
@@ -104,6 +106,8 @@ void W3DLaserDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "SegmentOverlapRatio",	INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_segmentOverlapRatio ) },
 		{ "TilingScalar",					INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_tilingScalar ) },
 		{ "TileLength",						INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_tileLength ) },	// Tiberium Project
+		{ "LightColor",						INI::parseRGBColor,							nullptr, offsetof( W3DLaserDrawModuleData, m_lightColor ) },	// Tiberium Project
+		{ "LightRadius",					INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_lightRadius ) },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
   p.add(dataFieldParse);
@@ -117,7 +121,8 @@ W3DLaserDraw::W3DLaserDraw( Thing *thing, const ModuleData* moduleData ) :
 	m_line3D(nullptr),
 	m_texture(nullptr),
 	m_textureAspectRatio(1.0f),
-	m_selfDirty(TRUE)
+	m_selfDirty(TRUE),
+	m_nextLightFrame(0)
 {
 	Vector3 dummyPos1( 0.0f, 0.0f, 0.0f );
 	Vector3 dummyPos2( 1.0f, 1.0f, 1.0f );
@@ -286,6 +291,29 @@ void W3DLaserDraw::doDrawModule(const Matrix3D* transformMtx)
 	{
 		update->setDirty(false);
 		m_selfDirty = false;
+
+		// Tiberium Project @feature the beam lights where it hits in its colour (C&C4's LaserDraw LightColor and LightMax):
+		// a pulse of light there as it is drawn anew, at most every LIGHT_REPEAT frames (a beam renewed shot to shot),
+		// lasting as long as the beam; the look only
+		const UnsignedInt LIGHT_REPEAT = 6;
+		const UnsignedInt clientFrame = TheGameClient != nullptr ? TheGameClient->getFrame() : 0;
+		if( data->m_lightRadius > 0.0f && TheDisplay != nullptr && clientFrame >= m_nextLightFrame
+			&& data->m_lightColor.red + data->m_lightColor.green + data->m_lightColor.blue > 0.0f )
+		{
+			m_nextLightFrame = clientFrame + LIGHT_REPEAT;
+#if RTS_ZEROHOUR
+			const Real lit = update->getStreamReach();
+#else
+			const Real lit = 1.0f;
+#endif
+			Coord3D at = *update->getStartPos();
+			at.x += ( update->getEndPos()->x - at.x ) * lit;
+			at.y += ( update->getEndPos()->y - at.y ) * lit;
+			at.z += ( update->getEndPos()->z - at.z ) * lit;
+			const UnsignedInt lasts = data->m_maxIntensityFrames + data->m_fadeFrames;
+			TheDisplay->createLightPulse( &at, &data->m_lightColor, data->m_lightRadius * 0.4f, data->m_lightRadius * 0.6f,
+				1, lasts > LIGHT_REPEAT ? lasts : LIGHT_REPEAT );
+		}
 
 		Vector3 laserPoints[ 2 ];
 
