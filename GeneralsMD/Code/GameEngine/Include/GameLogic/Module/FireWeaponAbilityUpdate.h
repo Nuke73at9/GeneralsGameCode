@@ -50,6 +50,10 @@
 // TeleportTime (not drawn, nothing can see or target it), and comes back at the target spot at that height, its
 // locomotor taking it on from there. TeleportMaxDistance (0: any) limits how far.
 //
+// Tiberium Project @feature aimed at an object, the ObjectShot lines are fired instead of the Shot ones, from
+// ObjectStartAbilityRange (0: StartAbilityRange): SAGE's SpecialPowerDispatchSpecialPower handing a power on by what it is
+// aimed at (Kane's Wrath's Orca drops its sensor pod on the ground, or fires one that sticks to a unit).
+//
 // Tiberium Project @feature taking a vehicle over (Kane's Wrath's Avatar commandeering a Beam Cannon, a Flame
 // Tank, an Attack Bike or a Stealth Tank): with TargetUpgrade = <object> <upgrade> (any number), only the
 // player's own objects of those kinds are taken (and not one whose upgrade the unit has already); on reaching it
@@ -105,6 +109,8 @@ class FireWeaponAbilityUpdateModuleData : public UpdateModuleData
 public:
 	SpecialPowerTemplate *m_specialPowerTemplate;
 	std::vector<FireWeaponAbilityShot> m_shots;
+	std::vector<FireWeaponAbilityShot> m_objectShots;	///< Tiberium Project: aimed at an object, these instead (ObjectShot)
+	Real m_objectStartAbilityRange;	///< Tiberium Project: ... from this far (0: StartAbilityRange)
 	std::vector<FireWeaponAbilityTargetUpgrade> m_targetUpgrades;	///< Tiberium Project: the objects it takes over
 	ModelConditionFlags m_activeConditions;	///< Tiberium Project: shown while it is at work
 	Real m_teleportHeight;					///< Tiberium Project: above the ground (0: no teleport)
@@ -150,6 +156,7 @@ public:
 		m_reflectorReach = 0.0f;
 		m_specialPowerTemplate = nullptr;
 		m_startAbilityRange = 0.0f;
+		m_objectStartAbilityRange = 0.0f;
 		m_unpackTime = m_preparationTime = m_packTime = 0;
 		m_faceTarget = FALSE;
 		m_leapSpeed = 0.0f;
@@ -163,6 +170,7 @@ public:
 
 	static void parseShot( INI *ini, void *instance, void *store, const void *userData );
 	static void parseTargetUpgrade( INI *ini, void *instance, void *store, const void *userData );	///< Tiberium Project
+	static void parseObjectShot( INI *ini, void *instance, void *store, const void *userData );	///< Tiberium Project
 
 	static void buildFieldParse( MultiIniFieldParse& p )
 	{
@@ -171,6 +179,8 @@ public:
 		{
 			{ "SpecialPowerTemplate",	INI::parseSpecialPowerTemplate,	nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_specialPowerTemplate ) },
 			{ "Shot",					parseShot,						nullptr, 0 },
+			{ "ObjectShot",				parseObjectShot,				nullptr, 0 },	// Tiberium Project
+			{ "ObjectStartAbilityRange",	INI::parseReal,				nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_objectStartAbilityRange ) },	// Tiberium Project
 			{ "StartAbilityRange",		INI::parseReal,					nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_startAbilityRange ) },
 			{ "UnpackTime",				INI::parseDurationUnsignedInt,	nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_unpackTime ) },
 			{ "PreparationTime",		INI::parseDurationUnsignedInt,	nullptr, offsetof( FireWeaponAbilityUpdateModuleData, m_preparationTime ) },
@@ -241,6 +251,8 @@ public:
 	virtual DisabledMaskType getDisabledTypesToProcess() const override { return m_stage == STAGE_LEAP || m_stage == STAGE_TELEPORT || isTeleportClimb() ? DISABLEDMASK_ALL : DISABLEDMASK_NONE; }
 
 private:
+	const std::vector<FireWeaponAbilityShot>& currentShots() const;	///< Tiberium Project: ObjectShot at an object, else Shot
+	Real currentStartRange() const;	///< Tiberium Project: its reach for them
 
 	enum Stage CPP_11(: Int)
 	{

@@ -70,9 +70,8 @@ static void fireAbilityShot( const WeaponTemplate *weapon, const Object *source,
 //-------------------------------------------------------------------------------------------------
 // Shot = Weapon:<name> Delay:<ms> OffsetX:<ahead> OffsetY:<left>
 //-------------------------------------------------------------------------------------------------
-void FireWeaponAbilityUpdateModuleData::parseShot( INI *ini, void *instance, void * /*store*/, const void * /*userData*/ )
+static FireWeaponAbilityShot readShot( INI *ini )
 {
-	FireWeaponAbilityUpdateModuleData *self = (FireWeaponAbilityUpdateModuleData *)instance;
 	FireWeaponAbilityShot shot;
 	shot.m_weaponName = INI::getNextSubToken( "Weapon" );
 	const Real delayMs = INI::scanReal( INI::getNextSubToken( "Delay" ) );
@@ -83,7 +82,37 @@ void FireWeaponAbilityUpdateModuleData::parseShot( INI *ini, void *instance, voi
 	const char *more = ini->getNextTokenOrNull( ini->getSepsColon() );
 	if( more != nullptr && stricmp( more, "FX" ) == 0 )
 		shot.m_fxName = ini->getNextToken( ini->getSepsColon() );
-	self->m_shots.push_back( shot );
+	return shot;
+}
+
+void FireWeaponAbilityUpdateModuleData::parseShot( INI *ini, void *instance, void * /*store*/, const void * /*userData*/ )
+{
+	( (FireWeaponAbilityUpdateModuleData *)instance )->m_shots.push_back( readShot( ini ) );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature ObjectShot: as Shot, fired when the power is aimed at an object
+//-------------------------------------------------------------------------------------------------
+void FireWeaponAbilityUpdateModuleData::parseObjectShot( INI *ini, void *instance, void * /*store*/, const void * /*userData*/ )
+{
+	( (FireWeaponAbilityUpdateModuleData *)instance )->m_objectShots.push_back( readShot( ini ) );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the shots for what it is aimed at (ObjectShot at an object), and their reach
+//-------------------------------------------------------------------------------------------------
+const std::vector<FireWeaponAbilityShot>& FireWeaponAbilityUpdate::currentShots() const
+{
+	const FireWeaponAbilityUpdateModuleData *data = getFireWeaponAbilityUpdateModuleData();
+	return m_targetID != INVALID_ID && !data->m_objectShots.empty() ? data->m_objectShots : data->m_shots;
+}
+
+Real FireWeaponAbilityUpdate::currentStartRange() const
+{
+	const FireWeaponAbilityUpdateModuleData *data = getFireWeaponAbilityUpdateModuleData();
+	if( m_targetID != INVALID_ID && !data->m_objectShots.empty() && data->m_objectStartAbilityRange > 0.0f )
+		return data->m_objectStartAbilityRange;
+	return data->m_startAbilityRange;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -128,7 +157,7 @@ Bool FireWeaponAbilityUpdate::initiateIntentToDoSpecialPower( const SpecialPower
 	const FireWeaponAbilityUpdateModuleData *data = getFireWeaponAbilityUpdateModuleData();
 	// (a leap needs no shots, nor a beam: Tiberium Project)
 	if( specialPowerTemplate != data->m_specialPowerTemplate
-		|| ( data->m_shots.empty() && data->m_leapSpeed <= 0.0f && data->m_beamWeaponName.isEmpty() && data->m_teleportHeight <= 0.0f ) )
+		|| ( data->m_shots.empty() && data->m_objectShots.empty() && data->m_leapSpeed <= 0.0f && data->m_beamWeaponName.isEmpty() && data->m_teleportHeight <= 0.0f ) )
 		return FALSE;
 	Object *me = getObject();
 	// (nor while it climbs out or is gone: Tiberium Project)
@@ -174,7 +203,7 @@ Bool FireWeaponAbilityUpdate::initiateIntentToDoSpecialPower( const SpecialPower
 		me->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_IS_USING_ABILITY ) );
 		clearTurretTargets( me );
 	}
-	enterStage( data->m_startAbilityRange > 0.0f && m_hasTarget ? STAGE_APPROACH : STAGE_UNPACK );
+	enterStage( currentStartRange() > 0.0f && m_hasTarget ? STAGE_APPROACH : STAGE_UNPACK );
 	return TRUE;
 }
 
@@ -208,7 +237,7 @@ void FireWeaponAbilityUpdate::enterStage( Stage stage )
 		{
 			// stand still and face the target (Tiberium Project: a beam's unit stops where it is ordered to fire it,
 			// as Kane's Wrath's Beam Cannon does)
-			if( ai != nullptr && ( data->m_startAbilityRange > 0.0f || !data->m_beamWeaponName.isEmpty() || data->m_teleportHeight > 0.0f ) )
+			if( ai != nullptr && ( currentStartRange() > 0.0f || !data->m_beamWeaponName.isEmpty() || data->m_teleportHeight > 0.0f ) )
 				ai->aiIdle( CMD_FROM_AI );
 			// Tiberium Project @feature a teleport: held as it climbs out (no physics, no orders, no shots), from here
 			// (m_leapPoints[0]) to TeleportHeight above the ground (m_leapPoints[1]; no lower than it is)
@@ -252,8 +281,8 @@ void FireWeaponAbilityUpdate::enterStage( Stage stage )
 			{
 				Object *target = TheGameLogic->findObjectByID( m_targetID );
 				UnsignedInt last = 0;
-				for( size_t i = 0; i < data->m_shots.size(); ++i )
-					last = max( last, data->m_shots[i].m_delay );
+				for( size_t i = 0; i < currentShots().size(); ++i )
+					last = max( last, currentShots()[i].m_delay );
 				if( target != nullptr && !target->isEffectivelyDead() )
 					target->setDisabledUntil( DISABLED_HELD, TheGameLogic->getFrame() + data->m_unpackTime + data->m_preparationTime + last + LOGICFRAMES_PER_SECOND );
 			}
@@ -503,7 +532,7 @@ UpdateSleepTime FireWeaponAbilityUpdate::update()
 			const Coord3D *at = me->getPosition();
 			const Real dx = pos.x - at->x, dy = pos.y - at->y;
 			const Real distSqr = targetObj != nullptr ? ThePartitionManager->getDistanceSquared( me, targetObj, FROM_BOUNDINGSPHERE_2D ) : dx * dx + dy * dy;
-			if( distSqr <= data->m_startAbilityRange * data->m_startAbilityRange )
+			if( distSqr <= currentStartRange() * currentStartRange() )
 			{
 				enterStage( STAGE_UNPACK );
 				return UPDATE_SLEEP_NONE;
@@ -608,9 +637,9 @@ UpdateSleepTime FireWeaponAbilityUpdate::update()
 				}
 				return UPDATE_SLEEP_NONE;
 			}
-			while( m_nextShot < (Int)data->m_shots.size() && since >= data->m_shots[m_nextShot].m_delay )
+			while( m_nextShot < (Int)currentShots().size() && since >= currentShots()[m_nextShot].m_delay )
 			{
-				const FireWeaponAbilityShot &shot = data->m_shots[m_nextShot++];
+				const FireWeaponAbilityShot &shot = currentShots()[m_nextShot++];
 				// Tiberium Project @feature the shot's FX at the unit (SAGE's FXListSelf)
 				if( shot.m_fxName.isNotEmpty() )
 					FXList::doFXObj( TheFXListStore->findFXList( shot.m_fxName.str() ), me );
@@ -630,7 +659,7 @@ UpdateSleepTime FireWeaponAbilityUpdate::update()
 				pos.y += shot.m_offsetX * s + shot.m_offsetY * c;
 				TheWeaponStore->createAndFireTempWeapon( weapon, me, &pos );
 			}
-			if( m_nextShot >= (Int)data->m_shots.size() )
+			if( m_nextShot >= (Int)currentShots().size() )
 			{
 				// (a leap that packed as it took off is done once it is down: Tiberium Project)
 				if( data->m_packTime > 0 && !( data->m_leapPackInFlight && m_leapSegments > 0 ) )

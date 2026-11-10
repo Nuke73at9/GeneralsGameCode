@@ -1683,6 +1683,8 @@ Bool ActionManager::canDoSpecialPowerAtObject( const Object *obj, const Object *
 		switch( spTemplate->getSpecialPowerType() )
 		{
 			case SPECIAL_ABILITY_AT_OBJECT:	// Tiberium Project @feature converted C&C4 abilities: the button's options pick the targets
+			case SPECIAL_ABILITY_AT_LOCATION:	// Tiberium Project @feature ... and those for an object or a spot (Kane's Wrath's Orca
+																				// sticks its sensor pod to a unit: FireWeaponAbilityUpdate's ObjectShot)
 			{
 				// Tiberium Project @feature ... unless the ability's own module refuses this one (Kane's Wrath's Avatar
 				// takes over only its side's Beam Cannons, Flame Tanks, Attack Bikes and Stealth Tanks)
