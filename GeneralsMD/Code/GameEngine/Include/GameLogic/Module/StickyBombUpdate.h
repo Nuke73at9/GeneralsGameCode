@@ -56,11 +56,13 @@ public:
 	Bool						m_targetShieldTint;	///< Tiberium Project: the target drawn shielded while it is there (C&C4's PERSONAL_SHIELDS look)
 	ObjectStatusMaskType	m_targetForbiddenStatus;	///< Tiberium Project: it dies once its target has any of these (C&C4's ForbiddenParentStatus)
 	NameKeyType			m_targetModifier;	///< Tiberium Project: an attribute modifier on its target while it is there (C&C4's ParentModifierToSet)
+	Bool						m_onePerTarget;	///< Tiberium Project: one of its kind on a target: those already there die (C&C4's DETACH_WHEN_MULTIPLE_ARE_ATTACHED)
 
 	StickyBombUpdateModuleData()
 	{
 		m_targetForbiddenStatus.clear();
 		m_targetModifier = NAMEKEY_INVALID;
+		m_onePerTarget = FALSE;
 		m_offsetZ = 10.0f;
 		m_geometryBasedDamageWeaponTemplate = nullptr;
 		m_geometryBasedDamageFX = nullptr;
@@ -98,6 +100,9 @@ public:
 			// and its target has TargetModifier while it is there (ParentModifierToSet), taken off as it goes
 			{ "TargetForbiddenStatus",		ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( StickyBombUpdateModuleData, m_targetForbiddenStatus ) },
 			{ "TargetModifier",						AttributeModifierStore::parseModifierName,	nullptr, offsetof( StickyBombUpdateModuleData, m_targetModifier ) },
+			// Tiberium Project @feature one of its kind on a target at a time: as it sticks there, those of its kind already there
+			// die, a death not of old age (C&C4's Shockwave: a second sonic charge on a target sets the first one's bonus blast off)
+			{ "OnePerTarget",							INI::parseBool,						nullptr, offsetof( StickyBombUpdateModuleData, m_onePerTarget ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
     p.add(dataFieldParse);

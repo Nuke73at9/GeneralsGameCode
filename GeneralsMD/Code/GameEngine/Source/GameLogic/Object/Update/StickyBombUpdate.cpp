@@ -58,7 +58,7 @@ static Bool s_absorbing = FALSE;	///< a shield is taking a hit for its target (t
 
 static Bool marksTarget( const StickyBombUpdateModuleData *d )
 {
-	return d->m_targetStatus.any() || d->m_absorbTargetDamage || d->m_targetShieldTint;
+	return d->m_targetStatus.any() || d->m_absorbTargetDamage || d->m_targetShieldTint || d->m_onePerTarget;
 }
 
 // PUBLIC /////////////////////////////////////////////////////////////////////////////////////////
@@ -195,6 +195,23 @@ void StickyBombUpdate::initStickyBomb( Object *target, const Object *bomber, con
 	//Store the target.
 	m_targetID = target ? target->getID() : INVALID_ID;
 	markTarget( TRUE );
+
+	// Tiberium Project @feature one of its kind on a target (OnePerTarget): those of its kind already stuck there die, a death
+	// not of old age (C&C4's DETACH_WHEN_MULTIPLE_ARE_ATTACHED: a second sonic charge sets the first one's bonus blast off)
+	if( getStickyBombUpdateModuleData()->m_onePerTarget && m_targetID != INVALID_ID )
+	{
+		std::vector<Object *> older;
+		for( size_t i = 0; i < s_markers.size(); ++i )
+		{
+			StickyBombUpdate *other = s_markers[i];
+			Object *o = other->getObject();
+			if( other != this && other->m_targetID == m_targetID && !o->isEffectivelyDead()
+				&& o->getTemplate()->isEquivalentTo( getObject()->getTemplate() ) )
+				older.push_back( o );
+		}
+		for( size_t i = 0; i < older.size(); ++i )
+			older[i]->kill();
+	}
 
 	//Set the target as the producer ID -- so we can access it from other areas.
 	// Tiberium Project @feature unless it keeps the one who made it (KeepProducer)
