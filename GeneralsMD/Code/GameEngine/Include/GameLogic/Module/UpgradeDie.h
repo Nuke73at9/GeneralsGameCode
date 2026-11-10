@@ -42,8 +42,12 @@ class UpgradeDieModuleData : public DieModuleData
 {
 public:
 	AsciiString m_upgradeName;
+	/// Tiberium Project @feature the upgrade is its player's (given as one of these is built: GrantUpgradeCreate), taken from the
+	/// player as the last of these it has built dies (C&C4's PLAYER_REGISTERED_OBJECT_SET_MUST_BE_EMPTY: the Ion Cannon's EMP
+	/// for the Zone Captains' strikes), not from its producer
+	Bool m_fromPlayerWhenLast;
 
-	UpgradeDieModuleData(){}
+	UpgradeDieModuleData() : m_fromPlayerWhenLast( FALSE ) {}
 
 	static void buildFieldParse(MultiIniFieldParse& p)
 	{
@@ -53,6 +57,7 @@ public:
 		static const FieldParse dataFieldParse[] =
 		{
 			{ "UpgradeToRemove",					INI::parseAsciiString,		nullptr, offsetof( UpgradeDieModuleData, m_upgradeName ) },
+			{ "FromPlayerWhenLast",				INI::parseBool,						nullptr, offsetof( UpgradeDieModuleData, m_fromPlayerWhenLast ) },	// Tiberium Project
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 

@@ -49,6 +49,7 @@
 #include "Common/Team.h"	// Tiberium Project
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
+#include "Common/Upgrade.h"	// Tiberium Project
 #include "Common/Xfer.h"
 
 #include "GameClient/Drawable.h"
@@ -221,6 +222,7 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "AttributeModifierDuration",	INI::parseDurationUnsignedInt,	nullptr,				offsetof(WeaponTemplate, m_victimModifierDuration) },	// Tiberium Project
 	{ "FollowUp",									WeaponTemplate::parseFollowUp,						nullptr,							0 },	// Tiberium Project
 	{ "Scatter",									WeaponTemplate::parseScatter,						nullptr,							0 },	// Tiberium Project
+	{ "UpgradedWeapon",						WeaponTemplate::parseUpgradedWeapon,		nullptr,							0 },	// Tiberium Project
 	{ "ScatterLaser",							INI::parseAsciiString,								nullptr,							offsetof(WeaponTemplate, m_scatterLaserName) },	// Tiberium Project
 	{ "ScatterFX",								INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_scatterFX) },	// Tiberium Project
 	{ "VictimKindOf",								KindOfMaskType::parseFromINI,						nullptr,							offsetof(WeaponTemplate, m_victimKindOf) },	// Tiberium Project
@@ -762,6 +764,14 @@ Real WeaponTemplate::estimateOwnDamage(
 			victimObj->getRelationship(sourceObj) == ENEMIES ? 1.0f : 0.0f;
 
 	const Real damageAmount = getPrimaryDamage(bonus);
+	// Tiberium Project @feature a shot whose blow is what it makes where it lands (TargetOCL), dealing no damage itself, is
+	// worth firing (C&C4's Zone Captain's ion strike beacon, the Hurricane's sensor pod): counted as doing nothing, it was
+	// never fired and its unit never attacked
+	if ( hasTargetOCL() && damageAmount <= 0.0f && getSecondaryDamage(bonus) <= 0.0f
+			&& ( victimObj == nullptr || !victimObj->isKindOf(KINDOF_SHRUBBERY) ) )
+	{
+		return 1.0f;
+	}
 	if ( victimObj == nullptr )
 	{
 		return damageAmount;
@@ -1235,7 +1245,9 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 
 		ObjectID damageID = getDamageDealtAtSelfPosition() ? INVALID_ID : victimID;
 
-		if( firingWeapon->isLaser() )
+		// (Tiberium Project: this weapon's laser, the one fired in the firing weapon's place with an upgrade drawing its
+		// own: UpgradedWeapon; otherwise the same weapon)
+		if( getLaserName().isNotEmpty() )
 		{
 			if( scatterRadius <= getPrimaryDamageRadius( bonus ) || scatterRadius <= getSecondaryDamageRadius( bonus ) )
 			{
@@ -1245,13 +1257,13 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 				{
 					projectileDestination.set( *victimObj->getPosition() );
 				}
-				firingWeapon->createLaser( sourceObj, victimObj, &projectileDestination );
+				firingWeapon->createLaser( sourceObj, victimObj, &projectileDestination, this );
 			}
 			else
 			{
 				//We are missing our intended target, so now we want to aim at the ground at the projectile offset.
 				damageID = INVALID_ID;
-				firingWeapon->createLaser( sourceObj, nullptr, &projectileDestination );
+				firingWeapon->createLaser( sourceObj, nullptr, &projectileDestination, this );
 			}
 			if( inflictDamage )
 			{
@@ -1611,6 +1623,54 @@ void WeaponTemplate::parseScatter( INI* ini, void *instance, void * /*store*/, c
 		token = ini->getNextTokenOrNull( ini->getSepsColon() );
 	}
 	self->m_scatterStages.push_back( st );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature UpgradedWeapon = <upgrade> <weapon>: that weapon is fired in this one's place while its
+// firer has the upgrade (one line each; the first the firer has is fired). SAGE's nuggets dealt only with an
+// upgrade or only without it (RequiredUpgrade, ForbiddenUpgrade), each such weapon converted as it is with the
+// upgrade: C&C4's Commando's Missile Storm, the Medusa's research, the Titan MKII's crate.
+//-------------------------------------------------------------------------------------------------
+void WeaponTemplate::parseUpgradedWeapon( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ )
+{
+	WeaponTemplate* self = (WeaponTemplate*)instance;
+	WeaponUpgradedVariant v;
+	v.m_upgradeName = ini->getNextToken();
+	v.m_weaponName = ini->getNextToken();
+	self->m_upgradedWeapons.push_back( v );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the weapon fired in this one's place by this firer (UpgradedWeapon): a player's upgrade
+// counts when its player has it (a fire field or a strike beacon the unit leaves fires as its player's research
+// has it), an object's when the firer has it
+//-------------------------------------------------------------------------------------------------
+const WeaponTemplate *WeaponTemplate::getUpgradedFor( const Object *firer ) const
+{
+	if( m_upgradedWeapons.empty() || firer == nullptr || TheUpgradeCenter == nullptr || TheWeaponStore == nullptr )
+		return this;
+	for( size_t i = 0; i < m_upgradedWeapons.size(); ++i )
+	{
+		const UpgradeTemplate *upgrade = TheUpgradeCenter->findUpgrade( m_upgradedWeapons[i].m_upgradeName );
+		if( upgrade == nullptr )
+			continue;
+		Bool has = FALSE;
+		if( upgrade->getUpgradeType() == UPGRADE_TYPE_PLAYER )
+		{
+			const Player *player = firer->getControllingPlayer();
+			has = player != nullptr && player->hasUpgradeComplete( upgrade );
+		}
+		else
+		{
+			has = firer->hasUpgrade( upgrade );
+		}
+		if( !has )
+			continue;
+		const WeaponTemplate *upgraded = TheWeaponStore->findWeaponTemplate( m_upgradedWeapons[i].m_weaponName );
+		if( upgraded != nullptr )
+			return upgraded;
+	}
+	return this;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -3353,20 +3413,22 @@ void Weapon::newProjectileFired(const Object *sourceObj, const Object *projectil
 }
 
 //-------------------------------------------------------------------------------------------------
-void Weapon::createLaser( const Object *sourceObj, const Object *victimObj, const Coord3D *victimPos )
+void Weapon::createLaser( const Object *sourceObj, const Object *victimObj, const Coord3D *victimPos, const WeaponTemplate *laserTemplate )
 {
-	const ThingTemplate* pst = TheThingFactory->findTemplate(m_template->getLaserName());
+	// Tiberium Project: the laser of the weapon fired (one fired in this one's place with an upgrade: UpgradedWeapon)
+	const WeaponTemplate *tmpl = laserTemplate != nullptr ? laserTemplate : m_template;
+	const ThingTemplate* pst = TheThingFactory->findTemplate(tmpl->getLaserName());
 	if( !pst )
 	{
 		DEBUG_CRASH( ("Weapon::createLaser(). %s could not find template for its laser %s.",
-			sourceObj->getTemplate()->getName().str(), m_template->getLaserName().str() ) );
+			sourceObj->getTemplate()->getName().str(), tmpl->getLaserName().str() ) );
 		return;
 	}
 	// Tiberium Project @feature RenewLaser: while the laser the last shot made lives, this shot renews it (its life
 	// starts over, its end turns to the new target) instead of making one more beside it, so a stream fired a tenth
 	// of a second at a time is one stream (C&C3 and Kane's Wrath's ActivateStreamNugget)
 	Object* laser = nullptr;
-	if( m_template->isRenewLaser() && m_renewLaserID != INVALID_ID )
+	if( tmpl->isRenewLaser() && m_renewLaserID != INVALID_ID )
 	{
 		// (a laser has no health, so it counts as dead from the start: it lives until its lifetime destroys it)
 		Object *last = TheGameLogic->findObjectByID( m_renewLaserID );
@@ -3385,7 +3447,7 @@ void Weapon::createLaser( const Object *sourceObj, const Object *victimObj, cons
 		laser = TheThingFactory->newObject( pst, sourceObj->getControllingPlayer()->getDefaultTeam() );
 		if( laser == nullptr )
 			return;
-		if( m_template->isRenewLaser() )
+		if( tmpl->isRenewLaser() )
 			m_renewLaserID = laser->getID();
 	}
 
@@ -3407,7 +3469,7 @@ void Weapon::createLaser( const Object *sourceObj, const Object *victimObj, cons
 				//Projectiles are a different story, target their exact position.
 				pos.z += 10.0f;
 			}
-			update->initLaser( sourceObj, victimObj, sourceObj->getPosition(), &pos, m_template->getLaserBoneName() );
+			update->initLaser( sourceObj, victimObj, sourceObj->getPosition(), &pos, tmpl->getLaserBoneName() );
 		}
 	}
 }
@@ -3544,6 +3606,10 @@ Bool Weapon::privateFireWeapon(
 			m_numShotsForCurBarrel = m_template->getShotsPerBarrel();
 		}
 
+		// Tiberium Project @feature the weapon its firer's upgrades make it (UpgradedWeapon: SAGE's nuggets dealt only with
+		// an upgrade); a projectile's burst is the weapon it was fired as
+		const WeaponTemplate *firedTemplate = isProjectileDetonation ? m_template : m_template->getUpgradedFor( sourceObj );
+
 		if( !m_scatterTargetsUnused.empty() )
 		{
 			// If I have a set scatter pattern, I need to offset the target by a random pick from that pattern
@@ -3603,11 +3669,11 @@ Bool Weapon::privateFireWeapon(
 				m_scatterTargetsUnused[randomPick] = m_scatterTargetsUnused.back();
 				m_scatterTargetsUnused.pop_back();
 			}
-			m_template->fireWeaponTemplate(sourceObj, m_wslot, m_curBarrel, victimObj, &targetPos, bonus, isProjectileDetonation, ignoreRanges, this, projectileID, inflictDamage );
+			firedTemplate->fireWeaponTemplate(sourceObj, m_wslot, m_curBarrel, victimObj, &targetPos, bonus, isProjectileDetonation, ignoreRanges, this, projectileID, inflictDamage );
 		}
 		else
 		{
-			m_template->fireWeaponTemplate(sourceObj, m_wslot, m_curBarrel, victimObj, victimPos, bonus, isProjectileDetonation, ignoreRanges, this, projectileID, inflictDamage );
+			firedTemplate->fireWeaponTemplate(sourceObj, m_wslot, m_curBarrel, victimObj, victimPos, bonus, isProjectileDetonation, ignoreRanges, this, projectileID, inflictDamage );
 		}
 
 		m_lastFireFrame = now;
@@ -3821,6 +3887,11 @@ Bool Weapon::isDamageWeapon() const
 
 	// Tiberium Project @feature one that disables what it hits (an EMP) is a weapon to attack with
 	if( m_template->isParalyzer() )
+		return TRUE;
+
+	// Tiberium Project @feature and one whose blow is what it makes where it lands (TargetOCL: C&C4's Zone Captain's ion
+	// strike beacon)
+	if( m_template->hasTargetOCL() )
 		return TRUE;
 
 	// Tiberium Project @bugfix a weapon whose damage comes after it fires (its FollowUp weapons: Kane's Wrath's

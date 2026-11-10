@@ -370,6 +370,15 @@ struct WeaponScatterStage
 	Real m_damageScale;
 };
 
+// Tiberium Project @feature SAGE's nuggets dealt only with an upgrade, or only without it (RequiredUpgrade,
+// ForbiddenUpgrade): the weapon fired in this one's place while its firer has the upgrade (UpgradedWeapon: C&C4's
+// Commando's Missile Storm, the Medusa's research, the Titan MKII's crate)
+struct WeaponUpgradedVariant
+{
+	AsciiString m_upgradeName;		///< found when it fires (the upgrades come after the weapons in the files)
+	AsciiString m_weaponName;		///< found when it fires
+};
+
 class WeaponTemplate : public MemoryPoolObject
 {
 	friend class WeaponStore;
@@ -491,7 +500,11 @@ public:
 	const FXList* getProjectileDetonateFX(VeterancyLevel v) const { return m_projectileDetonateFXs[v]; }
 	const ObjectCreationList* getFireOCL(VeterancyLevel v) const { return m_fireOCLs[v]; }
 	const ObjectCreationList* getTargetOCL() const { return m_targetOCL; }	///< Tiberium Project
+	Bool hasTargetOCL() const { return m_targetOCL != nullptr || m_targetStatusOCL != nullptr; }	///< Tiberium Project: it makes something where it lands (TargetOCL)
 	const std::vector<WeaponFollowUp>& getFollowUps() const { return m_followUps; }	///< Tiberium Project
+	/** Tiberium Project @feature the weapon fired in this one's place by this firer: the first of its UpgradedWeapon
+		whose upgrade the firer has (a player's upgrade: its player has it), else this one */
+	const WeaponTemplate *getUpgradedFor( const Object *firer ) const;
 	Bool isParalyzer() const { return m_paralyzeFrames > 0 && !m_paralyzeRemove; }	///< Tiberium Project: disables what it reaches
 	Bool canBeDodged() const { return m_canBeDodged; }	///< Tiberium Project: a dodge may make it miss (C&C4's CanBeDodged)
 	const ObjectCreationList* getProjectileDetonationOCL(VeterancyLevel v) const { return m_projectileDetonationOCLs[v]; }
@@ -535,6 +548,7 @@ private:
 	static void parseScatterTarget( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ );
 	static void parseShotDelay( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ );
 	static void parseFollowUp( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ );	///< Tiberium Project
+	static void parseUpgradedWeapon( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ );	///< Tiberium Project
 	/// Tiberium Project @feature the further damage this weapon's sets off (FollowUp)
 	void scheduleFollowUps(ObjectID sourceID, const Object *primaryVictim, const Coord3D *pos, const WeaponBonus& bonus) const;
 	void scheduleScatter(ObjectID sourceID, const Object *primaryVictim, const Coord3D *pos, const WeaponBonus& bonus) const;	///< Tiberium Project
@@ -608,6 +622,7 @@ private:
 	UnsignedInt m_victimModifierDuration;									///< Tiberium Project: ... for so long each time (frames; 0: the modifier's own)
 	std::vector<WeaponFollowUp> m_followUps;										///< Tiberium Project: the further damage it sets off (FollowUp)
 	std::vector<WeaponScatterStage> m_scatterStages;									///< Tiberium Project: its chain's stages, in order (Scatter)
+	std::vector<WeaponUpgradedVariant> m_upgradedWeapons;								///< Tiberium Project: the weapons fired in its place with an upgrade (UpgradedWeapon)
 	AsciiString m_scatterLaserName;													///< Tiberium Project: the beam drawn from each hop to the next (ScatterLaser)
 	const ThingTemplate* m_scatterLaser;											///< Tiberium Project: post-loaded m_scatterLaserName
 	const FXList* m_scatterFX;														///< Tiberium Project: played from each hop to the next (ScatterFX: a bolt between them)
@@ -793,7 +808,9 @@ public:
 	void newProjectileFired( const Object *sourceObj, const Object *projectile, const Object *victimObj, const Coord3D *victimPos );///<I just made this projectile and may need to keep track of it
 
 	Bool isLaser() const { return m_template->getLaserName().isNotEmpty(); }
-	void createLaser( const Object *sourceObj, const Object *victimObj, const Coord3D *victimPos );
+	/// (Tiberium Project: laserTemplate, the weapon fired, whose laser it is: the one fired in this weapon's place with an
+	/// upgrade, UpgradedWeapon; none: this weapon's)
+	void createLaser( const Object *sourceObj, const Object *victimObj, const Coord3D *victimPos, const WeaponTemplate *laserTemplate = nullptr );
 
 	const WeaponTemplate* getTemplate() const { return m_template; }
 	WeaponSlotType getWeaponSlot() const { return m_wslot; }

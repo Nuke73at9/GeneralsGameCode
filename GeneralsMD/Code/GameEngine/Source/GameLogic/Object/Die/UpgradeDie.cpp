@@ -30,6 +30,7 @@
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include "Common/Player.h"	// Tiberium Project
 #include "Common/ThingTemplate.h"
 #include "Common/Upgrade.h"
 #include "Common/Xfer.h"
@@ -53,12 +54,50 @@ UpgradeDie::~UpgradeDie()
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project: whether the player has another of the dying one's kind, built and alive
+//-------------------------------------------------------------------------------------------------
+struct UpgradeDieOthers
+{
+	const Object *dying;
+	Bool found;
+};
+
+static void findAnotherBuilt( Object *obj, void *userData )
+{
+	UpgradeDieOthers *others = (UpgradeDieOthers *)userData;
+	if( others->found || obj == others->dying || obj->isEffectivelyDead()
+			|| obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || obj->testStatus( OBJECT_STATUS_SOLD ) )
+		return;
+	if( obj->getTemplate()->isEquivalentTo( others->dying->getTemplate() ) )
+		others->found = TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** The die callback. */
 //-------------------------------------------------------------------------------------------------
 void UpgradeDie::onDie( const DamageInfo *damageInfo )
 {
 	if (!isDieApplicable(damageInfo))
 		return;
+
+	// Tiberium Project @feature FromPlayerWhenLast: the player's upgrade its kind gives it, taken away as the last of them
+	// it has built dies
+	if( getUpgradeDieModuleData()->m_fromPlayerWhenLast )
+	{
+		Player *player = getObject()->getControllingPlayer();
+		const UpgradeTemplate *upgrade = TheUpgradeCenter->findUpgrade( getUpgradeDieModuleData()->m_upgradeName );
+		if( player != nullptr && upgrade != nullptr && player->hasUpgradeComplete( upgrade ) )
+		{
+			UpgradeDieOthers others;
+			others.dying = getObject();
+			others.found = FALSE;
+			player->iterateObjects( findAnotherBuilt, &others );
+			if( !others.found )
+				player->removeUpgrade( upgrade );
+		}
+		return;
+	}
+
 	//Look for the object that created me.
 	Object *producer = TheGameLogic->findObjectByID( getObject()->getProducerID() );
 	if( producer )
