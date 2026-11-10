@@ -225,6 +225,7 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "FollowUp",									WeaponTemplate::parseFollowUp,						nullptr,							0 },	// Tiberium Project
 	{ "Scatter",									WeaponTemplate::parseScatter,						nullptr,							0 },	// Tiberium Project
 	{ "UpgradedWeapon",						WeaponTemplate::parseUpgradedWeapon,		nullptr,							0 },	// Tiberium Project
+	{ "ExtraLaser",								WeaponTemplate::parseExtraLaser,				nullptr,							0 },	// Tiberium Project
 	{ "ScatterLaser",							INI::parseAsciiString,								nullptr,							offsetof(WeaponTemplate, m_scatterLaserName) },	// Tiberium Project
 	{ "ScatterFX",								INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_scatterFX) },	// Tiberium Project
 	{ "VictimKindOf",								KindOfMaskType::parseFromINI,						nullptr,							offsetof(WeaponTemplate, m_victimKindOf) },	// Tiberium Project
@@ -1288,12 +1289,17 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 					projectileDestination.set( *victimObj->getPosition() );
 				}
 				firingWeapon->createLaser( sourceObj, victimObj, &projectileDestination, this );
+				// Tiberium Project @feature its other beams (ExtraLaser)
+				for( size_t x = 0; x < m_extraLasers.size(); ++x )
+					firingWeapon->createLaser( sourceObj, victimObj, &projectileDestination, this, &m_extraLasers[x] );
 			}
 			else
 			{
 				//We are missing our intended target, so now we want to aim at the ground at the projectile offset.
 				damageID = INVALID_ID;
 				firingWeapon->createLaser( sourceObj, nullptr, &projectileDestination, this );
+				for( size_t x = 0; x < m_extraLasers.size(); ++x )
+					firingWeapon->createLaser( sourceObj, nullptr, &projectileDestination, this, &m_extraLasers[x] );
 			}
 			if( inflictDamage )
 			{
@@ -1668,6 +1674,31 @@ void WeaponTemplate::parseUpgradedWeapon( INI* ini, void *instance, void * /*sto
 	v.m_upgradeName = ini->getNextToken();
 	v.m_weaponName = ini->getNextToken();
 	self->m_upgradedWeapons.push_back( v );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature ExtraLaser = Laser:<laser> [Bone:<bone>] [StrongCounter:<laser>]: one more beam drawn with each
+// shot, from that bone (else where the weapon's own laser starts), the other laser at what the weapon's kind counters
+// (C&C4's weapons that activate several lasers at once: the Focus Beam's two barrels)
+//-------------------------------------------------------------------------------------------------
+void WeaponTemplate::parseExtraLaser( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ )
+{
+	WeaponTemplate* self = (WeaponTemplate*)instance;
+	WeaponExtraLaser x;
+	x.m_laserName = INI::getNextSubToken( "Laser" );
+	const char *token = ini->getNextTokenOrNull( ini->getSepsColon() );
+	while( token != nullptr )
+	{
+		const char *value = ini->getNextToken( ini->getSepsColon() );
+		if( stricmp( token, "Bone" ) == 0 )
+			x.m_boneName = value;
+		else if( stricmp( token, "StrongCounter" ) == 0 )
+			x.m_strongCounterName = value;
+		else
+			throw INI_INVALID_DATA;
+		token = ini->getNextTokenOrNull( ini->getSepsColon() );
+	}
+	self->m_extraLasers.push_back( x );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -3443,15 +3474,20 @@ void Weapon::newProjectileFired(const Object *sourceObj, const Object *projectil
 }
 
 //-------------------------------------------------------------------------------------------------
-void Weapon::createLaser( const Object *sourceObj, const Object *victimObj, const Coord3D *victimPos, const WeaponTemplate *laserTemplate )
+void Weapon::createLaser( const Object *sourceObj, const Object *victimObj, const Coord3D *victimPos, const WeaponTemplate *laserTemplate,
+	const WeaponExtraLaser *extra )
 {
 	// Tiberium Project: the laser of the weapon fired (one fired in this one's place with an upgrade: UpgradedWeapon)
 	const WeaponTemplate *tmpl = laserTemplate != nullptr ? laserTemplate : m_template;
 	// Tiberium Project @feature C&C4's strong counter look (its LaserDraw for CombatChainCounter STRONG): the other
 	// laser at what its kind of weapon counters (LaserNameStrongCounter: a laser at heavy armour)
-	AsciiString laserName = tmpl->getLaserName();
-	if( tmpl->getLaserNameStrongCounter().isNotEmpty() && victimObj != nullptr && tmpl->isStrongCounterAgainst( victimObj ) )
-		laserName = tmpl->getLaserNameStrongCounter();
+	AsciiString laserName = extra != nullptr ? extra->m_laserName : tmpl->getLaserName();
+	const AsciiString &strongName = extra != nullptr ? extra->m_strongCounterName : tmpl->getLaserNameStrongCounter();
+	if( strongName.isNotEmpty() && victimObj != nullptr && tmpl->isStrongCounterAgainst( victimObj ) )
+		laserName = strongName;
+	// (Tiberium Project: an extra beam from its own bone, made anew each shot)
+	const AsciiString &boneName = extra != nullptr && extra->m_boneName.isNotEmpty() ? extra->m_boneName : tmpl->getLaserBoneName();
+	const Bool renew = tmpl->isRenewLaser() && extra == nullptr;
 	const ThingTemplate* pst = TheThingFactory->findTemplate(laserName);
 	if( !pst )
 	{
@@ -3463,7 +3499,7 @@ void Weapon::createLaser( const Object *sourceObj, const Object *victimObj, cons
 	// starts over, its end turns to the new target) instead of making one more beside it, so a stream fired a tenth
 	// of a second at a time is one stream (C&C3 and Kane's Wrath's ActivateStreamNugget)
 	Object* laser = nullptr;
-	if( tmpl->isRenewLaser() && m_renewLaserID != INVALID_ID )
+	if( renew && m_renewLaserID != INVALID_ID )
 	{
 		// (a laser has no health, so it counts as dead from the start: it lives until its lifetime destroys it)
 		Object *last = TheGameLogic->findObjectByID( m_renewLaserID );
@@ -3482,7 +3518,7 @@ void Weapon::createLaser( const Object *sourceObj, const Object *victimObj, cons
 		laser = TheThingFactory->newObject( pst, sourceObj->getControllingPlayer()->getDefaultTeam() );
 		if( laser == nullptr )
 			return;
-		if( tmpl->isRenewLaser() )
+		if( renew )
 			m_renewLaserID = laser->getID();
 	}
 
@@ -3504,7 +3540,7 @@ void Weapon::createLaser( const Object *sourceObj, const Object *victimObj, cons
 				//Projectiles are a different story, target their exact position.
 				pos.z += 10.0f;
 			}
-			update->initLaser( sourceObj, victimObj, sourceObj->getPosition(), &pos, tmpl->getLaserBoneName() );
+			update->initLaser( sourceObj, victimObj, sourceObj->getPosition(), &pos, boneName );
 		}
 	}
 }
