@@ -164,6 +164,9 @@ const char* const KindOfMaskType::s_bitNameList[] =
 	"NO_ATTACK_WARNING",
 	"FIRESTORM",											// Tiberium Project
 	"HAS_FIRE_GROUP_CENTER_UPDATE",		// Tiberium Project
+	"LIGHT_UNIT",											// Tiberium Project
+	"MEDIUM_UNIT",										// Tiberium Project
+	"HEAVY_UNIT",											// Tiberium Project
 
 	nullptr
 };

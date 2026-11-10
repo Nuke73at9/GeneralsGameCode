@@ -470,6 +470,7 @@ public:
 	*/
 	const AsciiString& getCommandSetString() const;
 	void setCommandSetStringOverride( AsciiString newCommandSetString ) { m_commandSetStringOverride = newCommandSetString; }
+	const AsciiString& getCommandSetStringOverride() const { return m_commandSetStringOverride; }	///< Tiberium Project: none when the template's is in use
 
 	/// People are faking their commandsets, and, Surprise!, they are authoritative.  Challenge everything.
 	Bool canProduceUpgrade( const UpgradeTemplate *upgrade );

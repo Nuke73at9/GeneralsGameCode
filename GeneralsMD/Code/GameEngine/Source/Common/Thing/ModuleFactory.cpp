@@ -273,6 +273,7 @@
 #include "GameLogic/Module/VeterancyCrateCollide.h"
 #include "GameLogic/Module/UpgradeCrateCollide.h"	// Tiberium Project
 #include "GameLogic/Module/SuppressionUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/GrabSpecialAbilityUpdate.h"	// Tiberium Project
 
 // body includes
 #include "GameLogic/Module/InactiveBody.h"
@@ -574,6 +575,7 @@ void ModuleFactory::init()
 	addModule( VeterancyCrateCollide );
 	addModule( UpgradeCrateCollide );	// Tiberium Project
 	addModule( SuppressionUpdate );	// Tiberium Project
+	addModule( GrabSpecialAbilityUpdate );	// Tiberium Project
 	addModule( ConvertToCarBombCrateCollide );
 	addModule( ConvertToHijackedVehicleCrateCollide );
 	addModule( SabotageCommandCenterCrateCollide );

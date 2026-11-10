@@ -80,6 +80,7 @@
 #include "GameLogic/Module/BaseConstructionUpdate.h"
 #include "GameLogic/Module/ToggleAbilityUpdate.h"
 #include "GameLogic/Module/SuppressionUpdate.h"
+#include "GameLogic/Module/GrabSpecialAbilityUpdate.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 #include "GameLogic/Module/SupplyTruckAIUpdate.h"
 #include "GameLogic/Module/DockUpdate.h"
@@ -131,6 +132,8 @@ namespace
 	Bool s_spawnHarvest = FALSE;	// "harvest": harvesters go to work, as a supply center's new ones do
 	Bool s_spawnMutual = FALSE;		// "mutual": the fight targets attack the spawned objects too
 	Bool s_spawnFoeAI = FALSE;		// "foe=ai": the fight targets are the skirmish AI's (a real enemy), not the first other player's
+	Bool s_spawnEachTarget = FALSE;	// Tiberium Project @feature (the test) "eachtarget": the k-th object gets the k-th kind of target= (A/B/C)
+	Bool s_spawnNoFire = FALSE;		// Tiberium Project @feature (the test) "nofire": the fight targets stand there, nobody told to attack
 	Real s_spawnTargetDistance = 160.0f;	// "dist=N": how far ahead the fight targets stand
 	Real s_spawnSpacing = 70.0f;	// between the objects of a row ("space=N": structures need more)
 	Int s_spawnBuildFrames = 0;		// "build=N": structures built up over N frames, then sold over N
@@ -442,6 +445,8 @@ void TiberiumTest::setSpawn( const char *spec )
 		s_spawnHarvest = parts[2].find( "harvest" ) != std::string::npos;
 		s_spawnMutual = parts[2].find( "mutual" ) != std::string::npos;
 		s_spawnFoeAI = parts[2].find( "foe=ai" ) != std::string::npos;
+		s_spawnEachTarget = parts[2].find( "eachtarget" ) != std::string::npos;
+		s_spawnNoFire = parts[2].find( "nofire" ) != std::string::npos;
 		const size_t dist = parts[2].find( "dist=" );
 		if ( dist != std::string::npos )
 			s_spawnTargetDistance = (Real)atof( parts[2].c_str() + dist + 5 );
@@ -907,6 +912,9 @@ void TiberiumTest::update()
 				Object *target = nullptr;
 				for ( size_t n = 0; n < kinds.size() && obj != nullptr && owner != nullptr; ++n )
 				{
+					// (Tiberium Project: "eachtarget": the k-th object's kind is the k-th, whatever it can attack)
+					if ( s_spawnEachTarget && n != k % kinds.size() )
+						continue;
 					Object *candidate = TheThingFactory->newObject( kinds[n], owner->getDefaultTeam() );
 					if ( candidate == nullptr )
 						continue;
@@ -917,6 +925,11 @@ void TiberiumTest::update()
 					candidate->setOrientation( s_spawnRear ? PI * 0.5f : -PI * 0.5f );
 					// the first kind it can attack, else the first kind (a unit that can attack none of them)
 					const CanAttackResult able = obj->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET, candidate, CMD_FROM_SCRIPT );
+					if ( s_spawnEachTarget )
+					{
+						target = candidate;
+						break;
+					}
 					if ( able >= ATTACKRESULT_POSSIBLE_AFTER_MOVING || n + 1 == kinds.size() )
 					{
 						if ( able < ATTACKRESULT_POSSIBLE_AFTER_MOVING )
@@ -987,7 +1000,7 @@ void TiberiumTest::update()
 			{
 				if ( s_spawnFight && k < s_spawnTargets.size() )
 				{
-					Object *target = TheGameLogic->findObjectByID( s_spawnTargets[k] );
+					Object *target = s_spawnNoFire ? nullptr : TheGameLogic->findObjectByID( s_spawnTargets[k] );
 					if ( target != nullptr )
 						ai->aiForceAttackObject( target, NO_MAX_SHOTS_LIMIT, CMD_FROM_SCRIPT );
 					AIUpdateInterface *tai = target != nullptr ? target->getAIUpdateInterface() : nullptr;
@@ -2163,15 +2176,17 @@ void TiberiumTest::update()
 				// (Kane's Wrath's building fields: the upgraded armour, the field's status and its look)
 				BodyModuleInterface *armourBody = obj->getBodyModule();
 				const Drawable *look = obj->getDrawable();
-				char field[512];
+				char field[768];
 				// (SAGE's general-purpose statuses, and the weapon set conditions following them: a crate's upgrade, a
 				// cannon broken)
-				char statuses[192] = "";
+				char statuses[320] = "";
 #if RTS_ZEROHOUR
 				{
 					static const ObjectStatusTypes s_shown[] = { OBJECT_STATUS_USER_1, OBJECT_STATUS_USER_2, OBJECT_STATUS_USER_3,
 						OBJECT_STATUS_USER_4, OBJECT_STATUS_WEAPON_UPGRADED_01, OBJECT_STATUS_WEAPON_UPGRADED_02,
-						OBJECT_STATUS_WEAPON_UPGRADED_03, OBJECT_STATUS_HAS_CRATE_UPGRADE };
+						OBJECT_STATUS_WEAPON_UPGRADED_03, OBJECT_STATUS_HAS_CRATE_UPGRADE,
+						// (a claw's grip: the holder's and the held's, C&C4's Scorpion's)
+						OBJECT_STATUS_NO_ATTACK, OBJECT_STATUS_IMMOBILE, OBJECT_STATUS_UNSELECTABLE, OBJECT_STATUS_NO_COLLISIONS };
 					AsciiString had, sets;
 					for ( size_t k = 0; k < ARRAY_SIZE( s_shown ); ++k )
 					{
@@ -2194,8 +2209,14 @@ void TiberiumTest::update()
 					static const NameKeyType suppressionKey = NAMEKEY( "SuppressionUpdate" );
 					const SuppressionUpdate *sup = (const SuppressionUpdate *)obj->findUpdateModule( suppressionKey );
 					const Bool pinned = sup != nullptr && sup->isSuppressed();
-					if ( had.isNotEmpty() || sets.isNotEmpty() || speed != 1.0f || pinned )
-						snprintf( statuses, sizeof( statuses ), ", status%s, weapon sets%s, speed x%.2f%s", had.str(), sets.str(), speed, pinned ? ", suppressed" : "" );
+					// (a claw's: what it holds, and its command set meanwhile)
+					static const NameKeyType grabKey = NAMEKEY( "GrabSpecialAbilityUpdate" );
+					const GrabSpecialAbilityUpdate *grab = (const GrabSpecialAbilityUpdate *)obj->findUpdateModule( grabKey );
+					char holding[96] = "";
+					if ( grab != nullptr && grab->isHolding() )
+						snprintf( holding, sizeof( holding ), ", holding #%u (set %s)", (unsigned)grab->getVictimID(), obj->getCommandSetString().str() );
+					if ( had.isNotEmpty() || sets.isNotEmpty() || speed != 1.0f || pinned || holding[0] != 0 )
+						snprintf( statuses, sizeof( statuses ), ", status%s, weapon sets%s, speed x%.2f%s%s", had.str(), sets.str(), speed, pinned ? ", suppressed" : "", holding );
 				}
 #endif
 				// (Tiberium Project: its false returns on the radar, a Signature Generator's)
@@ -2208,8 +2229,9 @@ void TiberiumTest::update()
 				const Object *goal = obj->getAI() != nullptr ? obj->getAI()->getGoalObject() : nullptr;
 				if ( goal != nullptr )
 					snprintf( aiming, sizeof( aiming ), ", after #%u", (unsigned)goal->getID() );
-				snprintf( field, sizeof( field ), "%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+				snprintf( field, sizeof( field ), "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
 					statuses, aiming,
+					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_USER_1 ) ? ", USER_1" : "",
 					// (a burrowed unit, C&C4's: dug out by the Seismic Disturbance)
 					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_BURROWING ) ? ", BURROWING" : "",
 					armourBody != nullptr && armourBody->testArmorSetFlag( ARMORSET_PLAYER_UPGRADE ) ? ", armour upgraded" : "",

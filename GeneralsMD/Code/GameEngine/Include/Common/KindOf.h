@@ -176,6 +176,9 @@ enum KindOfType CPP_11(: Int)
 	KINDOF_NO_ATTACK_WARNING,				///< does not trigger the under attack radar/EVA warning when taking damage
 	KINDOF_FIRESTORM,								///< Tiberium Project: C&C4's firestorm (a fire near one catches)
 	KINDOF_HAS_FIRE_GROUP_CENTER_UPDATE,	///< Tiberium Project: C&C4's fire that joins others into a firestorm (FireGroupCenterUpdate)
+	KINDOF_LIGHT_UNIT,							///< Tiberium Project: C&C4's weight classes (what a claw can lift, a satchel blows up, a bunker takes in)
+	KINDOF_MEDIUM_UNIT,							///< Tiberium Project
+	KINDOF_HEAVY_UNIT,							///< Tiberium Project
 
 	KINDOF_COUNT,										// total number of kindofs
 	KINDOF_FIRST = 0,
