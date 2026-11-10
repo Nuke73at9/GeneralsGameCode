@@ -49,6 +49,7 @@ class Drawable;
 class Object;
 struct FieldParse;
 class INI;
+class FXList;
 class DebugWindowDialog;		// really ParticleEditorDialog
 class RenderInfoClass;			// ick
 
@@ -251,6 +252,7 @@ protected:
 
 
 	Bool							m_isCulled;														///< status of particle relative to screen bounds
+	Bool							m_groundCollided;											///< Tiberium Project: it has come down to the ground (GroundCollisionFX; not saved)
 public:
 	Bool							m_inSystemList;
 	Bool							m_inOverallList;
@@ -680,6 +682,40 @@ public:
 	const LightningWave& getLightningWave( Int i ) const { return m_lightningWaves[i]; }
 	static void parseLightningWave( INI* ini, void *instance, void *store, const void* /*userData*/ );
 
+	/// Tiberium Project @feature model particles (C&C4 and Kane's Wrath's RenderObject particles: shell casings,
+	/// shock spheres, blast clouds, rays, Tiberium shards): each particle of a DRAWABLE system with a Model draws
+	/// that W3D model where it is. Its size on each axis runs its own course (ModelSize, ModelSizeRate and
+	/// ModelSizeDamping: x, y and z, each a min and max range, the rate added and damped each frame as a
+	/// particle's size; ModelSizeUniform: one pick for the three axes, so the model keeps its shape). It is turned
+	/// as ModelRotation says: about the world's axes by its angles (ModelAngleX and ModelAngleY with their rates,
+	/// damped by the system's AngularDamping, then the particle's own AngleZ), along its velocity and about it by
+	/// its X angle, or as its system is turned. Its alpha fades the model (an additive one dims) and, with
+	/// ModelTint, its colour tints it. Drawing only.
+	enum ModelRotation
+	{
+		MODEL_ROTATION_OFF = 0,				///< turned as its system is (the bone or effect it comes from: a muzzle flash)
+		MODEL_ROTATION_IN_WORLD,			///< turned about the world's X, then Y, then Z by its angles
+		MODEL_ROTATION_AROUND_VELOCITY		///< its X along the velocity, turned about it by its X angle
+	};
+	const AsciiString& getModelName() const { return m_modelName; }
+	Int getModelRotation() const { return m_modelRotation; }
+	Bool isModelTint() const { return m_modelTint; }
+	/// a particle's model scale on each axis (its personality picks within the ranges) at an age in frames
+	void getModelScale( UnsignedInt personality, Real ageFrames, Real scale[3] ) const;
+	/// a particle's model angles about X and Y (radians) at an age in frames
+	void getModelAngles( UnsignedInt personality, Real ageFrames, Real angles[2] ) const;
+	static void parseModelRange3( INI* ini, void *instance, void *store, const void* /*userData*/ );
+
+	/// Tiberium Project @feature ground collision (C&C4 and Kane's Wrath's particle Collision event: a shell casing
+	/// kicking up dust where it lands, sparks spattering): a particle that comes down to the ground (to
+	/// GroundCollisionHeight above it, a min max range) plays GroundCollisionFX there once, turned to the ground's
+	/// slope with GroundCollisionOrientFX, and with GroundCollisionKill it ends there. Drawing only.
+	Bool hasGroundCollision() const { return m_groundCollisionFXName.isNotEmpty() || m_groundCollisionKill; }
+	const FXList *getGroundCollisionFX() const;
+	Real getGroundCollisionHeight( UnsignedInt personality ) const;
+	Bool isGroundCollisionKill() const { return m_groundCollisionKill; }
+	Bool isGroundCollisionOrientFX() const { return m_groundCollisionOrientFX; }
+
 protected:
 	friend class ParticleSystemManager;					///< @todo remove this friendship
 	friend class ParticleSystem;								///< @todo remove this friendship
@@ -718,6 +754,25 @@ protected:
 	Bool m_lightning;					///< Lightning (on the template only)
 	Int m_lightningWaveCount;			///< LightningWave lines read
 	LightningWave m_lightningWaves[MAX_LIGHTNING_WAVES];
+	// Tiberium Project @feature model particles (on the template only)
+	AsciiString m_modelName;			///< Model
+	Real m_modelSize[3][2];				///< ModelSize: x, y and z, each a min and max
+	Real m_modelSizeRate[3][2];			///< ModelSizeRate: added each frame
+	Real m_modelSizeDamping[3][2];		///< ModelSizeDamping: the rate's factor each frame
+	Bool m_modelSizeUniform;			///< ModelSizeUniform
+	Int m_modelRotation;				///< ModelRotation
+	GameClientRandomVariable m_modelAngleX;			///< ModelAngleX (radians)
+	GameClientRandomVariable m_modelAngleY;			///< ModelAngleY
+	GameClientRandomVariable m_modelAngularRateX;	///< ModelAngularRateX (radians a frame)
+	GameClientRandomVariable m_modelAngularRateY;	///< ModelAngularRateY
+	Bool m_modelTint;					///< ModelTint
+	// Tiberium Project @feature ground collision (on the template only)
+	AsciiString m_groundCollisionFXName;	///< GroundCollisionFX
+	mutable const FXList *m_groundCollisionFX;	///< (looked up on first use)
+	mutable Bool m_groundCollisionFXLookedUp;
+	GameClientRandomVariable m_groundCollisionHeight;	///< GroundCollisionHeight
+	Bool m_groundCollisionKill;			///< GroundCollisionKill
+	Bool m_groundCollisionOrientFX;		///< GroundCollisionOrientFX
 
 	// template attribute data inherited from ParticleSystemInfo class
 };
@@ -745,6 +800,7 @@ public:
 	void setPosition( const Coord3D *pos );			///< set the position of the particle system
 	void getPosition( Coord3D *pos );				///< get the position of the particle system
 	void setLocalTransform( const Matrix3D *matrix );	///< set the system's local transform
+	const Matrix3D *getTransform() const { return &m_transform; }	///< Tiberium Project: where the system is and how it is turned (its parent's and its own)
 	void rotateLocalTransformX( Real x );				///< rotate local transform matrix
 	void rotateLocalTransformY( Real y );				///< rotate local transform matrix
 	void rotateLocalTransformZ( Real z );				///< rotate local transform matrix

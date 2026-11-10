@@ -42,6 +42,7 @@
 #include "GameClient/Drawable.h"
 #include "GameClient/DebugDisplay.h"
 #include "GameClient/Display.h"
+#include "GameClient/FXList.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/ParticleSys.h"
@@ -310,6 +311,7 @@ Particle::Particle( ParticleSystem *system, const ParticleInfo *info )
 	m_system = system;
 
 	m_isCulled = FALSE;
+	m_groundCollided = FALSE;	// Tiberium Project
 	m_accel.x = 0.0f;
 	m_accel.y = 0.0f;
 	m_accel.z = 0.0f;
@@ -485,6 +487,49 @@ Bool Particle::update()
 	if (frameCount == 0)
 	{
 		return true;
+	}
+
+	// Tiberium Project @feature ground collision: a particle that comes down to the ground plays its system's
+	// effect there, once, and ends there if its system says so
+	if (!m_groundCollided && TheTerrainLogic != nullptr)
+	{
+		const ParticleSystemTemplate *tmpl = m_system->getTemplate();
+		if (tmpl != nullptr && tmpl->hasGroundCollision())
+		{
+			Coord3D normal;
+			const Real ground = TheTerrainLogic->getGroundHeight( m_pos.x, m_pos.y, &normal );
+			if (m_pos.z <= ground + tmpl->getGroundCollisionHeight( m_personality ))
+			{
+				m_groundCollided = TRUE;
+				const FXList *fx = tmpl->getGroundCollisionFX();
+				if (fx != nullptr)
+				{
+					if (tmpl->isGroundCollisionOrientFX())
+					{
+						// the effect stands on the slope: its Z along the ground's normal
+						Vector3 up( normal.x, normal.y, normal.z );
+						if (up.Length2() < 0.0001f)
+							up.Set( 0.0f, 0.0f, 1.0f );
+						up.Normalize();
+						Vector3 side;
+						Vector3::Cross_Product( Vector3( 0.0f, 1.0f, 0.0f ), up, &side );
+						if (side.Length2() < 0.0001f)
+							side.Set( 1.0f, 0.0f, 0.0f );
+						side.Normalize();
+						Vector3 forward;
+						Vector3::Cross_Product( up, side, &forward );
+						const Matrix3D mtx( side, forward, up, Vector3( m_pos.x, m_pos.y, m_pos.z ) );
+						FXList::doFXPos( fx, &m_pos, &mtx );
+					}
+					else
+					{
+						FXList::doFXPos( fx, &m_pos );
+					}
+				}
+				if (tmpl->isGroundCollisionKill())
+					return false;
+			}
+		}
 	}
 
 #if PARTICLE_USE_XY_ROTATION
@@ -3079,6 +3124,12 @@ static const char *const ParticleGeometryRotationNames[] =
 	"OFF", "AROUND_VELOCITY", "IN_WORLD", nullptr
 };
 
+// Tiberium Project @feature model particles: ModelRotation
+static const char *const ModelRotationNames[] =
+{
+	"OFF", "IN_WORLD", "AROUND_VELOCITY", nullptr
+};
+
 const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 {
 	{ "Priority",								INI::parseIndexList, ParticlePriorityNames, offsetof( ParticleSystemTemplate, m_priority ) },
@@ -3207,6 +3258,23 @@ const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 	// Tiberium Project @feature lightning: a burst laid out along a bolt to the effect's target
 	{ "Lightning",							INI::parseBool,					nullptr,	offsetof( ParticleSystemTemplate, m_lightning ) },
 	{ "LightningWave",					ParticleSystemTemplate::parseLightningWave,	nullptr,	0 },
+	// Tiberium Project @feature model particles: a model drawn at each particle
+	{ "Model",									INI::parseAsciiString,	nullptr,	offsetof( ParticleSystemTemplate, m_modelName ) },
+	{ "ModelSize",							ParticleSystemTemplate::parseModelRange3,	nullptr,	offsetof( ParticleSystemTemplate, m_modelSize ) },
+	{ "ModelSizeRate",					ParticleSystemTemplate::parseModelRange3,	nullptr,	offsetof( ParticleSystemTemplate, m_modelSizeRate ) },
+	{ "ModelSizeDamping",				ParticleSystemTemplate::parseModelRange3,	nullptr,	offsetof( ParticleSystemTemplate, m_modelSizeDamping ) },
+	{ "ModelSizeUniform",				INI::parseBool,					nullptr,	offsetof( ParticleSystemTemplate, m_modelSizeUniform ) },
+	{ "ModelRotation",					INI::parseIndexList,		ModelRotationNames,	offsetof( ParticleSystemTemplate, m_modelRotation ) },
+	{ "ModelAngleX",						INI::parseGameClientRandomVariable,	nullptr,	offsetof( ParticleSystemTemplate, m_modelAngleX ) },
+	{ "ModelAngleY",						INI::parseGameClientRandomVariable,	nullptr,	offsetof( ParticleSystemTemplate, m_modelAngleY ) },
+	{ "ModelAngularRateX",			INI::parseGameClientRandomVariable,	nullptr,	offsetof( ParticleSystemTemplate, m_modelAngularRateX ) },
+	{ "ModelAngularRateY",			INI::parseGameClientRandomVariable,	nullptr,	offsetof( ParticleSystemTemplate, m_modelAngularRateY ) },
+	{ "ModelTint",							INI::parseBool,					nullptr,	offsetof( ParticleSystemTemplate, m_modelTint ) },
+	// Tiberium Project @feature ground collision: an effect where a particle comes down
+	{ "GroundCollisionFX",			INI::parseAsciiString,	nullptr,	offsetof( ParticleSystemTemplate, m_groundCollisionFXName ) },
+	{ "GroundCollisionHeight",	INI::parseGameClientRandomVariable,	nullptr,	offsetof( ParticleSystemTemplate, m_groundCollisionHeight ) },
+	{ "GroundCollisionKill",		INI::parseBool,					nullptr,	offsetof( ParticleSystemTemplate, m_groundCollisionKill ) },
+	{ "GroundCollisionOrientFX",	INI::parseBool,				nullptr,	offsetof( ParticleSystemTemplate, m_groundCollisionOrientFX ) },
 
 
 	{ nullptr,											nullptr,																					nullptr,		0 },
@@ -3317,6 +3385,24 @@ ParticleSystemTemplate::ParticleSystemTemplate( const AsciiString &name ) :
 	m_lightning = FALSE;
 	m_lightningWaveCount = 0;
 	memset( m_lightningWaves, 0, sizeof( m_lightningWaves ) );
+	for (Int axis = 0; axis < 3; ++axis)
+	{
+		m_modelSize[axis][0] = m_modelSize[axis][1] = 1.0f;
+		m_modelSizeRate[axis][0] = m_modelSizeRate[axis][1] = 0.0f;
+		m_modelSizeDamping[axis][0] = m_modelSizeDamping[axis][1] = 1.0f;
+	}
+	m_modelSizeUniform = FALSE;
+	m_modelRotation = MODEL_ROTATION_OFF;
+	m_modelAngleX.setRange( 0.0f, 0.0f );
+	m_modelAngleY.setRange( 0.0f, 0.0f );
+	m_modelAngularRateX.setRange( 0.0f, 0.0f );
+	m_modelAngularRateY.setRange( 0.0f, 0.0f );
+	m_modelTint = FALSE;
+	m_groundCollisionFX = nullptr;
+	m_groundCollisionFXLookedUp = FALSE;
+	m_groundCollisionHeight.setRange( 0.0f, 0.0f );
+	m_groundCollisionKill = FALSE;
+	m_groundCollisionOrientFX = FALSE;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -3352,6 +3438,96 @@ Real ParticleSystemTemplate::getGeometryLength( UnsignedInt personality, Unsigne
 		sum = (1.0f - (Real)pow(damping, (Real)ageFrames)) / (1.0f - damping);
 	const Real length = start + rate * sum;
 	return length > 0.0f ? length : 0.0f;
+}
+
+// ------------------------------------------------------------------------------------------------
+// Tiberium Project @feature model particles and ground collision: a particle's pick (0 to 1) for one of its
+// template's ranges, made from its personality (no state kept per particle)
+static Real personalityPick( UnsignedInt personality, UnsignedInt index )
+{
+	UnsignedInt seed = personality * 2654435761u + (index + 1) * 0x9E3779B9u;
+	seed ^= seed >> 16;
+	seed *= 0x85EBCA6Bu;
+	seed ^= seed >> 13;
+	seed *= 0xC2B2AE35u;
+	seed ^= seed >> 16;
+	return (Real)(seed & 0xFFFF) / 65535.0f;
+}
+
+static Real pickInRange( Real low, Real high, Real pick )
+{
+	return low + (high - low) * pick;
+}
+
+// a rate added each frame and damped each frame, summed over an age in frames: (1 - damping^age) / (1 - damping)
+static Real dampedFrames( Real damping, Real ageFrames )
+{
+	if (ageFrames <= 0.0f)
+		return 0.0f;
+	if (damping <= 0.0f)
+		return ageFrames < 1.0f ? ageFrames : 1.0f;	// (only the first frame adds the rate)
+	if (WWMath::Fabs( damping - 1.0f ) < 0.0001f)
+		return ageFrames;
+	return (1.0f - WWMath::PowOrigin( damping, ageFrames )) / (1.0f - damping);
+}
+
+// ------------------------------------------------------------------------------------------------
+void ParticleSystemTemplate::getModelScale( UnsignedInt personality, Real ageFrames, Real scale[3] ) const
+{
+	for (Int axis = 0; axis < 3; ++axis)
+	{
+		// (one pick for the three axes keeps the model's shape)
+		const UnsignedInt pick = m_modelSizeUniform ? 0 : (UnsignedInt)axis;
+		const Real start = pickInRange( m_modelSize[axis][0], m_modelSize[axis][1], personalityPick( personality, pick ) );
+		const Real rate = pickInRange( m_modelSizeRate[axis][0], m_modelSizeRate[axis][1], personalityPick( personality, 3 + pick ) );
+		const Real damping = pickInRange( m_modelSizeDamping[axis][0], m_modelSizeDamping[axis][1], personalityPick( personality, 6 + pick ) );
+		const Real size = start + rate * dampedFrames( damping, ageFrames );
+		scale[axis] = size > 0.0f ? size : 0.0f;
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+void ParticleSystemTemplate::getModelAngles( UnsignedInt personality, Real ageFrames, Real angles[2] ) const
+{
+	const GameClientRandomVariable *starts[2] = { &m_modelAngleX, &m_modelAngleY };
+	const GameClientRandomVariable *rates[2] = { &m_modelAngularRateX, &m_modelAngularRateY };
+	for (Int axis = 0; axis < 2; ++axis)
+	{
+		const Real start = pickInRange( starts[axis]->getMinimumValue(), starts[axis]->getMaximumValue(), personalityPick( personality, 9 + axis ) );
+		const Real rate = pickInRange( rates[axis]->getMinimumValue(), rates[axis]->getMaximumValue(), personalityPick( personality, 11 + axis ) );
+		const Real damping = pickInRange( m_angularDamping.getMinimumValue(), m_angularDamping.getMaximumValue(), personalityPick( personality, 13 + axis ) );
+		angles[axis] = start + rate * dampedFrames( damping, ageFrames );
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// Tiberium Project @feature model particles: "ModelSize = xmin xmax ymin ymax zmin zmax" (and its rate and damping)
+void ParticleSystemTemplate::parseModelRange3( INI* ini, void * /*instance*/, void *store, const void* /*userData*/ )
+{
+	Real (*range)[2] = static_cast<Real (*)[2]>( store );
+	for (Int axis = 0; axis < 3; ++axis)
+	{
+		range[axis][0] = INI::scanReal( ini->getNextToken() );
+		range[axis][1] = INI::scanReal( ini->getNextToken() );
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+const FXList *ParticleSystemTemplate::getGroundCollisionFX() const
+{
+	if (!m_groundCollisionFXLookedUp)
+	{
+		m_groundCollisionFXLookedUp = TRUE;
+		m_groundCollisionFX = (m_groundCollisionFXName.isNotEmpty() && TheFXListStore != nullptr)
+			? TheFXListStore->findFXList( m_groundCollisionFXName.str() ) : nullptr;
+	}
+	return m_groundCollisionFX;
+}
+
+// ------------------------------------------------------------------------------------------------
+Real ParticleSystemTemplate::getGroundCollisionHeight( UnsignedInt personality ) const
+{
+	return pickInRange( m_groundCollisionHeight.getMinimumValue(), m_groundCollisionHeight.getMaximumValue(), personalityPick( personality, 15 ) );
 }
 
 // ------------------------------------------------------------------------------------------------

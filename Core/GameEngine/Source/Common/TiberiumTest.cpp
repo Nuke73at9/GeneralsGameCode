@@ -1801,6 +1801,31 @@ void TiberiumTest::update()
 					world.x, world.y, pending != nullptr ? pending->getName().str() : "nothing" );
 			}
 		}
+		else if ( step.action == "fx" && TheFXListStore != nullptr && TheGameLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) an effect list played dx,dy from the first spawned object, ten
+			// units above the ground and facing along +x as a weapon's muzzle would (client side only): to see
+			// what its particle systems draw ("fx=<FX list>,dx,dy")
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			const FXList *fx = !f.empty() ? TheFXListStore->findFXList( f[0].c_str() ) : nullptr;
+			Object *from = !s_spawned.empty() ? TheGameLogic->findObjectByID( s_spawned[0] ) : nullptr;
+			if ( fx != nullptr && from != nullptr )
+			{
+				Coord3D p = *from->getPosition();
+				p.x += f.size() > 1 ? (Real)atof( f[1].c_str() ) : 0.0f;
+				p.y += f.size() > 2 ? (Real)atof( f[2].c_str() ) : 0.0f;
+				p.z = ( TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( p.x, p.y ) : p.z ) + 10.0f;
+				Matrix3D mtx( true );
+				mtx.Set_Translation( Vector3( p.x, p.y, p.z ) );
+				FXList::doFXPos( fx, &p, &mtx );
+				log( "frame %d: ui: effect %s at %.0f %.0f", (int)s_frame, f[0].c_str(), p.x, p.y );
+			}
+			else
+			{
+				log( "frame %d: ui: effect %s not played (%s)", (int)s_frame, f.empty() ? "" : f[0].c_str(),
+					fx == nullptr ? "no such effect list" : "nothing spawned" );
+			}
+		}
 		else if ( step.action == "mouse" )
 		{
 			s_uiMouse = TRUE;

@@ -32,6 +32,12 @@
 #include "WW3D2/streak.h"
 #include "WW3D2/rinfo.h"
 #include "WWLib/bittype.h"
+#include "WWMath/vector3.h"
+#include <vector>
+
+class RenderObjClass;
+class MeshClass;
+class VertexMaterialClass;
 
 //=============================================================================
 /** W3D implementation of the game display which is responsible for creating
@@ -43,6 +49,8 @@ class W3DParticleSystemManager : public ParticleSystemManager
 public:
 	W3DParticleSystemManager();
 	virtual ~W3DParticleSystemManager() override;
+
+	virtual void reset() override;									///< Tiberium Project: also lets go of the model particles' copies
 
 	virtual void doParticles(RenderInfoClass &rinfo) override;
 	virtual void queueParticleRender() override;
@@ -56,6 +64,42 @@ private:
 	/// Tiberium Project @feature geometry particles: the system's particles as crossed quads (see
 	/// ParticleSystemTemplate::ParticleGeometry), each colour times its light factor; returns how many
 	UnsignedInt renderGeometryParticles(ParticleSystem& sys, const ParticleSystemTemplate& t, Bool lit, const Real sceneFactor[3]);
+
+	/// Tiberium Project @feature model particles (see ParticleSystemTemplate's Model): a copy of each model for
+	/// each of its particles drawn, kept from frame to frame. Each copy's meshes and materials are its own, so the
+	/// fade and tint set on its materials hold whichever pass draws it (the sorted one too).
+	struct ModelMaterial
+	{
+		VertexMaterialClass *material;
+		Vector3 ambient, diffuse, emissive;		///< as the model has them
+		float opacity;
+		Int blend;								///< ModelBlend: how its mesh blends, so how it fades
+	};
+	enum ModelBlend
+	{
+		MODEL_BLEND_OPAQUE = 0,					///< not faded
+		MODEL_BLEND_ALPHA,						///< faded by its opacity
+		MODEL_BLEND_ADDITIVE					///< faded by its colours (an additive blend takes no opacity)
+	};
+	struct ModelCopy
+	{
+		RenderObjClass *robj;
+		std::vector<MeshClass*> meshes;			///< (held by robj)
+		std::vector<ModelMaterial> materials;
+	};
+	struct ModelPool
+	{
+		AsciiString name;
+		std::vector<ModelCopy> copies;
+		UnsignedInt used;						///< the copies drawn this frame
+		Bool missing;							///< the model could not be made
+	};
+	enum { MAX_MODEL_COPIES = 256 };			///< of one model at once
+	void renderModelParticles(RenderInfoClass &rinfo);
+	ModelPool *findModelPool(const AsciiString &name);
+	ModelCopy *takeModelCopy(ModelPool &pool);
+	void releaseModelPools();
+	std::vector<ModelPool*> m_modelPools;
 
 	enum { MAX_POINTS_PER_GROUP = 512 };
 

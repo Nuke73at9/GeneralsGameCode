@@ -26,6 +26,7 @@
 // W3D Particle System implementation
 // Author: Michael S. Booth, November 2001
 
+#include "Common/FramePacer.h"
 #include "Common/GlobalData.h"
 #include "GameClient/Color.h"
 #include "W3DDevice/GameClient/W3DParticleSys.h"
@@ -34,8 +35,17 @@
 #include "W3DDevice/GameClient/HeightMap.h"
 #include "W3DDevice/GameClient/W3DSmudge.h"
 #include "W3DDevice/GameClient/W3DSnow.h"
+#include "W3DDevice/GameClient/W3DScene.h"
 #include "WW3D2/camera.h"
 #include "WW3D2/pointgr.h"
+// Tiberium Project @feature model particles
+#include "WW3D2/dx8renderer.h"
+#include "WW3D2/dx8wrapper.h"
+#include "WW3D2/matinfo.h"
+#include "WW3D2/mesh.h"
+#include "WW3D2/meshmdl.h"
+#include "WW3D2/vertmaterial.h"
+#include "WW3D2/ww3d.h"
 #ifdef RTS_RENDERER_D3D9
 #include <math.h>
 #include <vector>
@@ -84,6 +94,17 @@ W3DParticleSystemManager::W3DParticleSystemManager()
 
 W3DParticleSystemManager::~W3DParticleSystemManager()
 {
+	// Tiberium Project @feature model particles: the copies are let go while W3D is up (at shutdown W3D may be
+	// gone first, its buffers with it: then they are left to the process's end)
+	if (WW3D::Is_Initted())
+		releaseModelPools();
+	else
+	{
+		for (size_t i = 0; i < m_modelPools.size(); ++i)
+			delete m_modelPools[i];
+		m_modelPools.clear();
+	}
+
 	delete m_pointGroup;
 
 //	W3DDisplay::m_3DScene->Remove_Render_Object( m_streakLine );
@@ -108,6 +129,259 @@ W3DParticleSystemManager::~W3DParticleSystemManager()
 void W3DParticleSystemManager::queueParticleRender()
 {
 	m_readyToRender = true;
+}
+
+// Tiberium Project @feature model particles: the copies are let go between games
+void W3DParticleSystemManager::reset()
+{
+	releaseModelPools();
+	ParticleSystemManager::reset();
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature model particles (see ParticleSystemTemplate's Model)
+//-------------------------------------------------------------------------------------------------
+// the meshes of a render object: itself, or its sub-objects'
+static void collectModelMeshes(RenderObjClass *robj, std::vector<MeshClass*> &meshes)
+{
+	if (robj->Class_ID() == RenderObjClass::CLASSID_MESH)
+	{
+		meshes.push_back(static_cast<MeshClass*>(robj));
+		return;
+	}
+	for (Int i = 0; i < robj->Get_Num_Sub_Objects(); ++i)
+	{
+		RenderObjClass *sub = robj->Get_Sub_Object(i);
+		if (sub != nullptr)
+		{
+			collectModelMeshes(sub, meshes);
+			sub->Release_Ref();
+		}
+	}
+}
+
+W3DParticleSystemManager::ModelPool *W3DParticleSystemManager::findModelPool(const AsciiString &name)
+{
+	for (size_t i = 0; i < m_modelPools.size(); ++i)
+	{
+		if (m_modelPools[i]->name == name)
+			return m_modelPools[i];
+	}
+	ModelPool *pool = NEW ModelPool;
+	pool->name = name;
+	pool->used = 0;
+	pool->missing = FALSE;
+	m_modelPools.push_back(pool);
+	return pool;
+}
+
+// the next copy of the pool's model this frame, made when there are not enough
+W3DParticleSystemManager::ModelCopy *W3DParticleSystemManager::takeModelCopy(ModelPool &pool)
+{
+	if (pool.used < pool.copies.size())
+		return &pool.copies[pool.used++];
+	if (pool.missing || pool.copies.size() >= MAX_MODEL_COPIES)
+		return nullptr;
+
+	RenderObjClass *robj = WW3DAssetManager::Get_Instance()->Create_Render_Obj(pool.name.str());
+	if (robj == nullptr)
+	{
+		fprintf(stderr, "Tiberium: model particles: no model %s; its systems draw nothing\n", pool.name.str());
+		fflush(stderr);
+		pool.missing = TRUE;
+		return nullptr;
+	}
+	ModelCopy copy;
+	copy.robj = robj;
+	collectModelMeshes(robj, copy.meshes);
+	for (size_t m = 0; m < copy.meshes.size(); ++m)
+	{
+		// its own mesh model and materials, so this copy's fade and tint are its own
+		MeshClass *mesh = copy.meshes[m];
+		mesh->Make_Unique(true);
+		MeshModelClass *model = mesh->Peek_Model();
+		if (model == nullptr)
+			continue;
+		const ShaderClass shader = model->Has_Shader_Array(0) ? model->Get_Shader(0, 0) : model->Get_Single_Shader(0);
+		Int blend = MODEL_BLEND_OPAQUE;
+		if (shader.Get_Dst_Blend_Func() == ShaderClass::DSTBLEND_ONE)
+			blend = MODEL_BLEND_ADDITIVE;
+		else if (shader.Get_Dst_Blend_Func() != ShaderClass::DSTBLEND_ZERO)
+			blend = MODEL_BLEND_ALPHA;
+		MaterialInfoClass *info = mesh->Get_Material_Info();
+		if (info == nullptr)
+			continue;
+		for (Int i = 0; i < info->Vertex_Material_Count(); ++i)
+		{
+			VertexMaterialClass *material = info->Peek_Vertex_Material(i);
+			if (material == nullptr)
+				continue;
+			ModelMaterial look;
+			look.material = material;
+			material->Get_Ambient(&look.ambient);
+			material->Get_Diffuse(&look.diffuse);
+			material->Get_Emissive(&look.emissive);
+			look.opacity = material->Get_Opacity();
+			look.blend = blend;
+			copy.materials.push_back(look);
+		}
+		info->Release_Ref();
+	}
+	if (pool.copies.empty())
+	{
+		fprintf(stderr, "Tiberium: model particles: %s, %d meshes, %d materials\n", pool.name.str(), (int)copy.meshes.size(), (int)copy.materials.size());
+		fflush(stderr);
+	}
+	pool.copies.push_back(copy);
+	return &pool.copies[pool.used++];
+}
+
+void W3DParticleSystemManager::releaseModelPools()
+{
+	for (size_t i = 0; i < m_modelPools.size(); ++i)
+	{
+		ModelPool *pool = m_modelPools[i];
+		for (size_t c = 0; c < pool->copies.size(); ++c)
+			REF_PTR_RELEASE(pool->copies[c].robj);
+		delete pool;
+	}
+	m_modelPools.clear();
+}
+
+// each particle of the systems that draw models: a copy of the model where it is, turned, sized, faded and tinted
+void W3DParticleSystemManager::renderModelParticles(RenderInfoClass &rinfo)
+{
+	for (size_t i = 0; i < m_modelPools.size(); ++i)
+		m_modelPools[i]->used = 0;
+
+	// (the particles have moved on into the logic frame this far: their sizes and angles follow)
+	const Real phase = TheFramePacer != nullptr ? TheFramePacer->getLogicFramePhase() : 0.0f;
+	LightEnvironmentClass *lights = W3DDisplay::m_3DScene != nullptr ? &W3DDisplay::m_3DScene->getDefaultLightEnv() : nullptr;
+	Bool drew = FALSE;
+
+	ParticleSystemManager::ParticleSystemList &systems = TheParticleSystemManager->getAllParticleSystems();
+	for (ParticleSystemManager::ParticleSystemListIt it = systems.begin(); it != systems.end(); ++it)
+	{
+		ParticleSystem *sys = *it;
+		if (sys == nullptr || !sys->isUsingDrawables())
+			continue;
+		const ParticleSystemTemplate *t = sys->getTemplate();
+		if (t == nullptr || t->getModelName().isEmpty())
+			continue;
+		ModelPool *pool = findModelPool(t->getModelName());
+		if (pool->missing)
+			continue;
+		// (an additive system keeps no alpha: its colours fade it instead)
+		const Bool fades = sys->getShaderType() != ParticleSystemInfo::ADDITIVE;
+		for (Particle *p = sys->getFirstParticle(); p != nullptr; p = p->m_systemNext)
+		{
+			const Real alpha = fades ? p->getAlpha() : 1.0f;
+			if (alpha < 0.004f)
+				continue;
+			const Real age = (Real)p->getElapsedFrames() + phase;
+			Real scale[3];
+			t->getModelScale(p->getPersonality(), age, scale);
+			if (scale[0] < 0.0001f || scale[1] < 0.0001f || scale[2] < 0.0001f)
+				continue;
+			ModelCopy *copy = takeModelCopy(*pool);
+			if (copy == nullptr)
+				break;
+
+			// turned as its template says
+			Matrix3D tm(true);
+			switch (t->getModelRotation())
+			{
+				case ParticleSystemTemplate::MODEL_ROTATION_IN_WORLD:
+				{
+					Real angles[2];
+					t->getModelAngles(p->getPersonality(), age, angles);
+					tm.Rotate_Z(p->getAngle());
+					tm.Rotate_Y(angles[1]);
+					tm.Rotate_X(angles[0]);
+					break;
+				}
+				case ParticleSystemTemplate::MODEL_ROTATION_AROUND_VELOCITY:
+				{
+					Vector3 along(p->m_vel.x, p->m_vel.y, p->m_vel.z);
+					if (along.Length2() > 0.000001f)
+					{
+						along.Normalize();
+						Vector3 side;
+						Vector3::Cross_Product(Vector3(0.0f, 0.0f, 1.0f), along, &side);
+						if (side.Length2() < 0.000001f)
+							side.Set(0.0f, 1.0f, 0.0f);
+						side.Normalize();
+						Vector3 up;
+						Vector3::Cross_Product(along, side, &up);
+						tm.Set(along, side, up, Vector3(0.0f, 0.0f, 0.0f));
+					}
+					Real angles[2];
+					t->getModelAngles(p->getPersonality(), age, angles);
+					tm.Rotate_X(angles[0]);
+					break;
+				}
+				default:
+				{
+					// as its system is turned (a muzzle flash along its barrel), its axes kept unit length
+					const Matrix3D *sysTm = sys->getTransform();
+					Vector3 axes[3];
+					for (Int a = 0; a < 3; ++a)
+					{
+						axes[a].Set((*sysTm)[0][a], (*sysTm)[1][a], (*sysTm)[2][a]);
+						if (axes[a].Length2() < 0.000001f)
+							axes[a].Set(a == 0 ? 1.0f : 0.0f, a == 1 ? 1.0f : 0.0f, a == 2 ? 1.0f : 0.0f);
+						axes[a].Normalize();
+					}
+					tm.Set(axes[0], axes[1], axes[2], Vector3(0.0f, 0.0f, 0.0f));
+					break;
+				}
+			}
+			// sized on each axis, where the particle is
+			for (Int row = 0; row < 3; ++row)
+			{
+				tm[row][0] *= scale[0];
+				tm[row][1] *= scale[1];
+				tm[row][2] *= scale[2];
+			}
+			const Coord3D *pos = p->getPosition();
+			tm.Set_Translation(Vector3(pos->x, pos->y, pos->z));
+			copy->robj->Set_Transform(tm);
+			// (its bounds and normals at its largest size)
+			Real largest = scale[0] > scale[1] ? scale[0] : scale[1];
+			if (scale[2] > largest)
+				largest = scale[2];
+			copy->robj->Set_ObjectScale(largest);
+			for (size_t m = 0; m < copy->meshes.size(); ++m)
+				copy->meshes[m]->Set_ObjectScale(largest);
+
+			// faded by its alpha, tinted by its colour
+			Vector3 tint(1.0f, 1.0f, 1.0f);
+			if (t->isModelTint())
+			{
+				const RGBColor *color = p->getColor();
+				tint.Set(color->red, color->green, color->blue);
+			}
+			for (size_t m = 0; m < copy->materials.size(); ++m)
+			{
+				const ModelMaterial &look = copy->materials[m];
+				const Real k = look.blend == MODEL_BLEND_ADDITIVE ? alpha : 1.0f;
+				look.material->Set_Ambient(look.ambient.X * tint.X * k, look.ambient.Y * tint.Y * k, look.ambient.Z * tint.Z * k);
+				look.material->Set_Diffuse(look.diffuse.X * tint.X * k, look.diffuse.Y * tint.Y * k, look.diffuse.Z * tint.Z * k);
+				look.material->Set_Emissive(look.emissive.X * tint.X * k, look.emissive.Y * tint.Y * k, look.emissive.Z * tint.Z * k);
+				look.material->Set_Opacity(look.blend == MODEL_BLEND_ALPHA ? look.opacity * alpha : look.opacity);
+			}
+			rinfo.light_environment = lights;
+			copy->robj->Render(rinfo);
+			drew = TRUE;
+		}
+	}
+	rinfo.light_environment = nullptr;
+	if (drew)
+	{
+		// (the copies' materials have changed since W3D last set them)
+		DX8Wrapper::Set_Material(nullptr);
+		TheDX8MeshRenderer.Flush();
+	}
 }
 
 /**
@@ -190,6 +464,9 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 
 	// external mechanism must tell us when it's OK to render again...
 	m_readyToRender = false;
+
+	// Tiberium Project @feature model particles: their models first, as the scene's translucent objects are drawn
+	renderModelParticles(rinfo);
 
 	//reset each frame
 	/// @todo lorenzen sez: this should be debug only:
