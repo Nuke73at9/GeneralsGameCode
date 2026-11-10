@@ -538,6 +538,7 @@ private:
 	/// Tiberium Project @feature the further damage this weapon's sets off (FollowUp)
 	void scheduleFollowUps(ObjectID sourceID, const Object *primaryVictim, const Coord3D *pos, const WeaponBonus& bonus) const;
 	void scheduleScatter(ObjectID sourceID, const Object *primaryVictim, const Coord3D *pos, const WeaponBonus& bonus) const;	///< Tiberium Project
+	void crushTiberium(Object *crystal, const Object *source) const;	///< Tiberium Project: CrushTiberiumShare
 	static void parseScatter( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ );	///< Tiberium Project
 	const ThingTemplate* getScatterLaser() const { return m_scatterLaser; }	///< Tiberium Project
 	const FXList* getScatterFX() const { return m_scatterFX; }	///< Tiberium Project
@@ -620,6 +621,7 @@ private:
 	Real m_suppressionAmount;															///< Tiberium Project: as it is dealt, this much suppression on those within SuppressionRadius (Kane's Wrath's SuppressionNugget: SuppressionUpdate)
 	Real m_suppressionRadius;
 	UnsignedInt m_suppressionFrames;											///< ... for this long
+	Real m_crushTiberiumShare;														///< Tiberium Project: a Tiberium crystal it reaches is crushed, emptied, its firer's player paid this share of it (Kane's Wrath's CrushTiberiumNugget: the MARV)
 	const FXList* m_fireFXs[LEVEL_COUNT];															///< weapon is fired fx
 	const FXList* m_projectileDetonateFXs[LEVEL_COUNT];								///< if we have a projectile, fx for projectile blowing up
 	AudioEventRTS m_fireSound;							///< weapon is fired sound

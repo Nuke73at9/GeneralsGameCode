@@ -85,6 +85,8 @@ enum AttributeModifierAttribute CPP_11(: Int)
 	MODIFIER_CLIP_RELOAD,			///< its weapons' clip reload times: CLIP_RELOAD_TIME
 	MODIFIER_PRE_ATTACK,			///< its weapons' pre-attack delays: PREATTACK_DELAY
 	MODIFIER_AREA,						///< its weapons' blast radii: AREA_OF_EFFECT
+	MODIFIER_AUTO_HEAL,				///< how much its AutoHealBehavior heals: AUTO_HEAL (C&C4's Enhanced Repair)
+	MODIFIER_AUTO_HEAL_RADIUS,	///< how far its AutoHealBehavior reaches: AUTO_HEAL_RADIUS
 	MODIFIER_ATTRIBUTE_COUNT
 };
 

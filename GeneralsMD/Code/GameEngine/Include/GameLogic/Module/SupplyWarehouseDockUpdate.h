@@ -69,6 +69,10 @@ public:
 	/// Tiberium Project @feature boxes growing back (a Tiberium crystal), up to its StartingBoxes
 	void regrowBoxes( Int count );
 	Int getMaxBoxes() const { return getSupplyWarehouseDockUpdateModuleData()->m_startingBoxesData; }
+	/// Tiberium Project @feature boxes taken away other than by a harvester (a crystal crushed: Kane's Wrath's MARV); how many were
+	Int takeBoxes( Int count );
+	/// Tiberium Project @feature what a box from here is worth, of a plain one
+	Real getBoxWorth() const { return getSupplyWarehouseDockUpdateModuleData()->m_boxWorth; }
 
 	void setCashValue( Int cashValue );
 

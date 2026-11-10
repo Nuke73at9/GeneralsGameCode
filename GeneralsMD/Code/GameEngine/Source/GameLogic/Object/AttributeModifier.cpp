@@ -82,6 +82,8 @@ const FieldParse *AttributeModifierTemplate::getFieldParse()
 		{ "ClipReload",				INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_scalar[MODIFIER_CLIP_RELOAD] ) },
 		{ "PreAttack",				INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_scalar[MODIFIER_PRE_ATTACK] ) },
 		{ "Area",							INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_scalar[MODIFIER_AREA] ) },
+		{ "AutoHeal",					INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_scalar[MODIFIER_AUTO_HEAL] ) },
+		{ "AutoHealRadius",		INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_scalar[MODIFIER_AUTO_HEAL_RADIUS] ) },
 		{ "Dodge",						INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_chance[MODIFIER_CHANCE_DODGE] ) },
 		{ "Reflect",					INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_chance[MODIFIER_CHANCE_REFLECT] ) },
 		{ "Hit",							INI::parsePercentToReal,				nullptr,	offsetof( AttributeModifierTemplate, m_chance[MODIFIER_CHANCE_HIT] ) },

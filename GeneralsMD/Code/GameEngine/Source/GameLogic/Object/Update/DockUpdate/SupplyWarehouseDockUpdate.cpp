@@ -188,6 +188,26 @@ void SupplyWarehouseDockUpdate::regrowBoxes( Int count )
 }
 
 // ------------------------------------------------------------------------------------------------
+// Tiberium Project @feature boxes taken away other than by a harvester docking (a crystal crushed: Kane's Wrath's MARV). A source
+// that goes once emptied (DeleteWhenEmpty: a harvester's spill) goes now
+Int SupplyWarehouseDockUpdate::takeBoxes( Int count )
+{
+	const Int taken = min( m_boxesStored, max( 0, count ) );
+	if( taken == 0 )
+		return 0;
+	m_boxesStored -= taken;
+	if( m_boxesStored == 0 && getSupplyWarehouseDockUpdateModuleData()->m_deleteWhenEmpty )
+	{
+		TheGameLogic->destroyObject( getObject() );
+		return taken;
+	}
+	Drawable *draw = getObject()->getDrawable();
+	if( draw )
+		draw->updateDrawableSupplyStatus( getSupplyWarehouseDockUpdateModuleData()->m_startingBoxesData, m_boxesStored );
+	return taken;
+}
+
+// ------------------------------------------------------------------------------------------------
 void SupplyWarehouseDockUpdate::setCashValue( Int cashValue )
 {
 	// A script can tell us our set value, and we need to figure out the boxes needed to provide that.

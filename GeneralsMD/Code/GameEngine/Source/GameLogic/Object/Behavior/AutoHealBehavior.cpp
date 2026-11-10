@@ -236,8 +236,9 @@ UpdateSleepTime AutoHealBehavior::update()
 		PartitionFilterAlive filterAlive;
 		PartitionFilter *filters[] = { &relationship, &filterAlive, &filterMapStatus, nullptr };
 
-		// scan objects in our region
-		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( obj->getPosition(), d->m_radius, FROM_CENTER_2D, filters );
+		// scan objects in our region (Tiberium Project @feature as far as its modifiers take it: C&C4's AUTO_HEAL_RADIUS)
+		const Real reach = d->m_radius * ( obj->hasAttributeModifiers() ? obj->getAttributeModifierScalar( MODIFIER_AUTO_HEAL_RADIUS ) : 1.0f );
+		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( obj->getPosition(), reach, FROM_CENTER_2D, filters );
 		MemoryPoolObjectHolder hold( iter );
 		for( obj = iter->first(); obj; obj = iter->next() )
 		{
@@ -288,10 +289,13 @@ void AutoHealBehavior::pulseHealObject( Object *obj )
 	const AutoHealBehaviorModuleData *data = getAutoHealBehaviorModuleData();
 
 
+	// Tiberium Project @feature as much as its modifiers make it (C&C4's AUTO_HEAL: Enhanced Repair, a husk's heal boost)
+	const Object *healer = getObject();
+	const Real amount = data->m_healingAmount * ( healer->hasAttributeModifiers() ? healer->getAttributeModifierScalar( MODIFIER_AUTO_HEAL ) : 1.0f );
 	if ( data->m_radius == 0.0f )
-		obj->attemptHealing(data->m_healingAmount, getObject());
+		obj->attemptHealing(amount, getObject());
 	else
-		obj->attemptHealingFromSoleBenefactor( data->m_healingAmount, getObject(), data->m_healingDelay );
+		obj->attemptHealingFromSoleBenefactor( amount, getObject(), data->m_healingDelay );
 
 
 	if( data->m_unitHealPulseParticleSystemTmpl )

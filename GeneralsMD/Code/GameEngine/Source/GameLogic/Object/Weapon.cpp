@@ -69,6 +69,9 @@
 #include "GameLogic/Module/CollideModule.h"	// Tiberium Project
 #include "Common/ActionManager.h"	// Tiberium Project
 #include "GameLogic/Module/SuppressionUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/SupplyWarehouseDockUpdate.h"	// Tiberium Project
+#include "Common/Money.h"	// Tiberium Project
+#include "Common/AbramGameRules.h"	// Tiberium Project
 #include "GameLogic/Module/UpdateModule.h"
 #include "GameLogic/Module/SpecialPowerCompletionDie.h"
 #include "GameLogic/Module/AssaultTransportAIUpdate.h"
@@ -230,6 +233,7 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "SuppressionAmount",					INI::parseReal,												nullptr,							offsetof(WeaponTemplate, m_suppressionAmount) },	// Tiberium Project
 	{ "SuppressionRadius",					INI::parseReal,												nullptr,							offsetof(WeaponTemplate, m_suppressionRadius) },	// Tiberium Project
 	{ "SuppressionDuration",				INI::parseDurationUnsignedInt,				nullptr,							offsetof(WeaponTemplate, m_suppressionFrames) },	// Tiberium Project
+	{ "CrushTiberiumShare",					INI::parsePercentToReal,							nullptr,							offsetof(WeaponTemplate, m_crushTiberiumShare) },	// Tiberium Project
 	{ "VictimFX",										INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[0]) },	// Tiberium Project
 	{ "VictimFXInfantry",						INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[1]) },	// Tiberium Project
 	{ "VictimFXStructure",					INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[2]) },	// Tiberium Project
@@ -345,6 +349,7 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_suppressionAmount = 0.0f;
 	m_suppressionRadius = 0.0f;
 	m_suppressionFrames = 0;
+	m_crushTiberiumShare = 0.0f;
 	for (Int i = LEVEL_FIRST; i <= LEVEL_LAST; ++i)
 	{
 		m_fireOCLNames[i].clear();
@@ -1748,6 +1753,34 @@ void WeaponTemplate::scheduleFollowUps(ObjectID sourceID, const Object *primaryV
 //-------------------------------------------------------------------------------------------------
 // Tiberium Project @feature the damage types a reflection sends back (C&C4's: all but its DamageTypesNotToReflect,
 // BLAST and ROCKET, here EXPLOSION and the missiles, and what is no shot at all)
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature (CrushTiberiumShare) a Tiberium crystal crushed: emptied, its firer's player paid that share of what was
+// in it, as its refinery would have paid for it (the player's box value, the crystal's richness, the match's cash rate)
+//-------------------------------------------------------------------------------------------------
+void WeaponTemplate::crushTiberium(Object *crystal, const Object *source) const
+{
+	static const NameKeyType key = NAMEKEY("SupplyWarehouseDockUpdate");
+	SupplyWarehouseDockUpdate *warehouse = (SupplyWarehouseDockUpdate *)crystal->findUpdateModule(key);
+	if (warehouse == nullptr || source == nullptr || warehouse->getBoxesStored() <= 0)
+		return;
+	const Object *firer = source;
+	if (source->isKindOf(KINDOF_PROJECTILE) && source->getProducerID() != INVALID_ID)
+		firer = TheGameLogic->findObjectByID(source->getProducerID());
+	Player *owner = firer != nullptr ? firer->getControllingPlayer() : nullptr;
+	if (owner == nullptr)
+		return;
+	const Int worthPercent = (Int)(warehouse->getBoxWorth() * 100.0f + 0.5f);
+	const Int sharePercent = (Int)(m_crushTiberiumShare * 100.0f + 0.5f);
+	const Int boxes = warehouse->takeBoxes(warehouse->getBoxesStored());
+	const Int value = boxes * (Int)owner->getSupplyBoxValue() * worthPercent / 100 * sharePercent / 100;
+	const UnsignedInt pay = AbramGameRules::scaleIncome(value > 0 ? (UnsignedInt)value : 0);
+	if (pay > 0)
+	{
+		owner->getMoney()->deposit(pay);
+		owner->getScoreKeeper()->addMoneyEarned(pay);
+	}
+}
+
 static Bool isReflectableDamage(DamageType type)
 {
 	switch (type)
@@ -2139,6 +2172,11 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 			// unit dug out)
 			if (m_forceToggleToDefault)
 				ToggleAbilityUpdate::forceAllToDefault(curVictim, m_forceToggleConditions);
+			// Tiberium Project @feature a Tiberium crystal it reaches is crushed: emptied, its firer's player paid CrushTiberiumShare
+			// of what was in it (Kane's Wrath's CrushTiberiumNugget: the MARV driving over a field). The crystal grows back as
+			// it does after a harvester
+			if (m_crushTiberiumShare > 0.0f && curVictim->isKindOf(KINDOF_SUPPLY_SOURCE))
+				crushTiberium(curVictim, source);
 			// Tiberium Project @feature veterancy for each (C&C4's ExperienceNugget: Battle Hardening's two levels)
 			if (m_victimVeterancy > 0 && !curVictim->isEffectivelyDead())
 			{
