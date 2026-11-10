@@ -68,6 +68,7 @@
 #include "GameLogic/Module/ToggleAbilityUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/CollideModule.h"	// Tiberium Project
 #include "Common/ActionManager.h"	// Tiberium Project
+#include "GameLogic/Module/SuppressionUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/UpdateModule.h"
 #include "GameLogic/Module/SpecialPowerCompletionDie.h"
 #include "GameLogic/Module/AssaultTransportAIUpdate.h"
@@ -226,6 +227,9 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "CanBeDodged",								INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_canBeDodged) },	// Tiberium Project
 	{ "VictimVeterancy",						INI::parseInt,												nullptr,							offsetof(WeaponTemplate, m_victimVeterancy) },	// Tiberium Project
 	{ "JamEnemyRadar",							INI::parseDurationUnsignedInt,				nullptr,							offsetof(WeaponTemplate, m_jamRadarFrames) },	// Tiberium Project
+	{ "SuppressionAmount",					INI::parseReal,												nullptr,							offsetof(WeaponTemplate, m_suppressionAmount) },	// Tiberium Project
+	{ "SuppressionRadius",					INI::parseReal,												nullptr,							offsetof(WeaponTemplate, m_suppressionRadius) },	// Tiberium Project
+	{ "SuppressionDuration",				INI::parseDurationUnsignedInt,				nullptr,							offsetof(WeaponTemplate, m_suppressionFrames) },	// Tiberium Project
 	{ "VictimFX",										INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[0]) },	// Tiberium Project
 	{ "VictimFXInfantry",						INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[1]) },	// Tiberium Project
 	{ "VictimFXStructure",					INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_victimFX[2]) },	// Tiberium Project
@@ -338,6 +342,9 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_forbiddenTargetStatus.clear();
 	m_victimVeterancy = 0;
 	m_jamRadarFrames = 0;
+	m_suppressionAmount = 0.0f;
+	m_suppressionRadius = 0.0f;
+	m_suppressionFrames = 0;
 	for (Int i = LEVEL_FIRST; i <= LEVEL_LAST; ++i)
 	{
 		m_fireOCLNames[i].clear();
@@ -1871,6 +1878,15 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 		// Tiberium Project @feature what shows where it is dealt (a sweep's wave at each of its steps)
 		if (m_impactFX != nullptr)
 			FXList::doFXPos(m_impactFX, pos);
+
+		// Tiberium Project @feature its suppression on those around (Kane's Wrath's infantry pinned down by fire: SuppressionUpdate)
+		if (m_suppressionAmount > 0.0f && m_suppressionFrames > 0)
+		{
+			const Object *firer = source;
+			if (source != nullptr && source->isKindOf(KINDOF_PROJECTILE) && source->getProducerID() != INVALID_ID)
+				firer = TheGameLogic->findObjectByID(source->getProducerID());
+			SuppressionUpdate::suppressAround(firer != nullptr ? firer : source, pos, m_suppressionRadius, m_suppressionAmount, m_suppressionFrames);
+		}
 
 		// Tiberium Project @feature the radars of its firer's enemies dark (C&C4's InformationWarfareNugget: Hack Radar)
 		if (m_jamRadarFrames > 0 && source != nullptr)

@@ -617,6 +617,9 @@ private:
 	Bool m_canBeDodged;																///< Tiberium Project: its target's dodge may make it miss (C&C4's CanBeDodged; default Yes)
 	Int m_victimVeterancy;															///< Tiberium Project: veterancy levels each object its damage reaches gains (C&C4's ExperienceNugget)
 	UnsignedInt m_jamRadarFrames;													///< Tiberium Project: as it is dealt, the radars of its firer's enemies go dark this long (C&C4's InformationWarfareNugget)
+	Real m_suppressionAmount;															///< Tiberium Project: as it is dealt, this much suppression on those within SuppressionRadius (Kane's Wrath's SuppressionNugget: SuppressionUpdate)
+	Real m_suppressionRadius;
+	UnsignedInt m_suppressionFrames;											///< ... for this long
 	const FXList* m_fireFXs[LEVEL_COUNT];															///< weapon is fired fx
 	const FXList* m_projectileDetonateFXs[LEVEL_COUNT];								///< if we have a projectile, fx for projectile blowing up
 	AudioEventRTS m_fireSound;							///< weapon is fired sound

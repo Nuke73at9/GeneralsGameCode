@@ -79,6 +79,7 @@
 #endif
 #include "GameLogic/Module/BaseConstructionUpdate.h"
 #include "GameLogic/Module/ToggleAbilityUpdate.h"
+#include "GameLogic/Module/SuppressionUpdate.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 #include "GameLogic/Module/SupplyTruckAIUpdate.h"
 #include "GameLogic/Module/DockUpdate.h"
@@ -1264,6 +1265,22 @@ void TiberiumTest::update()
 				obj->getAIUpdateInterface()->aiEnter( into, CMD_FROM_PLAYER );
 			log( "frame %d: ui: enter %s%s", (int)s_frame, step.arg.c_str(), obj != nullptr && into != nullptr ? "" : " (no such object)" );
 		}
+#if RTS_ZEROHOUR
+		else if ( step.action == "suppress" && TheGameLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) "suppress=k,amount,ms": that much suppression on the k-th spawned object for
+			// that long, as a weapon's (SuppressionUpdate: Kane's Wrath's infantry pinned down)
+			Int k = -1;
+			Real amount = 0.0f, ms = 0.0f;
+			sscanf( step.arg.c_str(), "%d,%f,%f", &k, &amount, &ms );
+			Object *obj = k >= 0 && k < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[k] ) : nullptr;
+			static const NameKeyType suppressionKey = NAMEKEY( "SuppressionUpdate" );
+			SuppressionUpdate *sup = obj != nullptr ? (SuppressionUpdate *)obj->findUpdateModule( suppressionKey ) : nullptr;
+			if ( sup != nullptr )
+				sup->addSuppression( amount, (UnsignedInt)( ms * LOGICFRAMES_PER_SECOND / 1000.0f ) );
+			log( "frame %d: ui: suppress %s%s", (int)s_frame, step.arg.c_str(), sup != nullptr ? "" : " (no such object or no SuppressionUpdate)" );
+		}
+#endif
 		else if ( step.action == "hurt" && TheGameLogic != nullptr )
 		{
 			// Tiberium Project @feature (the test) "hurt=k,amount,TYPE": the k-th spawned object takes that much
@@ -2172,10 +2189,13 @@ void TiberiumTest::update()
 							sets.concat( WeaponSetFlags::getBitNames()[ k ] );
 						}
 					}
-					// (and how fast it goes: a modifier's speed, the Mantis's as it loses its cannons)
+					// (and how fast it goes: a modifier's speed, the Mantis's as it loses its cannons; pinned down by fire)
 					const Real speed = obj->getAttributeModifierScalar( MODIFIER_SPEED );
-					if ( had.isNotEmpty() || sets.isNotEmpty() || speed != 1.0f )
-						snprintf( statuses, sizeof( statuses ), ", status%s, weapon sets%s, speed x%.2f", had.str(), sets.str(), speed );
+					static const NameKeyType suppressionKey = NAMEKEY( "SuppressionUpdate" );
+					const SuppressionUpdate *sup = (const SuppressionUpdate *)obj->findUpdateModule( suppressionKey );
+					const Bool pinned = sup != nullptr && sup->isSuppressed();
+					if ( had.isNotEmpty() || sets.isNotEmpty() || speed != 1.0f || pinned )
+						snprintf( statuses, sizeof( statuses ), ", status%s, weapon sets%s, speed x%.2f%s", had.str(), sets.str(), speed, pinned ? ", suppressed" : "" );
 				}
 #endif
 				// (Tiberium Project: its false returns on the radar, a Signature Generator's)
