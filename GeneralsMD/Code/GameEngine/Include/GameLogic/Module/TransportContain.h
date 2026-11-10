@@ -58,10 +58,24 @@ public:
 	Bool							m_isDelayExitInAir;
 	Bool							m_leaveMapWhenEmpty;	///< Tiberium Project @feature once it has carried someone and is empty again, it leaves the map (Kane's Wrath's summoned transports)
 
+	// Tiberium Project @feature the places its riders take (Kane's Wrath's UpgradeContainerOnContain): a rider takes
+	// a place of its kind with room, else the first free one, and gives the transport its kind's upgrade for that place
+	// until the place is empty again (the MARV: a squad's gun on each of its treads)
+	struct PlaceKind
+	{
+		std::vector<AsciiString>	m_upgradeNames;		///< the kind's upgrade at each place, in order (PlaceUpgrades)
+		std::vector<AsciiString>	m_riderNames;			///< the riders of the kind (PlaceRiders)
+		Int												m_ridersPerPlace;	///< how many of them share a place (a squad's soldiers)
+	};
+	std::vector<PlaceKind>	m_placeKinds;
+
 	TransportContainModuleData();
 
 	static void buildFieldParse(MultiIniFieldParse& p);
 	static void parseInitialPayload( INI* ini, void *instance, void *store, const void* /*userData*/ );
+	static void parsePlaceUpgrades( INI* ini, void *instance, void *store, const void* /*userData*/ );	///< Tiberium Project
+	static void parsePlaceRiders( INI* ini, void *instance, void *store, const void* /*userData*/ );	///< Tiberium Project
+	Int getPlaceCount() const;	///< Tiberium Project: the places its riders take (0: none)
 
 };
 
@@ -95,6 +109,7 @@ public:
 	virtual ExitDoorType reserveDoorForExit( const ThingTemplate* objType, Object *specificObject ) override;
 	virtual void unreserveDoorForExit( ExitDoorType exitDoor ) override;
 	virtual Bool isDisplayedOnControlBar() const override {return TRUE;}///< Does this container display its contents on the ControlBar?
+	virtual Bool getContainerPipsToShow( Int& numTotal, Int& numFull ) override;	///< Tiberium Project: its places, when it has them
 
 protected:
 
@@ -115,5 +130,20 @@ private:
 	UnsignedInt m_frameExitNotBusy;
 	Bool m_hasCarried;		///< Tiberium Project: someone has been inside (LeaveMapWhenEmpty)
 	Bool m_leavingMap;		///< Tiberium Project: on its way off the map
+
+	// Tiberium Project @feature the places its riders take (PlaceUpgrades)
+	enum { MAX_RIDER_PLACES = 8 };
+	struct PlaceRider
+	{
+		ObjectID	m_id;
+		Int				m_place;
+	};
+	Int												m_placeKind[MAX_RIDER_PLACES];	///< the kind of rider at each place (-1: free)
+	std::vector<PlaceRider>		m_placeRiders;									///< who is at which place
+	Int findPlaceKind( const Object* rider ) const;
+	Int ridersAtPlace( Int place ) const;
+	Int choosePlace( Int kind ) const;
+	void takePlace( Object* rider );
+	void leavePlace( Object* rider );
 
 };

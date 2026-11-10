@@ -2611,6 +2611,10 @@ void Object::updateUpgradeModules()
 			upgrade->attemptUpgrade( maskToCheck );
 		}
 	}
+
+	// Tiberium Project @feature its slots' weapons on upgrades (UpgradeWeapon) follow the upgrades it has now
+	if( m_weaponSet.hasUpgradeWeapons() )
+		m_weaponSet.updateWeaponSet( this );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -5035,6 +5039,10 @@ void Object::removeUpgrade( const UpgradeTemplate *upgradeT )
 		// in the sense of undoing the effects.  It is just resetting the upgrade so it may be run again.
 		upgrade->resetUpgrade( upgradeT->getUpgradeMask() );
 	}
+
+	// Tiberium Project @feature a slot's weapon on the upgrade goes with it (UpgradeWeapon)
+	if( m_weaponSet.hasUpgradeWeapons() && !testStatus( OBJECT_STATUS_DESTROYED ) )
+		m_weaponSet.updateWeaponSet( this );
 }
 
 //-------------------------------------------------------------------------------------------------

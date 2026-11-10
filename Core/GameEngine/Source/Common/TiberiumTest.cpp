@@ -2288,6 +2288,67 @@ void TiberiumTest::update()
 			log( "frame %d: ui: powers: $%u, %d of %d points, GP %d;%s", (int)s_frame, (unsigned)me->getMoney()->countMoney(),
 				(int)me->getSupportPoints(), (int)me->getSupportPointsMax(), (int)me->getSciencePurchasePoints(), all.c_str() );
 		}
+#if RTS_ZEROHOUR
+		else if ( step.action == "slots" && TheGameLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) "slots=Template": the first of that kind's weapon in each slot, how many
+			// ride in it and its pips (the places its riders take: Kane's Wrath's MARV), and its object upgrades
+			for ( Object *obj = TheGameLogic->getFirstObject(); obj != nullptr; obj = obj->getNextObject() )
+			{
+				if ( obj->getTemplate()->getName().compareNoCase( step.arg.c_str() ) != 0 )
+					continue;
+				AsciiString weapons;
+				for ( Int k = 0; k < WEAPONSLOT_COUNT; ++k )
+				{
+					const Weapon *w = obj->getWeaponInWeaponSlot( (WeaponSlotType)k );
+					char one[160];
+					if ( w != nullptr && w->getLastShotFrame() != 0 )
+						snprintf( one, sizeof( one ), " %d:%s@%u", (int)k, w->getName().str(), (unsigned)w->getLastShotFrame() );
+					else
+						snprintf( one, sizeof( one ), " %d:%s", (int)k, w != nullptr ? w->getName().str() : "-" );
+					// (where its first barrel fires from, in the object: the bones of the weapon it holds)
+					Matrix3D launch;
+					if ( w != nullptr && obj->getDrawable() != nullptr
+						&& obj->getDrawable()->getProjectileLaunchOffset( (WeaponSlotType)k, 0, &launch, TURRET_INVALID, nullptr ) )
+						snprintf( one + strlen( one ), sizeof( one ) - strlen( one ), "(%.0f,%.0f,%.0f)",
+							launch.Get_X_Translation(), launch.Get_Y_Translation(), launch.Get_Z_Translation() );
+					weapons.concat( one );
+				}
+				// (and each turret's angle, in degrees from its object's front)
+				const AIUpdateInterface *turretAI = obj->getAIUpdateInterface();
+				for ( Int t = 0; turretAI != nullptr && t < MAX_TURRETS; ++t )
+				{
+					Real angle = 0.0f, pitch = 0.0f;
+					if ( turretAI->getTurretRotAndPitch( (WhichTurretType)t, &angle, &pitch ) )
+					{
+						char one[32];
+						snprintf( one, sizeof( one ), " t%d:%.0f", (int)t, angle * 180.0f / PI );
+						weapons.concat( one );
+					}
+				}
+				ContainModuleInterface *contain = obj->getContain();
+				Int total = 0, full = 0;
+				if ( contain != nullptr )
+					contain->getContainerPipsToShow( total, full );
+				AsciiString ups;
+				if ( TheUpgradeCenter != nullptr )
+				{
+					for ( const UpgradeTemplate *up = TheUpgradeCenter->firstUpgradeTemplate(); up != nullptr; up = up->friend_getNext() )
+					{
+						if ( up->getUpgradeType() == UPGRADE_TYPE_OBJECT && obj->hasUpgrade( up ) )
+						{
+							ups.concat( ' ' );
+							ups.concat( up->getUpgradeName() );
+						}
+					}
+				}
+				log( "frame %d: ui: slots %s #%u:%s; riders %d, pips %d of %d; upgrades%s", (int)s_frame, step.arg.c_str(),
+					(unsigned)obj->getID(), weapons.str(), contain != nullptr ? (int)contain->getContainCount() : 0, (int)full,
+					(int)total, ups.isEmpty() ? " none" : ups.str() );
+				break;
+			}
+		}
+#endif
 		else if ( step.action == "state" && TheGameLogic != nullptr )
 		{
 			// Tiberium Project @feature (the test) every object of a template: its owner, health, stealth, EMP, sight,

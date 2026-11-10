@@ -129,6 +129,33 @@ void SubObjectsUpgrade::upgradeImplementation()
 	}
 }
 
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the upgrade taken off (UndoWhenRemoved): what it showed hidden again and what it hid
+// shown (Kane's Wrath's MARV: a squad's gun on a tread goes as the squad gets out)
+//-------------------------------------------------------------------------------------------------
+void SubObjectsUpgrade::undoUpgradeImplementation()
+{
+	const SubObjectsUpgradeModuleData *data = getSubObjectsUpgradeModuleData();
+	Drawable *draw = getObject()->getDrawable();
+	if( draw == nullptr )
+		return;
+
+	Bool updateSubObjects = false;
+	std::vector<AsciiString>::const_iterator subObjectName;
+	for( subObjectName = data->m_showSubObjectNames.begin(); subObjectName != data->m_showSubObjectNames.end(); ++subObjectName )
+	{
+		draw->showSubObject( *subObjectName, false );
+		updateSubObjects = true;
+	}
+	for( subObjectName = data->m_hideSubObjectNames.begin(); subObjectName != data->m_hideSubObjectNames.end(); ++subObjectName )
+	{
+		draw->showSubObject( *subObjectName, true );
+		updateSubObjects = true;
+	}
+	if( updateSubObjects )
+		draw->updateSubObjects();
+}
+
 //------------------------------------------------------------------------------------------------
 void SubObjectsUpgrade::crc( Xfer *xfer )
 {

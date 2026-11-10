@@ -141,6 +141,16 @@ enum WeaponSetConditionType CPP_11(: Int)
 class WeaponTemplateSet
 {
 private:
+	// Tiberium Project @feature a slot's weapon while the object has an upgrade (UpgradeWeapon = slot upgrade
+	// weapon; SAGE's Weapon with an Upgrade): the first of the slot's whose upgrade it has, else the slot's own
+	// Weapon. Kane's Wrath's MARV: each squad that boards it gives it that squad's gun on its tread.
+	struct UpgradeWeapon
+	{
+		WeaponSlotType					m_slot;
+		AsciiString							m_upgradeName;
+		const WeaponTemplate*		m_weapon;
+	};
+
 	const ThingTemplate*		m_thingTemplate;	// needed for save/load
 	WeaponSetFlags					m_types;
 	const WeaponTemplate*		m_template[WEAPONSLOT_COUNT];
@@ -148,10 +158,12 @@ private:
 	KindOfMaskType					m_preferredAgainst[WEAPONSLOT_COUNT];
 	Bool										m_isReloadTimeShared;
 	Bool										m_isWeaponLockSharedAcrossSets; ///< A weapon set so similar that it is safe to hold locks across
+	std::vector<UpgradeWeapon>	m_upgradeWeapons;	///< Tiberium Project: the slots' weapons on upgrades
 
 	static void parseWeapon(INI* ini, void *instance, void *store, const void* userData);
 	static void parseAutoChoose(INI* ini, void *instance, void *store, const void* userData);
 	static void parsePreferredAgainst(INI* ini, void *instance, void *store, const void* userData);
+	static void parseUpgradeWeapon(INI* ini, void *instance, void *store, const void* userData);	///< Tiberium Project
 
 public:
 	inline WeaponTemplateSet()
@@ -170,6 +182,10 @@ public:
 
 	Bool hasAnyWeapons() const;
 	inline const WeaponTemplate* getNth(WeaponSlotType n) const { return m_template[n]; }
+	// Tiberium Project @feature the slots' weapons on upgrades (UpgradeWeapon)
+	Bool hasUpgradeWeapons() const { return !m_upgradeWeapons.empty(); }
+	const WeaponTemplate* getWeaponFor(WeaponSlotType n, const Object* obj) const;	///< the slot's weapon with the upgrades the object has
+	const WeaponTemplate* getAnyWeaponFor(WeaponSlotType n) const;	///< the slot's own weapon, else its first on an upgrade
 	inline UnsignedInt getNthCommandSourceMask(WeaponSlotType n) const { return m_autoChooseMask[n]; }
 	inline const KindOfMaskType& getNthPreferredAgainstMask(WeaponSlotType n) const { return m_preferredAgainst[n]; }
 
@@ -223,6 +239,7 @@ private:
 	Bool											m_hasDamageWeapon;
 
 	Bool isAnyWithinTargetPitch(const Object* obj, const Object* victim) const;
+	void recountWeapons();	///< Tiberium Project: the masks and flags of the weapons it holds
 
 protected:
 	// snapshot methods
@@ -236,6 +253,8 @@ public:
 	~WeaponSet();
 
 	void updateWeaponSet(const Object* obj);
+	// Tiberium Project @feature its weapons follow the upgrades it has (UpgradeWeapon): only a set with such weapons
+	Bool hasUpgradeWeapons() const { return m_curWeaponTemplateSet != nullptr && m_curWeaponTemplateSet->hasUpgradeWeapons(); }
 	void reloadAllAmmo(const Object *obj, Bool now);
 	Bool isOutOfAmmo() const;
 	Bool hasAnyWeapon() const { return m_filledWeaponSlotMask != 0; }

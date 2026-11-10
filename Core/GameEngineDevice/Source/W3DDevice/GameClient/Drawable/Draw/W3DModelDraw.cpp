@@ -53,6 +53,7 @@
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/WeaponSet.h"
+#include "GameLogic/Weapon.h"	// Tiberium Project (WeaponBones)
 #include "GameLogic/FPUControl.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
@@ -869,7 +870,53 @@ void ModelConditionInfo::validateWeaponBarrelInfo() const
 			DEBUG_ASSERTCRASH(!(m_modelName.isNotEmpty() && m_weaponBarrelInfoVec[wslot].empty()), ("*** ASSET ERROR: No fx bone named '%s' found in model %s!",fxBoneName.str(),m_modelName.str()));
 		}
 	}
+	// Tiberium Project @feature the barrels of each weapon's own bones in its slot (WeaponBones)
+	for (std::vector<WeaponBoneSet>::const_iterator it = m_weaponBoneSets.begin(); it != m_weaponBoneSets.end(); ++it)
+	{
+		buildBarrels(it->m_fxBoneName, it->m_recoilBoneName, it->m_muzzleFlashName, it->m_launchBoneName,
+			it->m_barrels, it->m_hasRecoilBonesOrMuzzleFlashes);
+	}
 	m_validStuff |= BARRELS_VALID;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the barrels of a slot with the weapon the object holds in it (WeaponBones), else the
+// slot's own: the MARV's gun of each squad on a tread fires from its own muzzle
+const ModelConditionInfo::WeaponBarrelInfoVec& ModelConditionInfo::getBarrelsFor(Int wslot, const Object* obj, Bool* hasRecoilOrFlash) const
+{
+	if (!m_weaponBoneSets.empty() && obj != nullptr)
+	{
+		const Weapon* weapon = obj->getWeaponInWeaponSlot((WeaponSlotType)wslot);
+		if (weapon != nullptr && weapon->getTemplate() != nullptr)
+		{
+			const NameKeyType key = weapon->getTemplate()->getNameKey();
+			for (std::vector<WeaponBoneSet>::const_iterator it = m_weaponBoneSets.begin(); it != m_weaponBoneSets.end(); ++it)
+			{
+				if (it->m_slot == wslot && it->m_weaponKey == key)
+				{
+					if (hasRecoilOrFlash != nullptr)
+						*hasRecoilOrFlash = it->m_hasRecoilBonesOrMuzzleFlashes;
+					return it->m_barrels;
+				}
+			}
+		}
+	}
+	if (hasRecoilOrFlash != nullptr)
+		*hasRecoilOrFlash = m_hasRecoilBonesOrMuzzleFlashes[wslot];
+	return m_weaponBarrelInfoVec[wslot];
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project: the most barrels the slot has with any of its weapons (its recoil records)
+size_t ModelConditionInfo::getMostBarrelsFor(Int wslot) const
+{
+	size_t most = m_weaponBarrelInfoVec[wslot].size();
+	for (std::vector<WeaponBoneSet>::const_iterator it = m_weaponBoneSets.begin(); it != m_weaponBoneSets.end(); ++it)
+	{
+		if (it->m_slot == wslot && it->m_barrels.size() > most)
+			most = it->m_barrels.size();
+	}
+	return most;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -931,12 +978,23 @@ void ModelConditionInfo::expandWeaponBoneNames(const AsciiString& names, std::ve
 // serves every muzzle flash in Zero Hour's own case
 void ModelConditionInfo::validateMultiBoneBarrels(Int wslot) const
 {
+	buildBarrels(m_weaponFireFXBoneName[wslot], m_weaponRecoilBoneName[wslot], m_weaponMuzzleFlashName[wslot],
+		m_weaponProjectileLaunchBoneName[wslot], m_weaponBarrelInfoVec[wslot], m_hasRecoilBonesOrMuzzleFlashes[wslot]);
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project: barrels from bone names (each kind's names apart by spaces), as validateMultiBoneBarrels has them
+void ModelConditionInfo::buildBarrels(const AsciiString& fxNames, const AsciiString& recoilNames, const AsciiString& flashNames,
+	const AsciiString& launchNames, WeaponBarrelInfoVec& barrels, Bool& hasRecoilOrFlash) const
+{
+	barrels.clear();
+	hasRecoilOrFlash = false;
 	std::vector<Int> fx, recoil, flash, launch;
 	std::vector<const Matrix3D*> launchMatrices;
-	expandWeaponBoneNames(m_weaponFireFXBoneName[wslot], fx, nullptr);
-	expandWeaponBoneNames(m_weaponRecoilBoneName[wslot], recoil, nullptr);
-	expandWeaponBoneNames(m_weaponMuzzleFlashName[wslot], flash, nullptr);
-	expandWeaponBoneNames(m_weaponProjectileLaunchBoneName[wslot], launch, &launchMatrices);
+	expandWeaponBoneNames(fxNames, fx, nullptr);
+	expandWeaponBoneNames(recoilNames, recoil, nullptr);
+	expandWeaponBoneNames(flashNames, flash, nullptr);
+	expandWeaponBoneNames(launchNames, launch, &launchMatrices);
 	size_t count = fx.size();
 	if (recoil.size() > count) count = recoil.size();
 	if (flash.size() > count) count = flash.size();
@@ -953,9 +1011,9 @@ void ModelConditionInfo::validateMultiBoneBarrels(Int wslot) const
 			info.m_muzzleFlashBone = flash[k];
 		if (!launch.empty() && launchMatrices[k % launch.size()] != nullptr)
 			info.m_projectileOffsetMtx = *launchMatrices[k % launch.size()];
-		m_weaponBarrelInfoVec[wslot].push_back(info);
+		barrels.push_back(info);
 		if (info.m_recoilBone != 0 || info.m_muzzleFlashBone != 0)
-			m_hasRecoilBonesOrMuzzleFlashes[wslot] = true;
+			hasRecoilOrFlash = true;
 	}
 }
 
@@ -1013,6 +1071,15 @@ void ModelConditionInfo::validateTurretInfo() const
 		{
 			tur.m_turretPitchBone = 0;
 		}
+	}
+
+	// Tiberium Project @feature the more bones the turrets turn alike; one missing is left still
+	for (std::vector<ExtraTwinBone>::iterator it = m_extraTwinBones.begin(); it != m_extraTwinBones.end(); ++it)
+	{
+		it->m_bone = 0;
+		if (isValidTimeToCalcLogicStuff() && m_modelName.isNotEmpty() && it->m_nameKey != NAMEKEY_INVALID
+			&& findPristineBone(it->m_nameKey, &it->m_bone) == nullptr)
+			it->m_bone = 0;
 	}
 
 	if (isValidTimeToCalcLogicStuff())
@@ -1116,6 +1183,8 @@ void ModelConditionInfo::clear()
 		m_weaponBarrelInfoVec[i].clear();
 		m_hasRecoilBonesOrMuzzleFlashes[i] = false;
 	}
+	m_extraTwinBones.clear();	// Tiberium Project
+	m_weaponBoneSets.clear();	// Tiberium Project
 	m_particleSysBones.clear();
 	m_animations.clear();
 	m_flags = 0;
@@ -1568,6 +1637,96 @@ static void parseBoneNameKey(INI* ini, void *instance, void * store, const void 
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature a turret's twin field (userData: the turret twice, plus one for pitch): its first bone as
+// before, any more names more bones the turret turns (or pitches) alike. A state's own line replaces those it took
+// from the default state.
+static void parseTurretTwin(INI* ini, void *instance, void * store, const void * userData)
+{
+	parseBoneNameKey(ini, instance, store, nullptr);
+	ModelConditionInfo* self = (ModelConditionInfo*)instance;
+	if (self == nullptr)
+		return;
+	const Int code = (Int)(uintptr_t)userData;
+	const Int turret = code >> 1;
+	const Bool pitch = (code & 1) != 0;
+	for (std::vector<ModelConditionInfo::ExtraTwinBone>::iterator it = self->m_extraTwinBones.begin(); it != self->m_extraTwinBones.end(); )
+	{
+		if (it->m_turret == turret && it->m_pitch == pitch)
+			it = self->m_extraTwinBones.erase(it);
+		else
+			++it;
+	}
+	for (const char* token = ini->getNextTokenOrNull(); token != nullptr; token = ini->getNextTokenOrNull())
+	{
+		AsciiString name = token;
+		name.toLower();
+		if (name.isEmpty() || name.isNone())
+			continue;
+		self->addPublicBone(name);
+		ModelConditionInfo::ExtraTwinBone extra;
+		extra.m_turret = turret;
+		extra.m_pitch = pitch;
+		extra.m_nameKey = NAMEKEY(name);
+		extra.m_bone = 0;
+		self->m_extraTwinBones.push_back(extra);
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature WeaponBones = <slot> <weapon> FireFX:<bone> Launch:<bone> Recoil:<bone> MuzzleFlash:<bone>: the
+// bones the slot uses while it holds that weapon (a kind named again adds names: its barrels in turn). A state's own
+// line for a slot and weapon replaces the one it took from the default state.
+static void parseWeaponBones(INI* ini, void *instance, void * /*store*/, const void * /*userData*/)
+{
+	ModelConditionInfo* self = (ModelConditionInfo*)instance;
+	ModelConditionInfo::WeaponBoneSet set;
+	set.m_slot = INI::scanIndexList(ini->getNextToken(), TheWeaponSlotTypeNames);
+	set.m_weaponKey = NAMEKEY(ini->getNextToken());
+	set.m_hasRecoilBonesOrMuzzleFlashes = false;
+	for (const char* token = ini->getNextTokenOrNull(); token != nullptr; token = ini->getNextTokenOrNull())
+	{
+		const char* colon = strchr(token, ':');
+		if (colon == nullptr || colon == token || colon[1] == '\0')
+			throw INI_INVALID_DATA;
+		char kind[32];
+		const size_t len = (size_t)(colon - token) < sizeof(kind) - 1 ? (size_t)(colon - token) : sizeof(kind) - 1;
+		memcpy(kind, token, len);
+		kind[len] = '\0';
+		AsciiString name = colon + 1;
+		name.toLower();
+		if (name.isNone())
+			continue;
+		AsciiString* field = nullptr;
+		if (stricmp(kind, "FireFX") == 0)
+			field = &set.m_fxBoneName;
+		else if (stricmp(kind, "Launch") == 0)
+			field = &set.m_launchBoneName;
+		else if (stricmp(kind, "Recoil") == 0)
+			field = &set.m_recoilBoneName;
+		else if (stricmp(kind, "MuzzleFlash") == 0)
+			field = &set.m_muzzleFlashName;
+		else
+			throw INI_INVALID_DATA;
+		if (field->isNotEmpty())
+			field->concat(' ');
+		field->concat(name);
+		if (self)
+			self->addPublicBone(name);
+	}
+	if (self == nullptr)
+		return;
+	for (std::vector<ModelConditionInfo::WeaponBoneSet>::iterator it = self->m_weaponBoneSets.begin(); it != self->m_weaponBoneSets.end(); ++it)
+	{
+		if (it->m_slot == set.m_slot && it->m_weaponKey == set.m_weaponKey)
+		{
+			*it = set;
+			return;
+		}
+	}
+	self->m_weaponBoneSets.push_back(set);
+}
+
+//-------------------------------------------------------------------------------------------------
 static Bool doesStateExist(const ModelConditionVector& v, const ModelConditionFlags& f)
 {
 	for (ModelConditionVector::const_iterator it = v.begin(); it != v.end(); ++it)
@@ -1609,48 +1768,48 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 		{ "AnimationBlendTime", parseAnimBlendTime, nullptr, offsetof(ModelConditionInfo, m_animBlendTime) },
 #endif
 		// Tiberium Project @feature a second bone each turret turns and pitches alike (twin gun pods)
-		{ "TurretTwin",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[0].m_twinAngleNameKey) },
-		{ "TurretTwinPitch",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[0].m_twinPitchNameKey) },
-		{ "AltTurretTwin",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[1].m_twinAngleNameKey) },
-		{ "AltTurretTwinPitch",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[1].m_twinPitchNameKey) },
+		{ "TurretTwin",	parseTurretTwin, (void*)(uintptr_t)0, offsetof(ModelConditionInfo, m_turrets[0].m_twinAngleNameKey) },
+		{ "TurretTwinPitch",	parseTurretTwin, (void*)(uintptr_t)1, offsetof(ModelConditionInfo, m_turrets[0].m_twinPitchNameKey) },
+		{ "AltTurretTwin",	parseTurretTwin, (void*)(uintptr_t)2, offsetof(ModelConditionInfo, m_turrets[1].m_twinAngleNameKey) },
+		{ "AltTurretTwinPitch",	parseTurretTwin, (void*)(uintptr_t)3, offsetof(ModelConditionInfo, m_turrets[1].m_twinPitchNameKey) },
 #if RTS_ZEROHOUR
 		// Tiberium Project @feature further turrets (Turret3 to Turret8), the same fields as Turret's
 		{ "Turret3",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[2].m_turretAngleNameKey) },
 		{ "Turret3ArtAngle", INI::parseAngleReal, nullptr, offsetof(ModelConditionInfo, m_turrets[2].m_turretArtAngle) },
 		{ "Turret3Pitch",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[2].m_turretPitchNameKey) },
 		{ "Turret3ArtPitch", INI::parseAngleReal, nullptr, offsetof(ModelConditionInfo, m_turrets[2].m_turretArtPitch) },
-		{ "Turret3Twin",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[2].m_twinAngleNameKey) },
-		{ "Turret3TwinPitch",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[2].m_twinPitchNameKey) },
+		{ "Turret3Twin",	parseTurretTwin, (void*)(uintptr_t)4, offsetof(ModelConditionInfo, m_turrets[2].m_twinAngleNameKey) },
+		{ "Turret3TwinPitch",	parseTurretTwin, (void*)(uintptr_t)5, offsetof(ModelConditionInfo, m_turrets[2].m_twinPitchNameKey) },
 		{ "Turret4",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[3].m_turretAngleNameKey) },
 		{ "Turret4ArtAngle", INI::parseAngleReal, nullptr, offsetof(ModelConditionInfo, m_turrets[3].m_turretArtAngle) },
 		{ "Turret4Pitch",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[3].m_turretPitchNameKey) },
 		{ "Turret4ArtPitch", INI::parseAngleReal, nullptr, offsetof(ModelConditionInfo, m_turrets[3].m_turretArtPitch) },
-		{ "Turret4Twin",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[3].m_twinAngleNameKey) },
-		{ "Turret4TwinPitch",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[3].m_twinPitchNameKey) },
+		{ "Turret4Twin",	parseTurretTwin, (void*)(uintptr_t)6, offsetof(ModelConditionInfo, m_turrets[3].m_twinAngleNameKey) },
+		{ "Turret4TwinPitch",	parseTurretTwin, (void*)(uintptr_t)7, offsetof(ModelConditionInfo, m_turrets[3].m_twinPitchNameKey) },
 		{ "Turret5",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[4].m_turretAngleNameKey) },
 		{ "Turret5ArtAngle", INI::parseAngleReal, nullptr, offsetof(ModelConditionInfo, m_turrets[4].m_turretArtAngle) },
 		{ "Turret5Pitch",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[4].m_turretPitchNameKey) },
 		{ "Turret5ArtPitch", INI::parseAngleReal, nullptr, offsetof(ModelConditionInfo, m_turrets[4].m_turretArtPitch) },
-		{ "Turret5Twin",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[4].m_twinAngleNameKey) },
-		{ "Turret5TwinPitch",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[4].m_twinPitchNameKey) },
+		{ "Turret5Twin",	parseTurretTwin, (void*)(uintptr_t)8, offsetof(ModelConditionInfo, m_turrets[4].m_twinAngleNameKey) },
+		{ "Turret5TwinPitch",	parseTurretTwin, (void*)(uintptr_t)9, offsetof(ModelConditionInfo, m_turrets[4].m_twinPitchNameKey) },
 		{ "Turret6",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[5].m_turretAngleNameKey) },
 		{ "Turret6ArtAngle", INI::parseAngleReal, nullptr, offsetof(ModelConditionInfo, m_turrets[5].m_turretArtAngle) },
 		{ "Turret6Pitch",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[5].m_turretPitchNameKey) },
 		{ "Turret6ArtPitch", INI::parseAngleReal, nullptr, offsetof(ModelConditionInfo, m_turrets[5].m_turretArtPitch) },
-		{ "Turret6Twin",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[5].m_twinAngleNameKey) },
-		{ "Turret6TwinPitch",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[5].m_twinPitchNameKey) },
+		{ "Turret6Twin",	parseTurretTwin, (void*)(uintptr_t)10, offsetof(ModelConditionInfo, m_turrets[5].m_twinAngleNameKey) },
+		{ "Turret6TwinPitch",	parseTurretTwin, (void*)(uintptr_t)11, offsetof(ModelConditionInfo, m_turrets[5].m_twinPitchNameKey) },
 		{ "Turret7",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[6].m_turretAngleNameKey) },
 		{ "Turret7ArtAngle", INI::parseAngleReal, nullptr, offsetof(ModelConditionInfo, m_turrets[6].m_turretArtAngle) },
 		{ "Turret7Pitch",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[6].m_turretPitchNameKey) },
 		{ "Turret7ArtPitch", INI::parseAngleReal, nullptr, offsetof(ModelConditionInfo, m_turrets[6].m_turretArtPitch) },
-		{ "Turret7Twin",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[6].m_twinAngleNameKey) },
-		{ "Turret7TwinPitch",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[6].m_twinPitchNameKey) },
+		{ "Turret7Twin",	parseTurretTwin, (void*)(uintptr_t)12, offsetof(ModelConditionInfo, m_turrets[6].m_twinAngleNameKey) },
+		{ "Turret7TwinPitch",	parseTurretTwin, (void*)(uintptr_t)13, offsetof(ModelConditionInfo, m_turrets[6].m_twinPitchNameKey) },
 		{ "Turret8",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[7].m_turretAngleNameKey) },
 		{ "Turret8ArtAngle", INI::parseAngleReal, nullptr, offsetof(ModelConditionInfo, m_turrets[7].m_turretArtAngle) },
 		{ "Turret8Pitch",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[7].m_turretPitchNameKey) },
 		{ "Turret8ArtPitch", INI::parseAngleReal, nullptr, offsetof(ModelConditionInfo, m_turrets[7].m_turretArtPitch) },
-		{ "Turret8Twin",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[7].m_twinAngleNameKey) },
-		{ "Turret8TwinPitch",	parseBoneNameKey, nullptr, offsetof(ModelConditionInfo, m_turrets[7].m_twinPitchNameKey) },
+		{ "Turret8Twin",	parseTurretTwin, (void*)(uintptr_t)14, offsetof(ModelConditionInfo, m_turrets[7].m_twinAngleNameKey) },
+		{ "Turret8TwinPitch",	parseTurretTwin, (void*)(uintptr_t)15, offsetof(ModelConditionInfo, m_turrets[7].m_twinPitchNameKey) },
 #endif
 		{ "ShowSubObject", parseShowHideSubObject, (void*)nullptr, offsetof(ModelConditionInfo, m_hideShowVec) },
 		{ "HideSubObject", parseShowHideSubObject, (void*)1, offsetof(ModelConditionInfo, m_hideShowVec) },
@@ -1659,6 +1818,7 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 		{ "WeaponMuzzleFlash", parseWeaponBoneName, nullptr, offsetof(ModelConditionInfo, m_weaponMuzzleFlashName[0]) },
 		{ "WeaponLaunchBone", parseWeaponBoneName, nullptr, offsetof(ModelConditionInfo, m_weaponProjectileLaunchBoneName[0]) },
 		{ "WeaponHideShowBone", parseWeaponBoneName, nullptr, offsetof(ModelConditionInfo, m_weaponProjectileHideShowName[0]) },
+		{ "WeaponBones", parseWeaponBones, nullptr, 0 },	// Tiberium Project
 		{ "Animation", parseAnimation, (void*)ANIM_NORMAL, offsetof(ModelConditionInfo, m_animations) },
 		{ "IdleAnimation", parseAnimation, (void*)ANIM_IDLE, offsetof(ModelConditionInfo, m_animations) },
 		{ "AnimationMode", INI::parseIndexList, TheAnimModeNames, offsetof(ModelConditionInfo, m_mode) },
@@ -2950,6 +3110,14 @@ void W3DModelDraw::handleClientTurretPositioning()
 						m_renderObject->Capture_Bone( tur.m_twinAngleBone );
 						m_renderObject->Control_Bone( tur.m_twinAngleBone, turretBoneRotation( tree, tur.m_twinAngleBone, Vector3( 0.0f, 0.0f, 1.0f ), turretAngle ) );
 					}
+					// Tiberium Project: the more bones it turns alike
+					for (std::vector<ModelConditionInfo::ExtraTwinBone>::const_iterator et = m_curState->m_extraTwinBones.begin(); et != m_curState->m_extraTwinBones.end(); ++et)
+					{
+						if (et->m_turret != tslot || et->m_pitch || et->m_bone == 0)
+							continue;
+						m_renderObject->Capture_Bone( et->m_bone );
+						m_renderObject->Control_Bone( et->m_bone, turretBoneRotation( tree, et->m_bone, Vector3( 0.0f, 0.0f, 1.0f ), turretAngle ) );
+					}
 				}
 			}
 
@@ -2968,6 +3136,14 @@ void W3DModelDraw::handleClientTurretPositioning()
 					{
 						m_renderObject->Capture_Bone( tur.m_twinPitchBone );
 						m_renderObject->Control_Bone( tur.m_twinPitchBone, turretBoneRotation( tree, tur.m_twinPitchBone, Vector3( 0.0f, 1.0f, 0.0f ), -turretPitch ) );
+					}
+					// Tiberium Project: the more bones it pitches alike
+					for (std::vector<ModelConditionInfo::ExtraTwinBone>::const_iterator et = m_curState->m_extraTwinBones.begin(); et != m_curState->m_extraTwinBones.end(); ++et)
+					{
+						if (et->m_turret != tslot || !et->m_pitch || et->m_bone == 0)
+							continue;
+						m_renderObject->Capture_Bone( et->m_bone );
+						m_renderObject->Control_Bone( et->m_bone, turretBoneRotation( tree, et->m_bone, Vector3( 0.0f, 1.0f, 0.0f ), -turretPitch ) );
 					}
 				}
 			}
@@ -3010,12 +3186,15 @@ void W3DModelDraw::handleClientRecoil()
 	const W3DModelDrawModuleData* d = getW3DModelDrawModuleData();
 
 	// do recoil, if any
+	// (Tiberium Project: with the bones of the weapon the slot holds, WeaponBones)
+	const Object* logicObject = getDrawable()->getObject();
 	for (int wslot = 0; wslot < WEAPONSLOT_COUNT; ++wslot)
 	{
-		if (!m_curState->m_hasRecoilBonesOrMuzzleFlashes[wslot])
+		Bool hasRecoilOrFlash = false;
+		const ModelConditionInfo::WeaponBarrelInfoVec& barrels = m_curState->getBarrelsFor(wslot, logicObject, &hasRecoilOrFlash);
+		if (!hasRecoilOrFlash)
 			continue;
 
-		const ModelConditionInfo::WeaponBarrelInfoVec& barrels = m_curState->m_weaponBarrelInfoVec[wslot];
 		WeaponRecoilInfoVec& recoils = m_weaponRecoilInfoVec[wslot];
 		Int count = barrels.size();
 		Int recoilCount = recoils.size();
@@ -3393,6 +3572,18 @@ void W3DModelDraw::hideAllMuzzleFlashes(const ModelConditionInfo* state, RenderO
 			}
 		}
 	}
+
+	// Tiberium Project: each weapon's own muzzle flashes too (WeaponBones)
+	for (std::vector<ModelConditionInfo::WeaponBoneSet>::const_iterator set = state->m_weaponBoneSets.begin(); set != state->m_weaponBoneSets.end(); ++set)
+	{
+		if (!set->m_hasRecoilBonesOrMuzzleFlashes)
+			continue;
+		for (ModelConditionInfo::WeaponBarrelInfoVec::const_iterator it = set->m_barrels.begin(); it != set->m_barrels.end(); ++it)
+		{
+			if (it->m_muzzleFlashBone != 0)
+				it->setMuzzleFlashHidden(renderObject, true);
+		}
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -3408,6 +3599,17 @@ static Bool turretNamesDiffer(const ModelConditionInfo* a, const ModelConditionI
 				a->m_turrets[i].m_twinAngleNameKey != b->m_turrets[i].m_twinAngleNameKey ||
 				a->m_turrets[i].m_twinPitchNameKey != b->m_turrets[i].m_twinPitchNameKey)
 			return true;
+
+	// Tiberium Project: the more bones the turrets turn alike
+	if (a->m_extraTwinBones.size() != b->m_extraTwinBones.size())
+		return true;
+	for (size_t k = 0; k < a->m_extraTwinBones.size(); ++k)
+	{
+		if (a->m_extraTwinBones[k].m_turret != b->m_extraTwinBones[k].m_turret ||
+				a->m_extraTwinBones[k].m_pitch != b->m_extraTwinBones[k].m_pitch ||
+				a->m_extraTwinBones[k].m_nameKey != b->m_extraTwinBones[k].m_nameKey)
+			return true;
+	}
 
 	return false;
 }
@@ -3844,7 +4046,8 @@ Bool W3DModelDraw::getProjectileLaunchOffset(
 #endif
 
 	CRCDEBUG_LOG(("wslot = %d", wslot));
-	const ModelConditionInfo::WeaponBarrelInfoVec& wbvec = stateToUse->m_weaponBarrelInfoVec[wslot];
+	// (Tiberium Project: the bones of the weapon the slot holds, WeaponBones)
+	const ModelConditionInfo::WeaponBarrelInfoVec& wbvec = stateToUse->getBarrelsFor(wslot, getDrawable()->getObject());
 	if( wbvec.empty() )
 	{
 		// Can't find the launch pos, but they might still want the other info they asked for
@@ -4216,8 +4419,9 @@ const ModelConditionInfo* W3DModelDraw::findBestInfo(const ModelConditionFlags& 
 //-------------------------------------------------------------------------------------------------
 Int W3DModelDraw::getBarrelCount(WeaponSlotType wslot) const
 {
+	// (Tiberium Project: the barrels of the weapon the slot holds, WeaponBones)
 	return (m_curState && (m_curState->m_validStuff & ModelConditionInfo::BARRELS_VALID)) ?
-		m_curState->m_weaponBarrelInfoVec[wslot].size() : 0;
+		m_curState->getBarrelsFor(wslot, getDrawable()->getObject()).size() : 0;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -4228,7 +4432,8 @@ Bool W3DModelDraw::handleWeaponFireFX(WeaponSlotType wslot, Int specificBarrelTo
 	if (!m_curState || !(m_curState->m_validStuff & ModelConditionInfo::BARRELS_VALID))
 		return false;
 
-	const ModelConditionInfo::WeaponBarrelInfoVec& wbvec = m_curState->m_weaponBarrelInfoVec[wslot];
+	// (Tiberium Project: the bones of the weapon the slot holds, WeaponBones)
+	const ModelConditionInfo::WeaponBarrelInfoVec& wbvec = m_curState->getBarrelsFor(wslot, getDrawable()->getObject());
 	if (wbvec.empty())
 	{
 		// don't do this... some other module of our drawable may have handled it.
@@ -4289,7 +4494,8 @@ Bool W3DModelDraw::handleWeaponFireFX(WeaponSlotType wslot, Int specificBarrelTo
 		// Tiberium Project @bugfix the recoil table is sized when the state is set, from the barrels
 		// known then; a state whose barrels were found later (the first shot validates them, as for
 		// the converted C&C4 units) had an empty table here and the first shot wrote through it
-		if ((Int)m_weaponRecoilInfoVec[wslot].size() != (Int)wbvec.size())
+		// (Tiberium Project: room for the most barrels of any of the slot's weapons, WeaponBones)
+		if ((Int)m_weaponRecoilInfoVec[wslot].size() < (Int)wbvec.size())
 			rebuildWeaponRecoilInfo(m_curState);
 		//DEBUG_LOG(("START muzzleflash %08lx for Draw %08lx state %s at frame %d",info.m_muzzleFlashBone,this,m_curState->m_description.str(),TheGameLogic->getFrame()));
 		WeaponRecoilInfo& recoil = m_weaponRecoilInfoVec[wslot][specificBarrelToUse];
@@ -4420,7 +4626,8 @@ void W3DModelDraw::rebuildWeaponRecoilInfo(const ModelConditionInfo* state)
 	{
 		for (wslot = 0; wslot < WEAPONSLOT_COUNT; ++wslot)
 		{
-			Int ncount = state->m_weaponBarrelInfoVec[wslot].size();
+			// (Tiberium Project: room for the most barrels of any weapon of the slot, WeaponBones)
+			Int ncount = (Int)state->getMostBarrelsFor(wslot);
 			if (m_weaponRecoilInfoVec[wslot].size() != ncount)
 			{
 				WeaponRecoilInfo tmp;

@@ -43,6 +43,8 @@
 #include "Common/ThingTemplate.h"
 #include "Common/BitFlagsIO.h"
 
+#include "Common/Upgrade.h"	// Tiberium Project (UpgradeWeapon)
+
 #include "GameLogic/AI.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/AIUpdate.h"
@@ -113,6 +115,7 @@ void WeaponTemplateSet::clear()
 		m_autoChooseMask[i] = 0xffffffff;					// by default, allow autochoosing from any CommandSource
 		CLEAR_KINDOFMASK(m_preferredAgainst[i]);	// by default, weapon isn't preferred against anything in particular
 	}
+	m_upgradeWeapons.clear();	// Tiberium Project
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -123,7 +126,58 @@ Bool WeaponTemplateSet::hasAnyWeapons() const
 		if (m_template[i])
 			return true;
 	}
-	return false;
+	return !m_upgradeWeapons.empty();	// Tiberium Project: a slot's weapon on an upgrade is one it can have
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the slot's weapon with the upgrades the object has (UpgradeWeapon): the first of the
+// slot's whose upgrade it or its player has, else the slot's own Weapon (none for a slot with none)
+const WeaponTemplate* WeaponTemplateSet::getWeaponFor(WeaponSlotType n, const Object* obj) const
+{
+	if (obj != nullptr && TheUpgradeCenter != nullptr)
+	{
+		const Player* player = obj->getControllingPlayer();
+		for (std::vector<UpgradeWeapon>::const_iterator it = m_upgradeWeapons.begin(); it != m_upgradeWeapons.end(); ++it)
+		{
+			if (it->m_slot != n)
+				continue;
+			const UpgradeTemplate* up = TheUpgradeCenter->findUpgrade(it->m_upgradeName);
+			if (up == nullptr)
+				continue;
+			if (obj->getObjectCompletedUpgradeMask().testForAll(up->getUpgradeMask())
+				|| (player != nullptr && player->getCompletedUpgradeMask().testForAll(up->getUpgradeMask())))
+				return it->m_weapon;
+		}
+	}
+	return m_template[n];
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the slot's own weapon, else the first it has on an upgrade (a saved weapon's slot)
+const WeaponTemplate* WeaponTemplateSet::getAnyWeaponFor(WeaponSlotType n) const
+{
+	if (m_template[n] != nullptr)
+		return m_template[n];
+	for (std::vector<UpgradeWeapon>::const_iterator it = m_upgradeWeapons.begin(); it != m_upgradeWeapons.end(); ++it)
+	{
+		if (it->m_slot == n)
+			return it->m_weapon;
+	}
+	return nullptr;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature UpgradeWeapon = <slot> <upgrade> <weapon>: the slot's weapon while the object has the upgrade
+void WeaponTemplateSet::parseUpgradeWeapon(INI* ini, void *instance, void * /*store*/, const void* /*userData*/)
+{
+	WeaponTemplateSet* self = (WeaponTemplateSet*)instance;
+	UpgradeWeapon entry;
+	entry.m_slot = (WeaponSlotType)INI::scanIndexList(ini->getNextToken(), TheWeaponSlotTypeNames);
+	entry.m_upgradeName = ini->getNextToken();
+	entry.m_weapon = nullptr;
+	INI::parseWeaponTemplate(ini, instance, &entry.m_weapon, nullptr);
+	if (entry.m_weapon != nullptr)
+		self->m_upgradeWeapons.push_back(entry);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -161,6 +215,7 @@ void WeaponTemplateSet::parseWeaponTemplateSet( INI* ini, const ThingTemplate* t
 		{ "PreferredAgainst", WeaponTemplateSet::parsePreferredAgainst, nullptr, 0 },
 		{ "ShareWeaponReloadTime", INI::parseBool, nullptr, offsetof( WeaponTemplateSet, m_isReloadTimeShared ) },
 		{ "WeaponLockSharedAcrossSets", INI::parseBool, nullptr, offsetof( WeaponTemplateSet, m_isWeaponLockSharedAcrossSets ) },
+		{ "UpgradeWeapon", WeaponTemplateSet::parseUpgradeWeapon, nullptr, 0 },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
 
@@ -282,7 +337,8 @@ void WeaponSet::xfer( Xfer *xfer )
 		{
 			if (xfer->getXferMode() == XFER_LOAD && m_weapons[i] == nullptr)
 			{
-				const WeaponTemplate* wt = m_curWeaponTemplateSet->getNth((WeaponSlotType)i);
+				// (Tiberium Project: a slot's weapon on an upgrade, if it has no other; the weapon's own xfer names it)
+				const WeaponTemplate* wt = m_curWeaponTemplateSet->getAnyWeaponFor((WeaponSlotType)i);
 				if (wt==nullptr) {
 					DEBUG_CRASH(("xfer backwards compatibility code - old save file??? jba."));
 					wt = m_curWeaponTemplateSet->getNth((WeaponSlotType)0);
@@ -348,9 +404,11 @@ void WeaponSet::updateWeaponSet(const Object* obj)
 			deleteInstance(m_weapons[i]);
 			m_weapons[i] = nullptr;
 
-			if (set->getNth((WeaponSlotType)i))
+			// Tiberium Project: the slot's weapon with the upgrades the object has (UpgradeWeapon)
+			const WeaponTemplate* wt = set->hasUpgradeWeapons() ? set->getWeaponFor((WeaponSlotType)i, obj) : set->getNth((WeaponSlotType)i);
+			if (wt)
 			{
-				m_weapons[i] = TheWeaponStore->allocateNewWeapon(set->getNth((WeaponSlotType)i), (WeaponSlotType)i);
+				m_weapons[i] = TheWeaponStore->allocateNewWeapon(wt, (WeaponSlotType)i);
 				m_weapons[i]->loadAmmoNow(obj);	// start 'em all with full clips.
 				m_filledWeaponSlotMask |= (1 << i);
 				m_totalAntiMask |= m_weapons[i]->getAntiMask();
@@ -368,6 +426,58 @@ void WeaponSet::updateWeaponSet(const Object* obj)
 		}
 		m_curWeaponTemplateSet = set;
 		//DEBUG_LOG(("WeaponSet::updateWeaponSet -- changed curweapon to %s",getCurWeapon()->getName().str()));
+	}
+	// Tiberium Project @feature the same set, its slots' weapons following the upgrades the object has now
+	// (UpgradeWeapon): only a slot whose weapon changes is made anew, the others keep their shots and reloads
+	else if (set && set->hasUpgradeWeapons())
+	{
+		Bool changed = false;
+		for (Int i = PRIMARY_WEAPON; i < WEAPONSLOT_COUNT; ++i)
+		{
+			const WeaponTemplate* want = set->getWeaponFor((WeaponSlotType)i, obj);
+			const WeaponTemplate* have = m_weapons[i] ? m_weapons[i]->getTemplate() : nullptr;
+			if (want == have)
+				continue;
+			changed = true;
+			if (m_curWeapon == (WeaponSlotType)i && isCurWeaponLocked())
+				releaseWeaponLock(LOCKED_PERMANENTLY);
+			deleteInstance(m_weapons[i]);
+			m_weapons[i] = nullptr;
+			if (want)
+			{
+				m_weapons[i] = TheWeaponStore->allocateNewWeapon(want, (WeaponSlotType)i);
+				m_weapons[i]->loadAmmoNow(obj);
+			}
+		}
+		if (changed)
+		{
+			recountWeapons();
+			if (m_weapons[m_curWeapon] == nullptr && !isCurWeaponLocked())
+				m_curWeapon = PRIMARY_WEAPON;
+		}
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project: the masks and flags of the weapons the set holds now
+void WeaponSet::recountWeapons()
+{
+	m_filledWeaponSlotMask = 0;
+	m_totalAntiMask = 0;
+	m_totalDamageTypeMask.clear();
+	m_hasPitchLimit = false;
+	m_hasDamageWeapon = false;
+	for (Int i = PRIMARY_WEAPON; i < WEAPONSLOT_COUNT; ++i)
+	{
+		if (m_weapons[i] == nullptr)
+			continue;
+		m_filledWeaponSlotMask |= (1 << i);
+		m_totalAntiMask |= m_weapons[i]->getAntiMask();
+		m_totalDamageTypeMask.set(m_weapons[i]->getDamageType());
+		if (m_weapons[i]->isPitchLimited())
+			m_hasPitchLimit = true;
+		if (m_weapons[i]->isDamageWeapon())
+			m_hasDamageWeapon = true;
 	}
 }
 

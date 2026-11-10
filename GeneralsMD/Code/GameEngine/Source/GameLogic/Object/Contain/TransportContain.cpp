@@ -47,6 +47,7 @@
 #include "GameLogic/Module/TransportContain.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Weapon.h"
+#include "Common/Upgrade.h"	// Tiberium Project (PlaceUpgrades)
 
 
 // ------------------------------------------------------------------------------------------------
@@ -91,6 +92,51 @@ void TransportContainModuleData::parseInitialPayload( INI* ini, void *instance, 
 }
 
 // ------------------------------------------------------------------------------------------------
+// Tiberium Project @feature PlaceUpgrades = <upgrade at the first place> <at the second> ...: a kind of rider's upgrades,
+// one for each place; its riders follow (PlaceRiders)
+// ------------------------------------------------------------------------------------------------
+void TransportContainModuleData::parsePlaceUpgrades( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ )
+{
+	TransportContainModuleData* self = (TransportContainModuleData*)instance;
+	PlaceKind kind;
+	kind.m_ridersPerPlace = 1;
+	for (const char* token = ini->getNextTokenOrNull(); token != nullptr; token = ini->getNextTokenOrNull())
+		kind.m_upgradeNames.push_back(AsciiString(token));
+	self->m_placeKinds.push_back(kind);
+}
+
+// ------------------------------------------------------------------------------------------------
+// Tiberium Project @feature PlaceRiders = <how many share a place> <rider> <rider> ...: the riders of the kind the
+// PlaceUpgrades before it gave
+// ------------------------------------------------------------------------------------------------
+void TransportContainModuleData::parsePlaceRiders( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ )
+{
+	TransportContainModuleData* self = (TransportContainModuleData*)instance;
+	if (self->m_placeKinds.empty())
+		throw INI_INVALID_DATA;
+	PlaceKind& kind = self->m_placeKinds.back();
+	kind.m_ridersPerPlace = INI::scanInt(ini->getNextToken());
+	if (kind.m_ridersPerPlace < 1)
+		kind.m_ridersPerPlace = 1;
+	for (const char* token = ini->getNextTokenOrNull(); token != nullptr; token = ini->getNextTokenOrNull())
+		kind.m_riderNames.push_back(AsciiString(token));
+}
+
+// ------------------------------------------------------------------------------------------------
+// Tiberium Project: the places its riders take (the most upgrades a kind lists)
+// ------------------------------------------------------------------------------------------------
+Int TransportContainModuleData::getPlaceCount() const
+{
+	Int count = 0;
+	for (std::vector<PlaceKind>::const_iterator it = m_placeKinds.begin(); it != m_placeKinds.end(); ++it)
+	{
+		if ((Int)it->m_upgradeNames.size() > count)
+			count = (Int)it->m_upgradeNames.size();
+	}
+	return count;
+}
+
+// ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 void TransportContainModuleData::buildFieldParse(MultiIniFieldParse& p)
 {
@@ -113,6 +159,8 @@ void TransportContainModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "ArmedRidersUpgradeMyWeaponSet",	INI::parseBool,		nullptr, offsetof( TransportContainModuleData, m_armedRidersUpgradeWeaponSet ) },
 		{ "DelayExitInAir",	INI::parseBool,		nullptr, offsetof( TransportContainModuleData, m_isDelayExitInAir ) },
 		{ "LeaveMapWhenEmpty",	INI::parseBool,		nullptr, offsetof( TransportContainModuleData, m_leaveMapWhenEmpty ) },	// Tiberium Project
+		{ "PlaceUpgrades",	parsePlaceUpgrades,		nullptr, 0 },	// Tiberium Project
+		{ "PlaceRiders",	parsePlaceRiders,		nullptr, 0 },	// Tiberium Project
 
     { nullptr, nullptr, nullptr, 0 }
   };
@@ -143,6 +191,8 @@ TransportContain::TransportContain( Thing *thing, const ModuleData *moduleData )
 	m_frameExitNotBusy = 0;
 	m_hasCarried = FALSE;
 	m_leavingMap = FALSE;
+	for (Int i = 0; i < MAX_RIDER_PLACES; ++i)
+		m_placeKind[i] = -1;	// Tiberium Project: every place free
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -203,10 +253,20 @@ Bool TransportContain::isValidContainerFor(const Object* rider, Bool checkCapaci
 	if (transportSlotCount == 0)
 		return false;
 
+	// Tiberium Project @feature with places for its riders (PlaceUpgrades), only riders of a kind it has, with a place of
+	// their kind with room or a free one
+	const Bool hasPlaces = !getTransportContainModuleData()->m_placeKinds.empty();
+	const Int kind = hasPlaces ? findPlaceKind(rider) : -1;
+	if (hasPlaces && kind < 0)
+		return false;
+
 	if (checkCapacity)
 	{
     Int containMax = getContainMax();
     Int containCount = getContainCount();
+
+		if (hasPlaces && choosePlace(kind) < 0)
+			return false;
 
 		return (m_extraSlotsInUse + containCount + transportSlotCount <= containMax);
 
@@ -215,6 +275,131 @@ Bool TransportContain::isValidContainerFor(const Object* rider, Bool checkCapaci
 	{
 		return true;
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the places its riders take (PlaceUpgrades)
+//-------------------------------------------------------------------------------------------------
+Int TransportContain::findPlaceKind( const Object* rider ) const
+{
+	const TransportContainModuleData* d = getTransportContainModuleData();
+	if (rider == nullptr || d->m_placeKinds.empty())
+		return -1;
+	const ThingTemplate* tmpl = rider->getTemplate();
+	for (Int k = 0; k < (Int)d->m_placeKinds.size(); ++k)
+	{
+		const std::vector<AsciiString>& names = d->m_placeKinds[k].m_riderNames;
+		for (std::vector<AsciiString>::const_iterator it = names.begin(); it != names.end(); ++it)
+		{
+			const ThingTemplate* t = TheThingFactory->findTemplate(*it);
+			if (t != nullptr && tmpl->isEquivalentTo(t))
+				return k;
+		}
+	}
+	return -1;
+}
+
+//-------------------------------------------------------------------------------------------------
+Int TransportContain::ridersAtPlace( Int place ) const
+{
+	Int count = 0;
+	for (std::vector<PlaceRider>::const_iterator it = m_placeRiders.begin(); it != m_placeRiders.end(); ++it)
+	{
+		if (it->m_place == place)
+			++count;
+	}
+	return count;
+}
+
+//-------------------------------------------------------------------------------------------------
+// the place a rider of the kind takes: one of its kind with room, else the first free one (-1: none)
+Int TransportContain::choosePlace( Int kind ) const
+{
+	const TransportContainModuleData* d = getTransportContainModuleData();
+	if (kind < 0 || kind >= (Int)d->m_placeKinds.size())
+		return -1;
+	Int places = d->getPlaceCount();
+	if (places > MAX_RIDER_PLACES)
+		places = MAX_RIDER_PLACES;
+	const Int share = d->m_placeKinds[kind].m_ridersPerPlace;
+	for (Int p = 0; p < places; ++p)
+	{
+		if (m_placeKind[p] == kind && ridersAtPlace(p) < share)
+			return p;
+	}
+	for (Int p = 0; p < places && p < (Int)d->m_placeKinds[kind].m_upgradeNames.size(); ++p)
+	{
+		if (m_placeKind[p] < 0)
+			return p;
+	}
+	return -1;
+}
+
+//-------------------------------------------------------------------------------------------------
+// the rider takes its place; the first of its kind there gives the transport the kind's upgrade for it
+void TransportContain::takePlace( Object* rider )
+{
+	const TransportContainModuleData* d = getTransportContainModuleData();
+	const Int kind = findPlaceKind(rider);
+	const Int place = choosePlace(kind);
+	if (place < 0)
+		return;
+	PlaceRider entry;
+	entry.m_id = rider->getID();
+	entry.m_place = place;
+	m_placeRiders.push_back(entry);
+	if (m_placeKind[place] < 0)
+	{
+		m_placeKind[place] = kind;
+		const UpgradeTemplate* up = TheUpgradeCenter->findUpgrade(d->m_placeKinds[kind].m_upgradeNames[place]);
+		if (up != nullptr)
+			getObject()->giveUpgrade(up);
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// the rider leaves its place; the last of them there takes the place's upgrade off the transport again
+void TransportContain::leavePlace( Object* rider )
+{
+	const TransportContainModuleData* d = getTransportContainModuleData();
+	for (std::vector<PlaceRider>::iterator it = m_placeRiders.begin(); it != m_placeRiders.end(); ++it)
+	{
+		if (it->m_id != rider->getID())
+			continue;
+		const Int place = it->m_place;
+		m_placeRiders.erase(it);
+		if (place >= 0 && place < MAX_RIDER_PLACES && ridersAtPlace(place) == 0 && m_placeKind[place] >= 0)
+		{
+			const Int kind = m_placeKind[place];
+			m_placeKind[place] = -1;
+			if (kind < (Int)d->m_placeKinds.size() && place < (Int)d->m_placeKinds[kind].m_upgradeNames.size())
+			{
+				const UpgradeTemplate* up = TheUpgradeCenter->findUpgrade(d->m_placeKinds[kind].m_upgradeNames[place]);
+				if (up != nullptr && getObject()->hasUpgrade(up))
+					getObject()->removeUpgrade(up);
+			}
+		}
+		return;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature with places for its riders, a pip for each place
+Bool TransportContain::getContainerPipsToShow( Int& numTotal, Int& numFull )
+{
+	const TransportContainModuleData* d = getTransportContainModuleData();
+	if (d->m_placeKinds.empty())
+		return OpenContain::getContainerPipsToShow(numTotal, numFull);
+	numTotal = d->getPlaceCount();
+	if (numTotal > MAX_RIDER_PLACES)
+		numTotal = MAX_RIDER_PLACES;
+	numFull = 0;
+	for (Int p = 0; p < numTotal; ++p)
+	{
+		if (m_placeKind[p] >= 0)
+			++numFull;
+	}
+	return true;
 }
 
 
@@ -311,6 +496,10 @@ void TransportContain::onContaining( Object *rider, Bool wasSelected )
   if ( getTransportContainModuleData()->m_armedRidersUpgradeWeaponSet )
     letRidersUpgradeWeaponSet();
 
+	// Tiberium Project @feature the rider takes its place (PlaceUpgrades)
+	if( !getTransportContainModuleData()->m_placeKinds.empty() )
+		takePlace( rider );
+
 	//Kris: October 20, 2003 - Patch 1.01
 	//Force Jarmen Kell to transfer weapon timer for snipe to and from the combat bike.
 	if( getObject()->isKindOf( KINDOF_CLIFF_JUMPER ) && rider->isKindOf( KINDOF_HERO ) && rider->isKindOf( KINDOF_SALVAGER ) )
@@ -337,6 +526,10 @@ void TransportContain::onRemoving( Object *rider )
 	rider->clearDisabled( DISABLED_HELD );
 
 	const TransportContainModuleData* d = getTransportContainModuleData();
+
+	// Tiberium Project @feature the rider leaves its place (PlaceUpgrades)
+	if( !d->m_placeKinds.empty() )
+		leavePlace( rider );
 
 	if (!d->m_exitBone.isEmpty())
 	{
@@ -773,7 +966,8 @@ void TransportContain::xfer( Xfer *xfer )
 
 	// version
 	// Tiberium Project: 2: carried someone, leaving the map (LeaveMapWhenEmpty)
-	XferVersion currentVersion = 2;
+	// Tiberium Project: 3: the places its riders take (PlaceUpgrades)
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -794,6 +988,34 @@ void TransportContain::xfer( Xfer *xfer )
 	{
 		xfer->xferBool( &m_hasCarried );
 		xfer->xferBool( &m_leavingMap );
+	}
+
+	// Tiberium Project: the places its riders take (PlaceUpgrades)
+	if( version >= 3 )
+	{
+		for( Int p = 0; p < MAX_RIDER_PLACES; ++p )
+			xfer->xferInt( &m_placeKind[ p ] );
+		UnsignedShort count = (UnsignedShort)m_placeRiders.size();
+		xfer->xferUnsignedShort( &count );
+		if( xfer->getXferMode() == XFER_LOAD )
+		{
+			m_placeRiders.clear();
+			for( UnsignedShort i = 0; i < count; ++i )
+			{
+				PlaceRider entry;
+				xfer->xferObjectID( &entry.m_id );
+				xfer->xferInt( &entry.m_place );
+				m_placeRiders.push_back( entry );
+			}
+		}
+		else
+		{
+			for( std::vector<PlaceRider>::iterator it = m_placeRiders.begin(); it != m_placeRiders.end(); ++it )
+			{
+				xfer->xferObjectID( &it->m_id );
+				xfer->xferInt( &it->m_place );
+			}
+		}
 	}
 
 }

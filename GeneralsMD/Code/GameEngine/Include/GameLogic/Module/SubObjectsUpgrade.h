@@ -82,6 +82,7 @@ public:
 
 protected:
 	virtual void upgradeImplementation( ) override; ///< Here's the actual work of Upgrading
+	virtual void undoUpgradeImplementation() override;	///< Tiberium Project: the parts back as they were (UndoWhenRemoved)
 	virtual Bool isSubObjectsUpgrade() override { return true; }
 
 };

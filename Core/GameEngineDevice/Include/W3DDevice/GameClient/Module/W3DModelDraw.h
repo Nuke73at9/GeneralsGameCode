@@ -57,6 +57,7 @@ public:
 
 // FORWARD REFERENCES /////////////////////////////////////////////////////////////////////////////
 class Thing;
+class Object;
 class RenderObjClass;
 class Shadow;
 class TerrainTracksRenderObjClass;
@@ -207,6 +208,30 @@ struct ModelConditionInfo
 	};
 	typedef std::vector<WeaponBarrelInfo>	WeaponBarrelInfoVec;
 
+	// Tiberium Project @feature more bones a turret turns alike (its twin's field with more names): Kane's Wrath's
+	// MARV has a gun of each squad's on each tread, only the one of the squad aboard shown
+	struct ExtraTwinBone
+	{
+		Int							m_turret;			///< the turret it turns with
+		Bool						m_pitch;			///< pitches with it, else turns with it
+		NameKeyType			m_nameKey;
+		Int							m_bone;				///< calculated at runtime (0: not found)
+	};
+
+	// Tiberium Project @feature the bones a slot uses while it holds a given weapon (WeaponBones): the MARV's gun of
+	// each squad on a tread fires from its own muzzle
+	struct WeaponBoneSet
+	{
+		Int							m_slot;
+		NameKeyType			m_weaponKey;
+		AsciiString			m_fxBoneName;
+		AsciiString			m_recoilBoneName;
+		AsciiString			m_muzzleFlashName;
+		AsciiString			m_launchBoneName;
+		mutable WeaponBarrelInfoVec	m_barrels;
+		mutable Bool		m_hasRecoilBonesOrMuzzleFlashes;
+	};
+
 #if defined(RTS_DEBUG) || defined(DEBUG_CRASHING)
 	AsciiString												m_description;
 #endif
@@ -235,6 +260,8 @@ struct ModelConditionInfo
 	mutable TurretInfo								m_turrets[MAX_TURRETS];
 	mutable WeaponBarrelInfoVec				m_weaponBarrelInfoVec[WEAPONSLOT_COUNT];
 	mutable Bool											m_hasRecoilBonesOrMuzzleFlashes[WEAPONSLOT_COUNT];
+	mutable std::vector<ExtraTwinBone>	m_extraTwinBones;		///< Tiberium Project
+	std::vector<WeaponBoneSet>				m_weaponBoneSets;		///< Tiberium Project
 	mutable Byte											m_validStuff;
 
 	enum
@@ -268,9 +295,15 @@ struct ModelConditionInfo
 
 	void validateStuff(RenderObjClass* robj, Real scale, const std::vector<AsciiString>& extraPublicBones) const;
 
+	/// Tiberium Project @feature the barrels of a slot with the weapon the object holds in it (WeaponBones), else its own
+	const WeaponBarrelInfoVec& getBarrelsFor(Int wslot, const Object* obj, Bool* hasRecoilOrFlash = nullptr) const;
+	size_t getMostBarrelsFor(Int wslot) const;	///< Tiberium Project: the most barrels the slot has with any weapon
+
 private:
 	void validateWeaponBarrelInfo() const;
 	void validateMultiBoneBarrels(Int wslot) const;	///< Tiberium Project @feature a slot named with several bones
+	void buildBarrels(const AsciiString& fxNames, const AsciiString& recoilNames, const AsciiString& flashNames,
+		const AsciiString& launchNames, WeaponBarrelInfoVec& barrels, Bool& hasRecoilOrFlash) const;	///< Tiberium Project
 	void expandWeaponBoneNames(const AsciiString& names, std::vector<Int>& bones, std::vector<const Matrix3D*>* matrices) const;
 	void validateTurretInfo() const;
 	void validateCachedBones(RenderObjClass* robj, Real scale) const;
