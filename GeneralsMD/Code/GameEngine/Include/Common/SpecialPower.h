@@ -154,6 +154,9 @@ public:
 	const KindOfMaskType &getAIForbiddenKinds() const { return getFO()->m_aiForbiddenKinds; }
 	Real getAIDistance() const { return getFO()->m_aiDistance; }
 	const ObjectStatusMaskType &getForbiddenTargetStatus() const { return getFO()->m_forbiddenTargetStatus; }	///< Tiberium Project: not aimed at an object with any of these
+	/// Tiberium Project @feature the upgrade it waits for (RequiredUpgrade: SAGE's GameDependency NeededUpgrade, C&C4's
+	/// abilities a class upgrade unlocks and support powers the second tech tier does); empty: none
+	const AsciiString &getRequiredUpgradeName() const { return getFO()->m_requiredUpgradeName; }
 	/// Tiberium Project @feature the superweapon the announcer calls it (EvaAs: Kane's Wrath's ion cannon as the
 	/// particle cannon, its nuclear missile as the neutron missile: their detected, ready and launched lines); else its own type
 	SpecialPowerType getEvaType() const { return getFO()->m_evaType != SPECIAL_INVALID ? getFO()->m_evaType : getFO()->m_type; }
@@ -189,6 +192,7 @@ private:
 	Real							m_aiDistance;				///< ... how far back from a fight reinforcements come
 	ObjectStatusMaskType	m_forbiddenTargetStatus;	///< Tiberium Project: SAGE's target filter's rejected statuses (Kane's Wrath's satchel charges and a building's field)
 	SpecialPowerType	m_evaType;					///< Tiberium Project: the superweapon the announcer calls it (SPECIAL_INVALID: its own)
+	AsciiString				m_requiredUpgradeName;	///< Tiberium Project: the upgrade it waits for (RequiredUpgrade)
 
 	static const FieldParse m_specialPowerFieldParse[];		///< the parse table
 

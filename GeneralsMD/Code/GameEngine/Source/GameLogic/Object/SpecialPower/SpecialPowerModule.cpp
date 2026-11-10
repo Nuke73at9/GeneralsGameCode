@@ -40,6 +40,7 @@
 #include "Common/SpecialPower.h"
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
+#include "Common/Upgrade.h"	// Tiberium Project
 #include "Common/Xfer.h"
 
 #include "GameLogic/GameLogic.h"
@@ -301,6 +302,10 @@ Bool SpecialPowerModule::isModuleForPower( const SpecialPowerTemplate *specialPo
 //-------------------------------------------------------------------------------------------------
 Bool SpecialPowerModule::isReady() const
 {
+	// Tiberium Project @feature not before the upgrade it waits for (RequiredUpgrade)
+	if( !hasRequiredUpgrade() )
+		return FALSE;
+
 #if defined(RTS_DEBUG) || defined(_ALLOW_DEBUG_CHEATS_IN_RELEASE)
 	// this is a cheat ... remove this for release!
 	if( TheGlobalData->m_specialPowerUsesDelay == FALSE )
@@ -333,6 +338,10 @@ Bool SpecialPowerModule::isReady() const
 //-------------------------------------------------------------------------------------------------
 Real SpecialPowerModule::getPercentReady() const
 {
+	// Tiberium Project @feature none of it before the upgrade it waits for (RequiredUpgrade): its use refused
+	if( !hasRequiredUpgrade() )
+		return 0.0f;
+
 	if( m_pausedCount > 0 && m_pausedPercent == 1.0f )
 	{
 			//Don't consider it ready if paused.
@@ -737,6 +746,28 @@ Bool SpecialPowerModule::canPayForPower() const
 {
 	const Player *player = getObject()->getControllingPlayer();
 	return player == nullptr || player->canAffordSpecialPower( getSpecialPowerModuleData()->m_specialPowerTemplate );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature a power waiting for an upgrade (its template's RequiredUpgrade: SAGE's GameDependency
+// NeededUpgrade) is neither ready nor used before it: a player's upgrade its player has, an object's its object
+// has (C&C4's jump jets with Assault Jump, its second-tier support powers with Tech Up). Its button waits too
+// (NEED_UPGRADE); here the AI and any other use are held back as well
+//-------------------------------------------------------------------------------------------------
+Bool SpecialPowerModule::hasRequiredUpgrade() const
+{
+	const SpecialPowerTemplate *sp = getSpecialPowerModuleData()->m_specialPowerTemplate;
+	if( sp == nullptr || sp->getRequiredUpgradeName().isEmpty() || TheUpgradeCenter == nullptr )
+		return TRUE;
+	const UpgradeTemplate *upgrade = TheUpgradeCenter->findUpgrade( sp->getRequiredUpgradeName() );
+	if( upgrade == nullptr )
+		return TRUE;
+	if( upgrade->getUpgradeType() == UPGRADE_TYPE_PLAYER )
+	{
+		const Player *player = getObject()->getControllingPlayer();
+		return player != nullptr && player->hasUpgradeComplete( upgrade );
+	}
+	return getObject()->hasUpgrade( upgrade );
 }
 
 //-------------------------------------------------------------------------------------------------

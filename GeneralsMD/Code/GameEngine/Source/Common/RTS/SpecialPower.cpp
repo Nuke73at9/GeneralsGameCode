@@ -308,6 +308,7 @@ void SpecialPowerStore::parseSpecialPowerDefinition( INI *ini )
 	{ "Cost",											INI::parseUnsignedInt,						nullptr, offsetof( SpecialPowerTemplate, m_cost ) },	// Tiberium Project @feature
 	{ "SupportPoints",						INI::parseUnsignedInt,						nullptr, offsetof( SpecialPowerTemplate, m_supportPoints ) },
 	{ "ShroudedTargetOK",					INI::parseBool,										nullptr, offsetof( SpecialPowerTemplate, m_shroudedTargetOK ) },
+	{ "RequiredUpgrade",					INI::parseAsciiString,						nullptr, offsetof( SpecialPowerTemplate, m_requiredUpgradeName ) },	// Tiberium Project
 	{ "AIUse",										SpecialPowerTemplate::parseAIUse,	nullptr, 0 },	// Tiberium Project @feature
 	{ "ForbiddenTargetObjectStatus",	ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( SpecialPowerTemplate, m_forbiddenTargetStatus ) },	// Tiberium Project @feature
 	{ "EvaAs",										INI::parseIndexList,							SpecialPowerMaskType::getBitNames(), offsetof( SpecialPowerTemplate, m_evaType ) },	// Tiberium Project @feature

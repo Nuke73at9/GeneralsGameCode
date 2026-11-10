@@ -177,6 +177,7 @@ protected:
 	void resolveSpecialPower();
 	void aboutToDoSpecialPower( const Coord3D *location );
 	Bool canPayForPower() const;	///< Tiberium Project @feature the power's price (Cost, SupportPoints)
+	Bool hasRequiredUpgrade() const;	///< Tiberium Project @feature its power's RequiredUpgrade had (the player's, or its object's own)
 	Bool isRefusedByUpdate( const Object *targetObj, const Coord3D *targetPos );	///< Tiberium Project @feature its update module would not go through with it
 	void payForPower();
 

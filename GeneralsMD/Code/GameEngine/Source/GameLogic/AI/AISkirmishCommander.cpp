@@ -126,6 +126,19 @@ namespace
 		std::vector<Object *> deployers;	///< what deploys into a factory (C&C4's Crawlers, packed up)
 	};
 
+	/// whether a unit button on these pages waits for the upgrade (a tech tier: it opens up more units)
+	Bool opensUnits( const CommandSet *const *pages, Int pageCount, const UpgradeTemplate *up )
+	{
+		for( Int u = 0; u < MAX_COMMANDS_PER_SET * pageCount; ++u )
+		{
+			const CommandButton *other = pages[ u / MAX_COMMANDS_PER_SET ]->getCommandButton( u % MAX_COMMANDS_PER_SET );
+			if( other != nullptr && other->getCommandType() == GUI_COMMAND_UNIT_BUILD && ( other->getOptions() & NEED_UPGRADE )
+					&& other->getUpgradeTemplate() == up )
+				return TRUE;
+		}
+		return FALSE;
+	}
+
 	/// the ReplaceSelfUpdate that turns obj into a factory, if it has one
 	ReplaceSelfUpdate *deploysIntoFactory( Object *obj )
 	{
@@ -514,6 +527,24 @@ void AISkirmishPlayer::commandProduction()
 		}
 	}
 
+	// Tiberium Project @feature the player upgrades its army's abilities wait for (their powers' RequiredUpgrade), in the
+	// order its units come
+	std::vector<const UpgradeTemplate *> awaited;
+	for( size_t i = 0; i < muster.soldiers.size() && TheUpgradeCenter != nullptr; ++i )
+	{
+		for( BehaviorModule **m = muster.soldiers[i]->getBehaviorModules(); *m != nullptr; ++m )
+		{
+			const SpecialPowerModuleInterface *sp = (*m)->getSpecialPower();
+			const SpecialPowerTemplate *spt = sp != nullptr ? sp->getSpecialPowerTemplate() : nullptr;
+			if( spt == nullptr || spt->getRequiredUpgradeName().isEmpty() )
+				continue;
+			const UpgradeTemplate *up = TheUpgradeCenter->findUpgrade( spt->getRequiredUpgradeName() );
+			if( up != nullptr && up->getUpgradeType() == UPGRADE_TYPE_PLAYER && !m_player->hasUpgradeComplete( up )
+					&& std::find( awaited.begin(), awaited.end(), up ) == awaited.end() )
+				awaited.push_back( up );
+		}
+	}
+
 	// an idle factory builds
 	std::set<ObjectID> seen;
 	Money *money = m_player->getMoney();
@@ -553,14 +584,27 @@ void AISkirmishPlayer::commandProduction()
 			if( before != nullptr && !m_player->hasUpgradeComplete( before ) )
 				continue;
 			// (only what opens up more of the factory's units)
-			Bool opens = FALSE;
-			for( Int u = 0; u < MAX_COMMANDS_PER_SET * pageCount && !opens; ++u )
-			{
-				const CommandButton *other = pages[ u / MAX_COMMANDS_PER_SET ]->getCommandButton( u % MAX_COMMANDS_PER_SET );
-				opens = other != nullptr && other->getCommandType() == GUI_COMMAND_UNIT_BUILD && ( other->getOptions() & NEED_UPGRADE )
-					&& other->getUpgradeTemplate() == up;
-			}
-			if( !opens || (Int)money->countMoney() - up->calcCostToBuild( m_player ) < RESERVE || pu->canQueueUpgrade( up ) != CANMAKE_OK )
+			if( !opensUnits( pages, pageCount, up ) || (Int)money->countMoney() - up->calcCostToBuild( m_player ) < RESERVE
+					|| pu->canQueueUpgrade( up ) != CANMAKE_OK )
+				continue;
+			tier = up;
+		}
+
+		// Tiberium Project @feature an upgrade an ability of its army waits for (its power's RequiredUpgrade: C&C4's class
+		// upgrades, Kane's Wrath's EMP grenades), sold here, the money allowing twice the reserve over the price; the
+		// games' AIs buy them too
+		for( Int b = 0; b < MAX_COMMANDS_PER_SET * pageCount && tier == nullptr && !awaited.empty(); ++b )
+		{
+			const CommandButton *button = pages[ b / MAX_COMMANDS_PER_SET ]->getCommandButton( b % MAX_COMMANDS_PER_SET );
+			if( button == nullptr || button->getCommandType() != GUI_COMMAND_PLAYER_UPGRADE || button->getUpgradeTemplate() == nullptr )
+				continue;
+			const UpgradeTemplate *up = button->getUpgradeTemplate();
+			if( std::find( awaited.begin(), awaited.end(), up ) == awaited.end() || m_player->hasUpgradeInProduction( up ) )
+				continue;
+			const UpgradeTemplate *before = up->getNeededUpgradeName().isEmpty() ? nullptr : TheUpgradeCenter->findUpgrade( up->getNeededUpgradeName() );
+			if( before != nullptr && !m_player->hasUpgradeComplete( before ) )
+				continue;
+			if( (Int)money->countMoney() - up->calcCostToBuild( m_player ) < 2 * RESERVE || pu->canQueueUpgrade( up ) != CANMAKE_OK )
 				continue;
 			tier = up;
 		}
