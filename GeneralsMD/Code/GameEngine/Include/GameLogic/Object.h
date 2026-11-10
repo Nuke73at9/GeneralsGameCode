@@ -390,6 +390,9 @@ public:
 	UnsignedByte getCrushableLevel() const;
 
 	Bool hasUpgrade( const UpgradeTemplate *upgradeT ) const ;			///< does this object already have this upgrade
+	/// Tiberium Project @feature the upgrade of this name, the object's own or its player's (SAGE's UpgradeRequired and
+	/// UpgradeForbidden: C&C4's husk kept by a player with Backup Systems)
+	Bool hasUpgradeNamed( const AsciiString& upgradeName ) const;
 	Bool affectedByUpgrade( const UpgradeTemplate *upgradeT ) const ; ///< can the object even "have" this upgrade, will it do something?
 	void giveUpgrade( const UpgradeTemplate *upgradeT );		///< give upgrade to this object
 	void removeUpgrade( const UpgradeTemplate *upgradeT );	///< remove upgrade from this object
@@ -751,6 +754,7 @@ private:
 	UnsignedInt				m_disabledTillFrame[ DISABLED_COUNT ];
 
 	UnsignedInt		m_smcUntil;
+	ModelConditionFlagType	m_smcCondition;	///< Tiberium Project @feature the special state set (any condition, not only the cheer)
 
 	enum { NUM_SLEEP_HELPERS = 8 };
 	ObjectRepulsorHelper*					m_repulsorHelper;

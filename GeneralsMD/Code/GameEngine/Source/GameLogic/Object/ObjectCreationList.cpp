@@ -97,6 +97,20 @@ Object *ObjectCreationList::getStickTarget()
 	return s_stickTarget;
 }
 
+// Tiberium Project @feature whose side what an OCL makes is on, while an engineer raises a husk anew for its own
+// (EngineerContain: Kane's Wrath's ReplaceWith, C&C4's OnCaptureOCL; set and cleared around the one call)
+static Team *s_ownerOverride = nullptr;
+
+void ObjectCreationList::setOwnerOverride( Team *team )
+{
+	s_ownerOverride = team;
+}
+
+Team *ObjectCreationList::getOwnerOverride()
+{
+	return s_ownerOverride;
+}
+
 //-------------------------------------------------------------------------------------------------
 static void adjustVector(Coord3D *vec, const Matrix3D* mtx)
 {
@@ -753,6 +767,19 @@ enum OrderAfterCreationType
 };
 static const char *const OrderAfterCreationNames[] = { "NONE", "MOVE", "EVACUATE_AND_EXIT", "STRAFE", nullptr };
 
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the health of what is made, from the one that made it (HealthFromSource): its share of its
+// own (PERCENT: C&C4's SetHealthToParentPercent, Kane's Wrath's USE_CREATORS_HEALTH_PERCENTAGE), or its health itself
+// (ABSOLUTE: Kane's Wrath's USE_CREATORS_HEALTH_AS_BASE, a walker raised from its husk); MinHealth and MaxHealth then
+// scale it
+enum HealthFromSourceType
+{
+	HEALTH_FROM_SOURCE_NONE = 0,
+	HEALTH_FROM_SOURCE_PERCENT,
+	HEALTH_FROM_SOURCE_ABSOLUTE,
+};
+static const char *const HealthFromSourceNames[] = { "NONE", "PERCENT", "ABSOLUTE", nullptr };
+
 class GenericObjectCreationNugget : public ObjectCreationNugget
 {
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(GenericObjectCreationNugget, "GenericObjectCreationNugget")
@@ -807,7 +834,11 @@ public:
 		m_orderAfterCreation(ORDER_AFTER_CREATION_NONE),
 		m_veterancyLevel(LEVEL_REGULAR),
 		m_createFX(nullptr),
-		m_neutralOwner(false)
+		m_neutralOwner(false),
+		m_healthFromSource(HEALTH_FROM_SOURCE_NONE),
+		m_heldFrames(0),
+		m_timedCondition(MODELCONDITION_INVALID),
+		m_timedConditionFrames(0)
 	{
 		m_offset.zero();
 	}
@@ -907,6 +938,10 @@ public:
 			{ "CreateFX",	INI::parseFXList, nullptr, offsetof(GenericObjectCreationNugget, m_createFX) },	// Tiberium Project
 			{ "NeutralOwner",	INI::parseBool, nullptr, offsetof(GenericObjectCreationNugget, m_neutralOwner) },	// Tiberium Project
 			{ "AttachToSource",	INI::parseBool, nullptr, offsetof(GenericObjectCreationNugget, m_attachToSource) },	// Tiberium Project
+			{ "HealthFromSource",	INI::parseIndexList, HealthFromSourceNames, offsetof(GenericObjectCreationNugget, m_healthFromSource) },	// Tiberium Project
+			{ "HeldTime",	INI::parseDurationUnsignedInt, nullptr, offsetof(GenericObjectCreationNugget, m_heldFrames) },	// Tiberium Project
+			{ "TimedModelCondition",	INI::parseIndexList, ModelConditionFlags::getBitNames(), offsetof(GenericObjectCreationNugget, m_timedCondition) },	// Tiberium Project
+			{ "TimedModelConditionTime",	INI::parseDurationUnsignedInt, nullptr, offsetof(GenericObjectCreationNugget, m_timedConditionFrames) },	// Tiberium Project
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 
@@ -1036,6 +1071,22 @@ protected:
 		// set its beginning health
 		BodyModuleInterface *body = obj->getBodyModule();
 		Real healthPercent = GameLogicRandomValueReal( m_minHealth, m_maxHealth );
+		// Tiberium Project @feature from the health of the one that made it (HealthFromSource): its share of its own, or
+		// its health itself over what is made's most; at least a hundredth, at most all
+		const BodyModuleInterface *sourceBody = sourceObj ? sourceObj->getBodyModule() : nullptr;
+		if (body && sourceBody && m_healthFromSource != HEALTH_FROM_SOURCE_NONE)
+		{
+			Real share = 1.0f;
+			if (m_healthFromSource == HEALTH_FROM_SOURCE_PERCENT && sourceBody->getMaxHealth() > 0.0f)
+				share = sourceBody->getHealth() / sourceBody->getMaxHealth();
+			else if (m_healthFromSource == HEALTH_FROM_SOURCE_ABSOLUTE && body->getMaxHealth() > 0.0f)
+				share = sourceBody->getHealth() / body->getMaxHealth();
+			healthPercent *= share;
+			if (healthPercent > 1.0f)
+				healthPercent = 1.0f;
+			if (healthPercent < 0.01f)
+				healthPercent = 0.01f;
+		}
 		if (body)
 			body->setInitialHealth(healthPercent * 100.0f);
 
@@ -1424,6 +1475,13 @@ protected:
 			obj->getExperienceTracker()->setMinVeterancyLevel( (VeterancyLevel)m_veterancyLevel, FALSE );
 		if( m_createFX != nullptr )
 			FXList::doFXObj( m_createFX, obj );
+		// (held still, taking no orders, while it stands up: SAGE's StartingBusyTime with DisabledWhileBusy, C&C4's
+		// SetBusyState; and its condition for a while: SAGE's TempModelCondition, the vehicle raised from its husk
+		// standing up, the husk falling in)
+		if( m_heldFrames > 0 )
+			obj->setDisabledUntil( DISABLED_HELD, TheGameLogic->getFrame() + m_heldFrames );
+		if( m_timedCondition != MODELCONDITION_INVALID && m_timedConditionFrames > 0 )
+			obj->setSpecialModelConditionState( m_timedCondition, m_timedConditionFrames );
 	}
 
 	Object* reallyCreate(const Coord3D *pos, const Matrix3D *mtx, Real orientation, const Object *sourceObj, UnsignedInt lifetimeFrames, const Coord3D *target = nullptr ) const
@@ -1441,6 +1499,8 @@ protected:
 
 		if( sourceObj && sourceObj->getControllingPlayer() && !m_neutralOwner )	// Tiberium Project: NeutralOwner
 			debrisOwner = sourceObj->getControllingPlayer()->getDefaultTeam();
+		if( s_ownerOverride != nullptr && !m_neutralOwner )	// Tiberium Project: the engineer's side (setOwnerOverride)
+			debrisOwner = s_ownerOverride;
 
 		Object* container = nullptr;
 		Object *firstObject = nullptr;
@@ -1626,6 +1686,10 @@ private:
 	Int												m_veterancyLevel;				///< Tiberium Project: VeterancyLevel what it makes starts at (at least)
 	const FXList*							m_createFX;							///< Tiberium Project: played at each object it makes
 	Bool											m_neutralOwner;					///< Tiberium Project: what it makes is no one's (C&C4's crates, as Zero Hour's)
+	Int												m_healthFromSource;			///< Tiberium Project: HealthFromSourceType
+	UnsignedInt								m_heldFrames;						///< Tiberium Project: what it makes is held still, taking no orders, this long (SAGE's busy time)
+	ModelConditionFlagType		m_timedCondition;				///< Tiberium Project: a condition what it makes has for a while (SAGE's TempModelCondition)
+	UnsignedInt								m_timedConditionFrames;	///< Tiberium Project: how long
 	Bool											m_nameAreObjects;
 	Bool											m_okToChangeModelColor;
 	Bool											m_orientInForceDirection;

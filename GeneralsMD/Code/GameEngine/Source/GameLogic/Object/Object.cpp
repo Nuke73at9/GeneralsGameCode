@@ -254,6 +254,7 @@ Object::Object( const ThingTemplate *tt, const ObjectStatusMaskType &objectStatu
 	m_partitionLastThreat(nullptr),
 	m_partitionLastValue(nullptr),
 	m_smcUntil(NEVER),
+	m_smcCondition(MODELCONDITION_SPECIAL_CHEERING),	// Tiberium Project
 	m_privateStatus(0),
 	m_formationID(NO_FORMATION_ID),
 	m_isReceivingDifficultyBonus(FALSE),
@@ -1462,6 +1463,7 @@ void Object::setSpecialModelConditionState( ModelConditionFlagType set, Unsigned
 	clearSpecialModelConditionStates();
 
 	setModelConditionState( set );
+	m_smcCondition = set;	// Tiberium Project
 
 	if( frames == 0 )
 	{
@@ -1476,6 +1478,11 @@ void Object::setSpecialModelConditionState( ModelConditionFlagType set, Unsigned
 void Object::clearSpecialModelConditionStates()
 {
 	clearModelConditionFlags( MAKE_MODELCONDITION_MASK( MODELCONDITION_SPECIAL_CHEERING ) );
+	// Tiberium Project @feature and the condition that was set, if another: an OCL's TimedModelCondition (C&C4's husk
+	// that collapses, the vehicle raised from it that stands up)
+	if( m_smcCondition != MODELCONDITION_SPECIAL_CHEERING && m_smcCondition != MODELCONDITION_INVALID )
+		clearModelConditionFlags( MAKE_MODELCONDITION_MASK( m_smcCondition ) );
+	m_smcCondition = MODELCONDITION_SPECIAL_CHEERING;
 	m_smcUntil = NEVER;
 }
 
@@ -4183,7 +4190,7 @@ void Object::xfer( Xfer *xfer )
 	// version
 	// Tiberium Project @feature version 10: the attribute modifiers; 11: eight weapon slots' last
 	// conditions (three before)
-	const XferVersion currentVersion = 13;	// Tiberium Project @feature 12: 32 players (vision spied by); 13: what the attribute modifiers set and scale
+	const XferVersion currentVersion = 14;	// Tiberium Project @feature 12: 32 players (vision spied by); 13: what the attribute modifiers set and scale; 14: the special state's condition
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -4339,6 +4346,14 @@ void Object::xfer( Xfer *xfer )
 
 	// special model condition until
 	xfer->xferUnsignedInt( &m_smcUntil );
+
+	// Tiberium Project @feature and which condition it is (the cheer before version 14)
+	if( version >= 14 )
+	{
+		Int smcCondition = (Int)m_smcCondition;
+		xfer->xferInt( &smcCondition );
+		m_smcCondition = (ModelConditionFlagType)smcCondition;
+	}
 
 	//
 	// radar data ... when loading, we will remove all objects from the radar and let
@@ -4974,6 +4989,21 @@ Bool Object::hasUpgrade( const UpgradeTemplate *upgradeT ) const
 		return TRUE;
 	}
 	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature the upgrade of this name, the object's own or its player's (SAGE's UpgradeRequired and
+	UpgradeForbidden: C&C4's husk kept by a player with Backup Systems) */
+//-------------------------------------------------------------------------------------------------
+Bool Object::hasUpgradeNamed( const AsciiString& upgradeName ) const
+{
+	const UpgradeTemplate *upgradeT = TheUpgradeCenter ? TheUpgradeCenter->findUpgrade( upgradeName ) : nullptr;
+	if( upgradeT == nullptr )
+		return FALSE;
+	if( m_objectUpgradesCompleted.testForAll( upgradeT->getUpgradeMask() ) )
+		return TRUE;
+	const Player *player = getControllingPlayer();
+	return player != nullptr && player->getCompletedUpgradeMask().testForAll( upgradeT->getUpgradeMask() );
 }
 
 //-------------------------------------------------------------------------------------------------

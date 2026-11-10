@@ -884,6 +884,10 @@ public:
 		if (r != ENEMIES)
 			return false;
 
+		// Tiberium Project @feature not what nothing picks of its own accord (SAGE's NOT_AUTOACQUIRABLE: a husk)
+		if (objOther->isKindOf(KINDOF_NOT_AUTOACQUIRABLE))
+			return false;
+
 		return true;
 	}
 

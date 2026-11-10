@@ -91,6 +91,7 @@ const char *const TheEvaMessageNames[] =
   "SUPERWEAPONLAUNCHED_OWN_SNEAK_ATTACK",
   "SUPERWEAPONLAUNCHED_ALLY_SNEAK_ATTACK",
   "SUPERWEAPONLAUNCHED_ENEMY_SNEAK_ATTACK",
+	"BUILDINGCAPTURED",	// Tiberium Project
 
 	//****************************************************************************
 	//Kris: Don't forget to add another handler below -- it's ghey-ly implemented.
@@ -154,6 +155,7 @@ const ShouldPlayFunc Eva::s_shouldPlayFuncs[] =
   Eva::shouldPlayGenericHandler,
   Eva::shouldPlayGenericHandler,
   Eva::shouldPlayGenericHandler,
+	Eva::shouldPlayGenericHandler,	// Tiberium Project: BuildingCaptured
 };
 
 

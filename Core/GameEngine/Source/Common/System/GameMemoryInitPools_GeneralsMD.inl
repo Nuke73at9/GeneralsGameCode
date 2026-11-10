@@ -114,6 +114,8 @@ static PoolSizeRec PoolSizes[] =
 	{ "BridgeScaffoldBehavior", 32, 32 },
 	{ "CaveContain", 16, 16 },
 	{ "HealContain", 32, 32 },
+	{ "EngineerContain", 256, 64 },	// Tiberium Project @feature an engineer's way in (husks, buildings)
+	{ "CreateObjectOnHealed", 64, 32 },	// Tiberium Project @feature a husk mended back
 	{ "CreateCrateDie", 256, 128 },
 	{ "CreateObjectDie", 1024, 32 },
 	{ "EjectPilotDie", 1024, 32 },

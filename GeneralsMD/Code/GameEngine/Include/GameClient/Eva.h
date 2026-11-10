@@ -93,6 +93,7 @@ enum EvaMessage CPP_11(: Int)
 	EVA_SuperweaponLaunched_Own_Sneak_Attack,
   EVA_SuperweaponLaunched_Ally_Sneak_Attack,
   EVA_SuperweaponLaunched_Enemy_Sneak_Attack,
+	EVA_BuildingCaptured,	///< Tiberium Project: the player's engineer took a building (Kane's Wrath's and C&C4's EnemyBuildingCaptured)
 
 	EVA_COUNT,
 	EVA_FIRST = 0,

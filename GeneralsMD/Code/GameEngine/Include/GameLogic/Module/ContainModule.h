@@ -97,6 +97,8 @@ public:
 	virtual Bool isSpecialZeroSlotContainer() const = 0;
 	virtual Bool isHealContain() const = 0;
 	virtual Bool isTunnelContain() const = 0;
+	virtual Bool isEngineerContain() const = 0;	///< Tiberium Project: an engineer's way in (EngineerContain)
+	virtual const char *getEnterVoiceName( Bool hostile ) const = 0;	///< Tiberium Project: the per-unit voice of one ordered in (none: nullptr)
 	virtual Bool isRiderChangeContain() const = 0;
 	virtual Bool isImmuneToClearBuildingAttacks() const = 0;
   virtual Bool isSpecialOverlordStyleContainer() const = 0;

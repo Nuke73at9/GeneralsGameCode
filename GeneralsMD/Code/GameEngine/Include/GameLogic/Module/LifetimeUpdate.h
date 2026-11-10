@@ -40,6 +40,7 @@ public:
 	UnsignedInt m_minFrames;
 	UnsignedInt m_maxFrames;
 	DeathType m_deathType;	///< Tiberium Project @feature how the object dies when its time is up (C&C4's LifetimeUpdate DeathType)
+	std::vector<AsciiString> m_forbiddenUpgrades;	///< Tiberium Project @feature it lives on while the object or its player has one (C&C4's ForbiddenUpgrade: a husk kept by Backup Systems)
 
 	LifetimeUpdateModuleData()
 	{
@@ -59,6 +60,7 @@ public:
 			{ "MinLifetime",					INI::parseDurationUnsignedInt,		nullptr, offsetof( LifetimeUpdateModuleData, m_minFrames ) },
 			{ "MaxLifetime",					INI::parseDurationUnsignedInt,		nullptr, offsetof( LifetimeUpdateModuleData, m_maxFrames ) },
 			{ "DeathType",						LifetimeUpdateModuleData::parseDeathType,		nullptr, offsetof( LifetimeUpdateModuleData, m_deathType ) },	// Tiberium Project
+			{ "ForbiddenUpgrade",			INI::parseAsciiStringVectorAppend,		nullptr, offsetof( LifetimeUpdateModuleData, m_forbiddenUpgrades ) },	// Tiberium Project
 			{ nullptr, nullptr, nullptr, 0 }
 		};
     p.add(dataFieldParse);

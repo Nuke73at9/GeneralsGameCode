@@ -59,6 +59,7 @@
 #include "GameLogic/Module/OpenContain.h"
 #include "GameLogic/Module/OverchargeBehavior.h"
 #include "GameLogic/Module/HealContain.h"
+#include "GameLogic/Module/EngineerContain.h"	// Tiberium Project
 #include "GameLogic/Module/GarrisonContain.h"
 #include "GameLogic/Module/InternetHackContain.h"
 #include "GameLogic/Module/RailedTransportContain.h"
@@ -252,6 +253,7 @@
 // damage includes
 #include "GameLogic/Module/BoneFXDamage.h"
 #include "GameLogic/Module/TransitionDamageFX.h"
+#include "GameLogic/Module/CreateObjectOnHealed.h"	// Tiberium Project
 
 // collide includes
 #include "GameLogic/Module/FireWeaponCollide.h"
@@ -373,6 +375,7 @@ void ModuleFactory::init()
 	addModule( OpenContain );
 	addModule( OverchargeBehavior );
 	addModule( HealContain );
+	addModule( EngineerContain );	// Tiberium Project
 	addModule( GarrisonContain );
 	addModule( InternetHackContain );
 	addModule( TransportContain );
@@ -567,6 +570,7 @@ void ModuleFactory::init()
 	// damage modules
 	addModule( BoneFXDamage );
 	addModule( TransitionDamageFX );
+	addModule( CreateObjectOnHealed );	// Tiberium Project
 
 	// collide modules
 	addModule( FireWeaponCollide );

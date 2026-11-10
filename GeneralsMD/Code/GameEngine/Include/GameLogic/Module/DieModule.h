@@ -54,6 +54,8 @@ public:
 	VeterancyLevelFlags		m_veterancyLevels;
 	ObjectStatusMaskType	m_exemptStatus;						///< die module is ignored if any of these status bits are set
 	ObjectStatusMaskType	m_requiredStatus;					///< die module is ignored if any of these status bits are clear
+	std::vector<AsciiString>	m_upgradeRequired;		///< Tiberium Project @feature ignored unless the object or its player has all of these (SAGE's UpgradeRequired)
+	std::vector<AsciiString>	m_upgradeForbidden;		///< Tiberium Project @feature ignored if the object or its player has any of these (SAGE's UpgradeForbidden)
 
 	DieMuxData();
 	static const FieldParse* getFieldParse();

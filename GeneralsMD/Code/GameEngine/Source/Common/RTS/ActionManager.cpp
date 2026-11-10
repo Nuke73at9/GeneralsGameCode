@@ -664,6 +664,15 @@ Bool ActionManager::canEnterObject( const Object *obj, const Object *objectToEnt
 		return FALSE;
 	}
 
+	// Tiberium Project @feature an engineer's way in (EngineerContain: Kane's Wrath's, C&C4's CaptureContain): whoever's
+	// it is, those it names go in, one at a time, to take it, mend it or raise it anew; nothing drops into it
+	if( contain->isEngineerContain() )
+	{
+		if( mode == COMBATDROP_INTO )
+			return FALSE;
+		return contain->isValidContainerFor( obj, mode == CHECK_CAPACITY );
+	}
+
 	if( contain->isHealContain() )
 	{
 		BodyModuleInterface *body = obj->getBodyModule();

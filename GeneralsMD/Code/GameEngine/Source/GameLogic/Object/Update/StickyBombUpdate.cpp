@@ -308,9 +308,12 @@ UpdateSleepTime StickyBombUpdate::update()
 		}
 
 		// Tiberium Project @feature it dies once its target has any of TargetForbiddenStatus (C&C4's
-		// DIE_WHEN_PARENT_HAS_FORBIDDEN_STATUS: the Aftershock's Tiberium cloud is gone as the Aftershock deploys)
+		// DIE_WHEN_PARENT_HAS_FORBIDDEN_STATUS), or lacks any of TargetRequiredStatus (the Aftershock's Tiberium cloud is
+		// gone as the Aftershock packs up, out of DEPLOYED)
 		const ObjectStatusMaskType &forbidden = getStickyBombUpdateModuleData()->m_targetForbiddenStatus;
-		if( forbidden.any() && target->getStatusBits().testForAny( forbidden ) )
+		const ObjectStatusMaskType &required = getStickyBombUpdateModuleData()->m_targetRequiredStatus;
+		if( ( forbidden.any() && target->getStatusBits().testForAny( forbidden ) )
+			|| ( required.any() && !target->getStatusBits().testForAll( required ) ) )
 		{
 			if( !self->isEffectivelyDead() )
 				self->kill();

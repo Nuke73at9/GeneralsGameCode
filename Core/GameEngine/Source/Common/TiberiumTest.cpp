@@ -1275,6 +1275,27 @@ void TiberiumTest::update()
 			sscanf( step.arg.c_str(), "%d,%d", &k, &j );
 			Object *obj = k >= 0 && k < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[k] ) : nullptr;
 			Object *into = j >= 0 && j < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[j] ) : nullptr;
+#if RTS_ZEROHOUR
+			// Tiberium Project @feature (the test) "enter=k,name:Template": into the nearest of that kind, anyone's (a husk an
+			// engineer raises anew, a building it takes)
+			const size_t named = step.arg.find( ",name:" );
+			if ( named != std::string::npos && obj != nullptr )
+			{
+				const std::string kind = step.arg.substr( named + 6 );
+				Real best = 0.0f;
+				for ( Object *o = TheGameLogic->getFirstObject(); o != nullptr; o = o->getNextObject() )
+				{
+					if ( o == obj || o->isEffectivelyDead() || o->isDestroyed() || o->getTemplate()->getName().compareNoCase( kind.c_str() ) != 0 )
+						continue;
+					const Real dx = o->getPosition()->x - obj->getPosition()->x, dy = o->getPosition()->y - obj->getPosition()->y;
+					if ( into == nullptr || dx * dx + dy * dy < best )
+					{
+						into = o;
+						best = dx * dx + dy * dy;
+					}
+				}
+			}
+#endif
 			if ( obj != nullptr && into != nullptr && obj->getAIUpdateInterface() != nullptr )
 				obj->getAIUpdateInterface()->aiEnter( into, CMD_FROM_PLAYER );
 			log( "frame %d: ui: enter %s%s", (int)s_frame, step.arg.c_str(), obj != nullptr && into != nullptr ? "" : " (no such object)" );
@@ -1389,6 +1410,20 @@ void TiberiumTest::update()
 			char type[64] = "EXPLOSION";
 			sscanf( step.arg.c_str(), "%d,%f,%63s", &k, &amount, type );
 			Object *obj = k >= 0 && k < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[k] ) : nullptr;
+#if RTS_ZEROHOUR
+			// Tiberium Project @feature (the test) "hurt=name:Template,amount,TYPE": the first of that kind, anyone's (a husk
+			// healed whole)
+			if ( step.arg.compare( 0, 5, "name:" ) == 0 )
+			{
+				char kind[128] = "";
+				sscanf( step.arg.c_str() + 5, "%127[^,],%f,%63s", kind, &amount, type );
+				for ( Object *o = TheGameLogic->getFirstObject(); o != nullptr && obj == nullptr; o = o->getNextObject() )
+				{
+					if ( !o->isEffectivelyDead() && !o->isDestroyed() && o->getTemplate()->getName().compareNoCase( kind ) == 0 )
+						obj = o;
+				}
+			}
+#endif
 			Int t = 0;
 			while ( DamageTypeFlags::s_bitNameList[t] != nullptr && stricmp( DamageTypeFlags::s_bitNameList[t], type ) != 0 )
 				++t;
@@ -2103,6 +2138,48 @@ void TiberiumTest::update()
 			up->appendIntegerArgument( 0 );
 			log( "frame %d: ui: right click at %d,%d", (int)s_frame, (int)at.x, (int)at.y );
 		}
+		else if ( step.action == "clickon" && TheMessageStream != nullptr && TheTacticalView != nullptr && TheGameLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) "clickon=Template": a player's left click on the first of that kind, anyone's,
+			// at its middle (the selection's order on it: an engineer sent into a husk or a building, with its voice)
+			const Object *on = nullptr;
+			for ( Object *o = TheGameLogic->getFirstObject(); o != nullptr && on == nullptr; o = o->getNextObject() )
+			{
+				if ( !o->isEffectivelyDead() && !o->isDestroyed() && o->getTemplate()->getName().compareNoCase( step.arg.c_str() ) == 0 )
+					on = o;
+			}
+			ICoord2D at;
+			at.x = at.y = 0;
+			if ( on != nullptr )
+			{
+				// (at a height where a click picks it: halfway up, a quarter, nearly the ground: a husk lies low)
+				static const Real heights[] = { 0.5f, 0.25f, 0.05f };
+				for ( Int h = 0; h < 3; ++h )
+				{
+					Coord3D mid = *on->getPosition();
+					mid.z += on->getGeometryInfo().getMaxHeightAbovePosition() * heights[h];
+					TheTacticalView->worldToScreen( &mid, &at );
+					const Drawable *picked = TheTacticalView->pickDrawable( &at, FALSE, PICK_TYPE_SELECTABLE );
+					if ( picked != nullptr && picked->getObject() == on )
+						break;
+				}
+				if ( TheMouse != nullptr )
+					TheMouse->setPosition( at.x, at.y );
+				GameMessage *down = TheMessageStream->appendMessage( GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_DOWN );
+				down->appendPixelArgument( at );
+				down->appendIntegerArgument( 0 );
+				down->appendIntegerArgument( 0 );
+				GameMessage *up = TheMessageStream->appendMessage( GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_UP );
+				up->appendPixelArgument( at );
+				up->appendIntegerArgument( 0 );
+				up->appendIntegerArgument( 0 );
+			}
+			// (and what a click there picks, and whether it is masked: what the order is given on)
+			Drawable *hit = on != nullptr ? TheTacticalView->pickDrawable( &at, FALSE, PICK_TYPE_SELECTABLE ) : nullptr;
+			log( "frame %d: ui: click on %s at %d,%d%s: picks %s%s", (int)s_frame, step.arg.c_str(), (int)at.x, (int)at.y,
+				on != nullptr ? "" : " (none)", hit != nullptr && hit->getObject() != nullptr ? hit->getObject()->getTemplate()->getName().str() : "nothing",
+				on != nullptr && on->getStatusBits().test( OBJECT_STATUS_MASKED ) ? ", masked" : "" );
+		}
 #endif
 		else if ( step.action == "sell" )
 		{
@@ -2114,6 +2191,40 @@ void TiberiumTest::update()
 			ThePlayerList->getLocalPlayer()->getMoney()->deposit( (UnsignedInt)atoi( step.arg.c_str() ), FALSE );
 			log( "frame %d: ui: money %s", (int)s_frame, step.arg.c_str() );
 		}
+#if RTS_ZEROHOUR
+		else if ( step.action == "objinfo" && TheGameLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) "objinfo=Template": each of that kind, anyone's (up to eight): whose, its
+			// health, whether it is held still or untouchable, its first user condition set, where (a husk, the vehicle
+			// raised from it)
+			Int n = 0;
+			for ( Object *o = TheGameLogic->getFirstObject(); o != nullptr && n < 8; o = o->getNextObject() )
+			{
+				if ( o->isDestroyed() || o->getTemplate()->getName().compareNoCase( step.arg.c_str() ) != 0 )
+					continue;
+				++n;
+				const BodyModuleInterface *body = o->getBodyModule();
+				const Player *owner = o->getControllingPlayer();
+				const Drawable *draw = o->getDrawable();
+				const char *user = draw == nullptr ? "" : draw->getModelConditionFlags().test( MODELCONDITION_USER_5 ) ? " USER_5"
+					: draw->getModelConditionFlags().test( MODELCONDITION_USER_2 ) ? " USER_2" : "";
+				// (and its last hit: how much, what kind, from what)
+				const DamageInfo *last = body != nullptr ? body->getLastDamageInfo() : nullptr;
+				const Object *hitter = last != nullptr ? TheGameLogic->findObjectByID( last->in.m_sourceID ) : nullptr;
+				char hit[160] = "";
+				if ( last != nullptr && last->in.m_damageType != DAMAGE_HEALING && last->out.m_actualDamageDealt > 0.0f )
+					snprintf( hit, sizeof( hit ), ", last hit %.0f type %d from %s", last->out.m_actualDamageDealt, (int)last->in.m_damageType,
+						hitter != nullptr ? hitter->getTemplate()->getName().str() : "nobody" );
+				log( "frame %d: ui: objinfo %s: player %d%s, health %.0f of %.0f%s%s%s%s at %.0f %.0f", (int)s_frame, step.arg.c_str(),
+					owner != nullptr ? (int)owner->getPlayerIndex() : -1, owner != nullptr && owner == ThePlayerList->getNeutralPlayer() ? " (neutral)" : "",
+					body != nullptr ? body->getHealth() : 0.0f, body != nullptr ? body->getMaxHealth() : 0.0f,
+					o->isDisabledByType( DISABLED_HELD ) ? ", held" : "", o->isEffectivelyDead() ? ", dead" : "", user, hit,
+					o->getPosition()->x, o->getPosition()->y );
+			}
+			if ( n == 0 )
+				log( "frame %d: ui: objinfo %s: none", (int)s_frame, step.arg.c_str() );
+		}
+#endif
 		else if ( step.action == "count" && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
 		{
 			// how many of an object the local player has (what a factory made); "Template,all": and where each stands

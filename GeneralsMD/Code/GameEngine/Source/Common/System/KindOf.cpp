@@ -167,6 +167,7 @@ const char* const KindOfMaskType::s_bitNameList[] =
 	"LIGHT_UNIT",											// Tiberium Project
 	"MEDIUM_UNIT",										// Tiberium Project
 	"HEAVY_UNIT",											// Tiberium Project
+	"NOT_AUTOACQUIRABLE",							// Tiberium Project
 
 	nullptr
 };

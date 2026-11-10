@@ -55,12 +55,14 @@ public:
 	DamageTypeFlags	m_absorbDamageTypes;	///< Tiberium Project: the kinds of hit it takes for the target (C&C4's all but DamageTypesToNotLeech)
 	Bool						m_targetShieldTint;	///< Tiberium Project: the target drawn shielded while it is there (C&C4's PERSONAL_SHIELDS look)
 	ObjectStatusMaskType	m_targetForbiddenStatus;	///< Tiberium Project: it dies once its target has any of these (C&C4's ForbiddenParentStatus)
+	ObjectStatusMaskType	m_targetRequiredStatus;	///< Tiberium Project: it dies once its target lacks any of these (a forbidden status of a toggle's first state)
 	NameKeyType			m_targetModifier;	///< Tiberium Project: an attribute modifier on its target while it is there (C&C4's ParentModifierToSet)
 	Bool						m_onePerTarget;	///< Tiberium Project: one of its kind on a target: those already there die (C&C4's DETACH_WHEN_MULTIPLE_ARE_ATTACHED)
 
 	StickyBombUpdateModuleData()
 	{
 		m_targetForbiddenStatus.clear();
+		m_targetRequiredStatus.clear();
 		m_targetModifier = NAMEKEY_INVALID;
 		m_onePerTarget = FALSE;
 		m_offsetZ = 10.0f;
@@ -96,9 +98,12 @@ public:
 			{ "AbsorbDamageTypes",				INI::parseDamageTypeFlags,	nullptr, offsetof( StickyBombUpdateModuleData, m_absorbDamageTypes ) },
 			{ "TargetShieldTint",					INI::parseBool,						nullptr, offsetof( StickyBombUpdateModuleData, m_targetShieldTint ) },
 			// Tiberium Project @feature SAGE's AttachUpdate on what it is stuck to (C&C4's Aftershock's Tiberium cloud): it dies
-			// once its target has any of TargetForbiddenStatus (DIE_WHEN_PARENT_HAS_FORBIDDEN_STATUS: the Aftershock deployed),
+			// once its target has any of TargetForbiddenStatus (DIE_WHEN_PARENT_HAS_FORBIDDEN_STATUS),
 			// and its target has TargetModifier while it is there (ParentModifierToSet), taken off as it goes
 			{ "TargetForbiddenStatus",		ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( StickyBombUpdateModuleData, m_targetForbiddenStatus ) },
+			// (and once it lacks any of TargetRequiredStatus: C&C4's ForbiddenParentStatus of the state its toggle starts in,
+			// the Aftershock's cloud gone as the Aftershock packs up, out of DEPLOYED)
+			{ "TargetRequiredStatus",			ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( StickyBombUpdateModuleData, m_targetRequiredStatus ) },
 			{ "TargetModifier",						AttributeModifierStore::parseModifierName,	nullptr, offsetof( StickyBombUpdateModuleData, m_targetModifier ) },
 			// Tiberium Project @feature one of its kind on a target at a time: as it sticks there, those of its kind already there
 			// die, a death not of old age (C&C4's Shockwave: a second sonic charge on a target sets the first one's bonus blast off)

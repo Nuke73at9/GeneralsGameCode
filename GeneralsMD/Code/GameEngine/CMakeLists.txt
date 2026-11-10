@@ -340,6 +340,7 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/GrantUpgradeCreate.h
     Include/GameLogic/Module/HackInternetAIUpdate.h
     Include/GameLogic/Module/HealContain.h
+    Include/GameLogic/Module/EngineerContain.h
     Include/GameLogic/Module/HealCrateCollide.h
     Include/GameLogic/Module/HeightDieUpdate.h
     Include/GameLogic/Module/HelicopterSlowDeathUpdate.h
@@ -494,6 +495,7 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/TensileFormationUpdate.h
     Include/GameLogic/Module/ToppleUpdate.h
     Include/GameLogic/Module/TransitionDamageFX.h
+    Include/GameLogic/Module/CreateObjectOnHealed.h
     Include/GameLogic/Module/TransportAIUpdate.h
     Include/GameLogic/Module/TransportContain.h
     Include/GameLogic/Module/TunnelContain.h
@@ -956,6 +958,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Contain/CaveContain.cpp
     Source/GameLogic/Object/Contain/GarrisonContain.cpp
     Source/GameLogic/Object/Contain/HealContain.cpp
+    Source/GameLogic/Object/Contain/EngineerContain.cpp
     Source/GameLogic/Object/Contain/HelixContain.cpp
     Source/GameLogic/Object/Contain/InternetHackContain.cpp
     Source/GameLogic/Object/Contain/MobNexusContain.cpp
@@ -977,6 +980,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Damage/BoneFXDamage.cpp
     Source/GameLogic/Object/Damage/DamageModule.cpp
     Source/GameLogic/Object/Damage/TransitionDamageFX.cpp
+    Source/GameLogic/Object/Damage/CreateObjectOnHealed.cpp
     Source/GameLogic/Object/Destroy/DestroyModule.cpp
     Source/GameLogic/Object/Die/CreateCrateDie.cpp
     Source/GameLogic/Object/Die/CreateObjectDie.cpp

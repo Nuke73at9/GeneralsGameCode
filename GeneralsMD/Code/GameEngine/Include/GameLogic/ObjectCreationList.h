@@ -41,6 +41,7 @@ class ObjectCreationList;
 class ObjectCreationListStore;
 class INI;
 class Object;
+class Team;
 
 //-------------------------------------------------------------------------------------------------
 /**
@@ -165,6 +166,11 @@ public:
 	/// weapon's TargetOCL on its victim: C&C4's AttachToTarget, the Shockwave's sonic charge on what it hits)
 	static void setStickTarget( Object *target );
 	static Object *getStickTarget();
+
+	/// Tiberium Project @feature while set, what an OCL makes is this team's (an engineer raising a husk anew for its
+	/// own side: EngineerContain)
+	static void setOwnerOverride( Team *team );
+	static Team *getOwnerOverride();
 
 protected:
 

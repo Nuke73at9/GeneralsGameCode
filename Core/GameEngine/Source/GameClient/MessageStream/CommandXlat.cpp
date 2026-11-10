@@ -91,6 +91,7 @@
 #include "GameNetwork/GameSpy/BuddyThread.h"
 
 #include "WW3D2/ww3d.h"
+#include "Common/TiberiumTest.h"	// Tiberium Project
 
 #if defined(RTS_DEBUG)
 /*non-static*/ Real TheSkateDistOverride = 0.0f;
@@ -544,6 +545,18 @@ void pickAndPlayUnitVoiceResponse( const DrawableList *list, GameMessage::Type m
 				skip = true;
 				break;
 			case GameMessage::MSG_ENTER:
+#if RTS_ZEROHOUR
+				// Tiberium Project @feature an engineer's own words for what it goes in to do, named by the way in (its
+				// EngineerContain: Kane's Wrath's NameOfVoiceToUseForFriendlyEnter and HostileEnter, C&C4's
+				// OnCaptureNameOfVoiceToUse): "repairing", "capturing", a husk's own
+				if( target && target->getContain() && target->getContain()->isEngineerContain()
+					&& target->getContain()->getEnterVoiceName( obj->getRelationship( target ) != ALLIES ) != nullptr
+					&& templ->getPerUnitSound( target->getContain()->getEnterVoiceName( obj->getRelationship( target ) != ALLIES ) )->getEventName().isNotEmpty() )
+				{
+					soundToPlayPtr = templ->getPerUnitSound( target->getContain()->getEnterVoiceName( obj->getRelationship( target ) != ALLIES ) );
+				}
+				else
+#endif
 				if( target && target->isKindOf( KINDOF_HEAL_PAD ) )
 				{
 					soundToPlayPtr = templ->getPerUnitSound( "VoiceGetHealed" );
@@ -873,6 +886,12 @@ void pickAndPlayUnitVoiceResponse( const DrawableList *list, GameMessage::Type m
 
 	if (!soundToPlayPtr)
 		return;
+
+#if RTS_ZEROHOUR
+	// Tiberium Project @feature (the test) the voice an order calls for
+	if( TiberiumTest::isActive() && soundToPlayPtr->getEventName().isNotEmpty() )
+		TiberiumTest::log( "frame %u: ui: voice %s for order %d", TheGameLogic->getFrame(), soundToPlayPtr->getEventName().str(), (int)msgType );
+#endif
 
 	AudioEventRTS soundToPlay = *soundToPlayPtr;
 

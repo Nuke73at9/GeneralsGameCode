@@ -179,6 +179,7 @@ enum KindOfType CPP_11(: Int)
 	KINDOF_LIGHT_UNIT,							///< Tiberium Project: C&C4's weight classes (what a claw can lift, a satchel blows up, a bunker takes in)
 	KINDOF_MEDIUM_UNIT,							///< Tiberium Project
 	KINDOF_HEAVY_UNIT,							///< Tiberium Project
+	KINDOF_NOT_AUTOACQUIRABLE,			///< Tiberium Project: SAGE's: nothing picks it as a target of its own accord, only when ordered (a husk)
 
 	KINDOF_COUNT,										// total number of kindofs
 	KINDOF_FIRST = 0,

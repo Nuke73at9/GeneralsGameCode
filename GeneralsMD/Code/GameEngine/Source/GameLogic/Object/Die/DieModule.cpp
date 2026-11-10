@@ -57,6 +57,8 @@ const FieldParse* DieMuxData::getFieldParse()
 		{ "VeterancyLevels",	INI::parseVeterancyLevelFlags,			nullptr, offsetof( DieMuxData, m_veterancyLevels ) },
 		{ "ExemptStatus",			ObjectStatusMaskType::parseFromINI,	nullptr,	offsetof( DieMuxData, m_exemptStatus ) },
 		{ "RequiredStatus",		ObjectStatusMaskType::parseFromINI, nullptr,	offsetof( DieMuxData, m_requiredStatus ) },
+		{ "UpgradeRequired",	INI::parseAsciiStringVectorAppend, nullptr,	offsetof( DieMuxData, m_upgradeRequired ) },	// Tiberium Project
+		{ "UpgradeForbidden",	INI::parseAsciiStringVectorAppend, nullptr,	offsetof( DieMuxData, m_upgradeForbidden ) },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
   return dataFieldParse;
@@ -80,6 +82,19 @@ Bool DieMuxData::isDieApplicable(const Object* obj, const DamageInfo *damageInfo
 	// all 'required' bits must be set for us to run.
 	if( !obj->getStatusBits().testForAll( m_requiredStatus ) )
 		return false;
+
+	// Tiberium Project @feature the upgrades it needs, and those that stop it (C&C4's husk: its player's own with Backup
+	// Systems, no one's without)
+	for( std::vector<AsciiString>::const_iterator it = m_upgradeRequired.begin(); it != m_upgradeRequired.end(); ++it )
+	{
+		if( !obj->hasUpgradeNamed( *it ) )
+			return false;
+	}
+	for( std::vector<AsciiString>::const_iterator it = m_upgradeForbidden.begin(); it != m_upgradeForbidden.end(); ++it )
+	{
+		if( obj->hasUpgradeNamed( *it ) )
+			return false;
+	}
 
 	return true;
 }

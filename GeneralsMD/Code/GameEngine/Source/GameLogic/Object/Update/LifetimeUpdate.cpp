@@ -102,6 +102,15 @@ UnsignedInt LifetimeUpdate::calcSleepDelay(UnsignedInt minFrames, UnsignedInt ma
 //-------------------------------------------------------------------------------------------------
 UpdateSleepTime LifetimeUpdate::update()
 {
+	// Tiberium Project @feature not while the object or its player has one of its ForbiddenUpgrade (C&C4's husk is kept
+	// by its player's Backup Systems, a neutral one is not): it looks again in a second
+	const std::vector<AsciiString>& forbidden = getLifetimeUpdateModuleData()->m_forbiddenUpgrades;
+	for( std::vector<AsciiString>::const_iterator it = forbidden.begin(); it != forbidden.end(); ++it )
+	{
+		if( getObject()->hasUpgradeNamed( *it ) )
+			return UPDATE_SLEEP( LOGICFRAMES_PER_SECOND );
+	}
+
 	// Kill (NOT destroy) if time is up
 	// Tiberium Project @feature with the module's death type (DEATH_NORMAL unless given)
 	getObject()->kill( DAMAGE_UNRESISTABLE, getLifetimeUpdateModuleData()->m_deathType );
