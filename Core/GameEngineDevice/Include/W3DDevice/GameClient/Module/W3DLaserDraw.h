@@ -59,6 +59,15 @@ public:
 	Real m_tileLength;				///< Tiberium Project: the texture once every this far along the beam (TileLength), 0 for TilingScalar's way
 	RGBColor m_lightColor;		///< Tiberium Project: the beam lights where it hits in this colour (C&C4's LaserDraw LightColor); black: none
 	Real m_lightRadius;				///< Tiberium Project: ... this far round (C&C4's LightMax); 0: none
+	// Tiberium Project: C&C4's LaserDraw texturing (its Laser.fx: Texture1 * Texture2, each tiled and scrolled)
+	Real m_tilesPerBeam;			///< the texture this many times over the whole beam, whatever its length (Texture1_VTile); 0: by Tile
+	Real m_uTile;							///< ... and this many times across it (Texture1_UTile)
+	Real m_uScrollRate;				///< ... scrolling across it this much a second (Texture1_UScrollRate)
+	AsciiString m_texture2Name;	///< a second texture multiplying the first (Texture2)
+	Real m_texture2TilesPerBeam;	///< ... this many times over the whole beam (Texture2_VTile)
+	Real m_texture2UTile;			///< ... and across it (Texture2_UTile)
+	Real m_texture2ScrollRate;	///< ... scrolling along it this much a second (Texture2_VScrollRate)
+	Real m_texture2UScrollRate;	///< ... and across it (Texture2_UScrollRate)
 
 	W3DLaserDrawModuleData();
 	virtual ~W3DLaserDrawModuleData() override;
@@ -99,6 +108,11 @@ protected:
 
 	SegmentedLineClass **m_line3D;  ///< line 3D for effect
 	TextureClass *m_texture;
+	TextureClass *m_texture2;				///< Tiberium Project: the second texture (Texture2)
+	Coord3D m_drawnStart;						///< Tiberium Project: the beam as last drawn: from, to, width scale, reach (not saved)
+	Coord3D m_drawnEnd;
+	Real m_drawnWidthScale;
+	Real m_drawnReach;
 	Real m_textureAspectRatio;			///< aspect ratio of texture
 	Bool m_selfDirty;								// not saved
 	UnsignedInt m_nextLightFrame;		///< Tiberium Project: the next client frame its light may pulse again (not saved)

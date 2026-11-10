@@ -113,6 +113,12 @@ class SegmentedLineClass : public RenderObjClass
 		void					Set_Freeze_Random(int onoff);
 		void					Set_Disable_Sorting(int onoff);
 		void					Set_End_Caps(int onoff);
+		// Tiberium Project @feature the texture's V over the whole line and U scale; a second texture multiplying the first
+		void					Set_Texture_V_Range(float v_start, float v_end)	{ LineRenderer.Set_Texture_V_Range(v_start, v_end); }
+		void					Set_Texture_U_Scale(float scale)						{ LineRenderer.Set_Texture_U_Scale(scale); }
+		void					Set_Texture2(TextureClass *texture)					{ LineRenderer.Set_Texture2(texture); }
+		void					Set_Texture2_Mapping(float u_scale, float v_start, float v_end)	{ LineRenderer.Set_Texture2_Mapping(u_scale, v_start, v_end); }
+		void					Set_UV2_Offset_Rate(const Vector2 &rate)			{ LineRenderer.Set_UV2_Offset_Rate(rate); }
 
 		/////////////////////////////////////////////////////////////////////////////
 		// Render Object Interface - Cloning and Identification

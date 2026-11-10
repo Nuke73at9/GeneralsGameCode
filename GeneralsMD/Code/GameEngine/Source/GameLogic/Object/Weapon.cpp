@@ -281,6 +281,7 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "AutoReloadsClip",					INI::parseIndexList,										TheWeaponReloadNames,							offsetof(WeaponTemplate, m_reloadType) },
 	{ "ProjectileStreamName",			INI::parseAsciiString,									nullptr,							offsetof(WeaponTemplate, m_projectileStreamName) },
 	{ "LaserName",								INI::parseAsciiString,									nullptr,							offsetof(WeaponTemplate, m_laserName) },
+	{ "LaserNameStrongCounter",		INI::parseAsciiString,									nullptr,							offsetof(WeaponTemplate, m_laserNameStrongCounter) },	// Tiberium Project
 	{ "LaserBoneName",						INI::parseAsciiString,									nullptr,							offsetof(WeaponTemplate, m_laserBoneName) },
 	{ "RenewLaser",								INI::parseBool,													nullptr,							offsetof(WeaponTemplate, m_renewLaser) },	// Tiberium Project
 	{ "WeaponBonus",							WeaponTemplate::parseWeaponBonusSet,		nullptr,							0 },
@@ -405,6 +406,7 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_antiMask											= WEAPON_ANTI_GROUND;	// but not air or projectile.
 	m_projectileStreamName.clear();
 	m_laserName.clear();
+	m_laserNameStrongCounter.clear();	// Tiberium Project
 	m_laserBoneName.clear();
 	m_renewLaser										= FALSE;	// Tiberium Project
 	m_historicBonusTime							= 0;
@@ -3445,11 +3447,16 @@ void Weapon::createLaser( const Object *sourceObj, const Object *victimObj, cons
 {
 	// Tiberium Project: the laser of the weapon fired (one fired in this one's place with an upgrade: UpgradedWeapon)
 	const WeaponTemplate *tmpl = laserTemplate != nullptr ? laserTemplate : m_template;
-	const ThingTemplate* pst = TheThingFactory->findTemplate(tmpl->getLaserName());
+	// Tiberium Project @feature C&C4's strong counter look (its LaserDraw for CombatChainCounter STRONG): the other
+	// laser at what its kind of weapon counters (LaserNameStrongCounter: a laser at heavy armour)
+	AsciiString laserName = tmpl->getLaserName();
+	if( tmpl->getLaserNameStrongCounter().isNotEmpty() && victimObj != nullptr && tmpl->isStrongCounterAgainst( victimObj ) )
+		laserName = tmpl->getLaserNameStrongCounter();
+	const ThingTemplate* pst = TheThingFactory->findTemplate(laserName);
 	if( !pst )
 	{
 		DEBUG_CRASH( ("Weapon::createLaser(). %s could not find template for its laser %s.",
-			sourceObj->getTemplate()->getName().str(), tmpl->getLaserName().str() ) );
+			sourceObj->getTemplate()->getName().str(), laserName.str() ) );
 		return;
 	}
 	// Tiberium Project @feature RenewLaser: while the laser the last shot made lives, this shot renews it (its life

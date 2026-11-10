@@ -47,7 +47,7 @@
 class RenderInfoClass;
 class SphereClass;
 struct W3dEmitterLinePropertiesStruct;
-struct VertexFormatXYZDUV1;
+struct VertexFormatXYZDUV2;
 
 
 // The maximum allowable level of subdivision. This should be no more than 7 to avoid increasing
@@ -114,6 +114,19 @@ public:
 	void					Set_Disable_Sorting(int onoff)						{ if (onoff) { Bits |= DISABLE_SORTING; } else { Bits &= ~DISABLE_SORTING; }; }
 	void					Set_End_Caps(int onoff)									{ if (onoff) { Bits |= END_CAPS; } else { Bits &= ~END_CAPS; }; }
 
+	// Tiberium Project @feature the texture's V running from one value at the line's first point to another at its
+	// last, whatever the line's length (C&C4's LaserDraw Texture1_VTile), in place of the mapping mode's; and its U
+	// across the line from 0 to a scale (Texture1_UTile)
+	void					Set_Texture_V_Range(float v_start, float v_end)	{ HasVRange = true; VRangeStart = v_start; VRangeEnd = v_end; }
+	void					Set_Texture_U_Scale(float scale)						{ TextureUScale = scale; }
+	// Tiberium Project @feature a second texture multiplied with the first (C&C4's Laser.fx: Texture1 * Texture2) on its
+	// own coordinates: U across the line from 0 to a scale, V from one value at the first point to another at the
+	// last, both scrolling at their own rate (per second)
+	void					Set_Texture2(TextureClass *texture);
+	TextureClass *		Peek_Texture2() const								{ return Texture2; }
+	void					Set_Texture2_Mapping(float u_scale, float v_start, float v_end)	{ Texture2UScale = u_scale; Texture2VStart = v_start; Texture2VEnd = v_end; }
+	void					Set_UV2_Offset_Rate(const Vector2 &rate)			{ UV2OffsetDeltaPerMS = rate * 0.001f; }
+
 
 	void					Render(	RenderInfoClass & rinfo,
 										const Matrix3D & transform,
@@ -159,6 +172,18 @@ private:
 	Vector2							CurrentUVOffset;		// Current UV offset
 	Vector2							UVOffsetDeltaPerMS;	// Amount to increase offset each millisec
 
+	// Tiberium Project: the V range in place of the mapping mode's (HasVRange), the U scale, and the second texture
+	bool								HasVRange;
+	float								VRangeStart;
+	float								VRangeEnd;
+	float								TextureUScale;
+	TextureClass *					Texture2;
+	float								Texture2UScale;
+	float								Texture2VStart;
+	float								Texture2VEnd;
+	Vector2							CurrentUV2Offset;
+	Vector2							UV2OffsetDeltaPerMS;
+
 	// Various flags
 	enum BitShiftOffsets {
 		TEXTURE_MAP_MODE_OFFSET = 24	// By how many bits do I need to shift the texture mapping mode?
@@ -178,9 +203,9 @@ private:
 
 	friend class SegmentedLineClass;
 
-	VertexFormatXYZDUV1 *getVertexBuffer(unsigned int number);
+	VertexFormatXYZDUV2 *getVertexBuffer(unsigned int number);	// Tiberium Project: two texture coordinate sets
 	unsigned int m_vertexBufferSize;
-	VertexFormatXYZDUV1 *m_vertexBuffer;
+	VertexFormatXYZDUV2 *m_vertexBuffer;
 };
 
 

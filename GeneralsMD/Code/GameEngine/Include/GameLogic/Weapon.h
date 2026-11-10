@@ -455,6 +455,10 @@ public:
 	AsciiString getName() const { return m_name; }
 	AsciiString getProjectileStreamName() const { return m_projectileStreamName; }
 	AsciiString getLaserName() const { return m_laserName; }
+	const AsciiString& getLaserNameStrongCounter() const { return m_laserNameStrongCounter; }	///< Tiberium Project
+	/// Tiberium Project @feature whether the victim's armour is one its kind of weapon counters (C&C4's CombatChain: its
+	/// CounterCategory among the armour's CounteredBy)
+	Bool isStrongCounterAgainst(const Object *victim) const;
 	const AsciiString& getLaserBoneName() const { return m_laserBoneName; }
 	/// Tiberium Project @feature RenewLaser: while the laser the weapon's last shot made lives, each shot renews
 	/// it (its life starts over, its end moves to the new target) instead of making one more beside it. C&C3 and
@@ -558,9 +562,6 @@ private:
 	const FXList* getScatterFX() const { return m_scatterFX; }	///< Tiberium Project
 	/// Tiberium Project @feature whether its damage reaches the victim's kind (VictimKindOf, VictimForbiddenKindOf)
 	Bool isVictimKindAllowed(const Object *victim) const;
-	/// Tiberium Project @feature whether the victim's armour is one its kind of weapon counters (C&C4's CombatChain: its
-	/// CounterCategory among the armour's CounteredBy)
-	Bool isStrongCounterAgainst(const Object *victim) const;
 	Bool isTargetStatusAllowed(const Object *victim) const;	///< Tiberium Project: none of the statuses it may not be aimed at (SAGE's ForbiddenTargetObjectStatus)
 	/// the damage of its own (estimateWeaponTemplateDamage adds its follow-ups': Tiberium Project)
 	Real estimateOwnDamage(const Object *sourceObj, const Object *victimObj, const Coord3D* victimPos, const WeaponBonus& bonus) const;
@@ -571,6 +572,7 @@ private:
 	NameKeyType m_nameKey;									///< unique name key for this weapon template
 	AsciiString m_projectileStreamName;			///< Name of object that tracks are stream, if we have one
 	AsciiString m_laserName;								///< Name of the laser object that persists.
+	AsciiString m_laserNameStrongCounter;		///< Tiberium Project: its laser at what its kind counters (LaserNameStrongCounter: C&C4's strong counter look)
 	AsciiString m_laserBoneName;						///< Where to put the laser object
 	Bool m_renewLaser;											///< Tiberium Project: each shot renews the last shot's laser while it lives (RenewLaser)
 	Real m_primaryDamage;										///< primary damage amount

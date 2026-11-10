@@ -81,6 +81,16 @@ SegLineRendererClass::SegLineRendererClass() :
 		LastUsedSyncTime(WW3D::Get_Logic_Time_Milliseconds()),
 		CurrentUVOffset(0.0f,0.0f),
 		UVOffsetDeltaPerMS(0.0f, 0.0f),
+		HasVRange(false),					// Tiberium Project
+		VRangeStart(0.0f),
+		VRangeEnd(0.0f),
+		TextureUScale(1.0f),
+		Texture2(nullptr),
+		Texture2UScale(1.0f),
+		Texture2VStart(0.0f),
+		Texture2VEnd(1.0f),
+		CurrentUV2Offset(0.0f, 0.0f),
+		UV2OffsetDeltaPerMS(0.0f, 0.0f),
 		Bits(DEFAULT_BITS),
 		m_vertexBufferSize(0),
 		m_vertexBuffer(nullptr)
@@ -101,6 +111,16 @@ SegLineRendererClass::SegLineRendererClass(const SegLineRendererClass & that) :
 		LastUsedSyncTime(that.LastUsedSyncTime),
 		CurrentUVOffset(0.0f,0.0f),
 		UVOffsetDeltaPerMS(0.0f, 0.0f),
+		HasVRange(false),					// Tiberium Project
+		VRangeStart(0.0f),
+		VRangeEnd(0.0f),
+		TextureUScale(1.0f),
+		Texture2(nullptr),
+		Texture2UScale(1.0f),
+		Texture2VStart(0.0f),
+		Texture2VEnd(1.0f),
+		CurrentUV2Offset(0.0f, 0.0f),
+		UV2OffsetDeltaPerMS(0.0f, 0.0f),
 		Bits(DEFAULT_BITS),
 		m_vertexBufferSize(0),
 		m_vertexBuffer(nullptr)
@@ -123,6 +143,17 @@ SegLineRendererClass & SegLineRendererClass::operator = (const SegLineRendererCl
 		LastUsedSyncTime = that.LastUsedSyncTime;
 		CurrentUVOffset = that.CurrentUVOffset;
 		UVOffsetDeltaPerMS = that.UVOffsetDeltaPerMS;
+		// Tiberium Project
+		HasVRange = that.HasVRange;
+		VRangeStart = that.VRangeStart;
+		VRangeEnd = that.VRangeEnd;
+		TextureUScale = that.TextureUScale;
+		REF_PTR_SET(Texture2,that.Texture2);
+		Texture2UScale = that.Texture2UScale;
+		Texture2VStart = that.Texture2VStart;
+		Texture2VEnd = that.Texture2VEnd;
+		CurrentUV2Offset = that.CurrentUV2Offset;
+		UV2OffsetDeltaPerMS = that.UV2OffsetDeltaPerMS;
 		Bits = that.Bits;
 		// Don't modify m_vertexBufferSize and m_vertexBuffer
 	}
@@ -132,6 +163,7 @@ SegLineRendererClass & SegLineRendererClass::operator = (const SegLineRendererCl
 SegLineRendererClass::~SegLineRendererClass()
 {
 	REF_PTR_RELEASE(Texture);
+	REF_PTR_RELEASE(Texture2);	// Tiberium Project
 	delete [] m_vertexBuffer;
 }
 
@@ -171,6 +203,12 @@ void SegLineRendererClass::Set_Texture(TextureClass *texture)
 	REF_PTR_SET(Texture,texture);
 }
 
+// Tiberium Project @feature the second texture, multiplied with the first
+void SegLineRendererClass::Set_Texture2(TextureClass *texture)
+{
+	REF_PTR_SET(Texture2,texture);
+}
+
 TextureClass * SegLineRendererClass::Get_Texture() const
 {
 	if (Texture != nullptr) {
@@ -203,6 +241,7 @@ void SegLineRendererClass::Reset_Line()
 {
 	LastUsedSyncTime = WW3D::Get_Logic_Time_Milliseconds();
 	CurrentUVOffset.Set(0.0f,0.0f);
+	CurrentUV2Offset.Set(0.0f,0.0f);	// Tiberium Project
 }
 
 
@@ -234,6 +273,13 @@ void SegLineRendererClass::Render
 	// ensure offsets are in [0, 1] range:
 	uv_offset.X = uv_offset.X - floorf(uv_offset.X);
 	uv_offset.Y = uv_offset.Y - floorf(uv_offset.Y);
+
+	// Tiberium Project @feature the second texture's, at its own rate
+	Vector2 uv2_offset = CurrentUV2Offset + UV2OffsetDeltaPerMS * (float)delta;
+	uv2_offset.X = uv2_offset.X - floorf(uv2_offset.X);
+	uv2_offset.Y = uv2_offset.Y - floorf(uv2_offset.Y);
+	CurrentUV2Offset = uv2_offset;
+	const bool texture2_on = Texture != nullptr && Texture2 != nullptr;
 
 	// Update state
 	CurrentUVOffset = uv_offset;
@@ -297,6 +343,23 @@ void SegLineRendererClass::Render
 
 		float base_tex_v[MAX_SEGLINE_POINT_BUFFER_SIZE];
 		float u_values[2];
+		// Tiberium Project @feature with the V range or a second texture each point's V is first its index along the
+		// line, each texture's V a straight function of it at the vertex (the subdivision and the merged
+		// intersections average it, so the function holds); otherwise as ever
+		const bool by_index = HasVRange || texture2_on;
+		const float last_index = num_points > 1 ? (float)(num_points - 1) : 1.0f;
+		float v1_scale = 1.0f;
+		float v1_base = 0.0f;
+		if (by_index) {
+			if (HasVRange) {
+				v1_scale = (VRangeEnd - VRangeStart) / last_index;
+				v1_base = VRangeStart;
+			} else {
+				v1_scale = map_mode == UNIFORM_WIDTH_TEXTURE_MAP ? 0.0f : TextureTileFactor;
+			}
+		}
+		const float v2_scale = (Texture2VEnd - Texture2VStart) / last_index;
+		const float v2_base = Texture2VStart;
 		switch (map_mode) {
 			case UNIFORM_WIDTH_TEXTURE_MAP:
 				for (pidx = 0; pidx < point_cnt; pidx++) {
@@ -323,6 +386,14 @@ void SegLineRendererClass::Render
 				u_values[1] = 1.0f;
 				break;
 		}
+		// Tiberium Project @feature each point's index in place of its V (above), the texture's U scale, the second's U
+		if (by_index) {
+			for (pidx = 0; pidx < point_cnt; pidx++) {
+				base_tex_v[pidx] = (float)(pidx + chidx);
+			}
+		}
+		u_values[1] *= TextureUScale;
+		const float u2_values[2] = { 0.0f, Texture2UScale };
 
 
 		/*
@@ -926,7 +997,7 @@ void SegLineRendererClass::Render
 
 		// Configure vertex array and setup renderer.
 		unsigned int vnum = num_intersections[TOP_EDGE] + num_intersections[BOTTOM_EDGE];
-		VertexFormatXYZDUV1 *vArray = getVertexBuffer(vnum);
+		VertexFormatXYZDUV2 *vArray = getVertexBuffer(vnum);
 		TriIndex v_index_array[MAX_SEGLINE_POLY_BUFFER_SIZE];
 
 		// Vertex and triangle indices
@@ -934,6 +1005,15 @@ void SegLineRendererClass::Render
 		unsigned int tidx = 0;
 
 // GENERALIZE FOR WHEN NO TEXTURE (DO NOT SET UV IN THESE CASES? NEED TO GENERALIZE FOR DIFFERENT TEXTURING MODES ANYWAY).
+
+		// Tiberium Project @feature a vertex's texture coordinates on its edge (0 top, 1 bottom) at its intersection's V:
+		// the first texture's as ever (its V as is unless by index), and the second's
+		auto set_uv = [&](VertexFormatXYZDUV2 &vertex, int edge, float tex_v) {
+			vertex.u1 = u_values[edge] + uv_offset.X;
+			vertex.v1 = tex_v * v1_scale + v1_base + uv_offset.Y;
+			vertex.u2 = u2_values[edge] + uv2_offset.X;
+			vertex.v2 = tex_v * v2_scale + v2_base + uv2_offset.Y;
+		};
 
 		// "Prime the pump" with two vertices (pick nearest point on each direction line):
 		Vector3 &top_dir = intersection[1][TOP_EDGE].Direction;
@@ -944,15 +1024,13 @@ void SegLineRendererClass::Render
 		vArray[vidx].y = top.Y;
 		vArray[vidx].z = top.Z;
 		vArray[vidx].diffuse = DX8Wrapper::Convert_Color(intersection[1][TOP_EDGE].RGBA);
-		vArray[vidx].u1 = u_values[0] + uv_offset.X;
-		vArray[vidx].v1 = intersection[1][TOP_EDGE].TexV + uv_offset.Y;
+		set_uv(vArray[vidx], 0, intersection[1][TOP_EDGE].TexV);
 		vidx++;
 		vArray[vidx].x = bottom.X;
 		vArray[vidx].y = bottom.Y;
 		vArray[vidx].z = bottom.Z;
 		vArray[vidx].diffuse = DX8Wrapper::Convert_Color(intersection[1][BOTTOM_EDGE].RGBA);
-		vArray[vidx].u1 = u_values[1] + uv_offset.X;
-		vArray[vidx].v1 = intersection[1][BOTTOM_EDGE].TexV + uv_offset.Y;
+		set_uv(vArray[vidx], 1, intersection[1][BOTTOM_EDGE].TexV);
 		vidx++;
 
 		unsigned int last_top_vidx = 0;
@@ -1005,15 +1083,13 @@ void SegLineRendererClass::Render
 				vArray[vidx].y = top.Y;
 				vArray[vidx].z = top.Z;
 				vArray[vidx].diffuse = DX8Wrapper::Convert_Color(intersection[top_int_idx][TOP_EDGE].RGBA);
-				vArray[vidx].u1 = u_values[0] + uv_offset.X;
-				vArray[vidx].v1 = intersection[top_int_idx][TOP_EDGE].TexV + uv_offset.Y;
+				set_uv(vArray[vidx], 0, intersection[top_int_idx][TOP_EDGE].TexV);
 				vidx++;
 				vArray[vidx].x = bottom.X;
 				vArray[vidx].y = bottom.Y;
 				vArray[vidx].z = bottom.Z;
 				vArray[vidx].diffuse = DX8Wrapper::Convert_Color(intersection[bottom_int_idx][BOTTOM_EDGE].RGBA);
-				vArray[vidx].u1 = u_values[1] + uv_offset.X;
-				vArray[vidx].v1 = intersection[bottom_int_idx][BOTTOM_EDGE].TexV + uv_offset.Y;
+				set_uv(vArray[vidx], 1, intersection[bottom_int_idx][BOTTOM_EDGE].TexV);
 				vidx++;
 			} else {
 				// Exactly one of the pointcounts is greater than one - advance it and draw one triangle
@@ -1041,8 +1117,7 @@ void SegLineRendererClass::Render
 					vArray[vidx].y = bottom.Y;
 					vArray[vidx].z = bottom.Z;
 					vArray[vidx].diffuse = DX8Wrapper::Convert_Color(intersection[bottom_int_idx][BOTTOM_EDGE].RGBA);
-					vArray[vidx].u1 = u_values[1] + uv_offset.X;
-					vArray[vidx].v1 = intersection[bottom_int_idx][BOTTOM_EDGE].TexV + uv_offset.Y;
+					set_uv(vArray[vidx], 1, intersection[bottom_int_idx][BOTTOM_EDGE].TexV);
 					vidx++;
 				} else {
 
@@ -1070,8 +1145,7 @@ void SegLineRendererClass::Render
 					vArray[vidx].y = top.Y;
 					vArray[vidx].z = top.Z;
 					vArray[vidx].diffuse = DX8Wrapper::Convert_Color(intersection[top_int_idx][TOP_EDGE].RGBA);
-					vArray[vidx].u1 = u_values[0] + uv_offset.X;
-					vArray[vidx].v1 = intersection[top_int_idx][TOP_EDGE].TexV + uv_offset.Y;
+					set_uv(vArray[vidx], 0, intersection[top_int_idx][TOP_EDGE].TexV);
 					vidx++;
 				}
 			}
@@ -1128,6 +1202,13 @@ void SegLineRendererClass::Render
 			shader.Set_Texturing(ShaderClass::TEXTURING_DISABLE);
 		}
 
+		// Tiberium Project @feature the second texture multiplies the first, colour and alpha, on the second set
+		// of texture coordinates (the second stage's own, as the material sets it)
+		if (texture2_on) {
+			shader.Set_Post_Detail_Color_Func(ShaderClass::DETAILCOLOR_SCALE);
+			shader.Set_Post_Detail_Alpha_Func(ShaderClass::DETAILALPHA_SCALE);
+		}
+
 
 		/*
 		** Render
@@ -1144,6 +1225,7 @@ void SegLineRendererClass::Render
 			const unsigned int verticesOffset = fvfinfo.Get_Location_Offset();
 			const unsigned diffuseOffset = fvfinfo.Get_Diffuse_Offset();
 			const unsigned textureOffset = fvfinfo.Get_Tex_Offset(0);
+			const unsigned texture2Offset = fvfinfo.Get_Tex_Offset(1);	// Tiberium Project
 			const unsigned vbSize = fvfinfo.Get_FVF_Size();
 
 			for (i=0; i<vnum; i++)
@@ -1157,6 +1239,12 @@ void SegLineRendererClass::Render
 				Vector2 *texture = reinterpret_cast<Vector2 *>(vb + textureOffset);
 				texture->U = vArray[i].u1;
 				texture->V = vArray[i].v1;
+				if (texture2_on) {
+					// Tiberium Project: the second texture's
+					Vector2 *texture2 = reinterpret_cast<Vector2 *>(vb + texture2Offset);
+					texture2->U = vArray[i].u2;
+					texture2->V = vArray[i].v2;
+				}
 				vb += vbSize;
 			}
 		}
@@ -1179,6 +1267,9 @@ void SegLineRendererClass::Render
 		DX8Wrapper::Set_Vertex_Buffer(Verts);
 		DX8Wrapper::Set_Material(mat);
 		DX8Wrapper::Set_Texture(0,Texture);
+		if (texture2_on) {
+			DX8Wrapper::Set_Texture(1,Texture2);	// Tiberium Project
+		}
 		DX8Wrapper::Set_Shader(shader);
 
 		if (sorting) {
@@ -1301,14 +1392,14 @@ void SegLineRendererClass::Scale(float scale)
 	NoiseAmplitude *= scale;
 }
 
-VertexFormatXYZDUV1 *SegLineRendererClass::getVertexBuffer(unsigned int number)
+VertexFormatXYZDUV2 *SegLineRendererClass::getVertexBuffer(unsigned int number)
 {
 	// TODO: use a stl vector instead of our own array.
 	if (number > m_vertexBufferSize)
 	{
 		unsigned int numberToAlloc = number + (number >> 1);
 		delete [] m_vertexBuffer;
-		m_vertexBuffer = W3DNEWARRAY VertexFormatXYZDUV1[numberToAlloc];
+		m_vertexBuffer = W3DNEWARRAY VertexFormatXYZDUV2[numberToAlloc];
 		m_vertexBufferSize = numberToAlloc;
 	}
 

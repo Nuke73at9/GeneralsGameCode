@@ -74,6 +74,14 @@ W3DLaserDrawModuleData::W3DLaserDrawModuleData()
 	m_lightRadius = 0.0f;
 	m_segmentOverlapRatio = 0.0f;
 	m_tilingScalar = 1.0f;
+	// Tiberium Project: C&C4's texturing, off
+	m_tilesPerBeam = 0.0f;
+	m_uTile = 1.0f;
+	m_uScrollRate = 0.0f;
+	m_texture2TilesPerBeam = 1.0f;
+	m_texture2UTile = 1.0f;
+	m_texture2ScrollRate = 0.0f;
+	m_texture2UScrollRate = 0.0f;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -108,6 +116,15 @@ void W3DLaserDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "TileLength",						INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_tileLength ) },	// Tiberium Project
 		{ "LightColor",						INI::parseRGBColor,							nullptr, offsetof( W3DLaserDrawModuleData, m_lightColor ) },	// Tiberium Project
 		{ "LightRadius",					INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_lightRadius ) },	// Tiberium Project
+		// Tiberium Project: C&C4's LaserDraw texturing
+		{ "TilesPerBeam",					INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_tilesPerBeam ) },
+		{ "UTile",								INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_uTile ) },
+		{ "UScrollRate",					INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_uScrollRate ) },
+		{ "Texture2",							INI::parseAsciiString,					nullptr, offsetof( W3DLaserDrawModuleData, m_texture2Name ) },
+		{ "Texture2TilesPerBeam",	INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_texture2TilesPerBeam ) },
+		{ "Texture2UTile",				INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_texture2UTile ) },
+		{ "Texture2ScrollRate",		INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_texture2ScrollRate ) },
+		{ "Texture2UScrollRate",	INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_texture2UScrollRate ) },
 		{ nullptr, nullptr, nullptr, 0 }
 	};
   p.add(dataFieldParse);
@@ -120,10 +137,15 @@ W3DLaserDraw::W3DLaserDraw( Thing *thing, const ModuleData* moduleData ) :
 	DrawModule( thing, moduleData ),
 	m_line3D(nullptr),
 	m_texture(nullptr),
+	m_texture2(nullptr),
 	m_textureAspectRatio(1.0f),
 	m_selfDirty(TRUE),
-	m_nextLightFrame(0)
+	m_nextLightFrame(0),
+	m_drawnWidthScale(0.0f),
+	m_drawnReach(0.0f)
 {
+	m_drawnStart.zero();
+	m_drawnEnd.zero();
 	Vector3 dummyPos1( 0.0f, 0.0f, 0.0f );
 	Vector3 dummyPos2( 1.0f, 1.0f, 1.0f );
 	Int i;
@@ -140,6 +162,9 @@ W3DLaserDraw::W3DLaserDraw( Thing *thing, const ModuleData* moduleData ) :
 		m_texture->Get_Level_Description(surfaceDesc);
 		m_textureAspectRatio = (Real)surfaceDesc.Width/(Real)surfaceDesc.Height;
 	}
+	// Tiberium Project @feature a second texture multiplying the first (C&C4's Laser.fx), with a first one only
+	if( m_texture && data->m_texture2Name.isNotEmpty() )
+		m_texture2 = WW3DAssetManager::Get_Instance()->Get_Texture( data->m_texture2Name.str() );
 
 	//Get the color components for calculation purposes.
 	Real innerRed, innerGreen, innerBlue, innerAlpha, outerRed, outerGreen, outerBlue, outerAlpha;
@@ -202,10 +227,18 @@ W3DLaserDraw::W3DLaserDraw( Thing *thing, const ModuleData* moduleData ) :
 				line->Set_Shader( ShaderClass::_PresetAdditiveShader );	//pick the alpha blending mode you want - see shader.h for others.
 				line->Set_Width( width );
 				line->Set_Color( Vector3( red, green, blue ) );
-				line->Set_UV_Offset_Rate( Vector2(0.0f, data->m_scrollRate) );	//amount to scroll texture on each draw
+				line->Set_UV_Offset_Rate( Vector2(data->m_uScrollRate, data->m_scrollRate) );	//amount to scroll texture on each draw
 				if( m_texture )
 				{
 					line->Set_Texture_Mapping_Mode(SegLineRendererClass::TILED_TEXTURE_MAP);	//this tiles the texture across the line
+				}
+				// Tiberium Project @feature C&C4's texturing: the first texture so many times across the beam, the
+				// second multiplying it on its own tiling and scrolling (each segment's share of the beam: as drawn)
+				line->Set_Texture_U_Scale( data->m_uTile );
+				if( m_texture2 )
+				{
+					line->Set_Texture2( m_texture2 );
+					line->Set_UV2_Offset_Rate( Vector2(data->m_texture2UScrollRate, data->m_texture2ScrollRate) );
 				}
 
 				// add to scene
@@ -245,6 +278,7 @@ W3DLaserDraw::~W3DLaserDraw()
 	delete [] m_line3D;
 	// TheSuperHackers @fix Mauller 11/03/2025 Free reference counted material
 	REF_PTR_RELEASE(m_texture);
+	REF_PTR_RELEASE(m_texture2);	// Tiberium Project
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -286,11 +320,26 @@ void W3DLaserDraw::doDrawModule(const Matrix3D* transformMtx)
 		return;
 	}
 
+#if RTS_ZEROHOUR
+	const Real drawnReach = update->getStreamReach();
+#else
+	const Real drawnReach = 1.0f;
+#endif
+	// Tiberium Project @bugfix a second laser draw on the object (C&C4 lasers drawing two beams of their own looks)
+	// redraws as well: the update's mark is taken by the first draw, so each also redraws when the beam has changed
+	// since it last drew it (where it runs, its width, how far it has run out)
+	const Bool changed = !( m_drawnStart == *update->getStartPos() ) || !( m_drawnEnd == *update->getEndPos() )
+		|| m_drawnWidthScale != update->getWidthScale() || m_drawnReach != drawnReach;
+
 	//If the update has moved the laser, it requires a reset of the laser.
-	if (update->isDirty() || m_selfDirty)
+	if (update->isDirty() || m_selfDirty || changed)
 	{
 		update->setDirty(false);
 		m_selfDirty = false;
+		m_drawnStart = *update->getStartPos();
+		m_drawnEnd = *update->getEndPos();
+		m_drawnWidthScale = update->getWidthScale();
+		m_drawnReach = drawnReach;
 
 		// Tiberium Project @feature the beam lights where it hits in its colour (C&C4's LaserDraw LightColor and LightMax):
 		// a pulse of light there as it is drawn anew, at most every LIGHT_REPEAT frames (a beam renewed shot to shot),
@@ -332,6 +381,9 @@ void W3DLaserDraw::doDrawModule(const Matrix3D* transformMtx)
 			fullLine.set( *update->getEndPos() );
 			fullLine.sub( *update->getStartPos() );
 			const Real arcHeight = data->m_arcHeight + data->m_arcHeightFactor * fullLine.length();
+			// Tiberium Project: the share of the whole beam this segment draws (for TilesPerBeam)
+			Real shareFrom = 0.0f;
+			Real shareTo = reach;
 			if( arcHeight > 0.0f && data->m_segments > 1 )
 			{
 				//CALCULATE A CURVED LINE BASED ON TOTAL LENGTH AND DESIRED HEIGHT INCREASE
@@ -379,6 +431,8 @@ void W3DLaserDraw::doDrawModule(const Matrix3D* transformMtx)
 				}
 				startSegmentRatio *= reach;
 				endSegmentRatio *= reach;
+				shareFrom = startSegmentRatio;
+				shareTo = endSegmentRatio;
 
 				//Calculate our start segment position on the *ground*.
 				Coord3D segmentStart, segmentEnd, vector;
@@ -460,8 +514,17 @@ void W3DLaserDraw::doDrawModule(const Matrix3D* transformMtx)
 				}
 
 
+				// Tiberium Project @feature C&C4's texturing: the texture's V from TilesPerBeam where the beam starts to none
+				// where it ends, whatever its length (C&C4's laser texture coordinates), this segment its share; the second
+				// texture's likewise
+				if( data->m_tilesPerBeam > 0.0f )
+					m_line3D[ index ]->Set_Texture_V_Range( data->m_tilesPerBeam * ( 1.0f - shareFrom ), data->m_tilesPerBeam * ( 1.0f - shareTo ) );
+				if( m_texture2 )
+					m_line3D[ index ]->Set_Texture2_Mapping( data->m_texture2UTile, data->m_texture2TilesPerBeam * ( 1.0f - shareFrom ),
+						data->m_texture2TilesPerBeam * ( 1.0f - shareTo ) );
+
 				//Calculate the number of times to tile the line based on the height of the texture used.
-				if( m_texture && data->m_tile )
+				if( m_texture && data->m_tile && data->m_tilesPerBeam <= 0.0f )
 				{
 					//Calculate the length of the line.
 					Vector3 lineVector;
