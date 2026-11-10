@@ -264,6 +264,7 @@ private:
 		STAGE_PACK,
 		STAGE_LEAP,		///< Tiberium Project: in the air, to the target spot
 		STAGE_TELEPORT,	///< Tiberium Project: gone, to come back at the target spot
+		STAGE_TAKEOFF,	///< Tiberium Project: an aircraft off its pad first (a teleport climbs from the air)
 	};
 
 	Bool targetPosition( Coord3D *pos ) const;	///< where the target is now (false: it is gone)

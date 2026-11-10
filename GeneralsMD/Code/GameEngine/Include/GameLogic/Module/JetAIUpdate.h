@@ -62,6 +62,8 @@ public:
 	Real										m_lockonAngleSpin;								///< how many times to spin around it
 	Real										m_lockonBlinky;
 	UnsignedInt							m_returnToBaseIdleTime;						///< if we're idle for this long, return to base
+	Bool										m_hoversWhenIdle;									///< Tiberium Project @feature told to stop in the air, it hovers there (Kane's Wrath's VTOLs, which keep a pad: not back to it)
+	Bool										m_returnToBaseWhenVictimDead;			///< Tiberium Project @feature its victim dead, back to its pad (as a jet with a runway always goes: Kane's Wrath's Orca, Firehawk and Vertigo)
 
 	JetAIUpdateModuleData();
 	static void buildFieldParse(MultiIniFieldParse& p);

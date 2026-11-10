@@ -24,6 +24,10 @@
 
 #include "GameLogic/Module/AttributeModifierAuraUpdate.h"
 
+#include "Common/Player.h"
+#include "Common/ThingFactory.h"
+#include "Common/ThingTemplate.h"
+#include "Common/Upgrade.h"
 #include "Common/Xfer.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
@@ -59,6 +63,16 @@ UpdateSleepTime AttributeModifierAuraUpdate::update()
 	if( data->m_requiredModifier != NAMEKEY_INVALID &&
 			!me->hasAttributeModifier( TheAttributeModifierStore->find( data->m_requiredModifier ) ) )
 		return UPDATE_SLEEP( delay );
+	// Tiberium Project @feature only once its upgrade is had (its own, or its player's)
+	if( data->m_requiredUpgrade.isNotEmpty() )
+	{
+		const UpgradeTemplate *up = TheUpgradeCenter->findUpgrade( data->m_requiredUpgrade );
+		const Player *owner = me->getControllingPlayer();
+		const Bool had = up != nullptr && ( up->getUpgradeType() == UPGRADE_TYPE_OBJECT ? me->hasUpgrade( up )
+			: owner != nullptr && owner->hasUpgradeComplete( up ) );
+		if( !had )
+			return UPDATE_SLEEP( delay );
+	}
 
 	const UnsignedInt duration = modifier->getDuration() > 0 ? modifier->getDuration() : 2 * delay;
 
@@ -101,6 +115,18 @@ void AttributeModifierAuraUpdate::affect( Object *other, const AttributeModifier
 		return;
 	if( other->isAnyKindOf( data->m_forbiddenKindOf ) )
 		return;
+	// Tiberium Project @feature only the kinds named
+	if( !data->m_affectsNamed.empty() )
+	{
+		Bool named = FALSE;
+		for( size_t i = 0; i < data->m_affectsNamed.size() && !named; ++i )
+		{
+			const ThingTemplate *kind = TheThingFactory->findTemplate( data->m_affectsNamed[ i ] );
+			named = kind != nullptr && other->getTemplate()->isEquivalentTo( kind );
+		}
+		if( !named )
+			return;
+	}
 	other->applyAttributeModifier( modifier, me->getID(), duration );
 }
 

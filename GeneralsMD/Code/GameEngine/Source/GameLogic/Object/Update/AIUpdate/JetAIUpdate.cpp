@@ -1821,6 +1821,8 @@ JetAIUpdateModuleData::JetAIUpdateModuleData()
 	m_lockonFreq = 0.5;
 	m_lockonAngleSpin = 720;
 	m_returnToBaseIdleTime = 0;
+	m_hoversWhenIdle = false;
+	m_returnToBaseWhenVictimDead = false;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1849,6 +1851,8 @@ JetAIUpdateModuleData::JetAIUpdateModuleData()
 		{ "LockonAngleSpin",							INI::parseAngleReal, nullptr, offsetof( JetAIUpdateModuleData, m_lockonAngleSpin ) },
 		{ "LockonBlinky",									INI::parseBool, nullptr, offsetof( JetAIUpdateModuleData, m_lockonBlinky ) },
 		{ "ReturnToBaseIdleTime",					INI::parseDurationUnsignedInt, nullptr, offsetof( JetAIUpdateModuleData, m_returnToBaseIdleTime ) },
+		{ "HoversWhenIdle",								INI::parseBool, nullptr, offsetof( JetAIUpdateModuleData, m_hoversWhenIdle ) },	// Tiberium Project
+		{ "ReturnToBaseWhenVictimDead",		INI::parseBool, nullptr, offsetof( JetAIUpdateModuleData, m_returnToBaseWhenVictimDead ) },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
   p.add(dataFieldParse);
@@ -2085,7 +2089,10 @@ UpdateSleepTime JetAIUpdate::update()
 		{
 			pp->setHealee(getObject(), false);
 		}
-		m_returnToBaseFrame = 0;
+		// Tiberium Project @feature (ReturnToBaseWhenVictimDead) kept until it has a new order (aiDoCommand): an attack can go on
+		// after its victim is dead (a retaliation flies back to where it began), and it still goes back once that is over
+		if (!getJetAIUpdateModuleData()->m_returnToBaseWhenVictimDead)
+			m_returnToBaseFrame = 0;
 		if (getFlag(ALLOW_INTERRUPT_AND_RESUME_OF_CUR_STATE_FOR_RELOAD) &&
 						isOutOfSpecialReloadAmmo() && getFlag(ALLOW_AIR_LOCO))
 		{
@@ -2511,7 +2518,8 @@ void JetAIUpdate::doLandingCommand(Object *airfield, CommandSourceType cmdSource
 //----------------------------------------------------------------------------------------
 void JetAIUpdate::notifyVictimIsDead()
 {
-	if (getJetAIUpdateModuleData()->m_needsRunway)
+	// Tiberium Project @feature (ReturnToBaseWhenVictimDead) a VTOL told to go back too, as SAGE's JetAIUpdate is
+	if (getJetAIUpdateModuleData()->m_needsRunway || getJetAIUpdateModuleData()->m_returnToBaseWhenVictimDead)
 		m_returnToBaseFrame = TheGameLogic->getFrame();
 }
 
@@ -2582,6 +2590,11 @@ void JetAIUpdate::aiDoCommand(const AICommandParms* parms)
 	// note that we always store this, even if nothing will be "pending".
 	m_mostRecentCommand.store(*parms);
 
+	// Tiberium Project @feature (ReturnToBaseWhenVictimDead) a new order (not the AI's own idling) is what it does now, rather
+	// than going back for a victim that died
+	if (getJetAIUpdateModuleData()->m_returnToBaseWhenVictimDead && !(parms->m_cmd == AICMD_IDLE && parms->m_cmdSource == CMD_FROM_AI))
+		m_returnToBaseFrame = 0;
+
 	if (getFlag(TAKEOFF_IN_PROGRESS) || getFlag(LANDING_IN_PROGRESS))
 	{
 		// have to wait for takeoff or landing to complete, just store the sucker
@@ -2596,7 +2609,10 @@ void JetAIUpdate::aiDoCommand(const AICommandParms* parms)
 		setFlag(HAS_PENDING_COMMAND, true);
 		return;
 	}
-	else if( parms->m_cmd == AICMD_IDLE && getObject()->isAirborneTarget() && !getObject()->isKindOf( KINDOF_PRODUCED_AT_HELIPAD ) )
+	// Tiberium Project @feature (HoversWhenIdle) a VTOL from a pad, told to stop in the air, hovers there as a
+	// helicopter does (Kane's Wrath's Orca goes back to its pad only to rearm), not back to land
+	else if( parms->m_cmd == AICMD_IDLE && getObject()->isAirborneTarget() && !getObject()->isKindOf( KINDOF_PRODUCED_AT_HELIPAD )
+		&& !getJetAIUpdateModuleData()->m_hoversWhenIdle )
 	{
 		getStateMachine()->clear();
 		setLastCommandSource( CMD_FROM_AI );

@@ -203,6 +203,16 @@ Bool FireWeaponAbilityUpdate::initiateIntentToDoSpecialPower( const SpecialPower
 		me->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_IS_USING_ABILITY ) );
 		clearTurretTargets( me );
 	}
+	// Tiberium Project @feature an aircraft on its pad (Kane's Wrath's Firehawk keeps one: a VTOL that lands there to rearm)
+	// takes off first, its teleport climbing from the air
+	AIUpdateInterface *ai = me->getAI();
+	if( data->m_teleportHeight > 0.0f && me->isKindOf( KINDOF_AIRCRAFT ) && !me->isAirborneTarget() && ai != nullptr )
+	{
+		Coord3D here = *me->getPosition();
+		ai->aiMoveToPosition( &here, CMD_FROM_AI );
+		enterStage( STAGE_TAKEOFF );
+		return TRUE;
+	}
 	enterStage( currentStartRange() > 0.0f && m_hasTarget ? STAGE_APPROACH : STAGE_UNPACK );
 	return TRUE;
 }
@@ -560,6 +570,20 @@ UpdateSleepTime FireWeaponAbilityUpdate::update()
 			}
 			return UPDATE_SLEEP( 3 );
 		}
+		case STAGE_TAKEOFF:
+			// Tiberium Project @feature off its pad: in the air, the ability goes on as it would have (not off it within
+			// ten seconds: it is given up)
+			if( me->isAirborneTarget() )
+			{
+				enterStage( currentStartRange() > 0.0f && m_hasTarget ? STAGE_APPROACH : STAGE_UNPACK );
+				return UPDATE_SLEEP_NONE;
+			}
+			if( since > 10 * LOGICFRAMES_PER_SECOND )
+			{
+				finish();
+				return UPDATE_SLEEP_FOREVER;
+			}
+			return UPDATE_SLEEP( 3 );
 		case STAGE_UNPACK:
 			// Tiberium Project @feature a teleport climbs to TeleportHeight above the ground as it unpacks (no lower
 			// than it was), then is gone

@@ -1293,6 +1293,91 @@ void TiberiumTest::update()
 				sup->addSuppression( amount, (UnsignedInt)( ms * LOGICFRAMES_PER_SECOND / 1000.0f ) );
 			log( "frame %d: ui: suppress %s%s", (int)s_frame, step.arg.c_str(), sup != nullptr ? "" : " (no such object or no SuppressionUpdate)" );
 		}
+		else if ( step.action == "exitfrom" && TheGameLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) "exitfrom=k,Template": one of that kind made as the k-th spawned object's
+			// production makes one, out of its exit (an airfield's parking space, reserved for it), whatever its build rules
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			const Int k = f.empty() ? -1 : atoi( f[0].c_str() );
+			Object *factory = k >= 0 && k < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[k] ) : nullptr;
+			ExitInterface *exit = factory != nullptr ? factory->getObjectExitInterface() : nullptr;
+			const ThingTemplate *kind = f.size() > 1 ? TheThingFactory->findTemplate( f[1].c_str() ) : nullptr;
+			const char *how = "";
+			if ( exit == nullptr || kind == nullptr )
+				how = " (no exit, or no such kind)";
+			else
+			{
+				const ExitDoorType door = exit->reserveDoorForExit( kind, nullptr );
+				if ( door == DOOR_NONE_AVAILABLE )
+					how = " (no door free: its parking spaces taken)";
+				else
+				{
+					Object *made = TheThingFactory->newObject( kind, factory->getControllingPlayer()->getDefaultTeam() );
+					made->setProducer( factory );
+					exit->exitObjectViaDoor( made, door );
+					for ( BehaviorModule **m = made->getBehaviorModules(); *m; ++m )
+					{
+						CreateModuleInterface *create = (*m)->getCreate();
+						if ( create != nullptr )
+							create->onBuildComplete();
+					}
+				}
+			}
+			log( "frame %d: ui: exitfrom %s%s", (int)s_frame, step.arg.c_str(), how );
+		}
+		else if ( ( step.action == "produce" || step.action == "attack" || step.action == "stop" ) && TheGameLogic != nullptr
+			&& ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
+		{
+			// Tiberium Project @feature (the test) "produce=k,Template": the k-th spawned object (a factory) queues one of
+			// that kind, paid for as the player's click is; "attack=name:Template,Target": the local player's first of
+			// that kind attacks the first of the target's kind there is (anyone's); "stop=name:Template": it is told to stop
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			Object *obj = nullptr;
+			if ( !f.empty() && f[0].compare( 0, 5, "name:" ) == 0 )
+			{
+				const std::string kind = f[0].substr( 5 );
+				for ( Object *o = TheGameLogic->getFirstObject(); o != nullptr && obj == nullptr; o = o->getNextObject() )
+					if ( o->getControllingPlayer() == ThePlayerList->getLocalPlayer() && !o->isEffectivelyDead()
+						&& o->getTemplate()->getName().compareNoCase( kind.c_str() ) == 0 )
+						obj = o;
+			}
+			else if ( !f.empty() )
+			{
+				const Int k = atoi( f[0].c_str() );
+				obj = k >= 0 && k < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[k] ) : nullptr;
+			}
+			const char *how = obj != nullptr ? "" : " (no such object)";
+			if ( obj != nullptr && step.action == "produce" )
+			{
+				ProductionUpdateInterface *pu = obj->getProductionUpdateInterface();
+				const ThingTemplate *kind = f.size() > 1 ? TheThingFactory->findTemplate( f[1].c_str() ) : nullptr;
+				if ( pu == nullptr || kind == nullptr )
+					how = " (no production, or no such kind)";
+				else if ( pu->canQueueCreateUnit( kind ) != CANMAKE_OK )
+					how = " (refused: the queue)";
+				else if ( !pu->queueCreateUnit( kind, pu->requestUniqueUnitID() ) )
+				{
+					// (the build rules': its prerequisites, money, the factory's buttons; else no parking space for it)
+					static char why[64];
+					snprintf( why, sizeof( why ), " (not queued: can make %d)", (int)TheBuildAssistant->canMakeUnit( obj, kind ) );
+					how = why;
+				}
+			}
+			else if ( obj != nullptr && step.action == "attack" && obj->getAI() != nullptr )
+			{
+				Object *target = nullptr;
+				for ( Object *o = TheGameLogic->getFirstObject(); o != nullptr && target == nullptr && f.size() > 1; o = o->getNextObject() )
+					if ( !o->isEffectivelyDead() && o->getTemplate()->getName().compareNoCase( f[1].c_str() ) == 0 )
+						target = o;
+				if ( target != nullptr )
+					obj->getAI()->aiAttackObject( target, NO_MAX_SHOTS_LIMIT, CMD_FROM_PLAYER );
+				else
+					how = " (no target)";
+			}
+			else if ( obj != nullptr && step.action == "stop" && obj->getAI() != nullptr )
+				obj->getAI()->aiIdle( CMD_FROM_PLAYER );
+			log( "frame %d: ui: %s %s%s", (int)s_frame, step.action.c_str(), step.arg.c_str(), how );
+		}
 #endif
 		else if ( step.action == "hurt" && TheGameLogic != nullptr )
 		{
@@ -2186,7 +2271,9 @@ void TiberiumTest::update()
 						OBJECT_STATUS_USER_4, OBJECT_STATUS_WEAPON_UPGRADED_01, OBJECT_STATUS_WEAPON_UPGRADED_02,
 						OBJECT_STATUS_WEAPON_UPGRADED_03, OBJECT_STATUS_HAS_CRATE_UPGRADE,
 						// (a claw's grip: the holder's and the held's, C&C4's Scorpion's)
-						OBJECT_STATUS_NO_ATTACK, OBJECT_STATUS_IMMOBILE, OBJECT_STATUS_UNSELECTABLE, OBJECT_STATUS_NO_COLLISIONS };
+						OBJECT_STATUS_NO_ATTACK, OBJECT_STATUS_IMMOBILE, OBJECT_STATUS_UNSELECTABLE, OBJECT_STATUS_NO_COLLISIONS,
+						// (an aircraft in the air)
+						OBJECT_STATUS_AIRBORNE_TARGET };
 					AsciiString had, sets;
 					for ( size_t k = 0; k < ARRAY_SIZE( s_shown ); ++k )
 					{
@@ -2215,6 +2302,16 @@ void TiberiumTest::update()
 					char holding[96] = "";
 					if ( grab != nullptr && grab->isHolding() )
 						snprintf( holding, sizeof( holding ), ", holding #%u (set %s)", (unsigned)grab->getVictimID(), obj->getCommandSetString().str() );
+					// (an aircraft's ammo, which it may go back to its pad for, and what its AI is doing: Kane's Wrath's VTOLs)
+					const Weapon *primary = obj->getWeaponInWeaponSlot( PRIMARY_WEAPON );
+					if ( obj->isKindOf( KINDOF_AIRCRAFT ) && obj->getAI() != nullptr )
+					{
+						if ( primary != nullptr && primary->getClipSize() > 0 )
+							snprintf( holding + strlen( holding ), sizeof( holding ) - strlen( holding ), ", ammo %u of %d",
+								primary->getRemainingAmmo(), primary->getClipSize() );
+						snprintf( holding + strlen( holding ), sizeof( holding ) - strlen( holding ), ", ai state %d",
+							(int)obj->getAI()->getCurrentStateID() );
+					}
 					if ( had.isNotEmpty() || sets.isNotEmpty() || speed != 1.0f || pinned || holding[0] != 0 )
 						snprintf( statuses, sizeof( statuses ), ", status%s, weapon sets%s, speed x%.2f%s%s", had.str(), sets.str(), speed, pinned ? ", suppressed" : "", holding );
 				}

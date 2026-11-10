@@ -26,6 +26,9 @@
 // Reckoner: their passengers fire further); Radius 0: only on itself (SELF in Affects). RequiredStatus,
 // RequiredModifier: only while the object has all of those status bits, or carries that modifier itself
 // (a toggled state's: C&C4's Kodiak shields its allies only while armoured up); ForbiddenStatus: none of these.
+// Tiberium Project @feature AffectsNamed: only objects of these kinds (C&C4's Crawlers reload their side's bombers faster,
+// SAGE's IncludeThing); RequiredUpgrade: only once the object, or its player, has that upgrade (SAGE's aura switched on
+// by an upgrade: C&C4's Spectre's dodge for its neighbours, with its improved stealth).
 //
 //   Behavior = AttributeModifierAuraUpdate ModuleTag_ArmorAura
 //     AttributeModifier   = C4AM_Modifier_ArmorUp_Aura
@@ -36,6 +39,8 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #pragma once
+
+#include <vector>
 
 #include "Common/INI.h"
 #include "Common/KindOf.h"
@@ -59,6 +64,8 @@ public:
 	ObjectStatusMaskType m_forbiddenStatus;	///< Tiberium Project @feature and none of these (C&C4's Nod structures: its plain aura
 																					///< stops as its upgraded one takes over)
 	NameKeyType m_requiredModifier;			///< Tiberium Project @feature only while it carries this modifier
+	std::vector<AsciiString> m_affectsNamed;	///< Tiberium Project @feature only these kinds of object (none named: any)
+	AsciiString m_requiredUpgrade;			///< Tiberium Project @feature only once it (or its player) has this
 
 	AttributeModifierAuraUpdateModuleData()
 	{
@@ -85,6 +92,8 @@ public:
 			{ "RequiredStatus",				ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( AttributeModifierAuraUpdateModuleData, m_requiredStatus ) },
 			{ "ForbiddenStatus",			ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( AttributeModifierAuraUpdateModuleData, m_forbiddenStatus ) },
 			{ "RequiredModifier",			AttributeModifierStore::parseModifierName,	nullptr, offsetof( AttributeModifierAuraUpdateModuleData, m_requiredModifier ) },
+			{ "AffectsNamed",					INI::parseAsciiStringVectorAppend,	nullptr, offsetof( AttributeModifierAuraUpdateModuleData, m_affectsNamed ) },
+			{ "RequiredUpgrade",			INI::parseAsciiString,					nullptr, offsetof( AttributeModifierAuraUpdateModuleData, m_requiredUpgrade ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 		p.add( dataFieldParse );
