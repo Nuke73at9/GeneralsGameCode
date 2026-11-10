@@ -82,6 +82,7 @@
 #include "GameLogic/Module/SuppressionUpdate.h"
 #include "GameLogic/Module/GrabSpecialAbilityUpdate.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
+#include "GameLogic/AttributeModifier.h"
 #include "GameLogic/Module/SupplyTruckAIUpdate.h"
 #include "GameLogic/Module/DockUpdate.h"
 #endif
@@ -1405,6 +1406,23 @@ void TiberiumTest::update()
 			log( "frame %d: ui: hurt %s: health %.0f to %.0f%s", (int)s_frame, step.arg.c_str(), before,
 				body != nullptr ? body->getHealth() : 0.0f, body != nullptr && DamageTypeFlags::s_bitNameList[t] != nullptr ? "" : " (no such object or type)" );
 		}
+#if RTS_ZEROHOUR
+		else if ( step.action == "modifier" && TheGameLogic != nullptr && TheAttributeModifierStore != nullptr )
+		{
+			// Tiberium Project @feature (the test) "modifier=k,Name,ms": the attribute modifier on the k-th spawned object for
+			// that long (a debuff to see a cleanse take off)
+			Int k = -1, ms = 0;
+			char name[128] = "";
+			sscanf( step.arg.c_str(), "%d,%127[^,],%d", &k, name, &ms );
+			Object *obj = k >= 0 && k < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[k] ) : nullptr;
+			const AttributeModifierTemplate *tmpl = TheAttributeModifierStore->find( AsciiString( name ) );
+			if ( obj != nullptr && tmpl != nullptr )
+				obj->applyAttributeModifier( tmpl, INVALID_ID, (UnsignedInt)( ms * LOGICFRAMES_PER_SECOND / 1000 ) );
+			log( "frame %d: ui: modifier %s%s; it has %s", (int)s_frame, step.arg.c_str(),
+				obj == nullptr ? " (no such object)" : tmpl == nullptr ? " (no such modifier)" : "",
+				obj != nullptr && obj->hasAttributeModifiers() ? "modifiers" : "none" );
+		}
+#endif
 		else if ( step.action == "ready" && TheGameLogic != nullptr )
 		{
 			// Tiberium Project @feature (the test) "ready=Template": the special powers of every object of the
@@ -2374,6 +2392,66 @@ void TiberiumTest::update()
 				all += one;
 			}
 			log( "frame %d: ui: radar%s", (int)s_frame, all.c_str() );
+		}
+		else if ( step.action == "around" && TheGameLogic != nullptr && ThePartitionManager != nullptr && !s_spawned.empty()
+			&& ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
+		{
+			// Tiberium Project @feature (the test) "around=dx,dy,r": what stands within r of the spot dx,dy from the first spawned
+			// object (where power= and shortcut= aim): each kind there and whose (mine, ally, foe or no one's), and the enemies'
+			// health, to see what a power made, hurt or changed there
+			float dx = 0.0f, dy = 0.0f, r = 150.0f;
+			sscanf( step.arg.c_str(), "%f,%f,%f", &dx, &dy, &r );
+			const Object *first = TheGameLogic->findObjectByID( s_spawned[0] );
+			if ( first != nullptr )
+			{
+				Coord3D at = *first->getPosition();
+				at.x += dx;
+				at.y += dy;
+				Player *me = ThePlayerList->getLocalPlayer();
+				std::vector< std::pair<std::string, int> > kinds;
+				Int foes = 0, changed = 0;
+				Real foeHealth = 0.0f, foeMost = 0.0f;
+				ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( &at, r, FROM_CENTER_2D );
+				MemoryPoolObjectHolder hold( iter );
+				for ( Object *obj = iter->first(); obj != nullptr; obj = iter->next() )
+				{
+					if ( obj->isKindOf( KINDOF_PROJECTILE ) || obj->isEffectivelyDead() )
+						continue;
+					const char *whose = "none";
+					if ( obj->getControllingPlayer() == me )
+						whose = "mine";
+					else if ( obj->getTeam() != nullptr && me->getRelationship( obj->getTeam() ) == ENEMIES )
+						whose = "foe";
+					else if ( obj->getTeam() != nullptr && me->getRelationship( obj->getTeam() ) == ALLIES )
+						whose = "ally";
+					std::string key = std::string( obj->getTemplate()->getName().str() ) + "(" + whose + ")";
+					size_t k = 0;
+					while ( k < kinds.size() && kinds[k].first != key )
+						++k;
+					if ( k == kinds.size() )
+						kinds.push_back( std::make_pair( key, 0 ) );
+					++kinds[k].second;
+					BodyModuleInterface *body = obj->getBodyModule();
+					if ( whose[0] == 'f' && body != nullptr )
+					{
+						++foes;
+						foeHealth += body->getHealth();
+						foeMost += body->getMaxHealth();
+					}
+#if RTS_ZEROHOUR
+					changed += obj->hasAttributeModifiers() ? 1 : 0;
+#endif
+				}
+				std::string list;
+				for ( size_t k = 0; k < kinds.size(); ++k )
+				{
+					char one[160];
+					snprintf( one, sizeof( one ), "%s%d %s", k ? ", " : "", kinds[k].second, kinds[k].first.c_str() );
+					list += one;
+				}
+				log( "frame %d: ui: around %.0f %.0f within %.0f: %s; %d enemies, health %.0f of %.0f; %d with modifiers",
+					(int)s_frame, at.x, at.y, r, list.empty() ? "nothing" : list.c_str(), (int)foes, foeHealth, foeMost, (int)changed );
+			}
 		}
 		else if ( step.action == "census" && TheGameLogic != nullptr )
 		{

@@ -30,7 +30,11 @@
 
 #pragma once
 
+#include "Common/ObjectStatusTypes.h"
+#include "GameLogic/Damage.h"
 #include "GameLogic/Module/UpdateModule.h"
+
+#include <vector>
 
 class WeaponTemplate;
 class FXList;
@@ -45,6 +49,10 @@ public:
 	FXList*					m_geometryBasedDamageFX;
 	Bool						m_keepProducer;		///< Tiberium Project: the one who made it stays its producer (not the target)
 	Bool						m_dieWithTarget;	///< Tiberium Project: dies (its death modules run) when the target dies, not just vanishes
+	ObjectStatusMaskType	m_targetStatus;	///< Tiberium Project: what the target is while it is stuck there (C&C4's ParentStatus)
+	Bool						m_absorbTargetDamage;	///< Tiberium Project: the target's hits on it instead (C&C4's LEECH_DAMAGE_FROM_PARENT, ABSORB_ALL_DAMAGE)
+	DamageTypeFlags	m_absorbDamageTypes;	///< Tiberium Project: the kinds of hit it takes for the target (C&C4's all but DamageTypesToNotLeech)
+	Bool						m_targetShieldTint;	///< Tiberium Project: the target drawn shielded while it is there (C&C4's PERSONAL_SHIELDS look)
 
 	StickyBombUpdateModuleData()
 	{
@@ -53,6 +61,10 @@ public:
 		m_geometryBasedDamageFX = nullptr;
 		m_keepProducer = FALSE;
 		m_dieWithTarget = FALSE;
+		m_targetStatus.clear();
+		m_absorbTargetDamage = FALSE;
+		m_absorbDamageTypes = DAMAGE_TYPE_FLAGS_ALL;
+		m_targetShieldTint = FALSE;
 	}
 
 	static void buildFieldParse(MultiIniFieldParse& p)
@@ -69,6 +81,13 @@ public:
 			// with the target (its death weapons and effects play) instead of vanishing
 			{ "KeepProducer",							INI::parseBool,						nullptr, offsetof( StickyBombUpdateModuleData, m_keepProducer ) },
 			{ "DieWithTarget",						INI::parseBool,						nullptr, offsetof( StickyBombUpdateModuleData, m_dieWithTarget ) },
+			// Tiberium Project @feature SAGE's AttachUpdate shield (C&C4's Personal Shields): while it is stuck there the target
+			// has TargetStatus, and with AbsorbTargetDamage it takes the target's hits of AbsorbDamageTypes on itself (by its own
+			// armour), each whole, the target none of them, until it dies of them; it takes no hit but those
+			{ "TargetStatus",							ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( StickyBombUpdateModuleData, m_targetStatus ) },
+			{ "AbsorbTargetDamage",				INI::parseBool,						nullptr, offsetof( StickyBombUpdateModuleData, m_absorbTargetDamage ) },
+			{ "AbsorbDamageTypes",				INI::parseDamageTypeFlags,	nullptr, offsetof( StickyBombUpdateModuleData, m_absorbDamageTypes ) },
+			{ "TargetShieldTint",					INI::parseBool,						nullptr, offsetof( StickyBombUpdateModuleData, m_targetShieldTint ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
     p.add(dataFieldParse);
@@ -88,9 +107,7 @@ public:
 	// virtual destructor prototype provided by memory pool declaration
 
 	virtual void onObjectCreated() override;
-#if !RETAIL_COMPATIBLE_CRC
 	virtual void onDelete() override;
-#endif
 
 	virtual UpdateSleepTime update() override;							///< called once per frame
 
@@ -101,7 +118,13 @@ public:
 	Object* getTargetObject() const;
 	void setTargetObject( Object *obj );
 
+	/** Tiberium Project @feature whether the hit on the victim is dealt with here: taken by a shield stuck to it
+		(AbsorbTargetDamage), or the victim is such a shield, which takes only the hits it takes for its target (from ActiveBody) */
+	static Bool absorbDamage( Object *victim, const DamageInfo *damageInfo );
+
 private:
+
+	void markTarget( Bool on );	///< Tiberium Project: the target's TargetStatus and look, set or cleared
 
 	ObjectID			m_targetID;
 	UnsignedInt		m_dieFrame;

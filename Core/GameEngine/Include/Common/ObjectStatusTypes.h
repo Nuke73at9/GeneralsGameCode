@@ -102,6 +102,7 @@ enum ObjectStatusTypes CPP_11(: Int)
 	OBJECT_STATUS_WEAPON_UPGRADED_02,
 	OBJECT_STATUS_WEAPON_UPGRADED_03,
 	OBJECT_STATUS_HAS_CRATE_UPGRADE,		///< Tiberium Project: C&C4's crate upgrade taken (it arms the Mantis's other two cannons)
+	OBJECT_STATUS_POINT_DEFENSE_DRONE_ATTACHED,	///< Tiberium Project: something stuck to it shields it (C&C4's AttachUpdate ParentStatus: the Personal Shields' shield, which a second cast passes over)
 	// add more status types here and don't forget to add to the string table ObjectStatusMaskType::s_bitNameList[]
 
 	OBJECT_STATUS_COUNT

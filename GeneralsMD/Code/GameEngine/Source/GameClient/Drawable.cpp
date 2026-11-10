@@ -266,6 +266,7 @@ const RGBColor RED_IRRADIATED_COLOR					= { 1.0f, -1.0f, -1.0f};
 const RGBColor SUBDUAL_DAMAGE_COLOR					= {-0.2f, -0.2f,  0.8f};
 const RGBColor FRENZY_COLOR									= { 0.2f, -0.2f, -0.2f};
 const RGBColor FRENZY_COLOR_INFANTRY				= { 0.0f, -0.7f, -0.7f};
+const RGBColor SHIELDED_COLOR								= {-0.15f, 0.25f, 0.7f};	///< Tiberium Project: C&C4's Personal Shields' blue
 const Int MAX_ENABLED_MODULES								= 16;
 
 // ------------------------------------------------------------------------------------------------
@@ -1288,6 +1289,13 @@ void Drawable::updateDrawable(Real timeScale)
       m_colorTintEnvelope->play( isKindOf( KINDOF_INFANTRY) ? &FRENZY_COLOR_INFANTRY:&FRENZY_COLOR, 30, 30, SUSTAIN_INDEFINITELY);
 
     }
+		// Tiberium Project @feature a shield stuck to it (C&C4's Personal Shields' look on what they shield)
+		else if( testTintStatus(TINT_STATUS_SHIELDED) )
+		{
+			if (m_colorTintEnvelope == nullptr)
+				m_colorTintEnvelope = newInstance(TintEnvelope);
+			m_colorTintEnvelope->play( &SHIELDED_COLOR, 15, 15, SUSTAIN_INDEFINITELY);
+		}
 //		else if ( testTintStatus( TINT_STATUS_POISONED) )
 //		{
 //			if (m_colorTintEnvelope == nullptr)

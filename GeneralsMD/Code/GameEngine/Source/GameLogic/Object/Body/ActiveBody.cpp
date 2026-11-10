@@ -57,6 +57,7 @@
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/ActiveBody.h"
 #include "GameLogic/Module/ShieldSphereUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/StickyBombUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/BridgeBehavior.h"
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/DamageModule.h"
@@ -420,6 +421,11 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 	// Tiberium Project @feature a shield sphere around it (SAGE 2's) takes the hit instead
 	if( amount > 0.0f && !damageInfo->in.m_kill && damageInfo->in.m_damageType != DAMAGE_HEALING
 		&& ShieldSphereUpdate::absorbDamage( obj, damager, damageInfo->in.m_damageType, amount ) )
+		return;
+	// Tiberium Project @feature a shield stuck to it takes the hit instead (C&C4's Personal Shields), and such a shield
+	// takes no hit but those
+	if( amount > 0.0f && !damageInfo->in.m_kill && damageInfo->in.m_damageType != DAMAGE_HEALING
+		&& StickyBombUpdate::absorbDamage( obj, damageInfo ) )
 		return;
 
 	switch( damageInfo->in.m_damageType )

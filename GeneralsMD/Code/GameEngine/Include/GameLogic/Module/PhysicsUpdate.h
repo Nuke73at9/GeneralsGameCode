@@ -76,6 +76,7 @@ public:
 	Real	m_rigidBodySpinDamping;			///< fraction of the spin kept on each bounce
 	Real	m_rigidBodyTipRate;					///< fraction of the remaining tilt removed per frame while tipping onto a face
 	Real	m_rigidBodyGravityScale;		///< gravity multiplier, so heavy wreckage drops instead of floating
+	Real			m_gravityMult;	///< Tiberium Project: how strongly gravity pulls it (SAGE's GravityMultiplier: C&C4's and Kane's Wrath's shells falling from orbit)
 
 	const WeaponTemplate* m_vehicleCrashesIntoBuildingWeaponTemplate;
 	const WeaponTemplate* m_vehicleCrashesIntoNonBuildingWeaponTemplate;

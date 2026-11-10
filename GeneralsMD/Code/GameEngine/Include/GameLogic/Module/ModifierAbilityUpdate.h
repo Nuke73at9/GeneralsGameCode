@@ -50,7 +50,9 @@
 // RevealTime lifts the shroud over each for its player, RevealRadius past its edge (Kane's Wrath's
 // Power Signature Scan). JamEnemyRadar darkens the radars of its player's enemies for that long (the
 // Radar Jamming Missile); Weapon is fired at the spot (the infantry the Cloaking Field kills); Delay
-// makes it act that long after its power is used (Kane's Wrath's unpacking).
+// makes it act that long after its power is used (Kane's Wrath's unpacking). ActOnCreate makes it act once,
+// where it is, on its first frame (after its Delay), with no power used (C&C4's ActivateSpecialPowerOnCreate:
+// the Restoration's proxy, which cleanses where it is made).
 //
 //   Behavior = ModifierAbilityUpdate ModuleTag_LaserFencing
 //     SpecialPowerTemplate = KWSP_SpecialPower_LaserFencing
@@ -105,6 +107,7 @@ public:
 	UnsignedInt m_revealFrames;				///< the shroud lifted over each object it reaches this long, for its player
 	Real m_revealRadius;							///< ... this far past its edge
 	UnsignedInt m_delayFrames;				///< it acts this long after its power is used
+	Bool m_actOnCreate;								///< Tiberium Project: it acts once, where it is, as it is made (C&C4's ActivateSpecialPowerOnCreate)
 
 	ModifierAbilityUpdateModuleData()
 	{
@@ -129,6 +132,7 @@ public:
 		m_revealFrames = 0;
 		m_revealRadius = 0.0f;
 		m_delayFrames = 0;
+		m_actOnCreate = FALSE;
 	}
 
 	static void parseUpgradeNames( INI *ini, void *instance, void *store, const void *userData );
@@ -161,6 +165,7 @@ public:
 			{ "RevealTime",							INI::parseDurationUnsignedInt,	nullptr, offsetof( ModifierAbilityUpdateModuleData, m_revealFrames ) },
 			{ "RevealRadius",						INI::parseReal,									nullptr, offsetof( ModifierAbilityUpdateModuleData, m_revealRadius ) },
 			{ "Delay",									INI::parseDurationUnsignedInt,	nullptr, offsetof( ModifierAbilityUpdateModuleData, m_delayFrames ) },
+			{ "ActOnCreate",						INI::parseBool,									nullptr, offsetof( ModifierAbilityUpdateModuleData, m_actOnCreate ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 		p.add( dataFieldParse );

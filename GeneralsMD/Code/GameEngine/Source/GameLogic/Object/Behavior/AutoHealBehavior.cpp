@@ -98,10 +98,19 @@ AutoHealBehavior::AutoHealBehavior( Thing *thing, const ModuleData* moduleData )
 	if (d->m_initiallyActive)
 	{
 		giveSelfUpgrade();
-		// start these guys with random phasings so that we don't
-		// have all of 'em check on the same frame.
-		UnsignedInt delay = getAutoHealBehaviorModuleData()->m_healingDelay;
-		setWakeFrame(getObject(), UPDATE_SLEEP(GameLogicRandomValue(1, delay)));
+		// Tiberium Project @feature StartsImmediately: the first heal at once (C&C4's StartImmediately: its repair
+		// zones and the Restoration's mend are objects that live a moment, too short for the random phase)
+		if (d->m_startsImmediately)
+		{
+			setWakeFrame(getObject(), UPDATE_SLEEP_NONE);
+		}
+		else
+		{
+			// start these guys with random phasings so that we don't
+			// have all of 'em check on the same frame.
+			UnsignedInt delay = getAutoHealBehaviorModuleData()->m_healingDelay;
+			setWakeFrame(getObject(), UPDATE_SLEEP(GameLogicRandomValue(1, delay)));
+		}
 	}
 	else
 	{

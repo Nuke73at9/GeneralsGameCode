@@ -59,6 +59,14 @@ ModifierAbilityUpdate::ModifierAbilityUpdate( Thing *thing, const ModuleData* mo
 	m_revealUntil = 0;
 	m_revealMask = 0;
 	setWakeFrame( getObject(), UPDATE_SLEEP_FOREVER );
+	// Tiberium Project @feature ActOnCreate: once, where it is, on its first frame (it is put in place after it is made)
+	const ModifierAbilityUpdateModuleData *data = getModifierAbilityUpdateModuleData();
+	if( data->m_actOnCreate )
+	{
+		const UnsignedInt wait = max( (UnsignedInt)1, data->m_delayFrames );
+		m_actFrame = TheGameLogic->getFrame() + wait;
+		setWakeFrame( getObject(), UPDATE_SLEEP( wait ) );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

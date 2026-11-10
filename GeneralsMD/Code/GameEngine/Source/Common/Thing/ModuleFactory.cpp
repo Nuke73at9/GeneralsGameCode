@@ -157,6 +157,7 @@
 #include "GameLogic/Module/BuildAreaBehavior.h"	// Tiberium Project
 #include "GameLogic/Module/TiberiumCrystalUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/TiberiumFieldUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/ClusterBombUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/TiberiumPickupUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/TiberiumZoneNodeUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/TiberiumArrivalUpdate.h"	// Tiberium Project
@@ -446,6 +447,7 @@ void ModuleFactory::init()
 	addModule( BuildAreaBehavior );	// Tiberium Project
 	addModule( TiberiumCrystalUpdate );	// Tiberium Project
 	addModule( TiberiumFieldUpdate );	// Tiberium Project
+	addModule( ClusterBombUpdate );	// Tiberium Project
 	addModule( TiberiumPickupUpdate );	// Tiberium Project
 	addModule( TiberiumZoneNodeUpdate );	// Tiberium Project
 	addModule( TiberiumArrivalUpdate );	// Tiberium Project

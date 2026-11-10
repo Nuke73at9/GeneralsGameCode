@@ -209,6 +209,8 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "TargetOCLStatus",						ObjectStatusMaskType::parseFromINI,			nullptr,							offsetof(WeaponTemplate, m_targetOCLStatus) },	// Tiberium Project
 	{ "VictimNames",								INI::parseAsciiStringVectorAppend,		nullptr,							offsetof(WeaponTemplate, m_victimNames) },	// Tiberium Project
 	{ "VictimForbiddenNames",				INI::parseAsciiStringVectorAppend,		nullptr,							offsetof(WeaponTemplate, m_victimForbiddenNames) },	// Tiberium Project
+	{ "VictimForbiddenStatus",			ObjectStatusMaskType::parseFromINI,			nullptr,							offsetof(WeaponTemplate, m_victimForbiddenStatus) },	// Tiberium Project
+	{ "VictimOCL",									INI::parseAsciiString,								nullptr,							offsetof(WeaponTemplate, m_victimOCLName) },	// Tiberium Project
 	{ "ForceToggleToDefault",				INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_forceToggleToDefault) },	// Tiberium Project
 	{ "HijackVictim",								INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_hijackVictim) },	// Tiberium Project
 	{ "Taunt",											INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_taunt) },	// Tiberium Project
@@ -329,6 +331,8 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_projectileTmpl								= nullptr;
 	m_targetOCL										= nullptr;	// Tiberium Project
 	m_targetStatusOCL							= nullptr;	// Tiberium Project
+	m_victimOCL										= nullptr;	// Tiberium Project
+	m_victimForbiddenStatus.clear();	// Tiberium Project
 	m_forceToggleToDefault				= FALSE;	// Tiberium Project
 	m_hijackVictim								= FALSE;	// Tiberium Project
 	m_taunt												= FALSE;	// Tiberium Project
@@ -539,6 +543,9 @@ void WeaponTemplate::postProcessLoad()
 	DEBUG_ASSERTCRASH(m_targetOCLName.isEmpty() || m_targetOCL, ("OCL %s not found in a weapon!", m_targetOCLName.str()));
 	m_targetStatusOCL = m_targetStatusOCLName.isEmpty() ? nullptr : TheObjectCreationListStore->findObjectCreationList(m_targetStatusOCLName.str());
 	DEBUG_ASSERTCRASH(m_targetStatusOCLName.isEmpty() || m_targetStatusOCL, ("OCL %s not found in a weapon!", m_targetStatusOCLName.str()));
+	// Tiberium Project @feature VictimOCL: an OCL made on each object the damage reaches (C&C4's Personal Shields' shields)
+	m_victimOCL = m_victimOCLName.isEmpty() ? nullptr : TheObjectCreationListStore->findObjectCreationList(m_victimOCLName.str());
+	DEBUG_ASSERTCRASH(m_victimOCLName.isEmpty() || m_victimOCL, ("OCL %s not found in a weapon!", m_victimOCLName.str()));
 
 	// Tiberium Project @feature the beam a chain draws from hop to hop (Scatter)
 	m_scatterLaser = m_scatterLaserName.isEmpty() ? nullptr : TheThingFactory->findTemplate(m_scatterLaserName);
@@ -688,6 +695,9 @@ Bool WeaponTemplate::isVictimKindAllowed(const Object *victim) const
 	if (m_victimKindOf.any() && !victim->isAnyKindOf(m_victimKindOf))
 		return false;
 	if (victim->isAnyKindOf(m_victimForbiddenKindOf))
+		return false;
+	// Tiberium Project @feature none with a status it passes over (VictimForbiddenStatus: C&C4's StatusBitFlagsExclude)
+	if (m_victimForbiddenStatus.any() && victim->getStatusBits().testForAny(m_victimForbiddenStatus))
 		return false;
 	// Tiberium Project @feature only the objects it names (VictimNames: C&C4's IncludeThing, the Firestorm Ignition's
 	// flame units) and none it spares (VictimForbiddenNames: C&C4's ExcludeThing, the Black Hand in his own fire)
@@ -2168,6 +2178,22 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 			// (C&C4's AttributeModifierNugget: a slow, an armour debuff, an ally's damage boost)
 			if (m_victimModifier != NAMEKEY_INVALID && !curVictim->isEffectivelyDead())
 				curVictim->applyAttributeModifier(TheAttributeModifierStore->find(m_victimModifier), sourceID, m_victimModifierDuration);
+			// Tiberium Project @feature an OCL made on each object its damage reaches, by the weapon's owner, what it makes with a
+			// StickyBombUpdate stuck to that object (C&C4's FireOnObjectsNugget's weapon with a WeaponOCLNugget TargetAsPrimaryObject:
+			// the Personal Shields' shield on each friend), none on what cannot be attacked (a shield itself)
+			if (m_victimOCL != nullptr && source != nullptr && !curVictim->isEffectivelyDead() && !curVictim->isKindOf(KINDOF_UNATTACKABLE))
+			{
+				const Object *owner = source;
+				if (source->isKindOf(KINDOF_PROJECTILE) && source->getProducerID() != INVALID_ID)
+				{
+					const Object *launcher = TheGameLogic->findObjectByID(source->getProducerID());
+					if (launcher != nullptr)
+						owner = launcher;
+				}
+				ObjectCreationList::setStickTarget(curVictim);
+				ObjectCreationList::create(m_victimOCL, owner, curVictim->getPosition(), curVictim->getPosition(), owner->getOrientation());
+				ObjectCreationList::setStickTarget(nullptr);
+			}
 			// Tiberium Project @feature its toggles back to their first state (C&C4's ForceToggleToDefaultNugget: a burrowed
 			// unit dug out)
 			if (m_forceToggleToDefault)

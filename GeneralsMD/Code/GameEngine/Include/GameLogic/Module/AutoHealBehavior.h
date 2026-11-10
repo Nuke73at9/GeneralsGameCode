@@ -50,6 +50,7 @@ class AutoHealBehaviorModuleData : public UpdateModuleData
 public:
 	UpgradeMuxData				m_upgradeMuxData;
 	Bool									m_initiallyActive;
+	Bool									m_startsImmediately;	///< Tiberium Project: the first heal at once, not after a random phase (C&C4's StartImmediately)
 	Bool									m_singleBurst;
 	Int										m_healingAmount;
 	UnsignedInt						m_healingDelay;
@@ -65,6 +66,7 @@ public:
 	AutoHealBehaviorModuleData()
 	{
 		m_initiallyActive = false;
+		m_startsImmediately = FALSE;
 		m_singleBurst = FALSE;
 		m_healingAmount = 0;
 		m_healingDelay = UINT_MAX;
@@ -83,6 +85,7 @@ public:
 		static const FieldParse dataFieldParse[] =
 		{
 			{ "StartsActive",	INI::parseBool, nullptr, offsetof( AutoHealBehaviorModuleData, m_initiallyActive ) },
+			{ "StartsImmediately",	INI::parseBool, nullptr, offsetof( AutoHealBehaviorModuleData, m_startsImmediately ) },	// Tiberium Project
 			{ "SingleBurst",	INI::parseBool, nullptr, offsetof( AutoHealBehaviorModuleData, m_singleBurst ) },
 			{ "HealingAmount",		INI::parseInt,												nullptr, offsetof( AutoHealBehaviorModuleData, m_healingAmount ) },
 			{ "HealingDelay",			INI::parseDurationUnsignedInt,				nullptr, offsetof( AutoHealBehaviorModuleData, m_healingDelay ) },

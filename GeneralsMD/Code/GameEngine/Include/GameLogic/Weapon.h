@@ -595,6 +595,9 @@ private:
 	ObjectStatusMaskType m_targetOCLStatus;									///< Tiberium Project: the firer's statuses that pick m_targetStatusOCL
 	std::vector<AsciiString> m_victimNames;									///< Tiberium Project: its damage reaches only these objects (C&C4's IncludeThing; none: any)
 	std::vector<AsciiString> m_victimForbiddenNames;						///< Tiberium Project: and none of these (C&C4's ExcludeThing: a Black Hand in his own fire)
+	ObjectStatusMaskType m_victimForbiddenStatus;							///< Tiberium Project: and none with any of these (C&C4's filters' StatusBitFlagsExclude: a friend already shielded)
+	AsciiString m_victimOCLName;													///< Tiberium Project: an OCL made on each object its damage reaches, what it makes stuck to it (C&C4's FireOnObjectsNugget's weapon on each)
+	const ObjectCreationList* m_victimOCL;											///< Tiberium Project: post-loaded m_victimOCLName
 	Bool m_forceToggleToDefault;													///< Tiberium Project: its victims' toggles go back to their first state (C&C4's ForceToggleToDefaultNugget)
 	Bool m_hijackVictim;																///< Tiberium Project: landing, its firer takes the vehicle over (C&C4's Hacker: its hijack, through the firer's ConvertToHijackedVehicleCrateCollide)
 	Bool m_taunt;																				///< Tiberium Project: what it hits turns on its firer (C&C4's TauntNugget: the Titan draws fire)

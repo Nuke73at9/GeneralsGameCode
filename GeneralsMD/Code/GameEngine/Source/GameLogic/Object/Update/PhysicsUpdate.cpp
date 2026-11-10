@@ -142,6 +142,7 @@ PhysicsBehaviorModuleData::PhysicsBehaviorModuleData()
 	m_rigidBodySpinDamping = 0.5f;
 	m_rigidBodyTipRate = 0.12f;
 	m_rigidBodyGravityScale = 1.0f;
+	m_gravityMult = 1.0f;	// Tiberium Project
 	m_vehicleCrashesIntoBuildingWeaponTemplate = TheWeaponStore->findWeaponTemplate("VehicleCrashesIntoBuildingWeapon");
 	m_vehicleCrashesIntoNonBuildingWeaponTemplate = TheWeaponStore->findWeaponTemplate("VehicleCrashesIntoNonBuildingWeapon");
 
@@ -198,6 +199,7 @@ static void parseFrictionPerSec( INI* ini, void * /*instance*/, void *store, con
 		{ "RigidBodySpinDamping",		INI::parseReal,			nullptr, offsetof( PhysicsBehaviorModuleData, m_rigidBodySpinDamping) },
 		{ "RigidBodyTipRate",				INI::parseReal,			nullptr, offsetof( PhysicsBehaviorModuleData, m_rigidBodyTipRate) },
 		{ "RigidBodyGravityScale",	INI::parseReal,			nullptr, offsetof( PhysicsBehaviorModuleData, m_rigidBodyGravityScale) },
+		{ "GravityMult",						INI::parseReal,			nullptr, offsetof( PhysicsBehaviorModuleData, m_gravityMult) },	// Tiberium Project
 
 		{ "VehicleCrashesIntoBuildingWeaponTemplate", INI::parseWeaponTemplate, nullptr, offsetof(PhysicsBehaviorModuleData, m_vehicleCrashesIntoBuildingWeaponTemplate) },
 		{ "VehicleCrashesIntoNonBuildingWeaponTemplate", INI::parseWeaponTemplate, nullptr, offsetof(PhysicsBehaviorModuleData, m_vehicleCrashesIntoNonBuildingWeaponTemplate) },
@@ -456,6 +458,8 @@ void PhysicsBehavior::applyGravitationalForces()
 	// Tiberium Project @feature Rigid-body debris may fall faster than the global gravity
 	if (isRigidBody())
 		m_accel.z += TheGlobalData->m_gravity * getPhysicsBehaviorModuleData()->m_rigidBodyGravityScale;
+	else if (getPhysicsBehaviorModuleData()->m_gravityMult != 1.0f)
+		m_accel.z += TheGlobalData->m_gravity * getPhysicsBehaviorModuleData()->m_gravityMult;	// Tiberium Project @feature (GravityMult)
 	else
 		m_accel.z += TheGlobalData->m_gravity;
 }

@@ -32,6 +32,8 @@
 
 #include "GameLogic/Module/StickyBombUpdate.h"
 
+#include <algorithm>
+
 #include "Common/ThingTemplate.h"
 #include "Common/Player.h"
 #include "Common/Xfer.h"
@@ -49,6 +51,16 @@
 
 // PRIVATE ////////////////////////////////////////////////////////////////////////////////////////
 
+// Tiberium Project @feature the stuck objects that mark or shield their targets (TargetStatus, AbsorbTargetDamage,
+// TargetShieldTint), in the order they were made
+static std::vector<StickyBombUpdate *> s_markers;
+static Bool s_absorbing = FALSE;	///< a shield is taking a hit for its target (the hit is its own)
+
+static Bool marksTarget( const StickyBombUpdateModuleData *d )
+{
+	return d->m_targetStatus.any() || d->m_absorbTargetDamage || d->m_targetShieldTint;
+}
+
 // PUBLIC /////////////////////////////////////////////////////////////////////////////////////////
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -58,12 +70,84 @@ StickyBombUpdate::StickyBombUpdate( Thing *thing, const ModuleData *moduleData )
 	m_dieFrame		= 0;
 	m_nextPingFrame = 0;
 	setWakeFrame(getObject(), UPDATE_SLEEP_FOREVER);
+	if( marksTarget( getStickyBombUpdateModuleData() ) )
+		s_markers.push_back( this );
 }
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 StickyBombUpdate::~StickyBombUpdate()
 {
+	std::vector<StickyBombUpdate *>::iterator it = std::find( s_markers.begin(), s_markers.end(), this );
+	if( it != s_markers.end() )
+		s_markers.erase( it );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature the target's TargetStatus and shielded look while this is stuck to it; cleared, what
+	another stuck to it still gives it stays */
+void StickyBombUpdate::markTarget( Bool on )
+{
+	const StickyBombUpdateModuleData *d = getStickyBombUpdateModuleData();
+	if( !d->m_targetStatus.any() && !d->m_targetShieldTint )
+		return;
+	Object *target = getTargetObject();
+	if( target == nullptr )
+		return;
+	Drawable *draw = target->getDrawable();
+	if( on )
+	{
+		if( d->m_targetStatus.any() )
+			target->setStatus( d->m_targetStatus );
+		if( d->m_targetShieldTint && draw != nullptr )
+			draw->setTintStatus( TINT_STATUS_SHIELDED );
+		return;
+	}
+	ObjectStatusMaskType clear = d->m_targetStatus;
+	Bool tint = d->m_targetShieldTint;
+	for( size_t i = 0; i < s_markers.size(); ++i )
+	{
+		const StickyBombUpdate *other = s_markers[i];
+		if( other == this || other->m_targetID != m_targetID )
+			continue;
+		const StickyBombUpdateModuleData *od = other->getStickyBombUpdateModuleData();
+		clear.clear( od->m_targetStatus );
+		if( od->m_targetShieldTint )
+			tint = FALSE;
+	}
+	if( clear.any() )
+		target->clearStatus( clear );
+	if( tint && draw != nullptr )
+		draw->clearTintStatus( TINT_STATUS_SHIELDED );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature a shield stuck to the victim takes the hit, whole, by its own armour (C&C4's
+	ABSORB_ALL_DAMAGE LEECH_DAMAGE_FROM_PARENT); a shield takes no hit but those it takes for its target */
+Bool StickyBombUpdate::absorbDamage( Object *victim, const DamageInfo *damageInfo )
+{
+	if( s_markers.empty() || victim == nullptr || s_absorbing )
+		return FALSE;
+	const ObjectID id = victim->getID();
+	for( size_t i = 0; i < s_markers.size(); ++i )
+	{
+		StickyBombUpdate *sticky = s_markers[i];
+		const StickyBombUpdateModuleData *d = sticky->getStickyBombUpdateModuleData();
+		if( !d->m_absorbTargetDamage )
+			continue;
+		Object *shield = sticky->getObject();
+		if( shield == victim )
+			return TRUE;
+		if( sticky->m_targetID != id || shield->isEffectivelyDead() || !getDamageTypeFlag( d->m_absorbDamageTypes, damageInfo->in.m_damageType ) )
+			continue;
+		DamageInfo taken;
+		taken.in = damageInfo->in;
+		s_absorbing = TRUE;
+		shield->attemptDamage( &taken );
+		s_absorbing = FALSE;
+		return TRUE;
+	}
+	return FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -93,8 +177,14 @@ void StickyBombUpdate::onObjectCreated()
 //-------------------------------------------------------------------------------------------------
 void StickyBombUpdate::initStickyBomb( Object *target, const Object *bomber, const Coord3D *specificPos )
 {
+	// Tiberium Project @feature what it gave the target it was on before is taken back (an OCL's object, stuck first to
+	// its maker's goal, then to the weapon's victim)
+	if( m_targetID != INVALID_ID && ( target == nullptr || target->getID() != m_targetID ) )
+		markTarget( FALSE );
+
 	//Store the target.
 	m_targetID = target ? target->getID() : INVALID_ID;
+	markTarget( TRUE );
 
 	//Set the target as the producer ID -- so we can access it from other areas.
 	// Tiberium Project @feature unless it keeps the one who made it (KeepProducer)
@@ -167,6 +257,12 @@ UpdateSleepTime StickyBombUpdate::update()
 	// Continually reset position of stickybomb to match the position of the target.
 	const Object *target = getTargetObject();
 	Object *self = getObject();
+	// Tiberium Project @feature a shield whose target is gone goes too
+	if( target == nullptr && m_targetID != INVALID_ID && getStickyBombUpdateModuleData()->m_absorbTargetDamage )
+	{
+		TheGameLogic->destroyObject( self );
+		return UPDATE_SLEEP_FOREVER;
+	}
 	if( target )
 	{
 		if( target->isEffectivelyDead() )
@@ -294,9 +390,9 @@ void StickyBombUpdate::detonate()
 	getObject()->kill();// Most things just fire weapons in their death modules
 }
 
-#if !RETAIL_COMPATIBLE_CRC
 void StickyBombUpdate::onDelete()
 {
+#if !RETAIL_COMPATIBLE_CRC
 	// TheSuperHackers @bugfix Stubbjax 05/08/2026 Clear booby trap status when destroyed, not just when detonated.
 	if (getObject()->isKindOf(KINDOF_BOOBY_TRAP))
 	{
@@ -306,8 +402,10 @@ void StickyBombUpdate::onDelete()
 		if (boobyTrappedObject)
 			boobyTrappedObject->clearStatus(MAKE_OBJECT_STATUS_MASK(OBJECT_STATUS_BOOBY_TRAPPED));
 	}
-}
 #endif
+	// Tiberium Project @feature what it gave its target goes with it
+	markTarget( FALSE );
+}
 
 // ------------------------------------------------------------------------------------------------
 /** CRC */
