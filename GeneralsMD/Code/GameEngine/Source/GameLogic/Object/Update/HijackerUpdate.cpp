@@ -57,6 +57,7 @@ HijackerUpdate::HijackerUpdate( Thing *thing, const ModuleData *moduleData ) : U
 	setIsInVehicle( FALSE );
 	m_wasTargetAirborne = false;
 	m_ejectPos.zero();
+	m_keepsOwnVeterancy = FALSE;	// Tiberium Project
 //	m_ejectPilotDMI = nullptr;
 }
 
@@ -94,7 +95,8 @@ UpdateSleepTime HijackerUpdate::update()
 			// So, if while I am driving this American war vehicle, I gain skill points, I get to keep them when I wreck the vehicle
 			ExperienceTracker *targetExp = target->getExperienceTracker();
 			ExperienceTracker *jackerExp = obj->getExperienceTracker();
-			if ( targetExp && jackerExp )
+			// (Tiberium Project: not riding an ally's vehicle, RideAlly)
+			if ( targetExp && jackerExp && !m_keepsOwnVeterancy )
 			{
 				VeterancyLevel highestLevel = MAX(targetExp->getVeterancyLevel(),jackerExp->getVeterancyLevel());
 				jackerExp->setVeterancyLevel( highestLevel );
@@ -125,7 +127,14 @@ UpdateSleepTime HijackerUpdate::update()
 					ai->aiIdle( CMD_FROM_AI );
 				}
 
-				if (m_wasTargetAirborne)
+				// Tiberium Project @feature one riding an ally's vehicle (RideAlly) dies with it when it falls from the air
+				// (C&C4's DIE_WHEN_DETACHED_WHILE_AIRBORNE)
+				if (m_wasTargetAirborne && m_keepsOwnVeterancy)
+				{
+					obj->setPosition( &m_ejectPos );
+					obj->kill();
+				}
+				else if (m_wasTargetAirborne)
 				{
 					const ThingTemplate* putInContainerTmpl = TheThingFactory->findTemplate(getHijackerUpdateModuleData()->m_parachuteName);
 					DEBUG_ASSERTCRASH(putInContainerTmpl,("DeliverPayload: PutInContainer %s not found!",getHijackerUpdateModuleData()->m_parachuteName.str()));
@@ -152,6 +161,7 @@ UpdateSleepTime HijackerUpdate::update()
 			setIsInVehicle( FALSE );
 			setUpdate( FALSE );
 			m_wasTargetAirborne = false;
+			m_keepsOwnVeterancy = FALSE;	// Tiberium Project
 
 		}
 
@@ -221,7 +231,8 @@ void HijackerUpdate::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	// 2: Tiberium Project: m_keepsOwnVeterancy
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -242,6 +253,10 @@ void HijackerUpdate::xfer( Xfer *xfer )
 
 	// was target airborne
 	xfer->xferBool( &m_wasTargetAirborne );
+
+	// Tiberium Project: riding an ally's vehicle
+	if( version >= 2 )
+		xfer->xferBool( &m_keepsOwnVeterancy );
 
 }
 

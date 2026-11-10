@@ -34,6 +34,8 @@
 #pragma once
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
+#include "Common/GameCommon.h"
+#include "Common/INI.h"
 #include "Common/Module.h"
 #include "GameLogic/Module/CrateCollide.h"
 
@@ -45,15 +47,29 @@ class ConvertToHijackedVehicleCrateCollideModuleData : public CrateCollideModule
 {
 public:
 	UnsignedInt m_rangeOfEffect;
+	/// Tiberium Project @feature RideAlly: it boards one of its own player's vehicles instead of an enemy's, hidden inside
+	/// it, the vehicle staying its player's, at least RideVeterancy while it rides, and gets out where the vehicle dies
+	/// (C&C4's Commando: SAGE's AttachUpdate with UpgradeToAddToParent, the vehicle made heroic)
+	Bool m_rideAlly;
+	Int m_rideVeterancy;	///< VeterancyLevel
 
 	ConvertToHijackedVehicleCrateCollideModuleData()
 	{
 		m_rangeOfEffect = 0;
+		m_rideAlly = FALSE;
+		m_rideVeterancy = LEVEL_REGULAR;
 	}
 
 	static void buildFieldParse(MultiIniFieldParse& p)
 	{
     CrateCollideModuleData::buildFieldParse(p);
+		static const FieldParse dataFieldParse[] =
+		{
+			{ "RideAlly",				INI::parseBool,				nullptr,						offsetof( ConvertToHijackedVehicleCrateCollideModuleData, m_rideAlly ) },	// Tiberium Project
+			{ "RideVeterancy",	INI::parseIndexList,	TheVeterancyNames,	offsetof( ConvertToHijackedVehicleCrateCollideModuleData, m_rideVeterancy ) },	// Tiberium Project
+			{ nullptr, nullptr, nullptr, 0 }
+		};
+		p.add( dataFieldParse );
 	}
 
 };

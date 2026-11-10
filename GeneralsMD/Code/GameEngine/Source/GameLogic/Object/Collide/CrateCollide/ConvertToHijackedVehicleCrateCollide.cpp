@@ -83,6 +83,17 @@ Bool ConvertToHijackedVehicleCrateCollide::isValidToExecute( const Object *other
 		return FALSE;// can't hijack a dead vehicle
 	}
 
+	// Tiberium Project @feature RideAlly: one of its own player's vehicles, on the ground, no one riding it already (C&C4's
+	// Commando: SAME_PLAYER VEHICLE, not INFANTRY or CRAWLER, not AIRBORNE_TARGET or VEHICLE_ATTACHED)
+	if( getConvertToHijackedVehicleCrateCollideModuleData()->m_rideAlly )
+	{
+		const Object *me = getObject();
+		return other != me && other->getControllingPlayer() == me->getControllingPlayer()
+			&& other->isKindOf( KINDOF_VEHICLE ) && !other->isKindOf( KINDOF_AIRCRAFT ) && !other->isKindOf( KINDOF_INFANTRY )
+			&& !other->isKindOf( KINDOF_STRUCTURE ) && !other->isAirborneTarget()
+			&& !other->getStatusBits().test( OBJECT_STATUS_HIJACKED );
+	}
+
 	if( other->isKindOf( KINDOF_IMMUNE_TO_CAPTURE ) )
 	{
 		return FALSE; //Kris: Patch 1.03 -- Prevent hijackers from being able to hijack battle buses.
@@ -146,6 +157,32 @@ Bool ConvertToHijackedVehicleCrateCollide::executeCrateBehavior( Object *other )
 	//Assume ai is valid because CrateCollide::isValidToExecute(other) checks it.
 	Object *obj = getObject();
 	AIUpdateInterface* ai = obj->getAIUpdateInterface();
+	// Tiberium Project @feature RideAlly: aboard one of its player's own vehicles, which stays its player's, at least
+	// RideVeterancy while it rides (C&C4's Commando makes it heroic); it gets out where the vehicle dies
+	const ConvertToHijackedVehicleCrateCollideModuleData *data = getConvertToHijackedVehicleCrateCollideModuleData();
+	if( data->m_rideAlly )
+	{
+		other->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_HIJACKED ) );	// (one aboard: no one else)
+		ExperienceTracker *rideExp = other->getExperienceTracker();
+		if( rideExp != nullptr && rideExp->isTrainable() && data->m_rideVeterancy > LEVEL_REGULAR )
+			rideExp->setMinVeterancyLevel( (VeterancyLevel)data->m_rideVeterancy );
+		static NameKeyType key_RideHijackerUpdate = NAMEKEY( "HijackerUpdate" );
+		HijackerUpdate *ride = (HijackerUpdate*)obj->findUpdateModule( key_RideHijackerUpdate );
+		if( ride == nullptr )
+			return FALSE;
+		ride->setTargetObject( other );
+		ride->setIsInVehicle( TRUE );
+		ride->setUpdate( TRUE );
+		ride->setKeepsOwnVeterancy( TRUE );
+		obj->setStatus( MAKE_OBJECT_STATUS_MASK3( OBJECT_STATUS_NO_COLLISIONS, OBJECT_STATUS_MASKED, OBJECT_STATUS_UNSELECTABLE ) );
+		obj->leaveGroup();
+		if( ai )
+			ai->aiIdle( CMD_FROM_AI );
+		ThePartitionManager->unRegisterObject( obj );
+		if( obj->getDrawable() )
+			obj->getDrawable()->setDrawableHidden( true );
+		return FALSE;	// (it rides; it is not used up)
+	}
 	if (ai && ai->getGoalObject() != other)
 	{
 		return false;

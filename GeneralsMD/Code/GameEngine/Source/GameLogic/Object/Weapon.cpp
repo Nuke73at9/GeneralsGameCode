@@ -178,6 +178,8 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "PrimaryDamageRadius",			INI::parseReal,													nullptr,							offsetof(WeaponTemplate, m_primaryDamageRadius) },
 	{ "SecondaryDamage",					INI::parseReal,													nullptr,							offsetof(WeaponTemplate, m_secondaryDamage) },
 	{ "SecondaryDamageRadius",		INI::parseReal,													nullptr,							offsetof(WeaponTemplate, m_secondaryDamageRadius) },
+	{ "PrimaryDamageTaperOff",		INI::parseReal,													nullptr,							offsetof(WeaponTemplate, m_primaryDamageTaperOff) },	// Tiberium Project
+	{ "SecondaryDamageTaperOff",	INI::parseReal,													nullptr,							offsetof(WeaponTemplate, m_secondaryDamageTaperOff) },	// Tiberium Project
 	{ "ShockWaveAmount",					INI::parseReal,													nullptr,							offsetof(WeaponTemplate, m_shockWaveAmount) },
 	{ "ShockWaveRadius",					INI::parseReal,													nullptr,							offsetof(WeaponTemplate, m_shockWaveRadius) },
 	{ "ShockWaveTaperOff",				INI::parseReal,													nullptr,							offsetof(WeaponTemplate, m_shockWaveTaperOff) },
@@ -311,6 +313,8 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_primaryDamageRadius						= 0.0f;
 	m_secondaryDamage								= 0.0f;
 	m_secondaryDamageRadius					= 0.0f;
+	m_primaryDamageTaperOff					= -1.0f;	// Tiberium Project: none
+	m_secondaryDamageTaperOff				= -1.0f;
 	m_attackRange										= 0.0f;
 	m_minimumAttackRange						= 0.0f;
 	m_requestAssistRange						= 0.0f;
@@ -2150,6 +2154,24 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 			// note, don't bother with damage multipliers here...
 			// that's handled internally by the attemptDamage() method.
 			damageInfo.in.m_amount = (curVictimDistSqr <= primaryRadiusSqr) ? primaryDamage : secondaryDamage;
+
+			// Tiberium Project @feature the damage tapers off away from where it lands (SAGE's DamageTaperOff: C&C4's and
+			// Kane's Wrath's Ion Cannon and nuclear missile, Overlord's Wrath, a Fanatic's bomb): from its full amount at the
+			// centre to the taper's at the edge of its radius, in a straight line, the taper scaled by the same bonuses
+			{
+				const Bool inPrimary = curVictimDistSqr <= primaryRadiusSqr;
+				const Real taperOff = inPrimary ? m_primaryDamageTaperOff : m_secondaryDamageTaperOff;
+				const Real edge = inPrimary ? primaryRadius : secondaryRadius;
+				const Real full = inPrimary ? m_primaryDamage : m_secondaryDamage;
+				if (taperOff >= 0.0f && edge > 0.0f && full > 0.0f && curVictimDistSqr > 0.0f)
+				{
+					Real along = WWMath::Sqrt(curVictimDistSqr) / edge;
+					if (along > 1.0f)
+						along = 1.0f;
+					const Real atEdge = damageInfo.in.m_amount * (taperOff / full);
+					damageInfo.in.m_amount += (atEdge - damageInfo.in.m_amount) * along;
+				}
+			}
 
 			if( killSelf )
 			{

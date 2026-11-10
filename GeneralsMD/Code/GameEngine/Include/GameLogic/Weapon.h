@@ -560,6 +560,8 @@ private:
 	Real m_primaryDamageRadius;							///< primary damage radius range
 	Real m_secondaryDamage;									///< secondary damage amount
 	Real m_secondaryDamageRadius;						///< secondary damage radius range
+	Real m_primaryDamageTaperOff;						///< Tiberium Project: the primary damage at the edge of its radius, falling to it in a straight line from the full amount at the centre (SAGE's DamageTaperOff); below zero: none
+	Real m_secondaryDamageTaperOff;					///< Tiberium Project: the same for the secondary damage, from its full amount at the centre to this at the edge of its radius
 	Real m_shockWaveAmount;									///( How much shockwave generated
 	Real m_shockWaveRadius;									///( How far shockwave effect affects objects
 	Real m_shockWaveTaperOff;								///( How much shockwave is left at the tip of the shockwave radius

@@ -76,6 +76,7 @@ public:
 	Object* getTargetObject() const;
 	void setUpdate(Bool u ) {m_update = u;}
 	void setIsInVehicle(Bool i ) {m_isInVehicle = i;}
+	void setKeepsOwnVeterancy( Bool k ) { m_keepsOwnVeterancy = k; }	///< Tiberium Project: riding an ally's vehicle (RideAlly): no veterancy shared
 
 private:
 
@@ -84,6 +85,7 @@ private:
 	Bool     m_update;
 	Bool		 m_isInVehicle;
 	Bool		 m_wasTargetAirborne;
+	Bool		 m_keepsOwnVeterancy;	///< Tiberium Project
 
 //	DieModuleInterface *m_ejectPilotDMI; // point to ejectpilotdiemodule
 																			 // of target vehicle if it has one
