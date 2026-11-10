@@ -89,10 +89,20 @@ StickyBombUpdate::~StickyBombUpdate()
 void StickyBombUpdate::markTarget( Bool on )
 {
 	const StickyBombUpdateModuleData *d = getStickyBombUpdateModuleData();
-	if( !d->m_targetStatus.any() && !d->m_targetShieldTint )
-		return;
 	Object *target = getTargetObject();
 	if( target == nullptr )
+		return;
+	// Tiberium Project @feature its target's TargetModifier while it is there, put on and taken off as from this one
+	// (another stuck to it keeps its own)
+	if( d->m_targetModifier != NAMEKEY_INVALID && TheAttributeModifierStore != nullptr )
+	{
+		const AttributeModifierTemplate *tmpl = TheAttributeModifierStore->find( d->m_targetModifier );
+		if( tmpl != nullptr && on )
+			target->applyAttributeModifier( tmpl, getObject()->getID() );
+		else if( tmpl != nullptr )
+			target->removeAttributeModifier( tmpl, getObject()->getID() );
+	}
+	if( !d->m_targetStatus.any() && !d->m_targetShieldTint )
 		return;
 	Drawable *draw = target->getDrawable();
 	if( on )
@@ -278,6 +288,16 @@ UpdateSleepTime StickyBombUpdate::update()
 			//If the target is dead, then
 			TheGameLogic->destroyObject( self );
 			return UPDATE_SLEEP_NONE;
+		}
+
+		// Tiberium Project @feature it dies once its target has any of TargetForbiddenStatus (C&C4's
+		// DIE_WHEN_PARENT_HAS_FORBIDDEN_STATUS: the Aftershock's Tiberium cloud is gone as the Aftershock deploys)
+		const ObjectStatusMaskType &forbidden = getStickyBombUpdateModuleData()->m_targetForbiddenStatus;
+		if( forbidden.any() && target->getStatusBits().testForAny( forbidden ) )
+		{
+			if( !self->isEffectivelyDead() )
+				self->kill();
+			return UPDATE_SLEEP_FOREVER;
 		}
 
 		if ( target->isKindOf( KINDOF_IMMOBILE) )

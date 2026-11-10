@@ -979,7 +979,8 @@ protected:
 	void deleteAllDelayedDamage();
 	void resetWeaponTemplates();
 	void setDelayedDamage(const WeaponTemplate *weapon, const Coord3D* pos, UnsignedInt whichFrame, ObjectID sourceID, ObjectID victimID, const WeaponBonus& bonus,
-		const WeaponTemplate *hopOf = nullptr, ObjectID hopFromID = INVALID_ID, const Coord3D *hopFromPos = nullptr);	///< Tiberium Project: a chain hop of hopOf's, from hopFromID (or hopFromPos) to the victim
+		const WeaponTemplate *hopOf = nullptr, ObjectID hopFromID = INVALID_ID, const Coord3D *hopFromPos = nullptr,
+		Int sourcePlayerIndex = -1);	///< Tiberium Project: a chain hop of hopOf's, from hopFromID (or hopFromPos) to the victim; dealt as that player's once the source is gone (-1: as Zero Hour, by no one's)
 	static void showHop(const WeaponTemplate *chain, const Object *owner, const Object *from, const Coord3D *fromPos, const Object *to);	///< Tiberium Project: its beam and effect
 	/// Tiberium Project @feature the delayed damage of a weapon from a source on a victim called off (a damage over time
 	/// started over)
@@ -1005,6 +1006,7 @@ private:
 		const WeaponTemplate *m_hopOf;							///< Tiberium Project: a hop of this weapon's chain (its beam and effect)
 		ObjectID m_hopFromID;												///< Tiberium Project: from what (the last hop's target)
 		Coord3D m_hopFromPos;												///< Tiberium Project: or from where, when that is gone
+		Int m_sourcePlayerIndex;										///< Tiberium Project: dealt as this player's once its source is gone (-1: none)
 	};
 
 	std::vector<WeaponTemplate*> m_weaponTemplateVector;

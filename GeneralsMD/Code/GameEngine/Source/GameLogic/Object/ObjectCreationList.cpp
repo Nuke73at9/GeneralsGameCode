@@ -779,6 +779,7 @@ public:
 		m_skipIfSignificantlyAirborne(false),
 		m_invulnerableTime(0),
 		m_containInsideSourceObject(FALSE),
+		m_attachToSource(FALSE),
     m_minHealth(1.0f),
 		m_maxHealth(1.0f),
 		m_orientInForceDirection(false),
@@ -905,6 +906,7 @@ public:
 			{ "VeterancyLevel",	INI::parseIndexList, TheVeterancyNames, offsetof(GenericObjectCreationNugget, m_veterancyLevel) },	// Tiberium Project
 			{ "CreateFX",	INI::parseFXList, nullptr, offsetof(GenericObjectCreationNugget, m_createFX) },	// Tiberium Project
 			{ "NeutralOwner",	INI::parseBool, nullptr, offsetof(GenericObjectCreationNugget, m_neutralOwner) },	// Tiberium Project
+			{ "AttachToSource",	INI::parseBool, nullptr, offsetof(GenericObjectCreationNugget, m_attachToSource) },	// Tiberium Project
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 
@@ -1317,8 +1319,11 @@ protected:
 
 
 
-		// Tiberium Project @feature stuck to the weapon's victim (ObjectCreationList::setStickTarget)
+		// Tiberium Project @feature stuck to the weapon's victim (ObjectCreationList::setStickTarget); with AttachToSource,
+		// to the one it is made by instead (C&C4's AttachToSource: the Aftershock's Tiberium cloud goes where it goes)
 		Object *stickTo = ObjectCreationList::getStickTarget();
+		if( m_attachToSource && sourceObj != nullptr )
+			stickTo = TheGameLogic->findObjectByID( sourceObj->getID() );
 		if( stickTo != nullptr && stickTo != obj && !stickTo->isEffectivelyDead() )
 		{
 			static NameKeyType key_StickyBombUpdate = NAMEKEY( "StickyBombUpdate" );
@@ -1615,6 +1620,7 @@ private:
 	AudioEventRTS							m_bounceSound;
 	Bool											m_requiresLivePlayer;
 	Bool											m_containInsideSourceObject; ///< The created stuff will be added to the Contain module of the SourceObject
+	Bool											m_attachToSource;				///< Tiberium Project: what it makes with a StickyBombUpdate is stuck to the source (C&C4's AttachToSource)
 	Bool											m_preserveLayer;
 	Int												m_orderAfterCreation;		///< Tiberium Project: OrderAfterCreationType
 	Int												m_veterancyLevel;				///< Tiberium Project: VeterancyLevel what it makes starts at (at least)

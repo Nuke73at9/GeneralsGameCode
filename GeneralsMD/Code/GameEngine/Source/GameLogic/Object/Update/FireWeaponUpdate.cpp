@@ -36,6 +36,7 @@
 #include "GameLogic/Module/StickyBombUpdate.h"
 #include "GameLogic/ObjectIter.h"
 #include "GameLogic/PartitionManager.h"
+#include "GameLogic/TerrainLogic.h"
 #include "GameLogic/WeaponStatus.h"
 #include "GameLogic/GameLogic.h"
 
@@ -50,6 +51,7 @@ FireWeaponUpdateModuleData::FireWeaponUpdateModuleData()
 	m_requiredObjectRange = 0.0f;	// Tiberium Project
 	m_requiredObjectRelationship = 0;
 	m_startsInactive = FALSE;	// Tiberium Project
+	m_fireOffset.zero();	// Tiberium Project
 }
 
 // Tiberium Project: the relationships RequiredObjectRelationship names
@@ -73,6 +75,7 @@ enum { REQUIRED_ALLIES = 1, REQUIRED_ENEMIES = 2, REQUIRED_NEUTRALS = 4 };
 		{ "RequiredObjectKindOf",	KindOfMaskType::parseFromINI,		nullptr, offsetof( FireWeaponUpdateModuleData, m_requiredObjectKindOf ) },	// Tiberium Project
 		{ "RequiredObjectForbiddenKindOf",	KindOfMaskType::parseFromINI,	nullptr, offsetof( FireWeaponUpdateModuleData, m_requiredObjectForbiddenKindOf ) },	// Tiberium Project
 		{ "StartsInactive",				INI::parseBool,									nullptr, offsetof( FireWeaponUpdateModuleData, m_startsInactive ) },	// Tiberium Project
+		{ "FireOffset",						INI::parseCoord3D,							nullptr, offsetof( FireWeaponUpdateModuleData, m_fireOffset ) },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
   p.add(dataFieldParse);
@@ -153,8 +156,33 @@ UpdateSleepTime FireWeaponUpdate::update()
 		static NameKeyType key_StickyBombUpdate = NAMEKEY( "StickyBombUpdate" );
 		const StickyBombUpdate *sticky = (const StickyBombUpdate *)getObject()->findUpdateModule( key_StickyBombUpdate );
 		Object *stuckTo = sticky != nullptr ? sticky->getTargetObject() : nullptr;
+		// Tiberium Project @bugfix only what its damage is for: one stuck to its own side's (C&C4's Aftershock's
+		// Tiberium cloud, on the Aftershock) shoots where it is, its damage for those around and not for the Aftershock;
+		// shot at as the weapon's target, the Aftershock was hurt by its own cloud
+		if( stuckTo != nullptr )
+		{
+			const Int affects = m_weapon->getTemplate()->getAffectsMask();
+			const Relationship r = getObject()->getRelationship( stuckTo );
+			if( ( r == ALLIES && !( affects & WEAPON_AFFECTS_ALLIES ) ) || ( r == NEUTRAL && !( affects & WEAPON_AFFECTS_NEUTRALS ) )
+				|| ( r == ENEMIES && !( affects & WEAPON_AFFECTS_ENEMIES ) ) )
+				stuckTo = nullptr;
+		}
+		const Coord3D &offset = getFireWeaponUpdateModuleData()->m_fireOffset;
 		if( stuckTo != nullptr && !stuckTo->isEffectivelyDead() )
 			m_weapon->forceFireWeapon( getObject(), stuckTo );
+		else if( offset.x != 0.0f || offset.y != 0.0f || offset.z != 0.0f )
+		{
+			// Tiberium Project @feature at its spot from the object, turned with it (FireOffset), on the ground there
+			const Object *me = getObject();
+			const Real angle = me->getOrientation();
+			const Real c = WWMath::Cos( angle );
+			const Real s = WWMath::Sin( angle );
+			Coord3D at = *me->getPosition();
+			at.x += offset.x * c - offset.y * s;
+			at.y += offset.x * s + offset.y * c;
+			at.z = TheTerrainLogic->getGroundHeight( at.x, at.y ) + offset.z;
+			m_weapon->forceFireWeapon( getObject(), &at );
+		}
 		else
 			m_weapon->forceFireWeapon( getObject(), getObject()->getPosition() );
 	}

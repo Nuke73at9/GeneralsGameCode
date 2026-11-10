@@ -31,6 +31,7 @@
 #pragma once
 
 #include "Common/ObjectStatusTypes.h"
+#include "GameLogic/AttributeModifier.h"
 #include "GameLogic/Damage.h"
 #include "GameLogic/Module/UpdateModule.h"
 
@@ -53,9 +54,13 @@ public:
 	Bool						m_absorbTargetDamage;	///< Tiberium Project: the target's hits on it instead (C&C4's LEECH_DAMAGE_FROM_PARENT, ABSORB_ALL_DAMAGE)
 	DamageTypeFlags	m_absorbDamageTypes;	///< Tiberium Project: the kinds of hit it takes for the target (C&C4's all but DamageTypesToNotLeech)
 	Bool						m_targetShieldTint;	///< Tiberium Project: the target drawn shielded while it is there (C&C4's PERSONAL_SHIELDS look)
+	ObjectStatusMaskType	m_targetForbiddenStatus;	///< Tiberium Project: it dies once its target has any of these (C&C4's ForbiddenParentStatus)
+	NameKeyType			m_targetModifier;	///< Tiberium Project: an attribute modifier on its target while it is there (C&C4's ParentModifierToSet)
 
 	StickyBombUpdateModuleData()
 	{
+		m_targetForbiddenStatus.clear();
+		m_targetModifier = NAMEKEY_INVALID;
 		m_offsetZ = 10.0f;
 		m_geometryBasedDamageWeaponTemplate = nullptr;
 		m_geometryBasedDamageFX = nullptr;
@@ -88,6 +93,11 @@ public:
 			{ "AbsorbTargetDamage",				INI::parseBool,						nullptr, offsetof( StickyBombUpdateModuleData, m_absorbTargetDamage ) },
 			{ "AbsorbDamageTypes",				INI::parseDamageTypeFlags,	nullptr, offsetof( StickyBombUpdateModuleData, m_absorbDamageTypes ) },
 			{ "TargetShieldTint",					INI::parseBool,						nullptr, offsetof( StickyBombUpdateModuleData, m_targetShieldTint ) },
+			// Tiberium Project @feature SAGE's AttachUpdate on what it is stuck to (C&C4's Aftershock's Tiberium cloud): it dies
+			// once its target has any of TargetForbiddenStatus (DIE_WHEN_PARENT_HAS_FORBIDDEN_STATUS: the Aftershock deployed),
+			// and its target has TargetModifier while it is there (ParentModifierToSet), taken off as it goes
+			{ "TargetForbiddenStatus",		ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( StickyBombUpdateModuleData, m_targetForbiddenStatus ) },
+			{ "TargetModifier",						AttributeModifierStore::parseModifierName,	nullptr, offsetof( StickyBombUpdateModuleData, m_targetModifier ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
     p.add(dataFieldParse);

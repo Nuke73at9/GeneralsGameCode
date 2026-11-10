@@ -1684,7 +1684,8 @@ void WeaponTemplate::scheduleScatter(ObjectID sourceID, const Object *primaryVic
 					weapon->dealDamageInternal(owner, other->getID(), other->getPosition(), scaled, FALSE);
 				}
 				else
-					TheWeaponStore->setDelayedDamage(weapon, other->getPosition(), when, owner, other->getID(), scaled, this, from[f], &fromPos[f]);
+					TheWeaponStore->setDelayedDamage(weapon, other->getPosition(), when, owner, other->getID(), scaled, this, from[f], &fromPos[f],
+						ownerObj->getControllingPlayer() != nullptr ? (Int)ownerObj->getControllingPlayer()->getPlayerIndex() : -1);
 			}
 		}
 		if (next.empty())
@@ -1716,6 +1717,9 @@ void WeaponTemplate::scheduleFollowUps(ObjectID sourceID, const Object *primaryV
 	const ObjectID victimID = primaryVictim != nullptr ? primaryVictim->getID() : INVALID_ID;
 	const Coord3D at = *pos;
 	const UnsignedInt now = TheGameLogic->getFrame();
+	// (dealt as its owner's player's once the owner is gone: a cloud's ticks after the cloud, s_lostSourcePlayer)
+	const Object *ownerObj = TheGameLogic->findObjectByID(owner);
+	const Int ownerPlayer = ownerObj != nullptr && ownerObj->getControllingPlayer() != nullptr ? (Int)ownerObj->getControllingPlayer()->getPlayerIndex() : -1;
 	++s_depth;
 	for (size_t i = 0; i < m_followUps.size(); ++i)
 	{
@@ -1766,7 +1770,7 @@ void WeaponTemplate::scheduleFollowUps(ObjectID sourceID, const Object *primaryV
 			if (when <= now)
 				weapon->dealDamageInternal(owner, whom, &where, bonus, FALSE);
 			else
-				TheWeaponStore->setDelayedDamage(weapon, &where, when, owner, whom, bonus);
+				TheWeaponStore->setDelayedDamage(weapon, &where, when, owner, whom, bonus, nullptr, INVALID_ID, nullptr, ownerPlayer);
 		}
 	}
 	--s_depth;
@@ -1823,6 +1827,7 @@ static Bool isReflectableDamage(DamageType type)
 	}
 }
 static Bool s_reflecting = FALSE;	///< Tiberium Project: a reflected shot under way is not reflected again
+static const Player *s_lostSourcePlayer = nullptr;	///< Tiberium Project: a follow-up whose source is gone is dealt as this player's
 
 void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, const Coord3D *pos, const WeaponBonus& bonus, Bool isProjectileDetonation) const
 {
@@ -2070,6 +2075,15 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 						}
 					}
 				}
+			}
+			else if (s_lostSourcePlayer != nullptr && curVictim != primaryVictim)
+			{
+				// Tiberium Project @bugfix a follow-up whose source is gone keeps to its player's friends and foes (C&C4's
+				// Aftershock's cloud's damage over time, its ticks after the cloud has gone: they burned the Aftershock)
+				const Relationship r = curVictim->getTeam() != nullptr ? s_lostSourcePlayer->getRelationship(curVictim->getTeam()) : NEUTRAL;
+				const Int requiredMask = r == ALLIES ? WEAPON_AFFECTS_ALLIES : r == ENEMIES ? WEAPON_AFFECTS_ENEMIES : WEAPON_AFFECTS_NEUTRALS;
+				if (!(affects & requiredMask) || ((affects & WEAPON_DOESNT_AFFECT_AIRBORNE) != 0 && curVictim->isSignificantlyAboveTerrain()))
+					continue;
 			}
 
 			// Tiberium Project @feature a shot that hits its target may go back to its firer instead (C&C4's
@@ -2447,7 +2461,11 @@ void WeaponStore::update()
 			if (ddi->m_hopOf != nullptr)
 				showHop(ddi->m_hopOf, TheGameLogic->findObjectByID(ddi->m_delaySourceID), TheGameLogic->findObjectByID(ddi->m_hopFromID),
 					&ddi->m_hopFromPos, TheGameLogic->findObjectByID(ddi->m_delayIntendedVictimID));
+			// Tiberium Project @bugfix a follow-up whose source is gone is dealt as its player's (scheduleFollowUps)
+			s_lostSourcePlayer = ddi->m_sourcePlayerIndex >= 0 && TheGameLogic->findObjectByID(ddi->m_delaySourceID) == nullptr
+				? ThePlayerList->getNthPlayer(ddi->m_sourcePlayerIndex) : nullptr;
 			ddi->m_delayedWeapon->dealDamageInternal(ddi->m_delaySourceID, ddi->m_delayIntendedVictimID, &ddi->m_delayDamagePos, ddi->m_bonus, isProjectileDetonation);
+			s_lostSourcePlayer = nullptr;
 			ddi = m_weaponDDI.erase(ddi);
 		}
 		else
@@ -2496,9 +2514,10 @@ void WeaponStore::reset()
 
 //-------------------------------------------------------------------------------------------------
 void WeaponStore::setDelayedDamage(const WeaponTemplate *weapon, const Coord3D* pos, UnsignedInt whichFrame, ObjectID sourceID, ObjectID victimID, const WeaponBonus& bonus,
-	const WeaponTemplate *hopOf, ObjectID hopFromID, const Coord3D *hopFromPos)
+	const WeaponTemplate *hopOf, ObjectID hopFromID, const Coord3D *hopFromPos, Int sourcePlayerIndex)
 {
 	WeaponDelayedDamageInfo wi;
+	wi.m_sourcePlayerIndex = sourcePlayerIndex;
 	wi.m_delayedWeapon = weapon;
 	wi.m_delayDamagePos = *pos;
 	wi.m_delayDamageFrame = whichFrame;

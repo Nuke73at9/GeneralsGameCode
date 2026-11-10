@@ -54,6 +54,9 @@ public:
 	/// Tiberium Project @feature SAGE's INITIALLY_INACTIVE: it fires only once something switches it on (arm: a toggle's
 	/// ArmsTimedWeapons, C&C4's ACTIVATE_FIRE_WEAPON_UPDATE_MODULES), its InitialDelay counted from then
 	Bool m_startsInactive;
+	/// Tiberium Project @feature SAGE's FireWeaponNugget Offset: it fires at this spot from the object, turned with it (C&C4's
+	/// Subterranean Strike: its drills in rings round where it was aimed); none: at its own feet
+	Coord3D m_fireOffset;
 
 	FireWeaponUpdateModuleData();
 
