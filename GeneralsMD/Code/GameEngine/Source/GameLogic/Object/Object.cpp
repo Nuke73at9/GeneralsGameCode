@@ -1036,7 +1036,15 @@ Bool Object::checkAndDetonateBoobyTrap(const Object *victim)
 			if( victim && ourBoobyTrap->getControllingPlayer()->getRelationship(victim->getTeam()) == ALLIES )
 				return FALSE;// Friends don't touch friends boobies.
 
-			update->detonate();
+			// Tiberium Project @feature a trap that goes quietly with what it is on (DetonatesWithTarget = No: Kane's Wrath's
+			// Saboteur's): no one set it off, its target is dying (onDie)
+			if( victim == nullptr && !update->detonatesWithTarget() )
+				return FALSE;
+			// Tiberium Project @feature (a trap set off only once they are inside: StickyBombUpdate::setOffAfterEntry)
+			if( update->triggersAfterEntry() )
+				return FALSE;
+
+			update->trigger();	// Tiberium Project: after its TriggerDelay (none: now)
 			return TRUE;// Booby Trapped status will be cleared by stickybomb, as they set it
 		}
 	}
@@ -4848,6 +4856,41 @@ void Object::updateAttributeModifiers()
 	// Tiberium Project @feature its time up (a decoy's lifetime: KillOnExpire)
 	if (dies && !isEffectivelyDead())
 		kill();
+	// Tiberium Project @feature turned (Kane's Wrath's hallucinogen): on at the nearest as each falls, a few times a second
+	else if (testStatus(OBJECT_STATUS_DISSIDENT) && !isEffectivelyDead() && (now % 10) == (getID() % 10))
+		attackAsDissident();
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature Kane's Wrath's hallucinogen (its modifier's EMOTION_DISSIDENT): the unit turns on the nearest
+	unit it can hit within its sight, whoever's, its own side's too, and keeps at it, out of its player's hands, while the
+	modifier lasts (refreshAttributeModifierConditions calls it off) */
+//-------------------------------------------------------------------------------------------------
+void Object::attackAsDissident()
+{
+	AIUpdateInterface *ai = getAI();
+	if (ai == nullptr || getContainedBy() != nullptr || isDisabled())
+		return;
+	// (still at one: on with it)
+	const Object *victim = ai->getCurrentVictim();
+	if (ai->isAttacking() && victim != nullptr && !victim->isEffectivelyDead())
+		return;
+	PartitionFilterAlive filterAlive;
+	PartitionFilterSameMapStatus filterMapStatus(this);
+	PartitionFilter *filters[] = { &filterAlive, &filterMapStatus, nullptr };
+	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(this, getVisionRange(), FROM_CENTER_2D, filters, ITER_SORTED_NEAR_TO_FAR);
+	MemoryPoolObjectHolder hold(iter);
+	for (Object *other = iter->first(); other != nullptr; other = iter->next())
+	{
+		if (other == this || other->isKindOf(KINDOF_STRUCTURE) || other->getContainedBy() != nullptr
+			|| !(other->isKindOf(KINDOF_INFANTRY) || other->isKindOf(KINDOF_VEHICLE)))
+			continue;
+		const CanAttackResult can = getAbleToAttackSpecificObject(ATTACK_NEW_TARGET_FORCED, other, CMD_FROM_AI);
+		if (can != ATTACKRESULT_POSSIBLE && can != ATTACKRESULT_POSSIBLE_AFTER_MOVING)
+			continue;
+		ai->aiForceAttackObject(other, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI);
+		return;
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -4945,6 +4988,16 @@ void Object::refreshAttributeModifierConditions()
 		if (status.any())
 			setStatus(status, TRUE);
 		m_attributeModifierStatus = status;
+		// Tiberium Project @feature come to its senses (Kane's Wrath's hallucinogen worn off): at its own side's foes only
+		AIUpdateInterface *ai = getAI();
+		if (gone.test(OBJECT_STATUS_DISSIDENT) && !testStatus(OBJECT_STATUS_DISSIDENT) && ai != nullptr && ai->isAttacking())
+		{
+			const Object *victim = ai->getCurrentVictim();
+			if (victim == nullptr || getRelationship(victim) != ENEMIES)
+				ai->aiIdle(CMD_FROM_AI);
+		}
+		else if (status.test(OBJECT_STATUS_DISSIDENT) && !isEffectivelyDead())
+			attackAsDissident();
 	}
 	const Real health = getAttributeModifierScalar(MODIFIER_HEALTH);
 	BodyModuleInterface *body = getBodyModule();

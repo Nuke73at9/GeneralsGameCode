@@ -69,6 +69,7 @@ StickyBombUpdate::StickyBombUpdate( Thing *thing, const ModuleData *moduleData )
 	m_targetID		= INVALID_ID;
 	m_dieFrame		= 0;
 	m_nextPingFrame = 0;
+	m_triggerFrame = 0;	// Tiberium Project
 	setWakeFrame(getObject(), UPDATE_SLEEP_FOREVER);
 	if( marksTarget( getStickyBombUpdateModuleData() ) )
 		s_markers.push_back( this );
@@ -284,6 +285,13 @@ UpdateSleepTime StickyBombUpdate::update()
 	// Continually reset position of stickybomb to match the position of the target.
 	const Object *target = getTargetObject();
 	Object *self = getObject();
+	// Tiberium Project @feature set off a while ago (TriggerDelay): it goes off now
+	if( m_triggerFrame != 0 && TheGameLogic->getFrame() >= m_triggerFrame && !self->isEffectivelyDead() )
+	{
+		m_triggerFrame = 0;
+		detonate();
+		return UPDATE_SLEEP_FOREVER;
+	}
 	// Tiberium Project @feature a shield whose target is gone goes too
 	if( target == nullptr && m_targetID != INVALID_ID && getStickyBombUpdateModuleData()->m_absorbTargetDamage )
 	{
@@ -371,11 +379,62 @@ void StickyBombUpdate::setTargetObject( Object *obj )
 }
 
 //-------------------------------------------------------------------------------------------------
+void StickyBombUpdate::trigger()
+{
+	// Tiberium Project @feature (the trap's beep: SAGE's weapon's PreAttackDelay) goes off TriggerDelay after it is set off
+	const UnsignedInt delay = getStickyBombUpdateModuleData()->m_triggerDelay;
+	if( delay == 0 )
+	{
+		detonate();
+		return;
+	}
+	if( m_triggerFrame == 0 )
+	{
+		m_triggerFrame = TheGameLogic->getFrame() + delay;
+		setWakeFrame( getObject(), UPDATE_SLEEP_NONE );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the trap on a container set off by one not allied to it now inside (TriggerAfterEntry: SAGE's
+// BoobyTrapUpdate on a garrison, its GARRISONED); the ones that go off as they try to get in are Object's
+// checkAndDetonateBoobyTrap's
+//-------------------------------------------------------------------------------------------------
+void StickyBombUpdate::setOffAfterEntry( Object *container, const Object *rider )
+{
+	if( container == nullptr || rider == nullptr || !container->testStatus( OBJECT_STATUS_BOOBY_TRAPPED ) )
+		return;
+	static const NameKeyType key_StickyBombUpdate = NAMEKEY( "StickyBombUpdate" );
+	PartitionFilterAcceptByKindOf kindFilter( MAKE_KINDOF_MASK( KINDOF_BOOBY_TRAP ), KINDOFMASK_NONE );
+	PartitionFilterSameMapStatus filterMapStatus( container );
+	PartitionFilter *filters[] = { &kindFilter, &filterMapStatus, nullptr };
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( container->getPosition(),
+		25.0f + container->getGeometryInfo().getBoundingCircleRadius(), FROM_CENTER_2D, filters, ITER_SORTED_NEAR_TO_FAR );
+	MemoryPoolObjectHolder hold( iter );
+	for( Object *other = iter->first(); other != nullptr; other = iter->next() )
+	{
+		if( other->getProducerID() != container->getID() )
+			continue;
+		StickyBombUpdate *update = (StickyBombUpdate *)other->findUpdateModule( key_StickyBombUpdate );
+		if( update == nullptr || !update->triggersAfterEntry() )
+			return;
+		if( other->getControllingPlayer() != nullptr && rider->getTeam() != nullptr
+			&& other->getControllingPlayer()->getRelationship( rider->getTeam() ) == ALLIES )
+			return;
+		update->trigger();
+		return;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 void StickyBombUpdate::detonate()
 {
 	const StickyBombUpdateModuleData *data = getStickyBombUpdateModuleData();
 
 	Object* boobyTrappedObject = getTargetObject();
+	// Tiberium Project @feature its weapon at what it is on (TargetWeapon: SAGE's BoobyTrapUpdate's SpecialWeapon at its parent)
+	if( data->m_targetWeaponTemplate != nullptr && boobyTrappedObject != nullptr && !boobyTrappedObject->isEffectivelyDead() )
+		TheWeaponStore->createAndFireTempWeapon( data->m_targetWeaponTemplate, getObject(), boobyTrappedObject );
 	if( data->m_geometryBasedDamageWeaponTemplate )
 	{
 		// We need to hurt people based on the size of the thing we are on.  The radius in our weapon
@@ -466,8 +525,8 @@ void StickyBombUpdate::crc( Xfer *xfer )
 void StickyBombUpdate::xfer( Xfer *xfer )
 {
 
-	// version
-	XferVersion currentVersion = 1;
+	// version (Tiberium Project: 2: when it goes off, once set off)
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -482,6 +541,9 @@ void StickyBombUpdate::xfer( Xfer *xfer )
 
 	//Next frame that a ping sound will play.
 	xfer->xferUnsignedInt( &m_nextPingFrame );
+
+	if( version >= 2 )
+		xfer->xferUnsignedInt( &m_triggerFrame );
 
 }
 

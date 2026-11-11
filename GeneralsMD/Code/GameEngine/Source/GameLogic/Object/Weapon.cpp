@@ -229,6 +229,7 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "Scatter",									WeaponTemplate::parseScatter,						nullptr,							0 },	// Tiberium Project
 	{ "UpgradedWeapon",						WeaponTemplate::parseUpgradedWeapon,		nullptr,							0 },	// Tiberium Project
 	{ "ExtraLaser",								WeaponTemplate::parseExtraLaser,				nullptr,							0 },	// Tiberium Project
+	{ "DamageScalar",							WeaponTemplate::parseDamageScalar,			nullptr,							0 },	// Tiberium Project
 	{ "ScatterLaser",							INI::parseAsciiString,								nullptr,							offsetof(WeaponTemplate, m_scatterLaserName) },	// Tiberium Project
 	{ "ScatterFX",								INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_scatterFX) },	// Tiberium Project
 	{ "VictimKindOf",								KindOfMaskType::parseFromINI,						nullptr,							offsetof(WeaponTemplate, m_victimKindOf) },	// Tiberium Project
@@ -1707,6 +1708,99 @@ void WeaponTemplate::parseExtraLaser( INI* ini, void *instance, void * /*store*/
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature DamageScalar = <percent> [<kind> ...] [-<kind> ...] [Name:<object> ...] [Relationship:<a>,<b>]
+//-------------------------------------------------------------------------------------------------
+void WeaponTemplate::parseDamageScalar( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ )
+{
+	WeaponTemplate* self = (WeaponTemplate*)instance;
+	WeaponDamageScalar x;
+	x.m_scalar = INI::scanPercentToReal( ini->getNextToken() );
+	for( const char *token = ini->getNextTokenOrNull(); token != nullptr; token = ini->getNextTokenOrNull() )
+	{
+		AsciiString word( token );
+		if( word.startsWithNoCase( "Name:" ) )
+		{
+			x.m_names.push_back( AsciiString( token + 5 ) );
+			continue;
+		}
+		if( word.startsWithNoCase( "Relationship:" ) )
+		{
+			AsciiString list( token + 13 ), rel;
+			while( list.nextToken( &rel, "," ) )
+			{
+				if( rel.compareNoCase( "ALLIES" ) == 0 )
+					x.m_relationships |= 1 << ALLIES;
+				else if( rel.compareNoCase( "ENEMIES" ) == 0 )
+					x.m_relationships |= 1 << ENEMIES;
+				else if( rel.compareNoCase( "NEUTRAL" ) == 0 )
+					x.m_relationships |= 1 << NEUTRAL;
+				else
+					throw INI_INVALID_DATA;
+			}
+			continue;
+		}
+		const Bool spared = token[0] == '-';
+		const char *kind = spared ? token + 1 : token;
+		if( stricmp( kind, "CIVILIAN_BUILDING" ) == 0 && !spared )
+		{
+			x.m_civilianBuilding = TRUE;
+			continue;
+		}
+		const Int bit = KindOfMaskType::getSingleBitFromName( kind );
+		if( bit < 0 )
+		{
+			DEBUG_CRASH(( "DamageScalar: unknown kind %s", kind ));
+			throw INI_INVALID_DATA;
+		}
+		if( spared )
+			x.m_forbiddenKindOf.set( bit );
+		else
+			x.m_kindOf.set( bit );
+	}
+	self->m_damageScalars.push_back( x );
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool WeaponDamageScalar::takes( const Object *source, const Object *victim ) const
+{
+	if( victim == nullptr )
+		return FALSE;
+	if( m_forbiddenKindOf.any() && victim->isAnyKindOf( m_forbiddenKindOf ) )
+		return FALSE;
+	if( m_relationships != 0 && ( source == nullptr || ( m_relationships & ( 1 << source->getRelationship( victim ) ) ) == 0 ) )
+		return FALSE;
+	if( !m_kindOf.any() && !m_civilianBuilding && m_names.empty() )
+		return TRUE;
+	if( m_kindOf.any() && victim->isAnyKindOf( m_kindOf ) )
+		return TRUE;
+	if( m_civilianBuilding && victim->isNonFactionStructure() )
+	{
+		const ContainModuleInterface *contain = victim->getContain();
+		if( contain != nullptr && contain->isGarrisonable() )
+			return TRUE;
+	}
+	const AsciiString &name = victim->getTemplate()->getName();
+	for( size_t i = 0; i < m_names.size(); ++i )
+	{
+		if( m_names[i] == name )
+			return TRUE;
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+Real WeaponTemplate::getDamageScalarFor( const Object *source, const Object *victim ) const
+{
+	Real scalar = 1.0f;
+	for( size_t i = 0; i < m_damageScalars.size(); ++i )
+	{
+		if( m_damageScalars[i].takes( source, victim ) )
+			scalar *= m_damageScalars[i].m_scalar;
+	}
+	return scalar;
+}
+
+//-------------------------------------------------------------------------------------------------
 // Tiberium Project @feature the weapon fired in this one's place by this firer (UpgradedWeapon): a player's upgrade
 // counts when its player has it (a fire field or a strike beacon the unit leaves fires as its player's research
 // has it), an object's when the firer has it
@@ -2329,6 +2423,11 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 					damageInfo.in.m_amount += (atEdge - damageInfo.in.m_amount) * along;
 				}
 			}
+
+			// Tiberium Project @feature its damage scaled to this victim (DamageScalar: Kane's Wrath's satchel charges to a
+			// structure, its flamethrowers to a civilian building, a Fanatic's blast to his own)
+			if (!m_damageScalars.empty())
+				damageInfo.in.m_amount *= getDamageScalarFor(source, curVictim);
 
 			if( killSelf )
 			{

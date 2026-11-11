@@ -158,6 +158,7 @@ private:
 	KindOfMaskType					m_preferredAgainst[WEAPONSLOT_COUNT];
 	Bool										m_isReloadTimeShared;
 	Bool										m_isWeaponLockSharedAcrossSets; ///< A weapon set so similar that it is safe to hold locks across
+	Bool										m_finishPreAttack;	///< Tiberium Project: a weapon that has begun its aim is kept until it fires (SAGE's interleaved firing)
 	std::vector<UpgradeWeapon>	m_upgradeWeapons;	///< Tiberium Project: the slots' weapons on upgrades
 
 	static void parseWeapon(INI* ini, void *instance, void *store, const void* userData);
@@ -179,6 +180,7 @@ public:
 	Bool testWeaponSetFlag( WeaponSetType wst ) const;
 	Bool isSharedReloadTime() const { return m_isReloadTimeShared; }
 	Bool isWeaponLockSharedAcrossSets() const {return m_isWeaponLockSharedAcrossSets; }
+	Bool finishesPreAttack() const { return m_finishPreAttack; }	///< Tiberium Project
 
 	Bool hasAnyWeapons() const;
 	inline const WeaponTemplate* getNth(WeaponSlotType n) const { return m_template[n]; }

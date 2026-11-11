@@ -49,6 +49,7 @@
 #include "GameClient/InGameUI.h"
 
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/Module/BannerCarrierUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/CreateModule.h"
 #include "GameLogic/Module/ParkingPlaceBehavior.h"
 #include "Common/AbramGameRules.h"
@@ -162,6 +163,7 @@ ProductionEntry::ProductionEntry()
 	m_productionQuantityProduced = 0;
 	m_productionQuantityTotal = 0;
 	m_held = FALSE;	// Tiberium Project
+	m_squadID = INVALID_ID;	// Tiberium Project
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -835,6 +837,12 @@ UpdateSleepTime ProductionUpdate::update()
 
 							newObj->setProducer(creationBuilding);
 
+							// Tiberium Project @feature those one purchase makes are a squad (BuildQuantity: a Kane's Wrath squad's
+							// soldiers), each told the first of them (BannerCarrierUpdate: the squad's one leader)
+							if( production->m_squadID == INVALID_ID )
+								production->m_squadID = newObj->getID();
+							BannerCarrierUpdate::joinSquad( newObj, production->m_squadID );
+
 							// call the exit interface to do the rally point and position stuff
 							exitInterface->exitObjectViaDoor( newObj, exitDoor );
 
@@ -1317,12 +1325,12 @@ void ProductionUpdate::crc( Xfer *xfer )
 	* Version Info:
 	* 1: Initial version */
 // ------------------------------------------------------------------------------------------------
-// Tiberium Project: 2: an entry's hold; 3: the part of a frame its modifiers have gained or lost
+// Tiberium Project: 2: an entry's hold; 3: the part of a frame its modifiers have gained or lost; 4: an entry's squad
 void ProductionUpdate::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 3;
+	XferVersion currentVersion = 4;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1376,6 +1384,10 @@ void ProductionUpdate::xfer( Xfer *xfer )
 			// on hold (Tiberium Project)
 			if( version >= 2 )
 				xfer->xferBool( &production->m_held );
+
+			// the squad it is making (Tiberium Project)
+			if( version >= 4 )
+				xfer->xferObjectID( &production->m_squadID );
 
 		}
 
@@ -1469,6 +1481,10 @@ void ProductionUpdate::xfer( Xfer *xfer )
 			// on hold (Tiberium Project)
 			if( version >= 2 )
 				xfer->xferBool( &production->m_held );
+
+			// the squad it is making (Tiberium Project)
+			if( version >= 4 )
+				xfer->xferObjectID( &production->m_squadID );
 
 		}
 

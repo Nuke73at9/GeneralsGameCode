@@ -190,6 +190,7 @@ static PoolSizeRec PoolSizes[] =
 	{ "DecoyArmyUpdate", 32, 32 },	// Tiberium Project @feature the decoy armies
 	{ "MonitorSpecialPowerTimerUpdate", 32, 32 },	// Tiberium Project @feature a superweapon ready
 	{ "StoredResourceUpdate", 32, 32 },	// Tiberium Project @feature a superweapon's charge
+	{ "BannerCarrierUpdate", 64, 64 },	// Tiberium Project @feature a Kane's Wrath squad's leader
 	{ "CompositeStructureUpdate", 64, 32 },	// Tiberium Project @feature a Nod defence's turrets
 	{ "SupportMeterUpdate", 16, 16 },	// Tiberium Project @feature C&C4's support meter
 	{ "StrafeAreaUpdate", 16, 16 },	// Tiberium Project @feature Kane's Wrath's strafing runs

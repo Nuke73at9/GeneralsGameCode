@@ -58,6 +58,10 @@ public:
 	ObjectStatusMaskType	m_targetRequiredStatus;	///< Tiberium Project: it dies once its target lacks any of these (a forbidden status of a toggle's first state)
 	NameKeyType			m_targetModifier;	///< Tiberium Project: an attribute modifier on its target while it is there (C&C4's ParentModifierToSet)
 	Bool						m_onePerTarget;	///< Tiberium Project: one of its kind on a target: those already there die (C&C4's DETACH_WHEN_MULTIPLE_ARE_ATTACHED)
+	Bool						m_detonatesWithTarget;	///< Tiberium Project: a booby trap goes off as its target dies (No: it goes quietly with it)
+	WeaponTemplate*	m_targetWeaponTemplate;	///< Tiberium Project: fired at what it is on as it goes off (SAGE's BoobyTrapUpdate's SpecialWeapon)
+	Bool						m_triggerAfterEntry;		///< Tiberium Project: a booby trap set off once whoever goes in is inside, not as they try
+	UnsignedInt			m_triggerDelay;					///< Tiberium Project: frames from being set off to going off
 
 	StickyBombUpdateModuleData()
 	{
@@ -65,6 +69,10 @@ public:
 		m_targetRequiredStatus.clear();
 		m_targetModifier = NAMEKEY_INVALID;
 		m_onePerTarget = FALSE;
+		m_detonatesWithTarget = TRUE;
+		m_targetWeaponTemplate = nullptr;
+		m_triggerAfterEntry = FALSE;
+		m_triggerDelay = 0;
 		m_offsetZ = 10.0f;
 		m_geometryBasedDamageWeaponTemplate = nullptr;
 		m_geometryBasedDamageFX = nullptr;
@@ -108,6 +116,15 @@ public:
 			// Tiberium Project @feature one of its kind on a target at a time: as it sticks there, those of its kind already there
 			// die, a death not of old age (C&C4's Shockwave: a second sonic charge on a target sets the first one's bonus blast off)
 			{ "OnePerTarget",							INI::parseBool,						nullptr, offsetof( StickyBombUpdateModuleData, m_onePerTarget ) },
+			// Tiberium Project @feature a booby trap (KindOf BOOBY_TRAP) that does not go off as what it is on dies, but goes with
+			// it (Kane's Wrath's Saboteur's traps: SAGE's BoobyTrapUpdate fires only at a garrison or a capture)
+			{ "DetonatesWithTarget",			INI::parseBool,						nullptr, offsetof( StickyBombUpdateModuleData, m_detonatesWithTarget ) },
+			// Tiberium Project @feature SAGE's BoobyTrapUpdate: as it goes off it fires TargetWeapon at what it is on (the garrison it
+			// clears, the tech building or husk it destroys); a trap set off by a garrison (SAGE's GARRISONED) with
+			// TriggerAfterEntry goes off once they are inside, not as they try to get in, TriggerDelay after (its beep)
+			{ "TargetWeapon",							INI::parseWeaponTemplate,	nullptr, offsetof( StickyBombUpdateModuleData, m_targetWeaponTemplate ) },
+			{ "TriggerAfterEntry",				INI::parseBool,						nullptr, offsetof( StickyBombUpdateModuleData, m_triggerAfterEntry ) },
+			{ "TriggerDelay",							INI::parseDurationUnsignedInt,	nullptr, offsetof( StickyBombUpdateModuleData, m_triggerDelay ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
     p.add(dataFieldParse);
@@ -137,6 +154,11 @@ public:
 	UnsignedInt getDetonationFrame() const { return m_dieFrame; }
 	Object* getTargetObject() const;
 	void setTargetObject( Object *obj );
+	Bool detonatesWithTarget() const { return getStickyBombUpdateModuleData()->m_detonatesWithTarget; }	///< Tiberium Project
+	Bool triggersAfterEntry() const { return getStickyBombUpdateModuleData()->m_triggerAfterEntry; }	///< Tiberium Project
+	void trigger();	///< Tiberium Project: set off: it goes off after its TriggerDelay
+	/// Tiberium Project @feature the trap on a container that goes off once someone not allied to it is inside (TriggerAfterEntry)
+	static void setOffAfterEntry( Object *container, const Object *rider );
 
 	/** Tiberium Project @feature whether the hit on the victim is dealt with here: taken by a shield stuck to it
 		(AbsorbTargetDamage), or the victim is such a shield, which takes only the hits it takes for its target (from ActiveBody) */
@@ -149,4 +171,5 @@ private:
 	ObjectID			m_targetID;
 	UnsignedInt		m_dieFrame;
 	UnsignedInt   m_nextPingFrame;
+	UnsignedInt		m_triggerFrame;	///< Tiberium Project: when it goes off, once set off (0: not set off)
 };

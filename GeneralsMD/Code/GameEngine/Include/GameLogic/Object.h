@@ -855,6 +855,7 @@ private:
 	Real													m_attributeModifierShroud;			///< ... the shroud clearing range scale
 	void refreshAttributeModifierConditions();	///< (and the status, health and sight they change)
 	void followStatusWeaponSets( const ObjectStatusMaskType& oldStatus );	///< Tiberium Project: the weapons follow the statuses
+	void attackAsDissident();	///< Tiberium Project: turned, at the nearest it can hit (OBJECT_STATUS_DISSIDENT)
 	Bool upgradeKeeps( ObjectStatusTypes status, Int weaponSet ) const;	///< Tiberium Project: an applied upgrade sets it too
 
 };

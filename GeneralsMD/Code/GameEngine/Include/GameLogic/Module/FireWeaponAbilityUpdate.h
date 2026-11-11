@@ -53,6 +53,10 @@
 // Tiberium Project @feature aimed at an object, the ObjectShot lines are fired instead of the Shot ones, from
 // ObjectStartAbilityRange (0: StartAbilityRange): SAGE's SpecialPowerDispatchSpecialPower handing a power on by what it is
 // aimed at (Kane's Wrath's Orca drops its sensor pod on the ground, or fires one that sticks to a unit).
+// Tiberium Project @feature an ObjectShot ending in Target:<kinds> (KindOf names joined by commas; GARRISONABLE: a building
+// that can be garrisoned and holds no one) is fired only at an object of those: the dispatch picking one of its powers by
+// what it is aimed at (Kane's Wrath's Saboteur: a booby trap of its own for a tech building, a garrisonable building, a
+// husk, a bridge). When the ObjectShot lines all have one and none takes the object, the power is refused there.
 //
 // Tiberium Project @feature an approach (C&C4's weapon that hands its attack on to an ability with SpecialPowerNugget: the
 // Zone Raider's satchel charge, with the Assault Jump a leap to the building first): with ApproachVictimKindOf, while the
@@ -101,6 +105,12 @@ struct FireWeaponAbilityShot
 	UnsignedInt m_delay;		///< frames after the first shot
 	Real m_offsetX, m_offsetY;	///< from the target: ahead of the unit, to its left
 	AsciiString m_fxName;		///< Tiberium Project: played at the unit as it fires (FX:<FXList>, SAGE's FXListSelf)
+	KindOfMaskType m_targetKindOf;	///< Tiberium Project: fired only at an object of one of these (Target:)
+	Bool m_targetGarrisonable;		///< Tiberium Project: ... or at an empty building that can be garrisoned (Target:GARRISONABLE)
+
+	FireWeaponAbilityShot() : m_delay( 0 ), m_offsetX( 0.0f ), m_offsetY( 0.0f ), m_targetGarrisonable( FALSE ) {}
+	Bool hasTargetFilter() const { return m_targetKindOf.any() || m_targetGarrisonable; }
+	Bool takesTarget( const Object *target ) const;	///< Tiberium Project: whether it is fired at this object
 };
 
 //-------------------------------------------------------------------------------------------------

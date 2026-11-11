@@ -82,6 +82,7 @@
 #include "GameLogic/Module/SuppressionUpdate.h"
 #include "GameLogic/Module/GrabSpecialAbilityUpdate.h"
 #include "GameLogic/Module/StoredResourceUpdate.h"
+#include "GameLogic/Module/BannerCarrierUpdate.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 #include "GameLogic/AttributeModifier.h"
 #include "GameLogic/Module/SupplyTruckAIUpdate.h"
@@ -1269,6 +1270,60 @@ void TiberiumTest::update()
 			}
 			log( "frame %d: ui: ranks%s", (int)s_frame, ranks.c_str() );
 		}
+		else if ( step.action == "neutral" && TheGameLogic != nullptr && ThePlayerList != nullptr && ThePlayerList->getNeutralPlayer() != nullptr )
+		{
+			// Tiberium Project @feature (the test) "neutral=k": the k-th spawned object given to no one (a civilian building, a
+			// passer-by: a booby trap goes off for them)
+			const Int k = atoi( step.arg.c_str() );
+			Object *obj = k >= 0 && k < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[k] ) : nullptr;
+			if ( obj != nullptr )
+				obj->setTeam( ThePlayerList->getNeutralPlayer()->getDefaultTeam() );
+			log( "frame %d: ui: neutral %s%s", (int)s_frame, step.arg.c_str(), obj != nullptr ? "" : " (no such object)" );
+		}
+#if RTS_ZEROHOUR
+		else if ( step.action == "squad" && TheGameLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) "squad=k,j,...": those spawned objects one squad, as a factory's batch is
+			// (Kane's Wrath's squads: one leader for them all, BannerCarrierUpdate)
+			ObjectID squad = INVALID_ID;
+			Int n = 0;
+			for ( const std::string &part : split( step.arg.c_str(), ',' ) )
+			{
+				const Int k = atoi( part.c_str() );
+				Object *obj = k >= 0 && k < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[k] ) : nullptr;
+				if ( obj == nullptr )
+					continue;
+				if ( squad == INVALID_ID )
+					squad = obj->getID();
+				BannerCarrierUpdate::joinSquad( obj, squad );
+				++n;
+			}
+			log( "frame %d: ui: squad of %d", (int)s_frame, (int)n );
+		}
+		else if ( step.action == "foe" && TheGameLogic != nullptr && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
+		{
+			// Tiberium Project @feature (the test) "foe=k": the k-th spawned object given to another player, enemies of the local
+			// player both ways (one to set off a mine)
+			const Int k = atoi( step.arg.c_str() );
+			Object *obj = k >= 0 && k < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[k] ) : nullptr;
+			Player *ours = ThePlayerList->getLocalPlayer();
+			Player *foe = nullptr;
+			for ( Int n = 0; n < ThePlayerList->getPlayerCount() && foe == nullptr && obj != nullptr; ++n )
+			{
+				Player *candidate = ThePlayerList->getNthPlayer( n );
+				if ( candidate != nullptr && candidate != ours && candidate != ThePlayerList->getNeutralPlayer()
+					&& candidate->getDefaultTeam() != nullptr && candidate->isPlayerActive() )
+					foe = candidate;
+			}
+			if ( foe != nullptr )
+			{
+				foe->setPlayerRelationship( ours, ENEMIES );
+				ours->setPlayerRelationship( foe, ENEMIES );
+				obj->setTeam( foe->getDefaultTeam() );
+			}
+			log( "frame %d: ui: foe %s%s", (int)s_frame, step.arg.c_str(), foe != nullptr ? "" : " (no such object or no other player)" );
+		}
+#endif
 		else if ( step.action == "enter" && TheGameLogic != nullptr )
 		{
 			// "enter=k,j": the k-th spawned object told to get into the j-th (a transport, a building)
@@ -2244,6 +2299,20 @@ void TiberiumTest::update()
 				if ( o->getObjectCompletedUpgradeMask().any() )
 				{
 					snprintf( more, sizeof( more ), ", %d upgrades", (int)o->getObjectCompletedUpgradeMask().count() );
+					strlcat( hit, more, sizeof( hit ) );
+				}
+				// (a booby trap on it, who it holds: Kane's Wrath's Saboteur's traps)
+				if ( o->testStatus( OBJECT_STATUS_BOOBY_TRAPPED ) )
+					strlcat( hit, ", booby trapped", sizeof( hit ) );
+				// (turned on whoever is nearest: Kane's Wrath's hallucinogen)
+				if ( o->testStatus( OBJECT_STATUS_DISSIDENT ) )
+					strlcat( hit, ", dissident", sizeof( hit ) );
+				// (unseen, or seen through it: Kane's Wrath's stealth)
+				if ( o->testStatus( OBJECT_STATUS_STEALTHED ) )
+					strlcat( hit, o->testStatus( OBJECT_STATUS_DETECTED ) ? ", stealthed (detected)" : ", stealthed", sizeof( hit ) );
+				if ( o->getContain() != nullptr && o->getContain()->getContainCount() > 0 )
+				{
+					snprintf( more, sizeof( more ), ", holds %d", (int)o->getContain()->getContainCount() );
 					strlcat( hit, more, sizeof( hit ) );
 				}
 				log( "frame %d: ui: objinfo %s: player %d%s, health %.0f of %.0f%s%s%s%s%s at %.0f %.0f", (int)s_frame, step.arg.c_str(),

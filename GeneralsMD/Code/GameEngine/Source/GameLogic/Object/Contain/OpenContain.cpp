@@ -49,6 +49,7 @@
 
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/Module/StickyBombUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/OpenContain.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
@@ -393,6 +394,9 @@ void OpenContain::addToContain( Object *rider )
 	rider->onContainedBy( getObject() );
 
 	doLoadSound();
+
+	// Tiberium Project @feature a trap set off once they are inside (Kane's Wrath's Saboteur's on a garrison: its GARRISONED)
+	StickyBombUpdate::setOffAfterEntry( getObject(), rider );
 
 }
 

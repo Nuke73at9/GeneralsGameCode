@@ -108,6 +108,7 @@ void WeaponTemplateSet::clear()
 {
 	m_isReloadTimeShared = false;
 	m_isWeaponLockSharedAcrossSets = FALSE;
+	m_finishPreAttack = FALSE;	// Tiberium Project
 	m_types.clear();
 	for (int i = 0; i < WEAPONSLOT_COUNT; ++i)
 	{
@@ -215,6 +216,7 @@ void WeaponTemplateSet::parseWeaponTemplateSet( INI* ini, const ThingTemplate* t
 		{ "PreferredAgainst", WeaponTemplateSet::parsePreferredAgainst, nullptr, 0 },
 		{ "ShareWeaponReloadTime", INI::parseBool, nullptr, offsetof( WeaponTemplateSet, m_isReloadTimeShared ) },
 		{ "WeaponLockSharedAcrossSets", INI::parseBool, nullptr, offsetof( WeaponTemplateSet, m_isWeaponLockSharedAcrossSets ) },
+		{ "FinishPreAttack", INI::parseBool, nullptr, offsetof( WeaponTemplateSet, m_finishPreAttack ) },	// Tiberium Project
 		{ "UpgradeWeapon", WeaponTemplateSet::parseUpgradeWeapon, nullptr, 0 },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
@@ -1005,6 +1007,18 @@ Bool WeaponSet::chooseBestWeaponForTarget(const Object* obj, const Object* victi
 
 	if( isCurWeaponLocked() )
 		return TRUE; // I have been forced into choosing a specific weapon, so it is right until someone says otherwise
+
+	// Tiberium Project @feature SAGE's interleaved firing (FinishPreAttack): the weapon that has begun its aim is kept until it
+	// has fired (Kane's Wrath's Confessor's grenade, aimed for a second between his minigun's bursts, else dropped each time
+	// the minigun was ready again, or once aimed, and never thrown)
+	const Weapon *aiming = m_weapons[m_curWeapon];
+	if( m_curWeaponTemplateSet != nullptr && m_curWeaponTemplateSet->finishesPreAttack() && victim != nullptr && aiming != nullptr
+		&& ( aiming->getAntiMask() & getVictimAntiMask( victim ) ) != 0 )
+	{
+		const WeaponStatus aimStatus = aiming->getStatus();
+		if( aimStatus == PRE_ATTACK || ( aimStatus == READY_TO_FIRE && aiming->getPreAttackFinishedFrame() > aiming->getLastShotFrame() ) )
+			return TRUE;
+	}
 
 	if (victim == nullptr)
 	{

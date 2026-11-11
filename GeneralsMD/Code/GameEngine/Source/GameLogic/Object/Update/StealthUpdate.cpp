@@ -36,6 +36,7 @@
 #include "Common/FramePacer.h"
 #include "Common/GameState.h"
 #include "Common/GameUtility.h"
+#include "Common/NameKeyGenerator.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/Radar.h"
@@ -77,6 +78,9 @@ StealthUpdateModuleData::StealthUpdateModuleData()
     m_revealDistanceFromTarget = 0.0f;
     m_orderIdleEnemiesToAttackMeUponReveal = false;
     m_innateStealth   = true;
+    m_undetectable    = false;	// Tiberium Project
+    m_stealthOnFX     = nullptr;	// Tiberium Project
+    m_stealthOffFX    = nullptr;	// Tiberium Project
     m_disguiseTransitionFrames = 0;
     m_disguiseRevealTransitionFrames = 0;
     m_blackMarketCheckFrames = 0;
@@ -115,6 +119,12 @@ void StealthUpdateModuleData::buildFieldParse(MultiIniFieldParse& p)
     { "OwnDetectionEvaEvent",		  		Eva::parseEvaMessageFromIni,  	nullptr, offsetof( StealthUpdateModuleData, m_ownDetectionEvaEvent ) },
 		{ "BlackMarketCheckDelay",				INI::parseDurationUnsignedInt,  nullptr, offsetof( StealthUpdateModuleData, m_blackMarketCheckFrames ) },
     { "GrantedBySpecialPower",        INI::parseBool,                 nullptr, offsetof( StealthUpdateModuleData, m_grantedBySpecialPower ) },
+		// Tiberium Project @feature no detector reveals it (SAGE's KindOf CANNOT_BE_DETECTED with InvisibilityUpdate: Kane's Wrath's
+		// Saboteur's booby traps)
+		{ "Undetectable",									INI::parseBool,									nullptr, offsetof( StealthUpdateModuleData, m_undetectable ) },
+		// Tiberium Project @feature its shimmer going unseen and showing itself again (SAGE's EnteringStealthFX, LeavingStealthFX)
+		{ "StealthOnFX",									INI::parseFXList,								nullptr, offsetof( StealthUpdateModuleData, m_stealthOnFX ) },
+		{ "StealthOffFX",									INI::parseFXList,								nullptr, offsetof( StealthUpdateModuleData, m_stealthOffFX ) },
 
 		{ nullptr, nullptr, nullptr, 0 }
 	};
@@ -337,6 +347,26 @@ Bool StealthUpdate::allowedToStealth( Object *stealthOwner ) const
 	//If we have any forbidden statii, then fail
 	if( self->getStatusBits().testForAny( data->m_forbiddenStatus ) )
 		return FALSE;
+
+	// Tiberium Project @feature SAGE's: not while heavily damaged (REALLYDAMAGED: Kane's Wrath's Stealth Tank), nor while
+	// docking at a refinery or at a field (DOCKING, HARVESTING: its harvesters; the dock's own, past its queue)
+	if( flags & STEALTH_NOT_WHILE_REALLY_DAMAGED && self->getBodyModule()->getDamageState() >= BODY_REALLYDAMAGED )
+		return FALSE;
+	if( flags & ( STEALTH_NOT_WHILE_DOCKING | STEALTH_NOT_WHILE_HARVESTING ) )
+	{
+		AIUpdateInterface *ai = const_cast<Object *>( self )->getAI();
+		Object *dock = ai != nullptr && ai->getAIStateType() == AI_DOCK ? ai->getGoalObject() : nullptr;
+		DockUpdateInterface *dockUpdate = dock != nullptr ? dock->getDockUpdateInterface() : nullptr;
+		if( dockUpdate != nullptr && dockUpdate->isClearToEnter( self ) )
+		{
+			static const NameKeyType key_center = NAMEKEY( "SupplyCenterDockUpdate" );
+			static const NameKeyType key_warehouse = NAMEKEY( "SupplyWarehouseDockUpdate" );
+			if( ( flags & STEALTH_NOT_WHILE_DOCKING ) && dock->findUpdateModule( key_center ) != nullptr )
+				return FALSE;
+			if( ( flags & STEALTH_NOT_WHILE_HARVESTING ) && dock->findUpdateModule( key_warehouse ) != nullptr )
+				return FALSE;
+		}
+	}
 
 
 	//Do a quick preliminary test to see if we are restricted by firing particular weapons and we fired a shot last frame or this frame.
@@ -752,6 +782,7 @@ UpdateSleepTime StealthUpdate::update()
 			AudioEventRTS soundEvent = *self->getTemplate()->getSoundStealthOn();
 			soundEvent.setObjectID(self->getID());
 			TheAudio->addAudioEvent( &soundEvent );
+			FXList::doFXObj( getStealthUpdateModuleData()->m_stealthOnFX, self );	// Tiberium Project @feature
 		}
 
 		// The timer is zero, so if we aren't stealthed, do so now!
@@ -767,6 +798,7 @@ UpdateSleepTime StealthUpdate::update()
 			AudioEventRTS soundEvent = *self->getTemplate()->getSoundStealthOn();
 			soundEvent.setObjectID(self->getID());
 			TheAudio->addAudioEvent( &soundEvent );
+			FXList::doFXObj( getStealthUpdateModuleData()->m_stealthOffFX, self );	// Tiberium Project @feature
 		}
 
 		self->clearStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_STEALTHED ) );

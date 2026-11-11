@@ -388,6 +388,22 @@ struct WeaponExtraLaser
 	AsciiString m_strongCounterName;	///< drawn instead at what the weapon's kind counters (empty: the same)
 };
 
+// Tiberium Project @feature the weapon's damage times Scalar to what this takes (DamageScalar: SAGE's DamageScalarDetails):
+// an object of any of its kinds or one it names (none of either: any), none of the kinds it spares, of its relationships
+// to the firer (none: any). CIVILIAN_BUILDING: a structure no faction builds that can be garrisoned
+struct WeaponDamageScalar
+{
+	Real m_scalar;
+	KindOfMaskType m_kindOf;
+	KindOfMaskType m_forbiddenKindOf;
+	Bool m_civilianBuilding;
+	std::vector<AsciiString> m_names;
+	Int m_relationships;					///< a bit for each Relationship (0: any)
+
+	WeaponDamageScalar() : m_scalar( 1.0f ), m_civilianBuilding( FALSE ), m_relationships( 0 ) {}
+	Bool takes( const Object *source, const Object *victim ) const;
+};
+
 class WeaponTemplate : public MemoryPoolObject
 {
 	friend class WeaponStore;
@@ -564,6 +580,9 @@ private:
 	static void parseFollowUp( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ );	///< Tiberium Project
 	static void parseUpgradedWeapon( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ );	///< Tiberium Project
 	static void parseExtraLaser( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ );	///< Tiberium Project
+	static void parseDamageScalar( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ );	///< Tiberium Project
+	/// Tiberium Project @feature its damage to this victim, of its DamageScalar lines that take it (1: none)
+	Real getDamageScalarFor( const Object *source, const Object *victim ) const;
 	/// Tiberium Project @feature the further damage this weapon's sets off (FollowUp)
 	void scheduleFollowUps(ObjectID sourceID, const Object *primaryVictim, const Coord3D *pos, const WeaponBonus& bonus) const;
 	void scheduleScatter(ObjectID sourceID, const Object *primaryVictim, const Coord3D *pos, const WeaponBonus& bonus) const;	///< Tiberium Project
@@ -627,6 +646,7 @@ private:
 	ObjectStatusMaskType m_targetOCLStatus;									///< Tiberium Project: the firer's statuses that pick m_targetStatusOCL
 	std::vector<AsciiString> m_victimNames;									///< Tiberium Project: its damage reaches only these objects (C&C4's IncludeThing; none: any)
 	std::vector<AsciiString> m_victimForbiddenNames;						///< Tiberium Project: and none of these (C&C4's ExcludeThing: a Black Hand in his own fire)
+	std::vector<WeaponDamageScalar> m_damageScalars;						///< Tiberium Project: its damage scaled to some victims (DamageScalar)
 	ObjectStatusMaskType m_victimForbiddenStatus;							///< Tiberium Project: and none with any of these (C&C4's filters' StatusBitFlagsExclude: a friend already shielded)
 	AsciiString m_victimOCLName;													///< Tiberium Project: an OCL made on each object its damage reaches, what it makes stuck to it (C&C4's FireOnObjectsNugget's weapon on each)
 	const ObjectCreationList* m_victimOCL;											///< Tiberium Project: post-loaded m_victimOCLName

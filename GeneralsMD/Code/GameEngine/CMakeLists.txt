@@ -411,6 +411,7 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/DecoyArmyUpdate.h
     Include/GameLogic/Module/MonitorSpecialPowerTimerUpdate.h
     Include/GameLogic/Module/StoredResourceUpdate.h
+    Include/GameLogic/Module/BannerCarrierUpdate.h
     Include/GameLogic/Module/CompositeStructureUpdate.h
     Include/GameLogic/Module/SupportMeterUpdate.h
     Include/GameLogic/Module/StrafeAreaUpdate.h
@@ -1104,6 +1105,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Update/DecoyArmyUpdate.cpp
     Source/GameLogic/Object/Update/MonitorSpecialPowerTimerUpdate.cpp
     Source/GameLogic/Object/Update/StoredResourceUpdate.cpp
+    Source/GameLogic/Object/Update/BannerCarrierUpdate.cpp
     Source/GameLogic/Object/Update/CompositeStructureUpdate.cpp
     Source/GameLogic/Object/Update/SupportMeterUpdate.cpp
     Source/GameLogic/Object/Update/StrafeAreaUpdate.cpp

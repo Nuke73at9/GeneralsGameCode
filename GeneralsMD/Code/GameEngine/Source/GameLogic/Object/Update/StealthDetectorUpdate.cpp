@@ -211,6 +211,9 @@ UpdateSleepTime StealthDetectorUpdate::update()
 			continue;
 
 		StealthUpdate* stealth = them->getStealth();
+		// Tiberium Project @feature what no detector reveals (Undetectable)
+		if ( stealth && stealth->isUndetectable() )
+			continue;
 		if ( stealth )
 		{
 

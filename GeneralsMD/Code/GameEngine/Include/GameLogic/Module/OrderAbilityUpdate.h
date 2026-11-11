@@ -23,6 +23,12 @@
 // RETURN_TO_PRODUCER (C&C4's ReturnToProducerSpecialPower: an aircraft goes back to what made it,
 // to its parking place there, with AttributeModifier on itself for the way back).
 //
+// Tiberium Project @feature RETURN_TO_DOCK (Kane's Wrath's ReturnToDockSpecialPower: a harvester's Return to
+// Refinery) takes a harvester to its refinery with what it carries, then back to its field; RECALL_AIRCRAFT
+// (Kane's Wrath's RecallUnitsSpecialPower: the Air Tower's and the Hangar's Recall All Aircraft), given by an
+// airfield, sends each of its aircraft away from it back to its parking place, the first of them saying its
+// way-in line (its VoiceEnter, else its VoiceMove) unless RecalledVoice is No.
+//
 //   Behavior = SpecialAbility ModuleTag_ReturnPower
 //     SpecialPowerTemplate = C4SP_SpecialPower_GDIAircraftH_ReturnToProducer
 //   End
@@ -49,6 +55,8 @@ enum AbilityOrderType CPP_11(: Int)
 {
 	ABILITY_ORDER_REPAIR_TARGET = 0,
 	ABILITY_ORDER_RETURN_TO_PRODUCER,
+	ABILITY_ORDER_RETURN_TO_DOCK,		///< Tiberium Project
+	ABILITY_ORDER_RECALL_AIRCRAFT,	///< Tiberium Project
 	ABILITY_ORDER_COUNT
 };
 
@@ -59,12 +67,14 @@ public:
 	SpecialPowerTemplate *m_specialPowerTemplate;
 	AbilityOrderType m_order;
 	NameKeyType m_modifier;		///< put on itself when the order is given (none: no modifier)
+	Bool m_recalledVoice;			///< RECALL_AIRCRAFT: the first one sent back says its line
 
 	OrderAbilityUpdateModuleData()
 	{
 		m_specialPowerTemplate = nullptr;
 		m_order = ABILITY_ORDER_REPAIR_TARGET;
 		m_modifier = NAMEKEY_INVALID;
+		m_recalledVoice = TRUE;
 	}
 
 	static void buildFieldParse( MultiIniFieldParse& p );

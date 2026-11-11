@@ -39,6 +39,7 @@
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Weapon.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "GameLogic/Module/ContainModule.h"	// Tiberium Project
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/SpecialPowerModule.h"	// Tiberium Project
 
@@ -82,11 +83,61 @@ static FireWeaponAbilityShot readShot( INI *ini )
 	shot.m_delay = (UnsignedInt)WWMath::Ceil( ConvertDurationFromMsecsToFrames( delayMs ) );
 	shot.m_offsetX = INI::scanReal( INI::getNextSubToken( "OffsetX" ) );
 	shot.m_offsetY = INI::scanReal( INI::getNextSubToken( "OffsetY" ) );
-	// Tiberium Project @feature FX:<FXList> (optional)
-	const char *more = ini->getNextTokenOrNull( ini->getSepsColon() );
-	if( more != nullptr && stricmp( more, "FX" ) == 0 )
-		shot.m_fxName = ini->getNextToken( ini->getSepsColon() );
+	// Tiberium Project @feature FX:<FXList>, Target:<kinds> (optional)
+	for( const char *more = ini->getNextTokenOrNull( ini->getSepsColon() ); more != nullptr;
+			more = ini->getNextTokenOrNull( ini->getSepsColon() ) )
+	{
+		const char *value = ini->getNextToken( ini->getSepsColon() );
+		if( stricmp( more, "FX" ) == 0 )
+			shot.m_fxName = value;
+		else if( stricmp( more, "Target" ) == 0 )
+		{
+			// (KindOf names joined by commas, or GARRISONABLE)
+			AsciiString kinds( value ), kind;
+			while( kinds.nextToken( &kind, "," ) )
+			{
+				if( kind.compareNoCase( "GARRISONABLE" ) == 0 )
+				{
+					shot.m_targetGarrisonable = TRUE;
+					continue;
+				}
+				const Int bit = KindOfMaskType::getSingleBitFromName( kind.str() );
+				if( bit < 0 )
+				{
+					DEBUG_CRASH(( "FireWeaponAbilityUpdate: unknown Target kind %s", kind.str() ));
+					throw INI_INVALID_DATA;
+				}
+				shot.m_targetKindOf.set( bit );
+			}
+		}
+		else
+		{
+			DEBUG_CRASH(( "FireWeaponAbilityUpdate: unknown shot field %s", more ));
+			throw INI_INVALID_DATA;
+		}
+	}
 	return shot;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature a shot's target: any (no Target:), else an object of its kinds or an empty building that
+// can be garrisoned
+//-------------------------------------------------------------------------------------------------
+Bool FireWeaponAbilityShot::takesTarget( const Object *target ) const
+{
+	if( !hasTargetFilter() )
+		return TRUE;
+	if( target == nullptr )
+		return FALSE;
+	if( m_targetKindOf.any() && target->isAnyKindOf( m_targetKindOf ) )
+		return TRUE;
+	if( m_targetGarrisonable )
+	{
+		const ContainModuleInterface *contain = target->getContain();
+		if( contain != nullptr && contain->isGarrisonable() && contain->getContainCount() == 0 )
+			return TRUE;
+	}
+	return FALSE;
 }
 
 void FireWeaponAbilityUpdateModuleData::parseShot( INI *ini, void *instance, void * /*store*/, const void * /*userData*/ )
@@ -642,15 +693,28 @@ UpdateSleepTime FireWeaponAbilityUpdate::updateStages()
 			}
 			if( !m_moveIssued )
 			{
-				// (to an object: after it, to beside it, not to the spot it stands on)
+				// (to an object: after it, to beside it, not to the spot it stands on; Tiberium Project @tweak its footprint no
+				// bar on the way, as Zero Hour's own SpecialAbilityUpdate goes up to a building's walls)
 				if( targetObj != nullptr )
+				{
+					ai->ignoreObstacle( targetObj );
 					ai->aiMoveToObject( targetObj, CMD_FROM_AI );
+				}
 				else
 					ai->aiMoveToPosition( &pos, CMD_FROM_AI );
 				m_moveIssued = TRUE;
 			}
 			else if( since > LOGICFRAMES_PER_SECOND && ai->isIdle() )
 			{
+				// Tiberium Project @tweak kept off a building by what stands around it (another building, a wall, a cliff),
+				// within two pathfinding cells of reach: from there, rather than given up (the Saboteur at a house built up
+				// against a Command Center)
+				const Real nearEnough = currentStartRange() + 2.0f * PATHFIND_CELL_SIZE_F;
+				if( targetObj != nullptr && targetObj->isKindOf( KINDOF_IMMOBILE ) && distSqr <= nearEnough * nearEnough )
+				{
+					enterStage( STAGE_UNPACK );
+					return UPDATE_SLEEP_NONE;
+				}
 				// stopped short (told to go elsewhere, or no way there): the ability is off
 				finish();
 				return UPDATE_SLEEP_FOREVER;
@@ -758,6 +822,9 @@ UpdateSleepTime FireWeaponAbilityUpdate::updateStages()
 				if( weapon == nullptr || !targetPosition( &pos ) )
 					continue;
 				Object *target = m_targetID != INVALID_ID ? TheGameLogic->findObjectByID( m_targetID ) : nullptr;
+				// Tiberium Project @feature only the object shots for what it is aimed at (Target:)
+				if( m_targetID != INVALID_ID && !shot.takesTarget( target ) )
+					continue;
 				if( target != nullptr && shot.m_offsetX == 0.0f && shot.m_offsetY == 0.0f )
 				{
 					fireAbilityShot( weapon, me, target );
@@ -859,7 +926,22 @@ const FireWeaponAbilityTargetUpgrade *FireWeaponAbilityUpdate::targetUpgradeFor(
 Bool FireWeaponAbilityUpdate::refusesSpecialPower( const SpecialPowerTemplate *specialPowerTemplate, const Object *targetObj, const Coord3D * /*targetPos*/ ) const
 {
 	const FireWeaponAbilityUpdateModuleData *data = getFireWeaponAbilityUpdateModuleData();
-	if( specialPowerTemplate != data->m_specialPowerTemplate || data->m_targetUpgrades.empty() )
+	if( specialPowerTemplate != data->m_specialPowerTemplate )
+		return FALSE;
+	// Tiberium Project @feature aimed at an object no object shot is for (each has its Target: and none takes it): the
+	// Saboteur's booby trap at a unit
+	if( targetObj != nullptr && !data->m_objectShots.empty() )
+	{
+		Bool filtered = TRUE, taken = FALSE;
+		for( size_t i = 0; i < data->m_objectShots.size(); ++i )
+		{
+			filtered = filtered && data->m_objectShots[i].hasTargetFilter();
+			taken = taken || data->m_objectShots[i].takesTarget( targetObj );
+		}
+		if( filtered && !taken )
+			return TRUE;
+	}
+	if( data->m_targetUpgrades.empty() )
 		return FALSE;
 	const Object *me = getObject();
 	if( targetObj == nullptr || targetObj == me || targetObj->isEffectivelyDead() || targetObj->getControllingPlayer() != me->getControllingPlayer() )

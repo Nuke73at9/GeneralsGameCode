@@ -49,6 +49,9 @@ enum
 	STEALTH_ONLY_WITH_BLACK_MARKET			= 0x00000040,
 	STEALTH_NOT_WHILE_TAKING_DAMAGE			= 0x00000080,
   STEALTH_NOT_WHILE_RIDERS_ATTACKING  = 0x00000100,
+	STEALTH_NOT_WHILE_REALLY_DAMAGED		= 0x00000200,	///< Tiberium Project: SAGE's REALLYDAMAGED (Kane's Wrath's Stealth Tank)
+	STEALTH_NOT_WHILE_DOCKING						= 0x00000400,	///< Tiberium Project: SAGE's DOCKING (at a refinery: a harvester)
+	STEALTH_NOT_WHILE_HARVESTING				= 0x00000800,	///< Tiberium Project: SAGE's HARVESTING (at a field)
 
 	STEALTH_NOT_WHILE_FIRING_WEAPON			= (STEALTH_NOT_WHILE_FIRING_PRIMARY | STEALTH_NOT_WHILE_FIRING_SECONDARY | STEALTH_NOT_WHILE_FIRING_TERTIARY),
 };
@@ -65,6 +68,9 @@ static const char *const TheStealthLevelNames[] =
 	"NO_BLACK_MARKET",
 	"TAKING_DAMAGE",
   "RIDERS_ATTACKING",
+	"REALLY_DAMAGED",	// Tiberium Project
+	"DOCKING",	// Tiberium Project
+	"HARVESTING",	// Tiberium Project
 	nullptr
 };
 #endif
@@ -97,6 +103,9 @@ public:
 	Bool					m_teamDisguised;
 	Bool					m_useRiderStealth;
   Bool          m_grantedBySpecialPower;
+	Bool					m_undetectable;		///< Tiberium Project: no detector reveals it (SAGE's KindOf CANNOT_BE_DETECTED)
+	const FXList	*m_stealthOnFX;		///< Tiberium Project: as it goes unseen (SAGE's EnteringStealthFX)
+	const FXList	*m_stealthOffFX;	///< Tiberium Project: as it shows itself (SAGE's LeavingStealthFX)
 
   StealthUpdateModuleData();
 	static void buildFieldParse(MultiIniFieldParse& p);
@@ -143,6 +152,7 @@ public:
   Bool isGrantedBySpecialPower() { return getStealthUpdateModuleData()->m_grantedBySpecialPower; }
 	Bool isTemporaryGrant() { return m_framesGranted > 0; }
 	Bool isInnateStealth() const { return getStealthUpdateModuleData()->m_innateStealth; }	///< Tiberium Project
+	Bool isUndetectable() const { return getStealthUpdateModuleData()->m_undetectable; }	///< Tiberium Project
 
 protected:
 
