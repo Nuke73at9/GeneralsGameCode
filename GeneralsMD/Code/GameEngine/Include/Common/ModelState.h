@@ -308,6 +308,10 @@ enum ModelConditionFlagType CPP_11(: Int)
 	MODELCONDITION_SPECIAL_WEAPON_ONE,
 	MODELCONDITION_SPECIAL_WEAPON_TWO,
 	MODELCONDITION_SPECIAL_WEAPON_THREE,
+	// Tiberium Project @feature SAGE 2's last two wildcards: C&C4's Ion Cannon fully charged
+	// (StoredResourceUpdate's ConditionFull), the Crawlers' advanced shield dome
+	MODELCONDITION_USER_7,
+	MODELCONDITION_USER_8,
 //
 // Note: these values are saved in save files, so you MUST NOT REMOVE OR CHANGE
 // existing values!

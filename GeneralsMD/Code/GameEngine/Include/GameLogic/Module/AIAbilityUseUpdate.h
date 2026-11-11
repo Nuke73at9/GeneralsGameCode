@@ -24,10 +24,15 @@
 // fights, back off after CalmTime without a fight; TRANSFORM (a toggle that switches the unit's
 // weapon set: the Thunderhead's flight, an anti-rocket mode) out of a fight, into whichever state's
 // weapons can hit the nearest enemy that only one of them can. A human player's units are left alone.
+// Tiberium Project @feature SUPER_WEAPON (a structure's superweapon: C&C4's Ion Cannon and Temple of
+// Nod) at the spot among its enemies' things the skirmish AI finds worth most (Zero Hour's superweapon
+// targeting), once the object's stored resource is at MinCharge percent (its charge: SAGE's
+// UseWhenChargeIsAtLeast) and the spot is worth MinValue (SAGE's ValueRequired).
 //
 //   Behavior = AIAbilityUseUpdate ModuleTag_AIAbilities
 //     Power = C4SP_SpecialPower_GDIAircraftQBezerkAbility IN_COMBAT
 //     Power = C4SP_SpecialPower_NODVehicleMToggleDeploy TOGGLE
+//     Power = C4SP_SpecialPowerTemplate_GDIStructureJSuperweapon SUPER_WEAPON MinCharge:100 MinValue:1200
 //   End
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -44,6 +49,7 @@ enum AIAbilityHeuristic CPP_11(: Int)
 	AI_ABILITY_AT_VICTIM,
 	AI_ABILITY_TOGGLE,
 	AI_ABILITY_TRANSFORM,	///< Tiberium Project @feature the state whose weapons suit what is near
+	AI_ABILITY_SUPER_WEAPON,	///< Tiberium Project @feature the spot worth most among its enemies' things
 	AI_ABILITY_HEURISTIC_COUNT
 };
 
@@ -55,6 +61,8 @@ public:
 	{
 		const SpecialPowerTemplate *power;
 		AIAbilityHeuristic heuristic;
+		Int minCharge;		///< Tiberium Project: percent of the object's stored resource (0: any)
+		Int minValue;			///< Tiberium Project: SUPER_WEAPON: what the spot must be worth
 	};
 	std::vector<Power> m_powers;
 	UnsignedInt m_scanDelay;		///< frames between looks

@@ -20,6 +20,10 @@
 // Tiberium Project @feature SAGE's MonitorSpecialPowerTimerUpdate: while its special power is ready to
 // use, the object shows ReadyCondition (Kane's Wrath's Temple of Nod raises its missile, the Ion Cannon
 // Control Center its emitter, as their superweapons come ready). Not while it is being built or sold.
+// Tiberium Project @feature ReadyStatus: statuses it has while the power is ready (SAGE's
+// ObjectStatusWhenReady: C&C4's Temple of Nod charges its missile only while it is ready, USER_1).
+// ReadyEvaEvent: the announcer tells the owner as it comes ready (SAGE's EvaAnnounceSpecialPowerReady-
+// ClientUpdate: the Temple of Nod's nuclear missile ready).
 //
 //   Behavior = MonitorSpecialPowerTimerUpdate ModuleTag_NukeReady
 //     SpecialPowerTemplate = KWSP_SpecialPowerNuclearMissile
@@ -31,6 +35,8 @@
 
 #include "Common/INI.h"
 #include "Common/ModelState.h"
+#include "Common/ObjectStatusTypes.h"
+#include "GameClient/Eva.h"
 #include "GameLogic/Module/UpdateModule.h"
 
 class SpecialPowerTemplate;
@@ -41,6 +47,8 @@ class MonitorSpecialPowerTimerUpdateModuleData : public UpdateModuleData
 public:
 	SpecialPowerTemplate *m_specialPowerTemplate;
 	ModelConditionFlagType m_readyCondition;
+	ObjectStatusMaskType m_readyStatus;	///< Tiberium Project
+	EvaMessage m_readyEva;							///< Tiberium Project
 
 	MonitorSpecialPowerTimerUpdateModuleData();
 	static void buildFieldParse( MultiIniFieldParse& p );

@@ -633,6 +633,8 @@ private:
 	Bool m_forceToggleToDefault;													///< Tiberium Project: its victims' toggles go back to their first state (C&C4's ForceToggleToDefaultNugget)
 	Bool m_hijackVictim;																///< Tiberium Project: landing, its firer takes the vehicle over (C&C4's Hacker: its hijack, through the firer's ConvertToHijackedVehicleCrateCollide)
 	Bool m_taunt;																				///< Tiberium Project: what it hits turns on its firer (C&C4's TauntNugget: the Titan draws fire)
+	Int m_modifyStoredResource;													///< Tiberium Project: added to its owner's stored resource where it lands (C&C4's ModifyStoredResourceNugget: a superweapon's charge spent)
+	Bool m_modifyTargetStoredResource;										///< Tiberium Project: ... to its victim's instead (the nugget's Target TARGET)
 	ModelConditionFlags m_forceToggleConditions;								///< Tiberium Project: ... those whose second state shows any of these (none: all)
 	NameKeyType m_victimModifier;													///< Tiberium Project: an attribute modifier put on each object the damage reaches (C&C4's AttributeModifierNugget)
 	UnsignedInt m_victimModifierDuration;									///< Tiberium Project: ... for so long each time (frames; 0: the modifier's own)

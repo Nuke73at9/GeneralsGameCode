@@ -5054,6 +5054,19 @@ void Object::giveUpgrade( const UpgradeTemplate *upgradeT )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature give these upgrades to this object, all at once: its upgrade modules then
+	look at them together, so one that conflicts with another of them stays off (C&C4's superweapon
+	strike, made with its structure's charge levels, fires its highest level's weapon alone) */
+//-------------------------------------------------------------------------------------------------
+void Object::giveUpgradeMask( const UpgradeMaskType& mask )
+{
+	if( !mask.any() )
+		return;
+	m_objectUpgradesCompleted.set( mask );
+	updateUpgradeModules();
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Remove this upgrade from this object */
 //-------------------------------------------------------------------------------------------------
 void Object::removeUpgrade( const UpgradeTemplate *upgradeT )

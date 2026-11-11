@@ -229,6 +229,8 @@ const char* const ModelConditionFlags::s_bitNameList[] =
 	"SPECIAL_WEAPON_ONE",
 	"SPECIAL_WEAPON_TWO",
 	"SPECIAL_WEAPON_THREE",
+	"USER_7",	// Tiberium Project
+	"USER_8",
 
 
 	nullptr

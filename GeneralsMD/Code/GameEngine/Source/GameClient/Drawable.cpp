@@ -62,6 +62,7 @@
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/StealthUpdate.h"
 #include "GameLogic/Module/StickyBombUpdate.h"
+#include "GameLogic/Module/StoredResourceUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/BattlePlanUpdate.h"
 #include "GameLogic/ScriptEngine.h"
 #include "GameLogic/Weapon.h"
@@ -2832,6 +2833,7 @@ void Drawable::drawIconUI()
 			return;
 		drawHealing( healthBarRegion );//call so dead things can kill their healing icons
 		drawBombed( healthBarRegion );
+		drawStoredResource( healthBarRegion );	// Tiberium Project
 
 
 		//Disabled for multiplay!
@@ -3971,6 +3973,40 @@ void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
 															color );
 	}
 
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature what the object has stored (StoredResourceUpdate ShowInUI: C&C4's superweapons'
+// charge), as a bar under its health bar, a mark at each level of the store; shown with the health bar
+//-------------------------------------------------------------------------------------------------
+void Drawable::drawStoredResource( const IRegion2D* healthBarRegion )
+{
+	if( healthBarRegion == nullptr || !TheGlobalData->m_showObjectHealth )
+		return;
+	if( !isSelected() && !( TheInGameUI && TheInGameUI->getMousedOverDrawableID() == getID() ) )
+		return;
+	const StoredResourceUpdate *store = StoredResourceUpdate::find( getObject() );
+	if( store == nullptr || !store->showsInUI() || store->getCapacity() <= 0 )
+		return;
+
+	const Real width = healthBarRegion->hi.x - healthBarRegion->lo.x;
+	const Real height = max( 3, healthBarRegion->hi.y - healthBarRegion->lo.y );
+	const Real x = healthBarRegion->lo.x;
+	const Real y = healthBarRegion->lo.y + height + 1.0f;
+	const Real ratio = store->getFillRatio();
+	// (amber while it fills, brighter once full)
+	const Color fill = ratio >= 1.0f ? GameMakeColor( 255, 232, 120, 255 ) : GameMakeColor( 232, 168, 40, 255 );
+	const Color outline = GameMakeColor( 116, 84, 20, 255 );
+	TheDisplay->drawOpenRect( x, y, width, height, 1.0f, outline );
+	TheDisplay->drawFillRect( x + 1, y + 1, ( width - 2 ) * ratio, height - 2, fill );
+	const Int capacity = store->getCapacity();
+	for( Int i = 0; i < store->getLevelCount(); ++i )
+	{
+		const Int amount = store->getLevelAmount( i );
+		if( amount <= 0 || amount >= capacity )
+			continue;
+		TheDisplay->drawFillRect( x + 1 + ( width - 2 ) * amount / (Real)capacity, y + 1, 1, height - 2, outline );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

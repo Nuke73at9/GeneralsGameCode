@@ -25,6 +25,7 @@
 #include "GameLogic/Module/AIAbilityUseUpdate.h"
 
 #include "Common/Player.h"
+#include "Common/PlayerList.h"
 #include "Common/SpecialPower.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
@@ -35,6 +36,7 @@
 #include "GameLogic/WeaponSet.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
+#include "GameLogic/Module/StoredResourceUpdate.h"
 
 static const char *const TheAIAbilityHeuristicNames[] =
 {
@@ -42,6 +44,7 @@ static const char *const TheAIAbilityHeuristicNames[] =
 	"AT_VICTIM",
 	"TOGGLE",
 	"TRANSFORM",
+	"SUPER_WEAPON",
 	nullptr
 };
 static_assert(ARRAY_SIZE(TheAIAbilityHeuristicNames) == AI_ABILITY_HEURISTIC_COUNT + 1, "Incorrect array size");
@@ -97,14 +100,83 @@ static Bool otherStateSuits( const Object *me )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** Power = SpecialPowerTemplate Heuristic */
+/** Tiberium Project @feature SUPER_WEAPON: what the enemies' things within the superweapon's radius of
+	the spot are worth (what they cost) */
+static Int valueAround( const Object *me, const Coord3D *pos, Real radius )
+{
+	PartitionFilterRelationship enemies( me, PartitionFilterRelationship::ALLOW_ENEMIES );
+	PartitionFilterAlive alive;
+	PartitionFilter *filters[] = { &enemies, &alive, nullptr };
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( pos, radius, FROM_CENTER_2D, filters );
+	MemoryPoolObjectHolder hold( iter );
+	Int value = 0;
+	for( Object *o = iter->first(); o != nullptr; o = iter->next() )
+	{
+		if( !o->isKindOf( KINDOF_STRUCTURE ) && !o->isKindOf( KINDOF_INFANTRY ) && !o->isKindOf( KINDOF_VEHICLE ) &&
+				!o->isKindOf( KINDOF_AIRCRAFT ) )
+			continue;
+		value += o->getTemplate()->calcCostToBuild( o->getControllingPlayer() );
+	}
+	return value;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature SUPER_WEAPON: the spot worth most, among each enemy player's things (the
+	skirmish AI's own superweapon targeting picks the spot in each), if it is worth the power's MinValue */
+static Bool findSuperweaponTarget( const Object *me, const AIAbilityUseUpdateModuleData::Power &power, Coord3D *target )
+{
+	Player *owner = me->getControllingPlayer();
+	if( owner == nullptr || ThePlayerList == nullptr )
+		return FALSE;
+	Real radius = power.power->getRadiusCursorRadius();
+	if( radius < 50.0f )
+		radius = 50.0f;
+	Int best = -1;
+	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
+	{
+		Player *enemy = ThePlayerList->getNthPlayer( i );
+		if( enemy == nullptr || enemy == owner || !enemy->isPlayerActive() || enemy->getDefaultTeam() == nullptr ||
+				owner->getRelationship( enemy->getDefaultTeam() ) != ENEMIES )
+			continue;
+		Coord3D pos;
+		if( !owner->computeSuperweaponTarget( power.power, &pos, enemy->getPlayerIndex(), radius ) || pos.lengthSqr() <= 0.0f )
+			continue;
+		const Int value = valueAround( me, &pos, radius );
+		if( value > best )
+		{
+			best = value;
+			*target = pos;
+		}
+	}
+	return best >= 0 && best >= power.minValue && best > 0;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Power = SpecialPowerTemplate Heuristic [MinCharge:<percent>] [MinValue:<cost>] */
 void AIAbilityUseUpdateModuleData::parsePower( INI *ini, void *instance, void * /*store*/, const void * /*userData*/ )
 {
 	AIAbilityUseUpdateModuleData *self = (AIAbilityUseUpdateModuleData *)instance;
 	Power power;
 	power.power = nullptr;
+	power.minCharge = 0;
+	power.minValue = 0;
 	INI::parseSpecialPowerTemplate( ini, nullptr, &power.power, nullptr );
 	power.heuristic = (AIAbilityHeuristic)INI::scanIndexList( ini->getNextToken(), TheAIAbilityHeuristicNames );
+	// Tiberium Project @feature its charge and worth
+	for( const char *key = ini->getNextTokenOrNull( ini->getSepsColon() ); key != nullptr;
+			key = ini->getNextTokenOrNull( ini->getSepsColon() ) )
+	{
+		const Int value = INI::scanInt( ini->getNextToken( ini->getSepsColon() ) );
+		if( stricmp( key, "MinCharge" ) == 0 )
+			power.minCharge = value;
+		else if( stricmp( key, "MinValue" ) == 0 )
+			power.minValue = value;
+		else
+		{
+			DEBUG_CRASH(( "AIAbilityUseUpdate: unknown Power field %s", key ));
+			throw INI_INVALID_DATA;
+		}
+	}
 	if( power.power != nullptr && self->m_powers.size() < 32 )
 		self->m_powers.push_back( power );
 }
@@ -174,6 +246,13 @@ UpdateSleepTime AIAbilityUseUpdate::update()
 		SpecialPowerModuleInterface *module = me->getSpecialPowerModule( power.power );
 		if( module == nullptr || !module->isReady() )
 			continue;
+		// Tiberium Project @feature not before its charge is at MinCharge percent (SAGE's UseWhenChargeIsAtLeast)
+		if( power.minCharge > 0 )
+		{
+			const StoredResourceUpdate *store = StoredResourceUpdate::find( me );
+			if( store != nullptr && store->getFillRatio() * 100.0f + 0.001f < (Real)power.minCharge )
+				continue;
+		}
 		const UnsignedInt bit = 1u << i;
 		switch( power.heuristic )
 		{
@@ -210,6 +289,14 @@ UpdateSleepTime AIAbilityUseUpdate::update()
 				if( victim == nullptr && otherStateSuits( me ) )
 					module->doSpecialPower( 0 );
 				break;
+			case AI_ABILITY_SUPER_WEAPON:
+			{
+				// Tiberium Project @feature the spot worth most among its enemies' things
+				Coord3D target;
+				if( findSuperweaponTarget( me, power, &target ) )
+					module->doSpecialPowerAtLocation( &target, INVALID_ANGLE, 0 );
+				break;
+			}
 			default:
 				break;
 		}

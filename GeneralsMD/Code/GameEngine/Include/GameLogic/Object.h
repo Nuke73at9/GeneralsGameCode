@@ -395,6 +395,7 @@ public:
 	Bool hasUpgradeNamed( const AsciiString& upgradeName ) const;
 	Bool affectedByUpgrade( const UpgradeTemplate *upgradeT ) const ; ///< can the object even "have" this upgrade, will it do something?
 	void giveUpgrade( const UpgradeTemplate *upgradeT );		///< give upgrade to this object
+	void giveUpgradeMask( const UpgradeMaskType& mask );	///< Tiberium Project: these upgrades, all at once
 	void removeUpgrade( const UpgradeTemplate *upgradeT );	///< remove upgrade from this object
 
 	Bool hasCountermeasures() const;

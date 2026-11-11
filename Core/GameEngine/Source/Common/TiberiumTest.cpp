@@ -81,6 +81,7 @@
 #include "GameLogic/Module/ToggleAbilityUpdate.h"
 #include "GameLogic/Module/SuppressionUpdate.h"
 #include "GameLogic/Module/GrabSpecialAbilityUpdate.h"
+#include "GameLogic/Module/StoredResourceUpdate.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 #include "GameLogic/AttributeModifier.h"
 #include "GameLogic/Module/SupplyTruckAIUpdate.h"
@@ -1479,6 +1480,25 @@ void TiberiumTest::update()
 			}
 			log( "frame %d: ui: ready %s: %d powers", (int)s_frame, step.arg.c_str(), (int)count );
 		}
+#if RTS_ZEROHOUR
+		else if ( step.action == "store" && TheGameLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) "store=Template,amount": what every object of the template has stored set
+			// to amount (a superweapon's charge, its levels' minutes skipped)
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			const Int amount = f.size() > 1 ? atoi( f[1].c_str() ) : 0;
+			Int count = 0;
+			for ( Object *obj = TheGameLogic->getFirstObject(); obj != nullptr && !f.empty(); obj = obj->getNextObject() )
+			{
+				StoredResourceUpdate *store = obj->getTemplate()->getName().compareNoCase( f[0].c_str() ) == 0 ? StoredResourceUpdate::find( obj ) : nullptr;
+				if ( store == nullptr )
+					continue;
+				store->addAmount( amount - store->getAmount() );
+				++count;
+			}
+			log( "frame %d: ui: store %s: %d objects", (int)s_frame, step.arg.c_str(), (int)count );
+		}
+#endif
 		else if ( step.action == "grant" && TheGameLogic != nullptr && TheUpgradeCenter != nullptr )
 		{
 			// Tiberium Project @feature (the test) "grant=k,Upgrade[,target]": the k-th spawned object (or the fight
@@ -2215,10 +2235,22 @@ void TiberiumTest::update()
 				if ( last != nullptr && last->in.m_damageType != DAMAGE_HEALING && last->out.m_actualDamageDealt > 0.0f )
 					snprintf( hit, sizeof( hit ), ", last hit %.0f type %d from %s", last->out.m_actualDamageDealt, (int)last->in.m_damageType,
 						hitter != nullptr ? hitter->getTemplate()->getName().str() : "nobody" );
-				log( "frame %d: ui: objinfo %s: player %d%s, health %.0f of %.0f%s%s%s%s at %.0f %.0f", (int)s_frame, step.arg.c_str(),
+				// (and what it has stored, how many object upgrades it has: a superweapon's charge and its levels)
+				const StoredResourceUpdate *store = StoredResourceUpdate::find( o );
+				char more[96] = "";
+				if ( store != nullptr )
+					snprintf( more, sizeof( more ), ", stored %d of %d", (int)store->getAmount(), (int)store->getCapacity() );
+				strlcat( hit, more, sizeof( hit ) );
+				if ( o->getObjectCompletedUpgradeMask().any() )
+				{
+					snprintf( more, sizeof( more ), ", %d upgrades", (int)o->getObjectCompletedUpgradeMask().count() );
+					strlcat( hit, more, sizeof( hit ) );
+				}
+				log( "frame %d: ui: objinfo %s: player %d%s, health %.0f of %.0f%s%s%s%s%s at %.0f %.0f", (int)s_frame, step.arg.c_str(),
 					owner != nullptr ? (int)owner->getPlayerIndex() : -1, owner != nullptr && owner == ThePlayerList->getNeutralPlayer() ? " (neutral)" : "",
 					body != nullptr ? body->getHealth() : 0.0f, body != nullptr ? body->getMaxHealth() : 0.0f,
-					o->isDisabledByType( DISABLED_HELD ) ? ", held" : "", o->isEffectivelyDead() ? ", dead" : "", user, hit,
+					o->isDisabledByType( DISABLED_HELD ) ? ", held" : "",
+					o->isDisabledByType( DISABLED_EMP ) ? ", EMP" : "", o->isEffectivelyDead() ? ", dead" : "", user, hit,
 					o->getPosition()->x, o->getPosition()->y );
 			}
 			if ( n == 0 )

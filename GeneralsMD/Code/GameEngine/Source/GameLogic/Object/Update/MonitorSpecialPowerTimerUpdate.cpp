@@ -25,8 +25,10 @@
 #include "GameLogic/Module/MonitorSpecialPowerTimerUpdate.h"
 
 #include "Common/BitFlagsIO.h"
+#include "Common/PlayerList.h"
 #include "Common/SpecialPower.h"
 #include "Common/Xfer.h"
+#include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
 
@@ -35,6 +37,7 @@ MonitorSpecialPowerTimerUpdateModuleData::MonitorSpecialPowerTimerUpdateModuleDa
 {
 	m_specialPowerTemplate = nullptr;
 	m_readyCondition = MODELCONDITION_SPECIALPOWER1_READY;
+	m_readyEva = EVA_Invalid;	// Tiberium Project
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -45,6 +48,8 @@ void MonitorSpecialPowerTimerUpdateModuleData::buildFieldParse( MultiIniFieldPar
 	{
 		{ "SpecialPowerTemplate",	INI::parseSpecialPowerTemplate,				nullptr, offsetof( MonitorSpecialPowerTimerUpdateModuleData, m_specialPowerTemplate ) },
 		{ "ReadyCondition",			ModelConditionFlags::parseSingleBitFromINI,	nullptr, offsetof( MonitorSpecialPowerTimerUpdateModuleData, m_readyCondition ) },
+		{ "ReadyStatus",				ObjectStatusMaskType::parseFromINI,			nullptr, offsetof( MonitorSpecialPowerTimerUpdateModuleData, m_readyStatus ) },	// Tiberium Project
+		{ "ReadyEvaEvent",			Eva::parseEvaMessageFromIni,					nullptr, offsetof( MonitorSpecialPowerTimerUpdateModuleData, m_readyEva ) },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
 	p.add( dataFieldParse );
@@ -79,6 +84,13 @@ UpdateSleepTime MonitorSpecialPowerTimerUpdate::update()
 		else
 			me->clearModelConditionState( data->m_readyCondition );
 	}
+	// Tiberium Project @feature and its statuses (ReadyStatus)
+	if( ready != m_ready && data->m_readyStatus.any() )
+		me->setStatus( data->m_readyStatus, ready );
+	// Tiberium Project @feature the announcer tells its owner (ReadyEvaEvent)
+	if( ready && !m_ready && data->m_readyEva != EVA_Invalid && TheEva != nullptr && TheGameLogic->getFrame() > 0 &&
+			ThePlayerList != nullptr && me->getControllingPlayer() == ThePlayerList->getLocalPlayer() )
+		TheEva->setShouldPlay( data->m_readyEva );
 	m_ready = ready;
 	return UPDATE_SLEEP( LOGICFRAMES_PER_SECOND / 2 );
 }

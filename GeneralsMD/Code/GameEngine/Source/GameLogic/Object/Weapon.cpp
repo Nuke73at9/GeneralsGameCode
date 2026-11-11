@@ -72,6 +72,7 @@
 #include "Common/ActionManager.h"	// Tiberium Project
 #include "GameLogic/Module/SuppressionUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/StoredResourceUpdate.h"	// Tiberium Project
 #include "Common/Money.h"	// Tiberium Project
 #include "Common/AbramGameRules.h"	// Tiberium Project
 #include "GameLogic/Module/UpdateModule.h"
@@ -219,6 +220,8 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "ForceToggleToDefault",				INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_forceToggleToDefault) },	// Tiberium Project
 	{ "HijackVictim",								INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_hijackVictim) },	// Tiberium Project
 	{ "Taunt",											INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_taunt) },	// Tiberium Project
+	{ "ModifyStoredResource",				INI::parseInt,												nullptr,							offsetof(WeaponTemplate, m_modifyStoredResource) },	// Tiberium Project
+	{ "ModifyStoredResourceOfTarget",	INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_modifyTargetStoredResource) },	// Tiberium Project
 	{ "ForceToggleConditions",			ModelConditionFlags::parseFromINI,			nullptr,							offsetof(WeaponTemplate, m_forceToggleConditions) },	// Tiberium Project
 	{ "AttributeModifier",					AttributeModifierStore::parseModifierName,	nullptr,				offsetof(WeaponTemplate, m_victimModifier) },	// Tiberium Project
 	{ "AttributeModifierDuration",	INI::parseDurationUnsignedInt,	nullptr,				offsetof(WeaponTemplate, m_victimModifierDuration) },	// Tiberium Project
@@ -356,6 +359,8 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_forceToggleToDefault				= FALSE;	// Tiberium Project
 	m_hijackVictim								= FALSE;	// Tiberium Project
 	m_taunt												= FALSE;	// Tiberium Project
+	m_modifyStoredResource				= 0;	// Tiberium Project
+	m_modifyTargetStoredResource	= FALSE;	// Tiberium Project
 	m_victimModifier							= NAMEKEY_INVALID;	// Tiberium Project
 	m_victimModifierDuration			= 0;	// Tiberium Project
 	m_impactFX = nullptr;	// Tiberium Project
@@ -2039,6 +2044,23 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 		if (targetOCL != nullptr)
 			ObjectCreationList::create(targetOCL, owner, pos, pos, owner->getOrientation());
 		ObjectCreationList::setStickTarget(nullptr);
+	}
+
+	// Tiberium Project @feature its owner's stored resource changed where it lands (ModifyStoredResource: C&C4's
+	// ModifyStoredResourceNugget, a superweapon's charge spent as it fires), after its TargetOCL made the strike
+	// with the charge's levels; or its victim's (ModifyStoredResourceOfTarget)
+	if (m_modifyStoredResource != 0 && source != nullptr)
+	{
+		Object *holder = m_modifyTargetStoredResource ? primaryVictim : source;
+		if (!m_modifyTargetStoredResource && source->isKindOf(KINDOF_PROJECTILE) && source->getProducerID() != INVALID_ID)
+		{
+			Object *launcher = TheGameLogic->findObjectByID(source->getProducerID());
+			if (launcher != nullptr)
+				holder = launcher;
+		}
+		StoredResourceUpdate *store = StoredResourceUpdate::find(holder);
+		if (store != nullptr && !holder->isEffectivelyDead())
+			store->addAmount(m_modifyStoredResource);
 	}
 
 	DamageType damageType = getDamageType();

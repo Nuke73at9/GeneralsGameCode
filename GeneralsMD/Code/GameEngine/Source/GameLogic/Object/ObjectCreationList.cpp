@@ -36,6 +36,7 @@
 #define NO_DEBUG_CRC
 
 #include "Common/AudioEventRTS.h"
+#include "Common/BitFlagsIO.h"	// Tiberium Project
 #include "Common/DrawModule.h"
 #include "Common/GlobalData.h"
 #include "Common/INI.h"
@@ -43,6 +44,7 @@
 #include "Common/PlayerList.h"
 #include "Common/ThingTemplate.h"
 #include "Common/ThingFactory.h"
+#include "Common/Upgrade.h"	// Tiberium Project
 #include "Common/GameLOD.h"
 
 #include "GameClient/Drawable.h"
@@ -838,7 +840,8 @@ public:
 		m_healthFromSource(HEALTH_FROM_SOURCE_NONE),
 		m_heldFrames(0),
 		m_timedCondition(MODELCONDITION_INVALID),
-		m_timedConditionFrames(0)
+		m_timedConditionFrames(0),
+		m_copySourceUpgrades(false)
 	{
 		m_offset.zero();
 	}
@@ -942,6 +945,10 @@ public:
 			{ "HeldTime",	INI::parseDurationUnsignedInt, nullptr, offsetof(GenericObjectCreationNugget, m_heldFrames) },	// Tiberium Project
 			{ "TimedModelCondition",	INI::parseIndexList, ModelConditionFlags::getBitNames(), offsetof(GenericObjectCreationNugget, m_timedCondition) },	// Tiberium Project
 			{ "TimedModelConditionTime",	INI::parseDurationUnsignedInt, nullptr, offsetof(GenericObjectCreationNugget, m_timedConditionFrames) },	// Tiberium Project
+			{ "CopySourceUpgrades",	INI::parseBool, nullptr, offsetof(GenericObjectCreationNugget, m_copySourceUpgrades) },	// Tiberium Project
+			{ "RequiredUpgrade",	INI::parseAsciiStringVectorAppend, nullptr, offsetof(GenericObjectCreationNugget, m_requiredUpgrades) },	// Tiberium Project
+			{ "ForbiddenUpgrade",	INI::parseAsciiStringVectorAppend, nullptr, offsetof(GenericObjectCreationNugget, m_forbiddenUpgrades) },	// Tiberium Project
+			{ "ModelConditions",	ModelConditionFlags::parseFromINI, nullptr, offsetof(GenericObjectCreationNugget, m_startingConditions) },	// Tiberium Project
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 
@@ -1484,6 +1491,49 @@ protected:
 			obj->setSpecialModelConditionState( m_timedCondition, m_timedConditionFrames );
 	}
 
+	//-------------------------------------------------------------------------------------------------
+	/** Tiberium Project @feature whether its source has the upgrade, its own or its player's */
+	static Bool sourceHasUpgrade( const Object *sourceObj, const AsciiString& name )
+	{
+		const UpgradeTemplate *upgrade = TheUpgradeCenter != nullptr ? TheUpgradeCenter->findUpgrade( name ) : nullptr;
+		if( sourceObj == nullptr || upgrade == nullptr )
+			return FALSE;
+		if( sourceObj->hasUpgrade( upgrade ) )
+			return TRUE;
+		const Player *player = sourceObj->getControllingPlayer();
+		return player != nullptr && player->hasUpgradeComplete( upgrade );
+	}
+
+	//-------------------------------------------------------------------------------------------------
+	/** Tiberium Project @feature made only while its source has every RequiredUpgrade and none of its
+		ForbiddenUpgrade (SAGE's CreateObject RequiredUpgrade and ForbiddenUpgrade: C&C4's Ion Cannon strike,
+		its stronger look at its last charge level) */
+	Bool sourceUpgradesAllow( const Object *sourceObj ) const
+	{
+		for( std::vector<AsciiString>::const_iterator it = m_requiredUpgrades.begin(); it != m_requiredUpgrades.end(); ++it )
+			if( !sourceHasUpgrade( sourceObj, *it ) )
+				return FALSE;
+		for( std::vector<AsciiString>::const_iterator it = m_forbiddenUpgrades.begin(); it != m_forbiddenUpgrades.end(); ++it )
+			if( sourceHasUpgrade( sourceObj, *it ) )
+				return FALSE;
+		return TRUE;
+	}
+
+	//-------------------------------------------------------------------------------------------------
+	/** Tiberium Project @feature what was made gets its source's object upgrades (CopySourceUpgrades: SAGE's
+		COPY_CREATORS_UPGRADES and CopyParentUpgrades, C&C4's superweapon strikes made at their charge's level),
+		all at once, so its modules that conflict with a higher one stay off; and its ModelConditions for good
+		(SAGE's StartingModelConditions) */
+	void inheritFromSource( Object *obj, const Object *sourceObj ) const
+	{
+		if( obj == nullptr )
+			return;
+		if( m_copySourceUpgrades && sourceObj != nullptr && sourceObj->getObjectCompletedUpgradeMask().any() )
+			obj->giveUpgradeMask( sourceObj->getObjectCompletedUpgradeMask() );
+		if( m_startingConditions.any() )
+			obj->setModelConditionFlags( m_startingConditions );
+	}
+
 	Object* reallyCreate(const Coord3D *pos, const Matrix3D *mtx, Real orientation, const Object *sourceObj, UnsignedInt lifetimeFrames, const Coord3D *target = nullptr ) const
 	{
 		static const ThingTemplate* debrisTemplate = TheThingFactory->findTemplate("GenericDebris");
@@ -1493,6 +1543,10 @@ protected:
 
 		if (m_requiresLivePlayer && (!sourceObj || !sourceObj->getControllingPlayer() || !sourceObj->getControllingPlayer()->isPlayerActive()))
 			return nullptr; // don't spawn useful objects for dead players.  Avoid the zombie units from Yuri's.
+
+		// Tiberium Project @feature RequiredUpgrade, ForbiddenUpgrade
+		if ((!m_requiredUpgrades.empty() || !m_forbiddenUpgrades.empty()) && !sourceUpgradesAllow(sourceObj))
+			return nullptr;
 
 		// Object type debris might need this information to process visual UpgradeModules.
 		Team *debrisOwner = ThePlayerList->getNeutralPlayer() ? ThePlayerList->getNeutralPlayer()->getDefaultTeam() : nullptr;
@@ -1596,6 +1650,7 @@ protected:
 			}
 			orderAfterCreation( debris, target );	// Tiberium Project
 			finishCreation( debris );	// Tiberium Project
+			inheritFromSource( debris, sourceObj );	// Tiberium Project
 
 			if (m_fadeIn)
 			{
@@ -1690,6 +1745,10 @@ private:
 	UnsignedInt								m_heldFrames;						///< Tiberium Project: what it makes is held still, taking no orders, this long (SAGE's busy time)
 	ModelConditionFlagType		m_timedCondition;				///< Tiberium Project: a condition what it makes has for a while (SAGE's TempModelCondition)
 	UnsignedInt								m_timedConditionFrames;	///< Tiberium Project: how long
+	Bool											m_copySourceUpgrades;		///< Tiberium Project: what it makes gets its source's object upgrades
+	std::vector<AsciiString>	m_requiredUpgrades;			///< Tiberium Project: made only while its source has all of these...
+	std::vector<AsciiString>	m_forbiddenUpgrades;		///< Tiberium Project: ... and none of these
+	ModelConditionFlags				m_startingConditions;		///< Tiberium Project: what it makes shows these for good
 	Bool											m_nameAreObjects;
 	Bool											m_okToChangeModelColor;
 	Bool											m_orientInForceDirection;
