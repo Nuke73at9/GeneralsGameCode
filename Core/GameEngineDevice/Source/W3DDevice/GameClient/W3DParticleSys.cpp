@@ -54,6 +54,7 @@
 #include "WW3D2/sage2/sage2globals.h"	// Tiberium Project @feature lit smoke
 #include "WW3D2/sage2/sage2lighting.h"
 #include "WW3D2/sage2/sage2scene.h"
+#include "WW3D2/sage2/sage2raytracing.h"	// Tiberium Project @bugfix model particles stay out of the ray-traced scene
 #endif
 
 
@@ -263,6 +264,11 @@ void W3DParticleSystemManager::renderModelParticles(RenderInfoClass &rinfo)
 	LightEnvironmentClass *lights = W3DDisplay::m_3DScene != nullptr ? &W3DDisplay::m_3DScene->getDefaultLightEnv() : nullptr;
 	Bool drew = FALSE;
 
+#ifdef RTS_RENDERER_D3D9
+	// Tiberium Project @bugfix the copies stay out of the ray-traced scene: brief effects, each with a
+	// mesh model of its own (a new structure each), that shade nothing worth tracing
+	Sage2RayTracingClass::Pause_Meshes(true);
+#endif
 	ParticleSystemManager::ParticleSystemList &systems = TheParticleSystemManager->getAllParticleSystems();
 	for (ParticleSystemManager::ParticleSystemListIt it = systems.begin(); it != systems.end(); ++it)
 	{
@@ -380,6 +386,9 @@ void W3DParticleSystemManager::renderModelParticles(RenderInfoClass &rinfo)
 		}
 	}
 	rinfo.light_environment = nullptr;
+#ifdef RTS_RENDERER_D3D9
+	Sage2RayTracingClass::Pause_Meshes(false);
+#endif
 	if (drew)
 	{
 		// (the copies' materials have changed since W3D last set them)

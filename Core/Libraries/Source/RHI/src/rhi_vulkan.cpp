@@ -531,6 +531,7 @@ public:
 	FrameData frames[FRAMES];
 	uint32_t frameIndex = 0;
 	bool frameOpen = false;
+	bool lost = false;				// a submission failed (VK_ERROR_DEVICE_LOST and the like)
 	VulkanCommandList cmdList;
 	std::vector<Garbage> garbage;
 
@@ -604,6 +605,7 @@ public:
 	virtual const TextureDesc& Get_Desc(Texture* texture) const override { return texture->desc; }
 	virtual CommandList* Begin_Frame() override;
 	virtual void Submit_Frame() override;
+	virtual bool Is_Lost() const override { return lost; }
 	virtual void Wait_Idle() override;
 
 	void Build_Sizes(const TriangleGeometry* geometry, uint32_t count, std::vector<VkAccelerationStructureGeometryKHR>& geos,
@@ -981,7 +983,8 @@ bool VulkanDevice::Init_External(const VulkanExternal& e)
 
 void VulkanDevice::Wait_Timeline(uint64_t value)
 {
-	if (timeline == VK_NULL_HANDLE || value == 0)
+	// (a lost device signals nothing more: a wait for it would never end)
+	if (timeline == VK_NULL_HANDLE || value == 0 || lost)
 		return;
 	VkSemaphoreWaitInfo wi = { VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO };
 	wi.semaphoreCount = 1;
@@ -1567,8 +1570,8 @@ CommandList* VulkanDevice::Begin_Frame()
 	if (frameOpen)
 		return &cmdList;
 	FrameData& f = Current();
-	// wait until the GPU is done with this frame's last use
-	if (f.completion > 0)
+	// wait until the GPU is done with this frame's last use (a lost device: nothing to wait for)
+	if (f.completion > 0 && !lost)
 	{
 		VkSemaphoreWaitInfo wi = { VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO };
 		wi.semaphoreCount = 1;
@@ -1636,7 +1639,14 @@ void VulkanDevice::Submit_Frame()
 	if (external && shared.unlockQueue)
 		shared.unlockQueue(shared.user);
 	if (submitted != VK_SUCCESS)
-		Log("vkQueueSubmit2 failed (%d)", (int)submitted);
+	{
+		// (once: every later frame fails the same way) the frame never signals its value, so no one
+		// waits for it
+		if (!lost)
+			Log("vkQueueSubmit2 failed (%d)", (int)submitted);
+		lost = true;
+		f.completion = 0;
+	}
 	frameOpen = false;
 	frameIndex = (frameIndex + 1) % FRAMES;
 }
@@ -1647,7 +1657,7 @@ void VulkanDevice::Wait_Idle()
 		Submit_Frame();
 	if (external)
 		Wait_Timeline(timelineValue);
-	else
+	else if (!lost)
 		vkDeviceWaitIdle(device);
 	for (FrameData& f : frames)
 		Retire(f);

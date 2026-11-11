@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tiberium Project: builds DXVK 2.6 with cmake/dxvk/dxvk-2.6-ray-query.patch (its Vulkan device made with
-# acceleration structures and ray queries when the game asks, for the ray-traced passes; otherwise it is
+# acceleration structures and ray queries when the game asks, for the ray-traced passes, and the images its
+# Direct3D 9 interop hands out kept where they are, out of memory defragmentation's reach; otherwise it is
 # DXVK 2.6 as released), for Linux (native, SDL3) or 64-bit Windows (cross-compiled with MinGW).
 #
 # Usage:

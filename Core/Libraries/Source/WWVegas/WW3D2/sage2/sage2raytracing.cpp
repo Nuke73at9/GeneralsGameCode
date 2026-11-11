@@ -20,18 +20,22 @@
 
 #include "sage2raytracing.h"
 
+#include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "sage2globals.h"
 
 static bool s_enabled = true;
+static bool s_meshesPaused = false;
 static float s_aoRadius = 40.0f;
 static int s_aoRays = 6;
 static float s_aoIntensity = 1.0f;
 
 void Sage2RayTracingClass::Set_Enabled(bool enabled) { s_enabled = enabled; }
 bool Sage2RayTracingClass::Is_Enabled() { return s_enabled; }
+void Sage2RayTracingClass::Pause_Meshes(bool paused) { s_meshesPaused = paused; }
 
 void Sage2RayTracingClass::Set_AO_Params(float radius, int rays, float intensity)
 {
@@ -52,6 +56,39 @@ void Sage2RayTracingClass::Before_Device_Creation()
 #else
 	setenv("DXVK_ENABLE_RAY_QUERY", "1", 1);
 #endif
+	// Tiberium Project @bugfix DXVK's memory defragmentation (2.5 and later) moves its images to new
+	// storage now and then. The ray tracer uses two of them directly (the frame's depth, its AO
+	// target), in commands DXVK does not track: a move under them left the GPU reading and writing
+	// freed memory, a lost device at random as a map came up (the user's PC, on NVIDIA). Our DXVK
+	// pins the images its Direct3D 9 interop hands out; with any other, defragmentation is off
+	// while the ray tracer is (DXVK_CONFIG, its options as dxvk.conf lines; one the user set stays).
+	{
+		const char* option = "dxvk.enableMemoryDefrag = False";
+		char existing[1024] = { 0 };
+#if defined(_WIN32)
+		GetEnvironmentVariableA("DXVK_CONFIG", existing, sizeof(existing));
+#else
+		const char* current = getenv("DXVK_CONFIG");
+		if (current != nullptr)
+		{
+			strncpy(existing, current, sizeof(existing) - 1);
+			existing[sizeof(existing) - 1] = 0;
+		}
+#endif
+		if (strstr(existing, "enableMemoryDefrag") == nullptr)
+		{
+			char config[1100];
+			if (existing[0] != 0)
+				snprintf(config, sizeof(config), "%s; %s", existing, option);
+			else
+				snprintf(config, sizeof(config), "%s", option);
+#if defined(_WIN32)
+			SetEnvironmentVariableA("DXVK_CONFIG", config);
+#else
+			setenv("DXVK_CONFIG", config, 1);
+#endif
+		}
+	}
 #endif
 }
 
@@ -159,10 +196,13 @@ namespace
 	// the AO target: a Direct3D 9 texture DXVK made with storage use, and the RHI's view of it
 	IDirect3DTexture9* s_aoTexture = nullptr;
 	rhi::Texture* s_aoImage = nullptr;
+	uint64_t s_aoHandle = 0;			// its VkImage when imported (DXVK may move it to new storage)
 	unsigned s_aoWidth = 0, s_aoHeight = 0;
-	// the depth buffer, as the RHI sees it (made again when the device's changes)
+	// the depth buffer, as the RHI sees it (made again when the device's changes, or DXVK's image)
 	IDirect3DTexture9* s_depthTexture = nullptr;
 	rhi::Texture* s_depthImage = nullptr;
+	uint64_t s_depthHandle = 0;
+	bool s_loggedMove = false;
 
 	// the terrain
 	std::vector<float> s_terrainPositions;
@@ -327,9 +367,10 @@ namespace
 		return true;
 	}
 
-	/// The RHI's view of a Direct3D 9 texture DXVK made (null if it is not DXVK's)
-	rhi::Texture* Import(IDirect3DTexture9* texture, uint32_t usage, const char* name)
+	/// The RHI's view of a Direct3D 9 texture DXVK made (null if it is not DXVK's), and its VkImage
+	rhi::Texture* Import(IDirect3DTexture9* texture, uint32_t usage, const char* name, uint64_t* handle)
 	{
+		*handle = 0;
 		InteropTexture* interop = nullptr;
 		if (FAILED(texture->QueryInterface(IID_InteropTexture, (void**)&interop)) || interop == nullptr)
 			return nullptr;
@@ -342,6 +383,7 @@ namespace
 		interop->Release();
 		if (FAILED(hr) || image == 0)
 			return nullptr;
+		*handle = image;
 		rhi::ExternalTexture e;
 		e.image = image;
 		e.vkFormat = (uint32_t)info.format;
@@ -353,9 +395,11 @@ namespace
 		return s_rhi->Import_Texture(e);
 	}
 
-	/// The layout DXVK will have the texture in when its commands so far are done
-	uint32_t Current_Layout(IDirect3DTexture9* texture)
+	/// The layout DXVK will have the texture in when its commands so far are done, and its VkImage
+	/// now (another than the one imported: DXVK moved it, and the import is stale)
+	uint32_t Current_Layout(IDirect3DTexture9* texture, uint64_t* handle)
 	{
+		*handle = 0;
 		InteropTexture* interop = nullptr;
 		if (FAILED(texture->QueryInterface(IID_InteropTexture, (void**)&interop)) || interop == nullptr)
 			return 0;
@@ -363,7 +407,44 @@ namespace
 		int32_t layout = 0;
 		interop->GetVulkanImageInfo(&image, &layout, nullptr);
 		interop->Release();
+		*handle = image;
 		return (uint32_t)layout;
+	}
+
+	/// the GPU gone (a submission failed): the ray tracer stops for good, the screen-space pass
+	/// takes over, and nothing waits for work that will never finish
+	bool Check_Lost()
+	{
+		if (s_rhi == nullptr || !s_rhi->Is_Lost())
+			return false;
+		Sage2_Log("raytracing: a submission failed (the GPU's device is lost); ray tracing off from here");
+		s_state = UNAVAILABLE;
+		return true;
+	}
+
+	void Log_Move(const char* what)
+	{
+		if (s_loggedMove)
+			return;
+		s_loggedMove = true;
+		Sage2_Log("raytracing: DXVK moved %s to new storage; taken up again (a DXVK without our patch, with defragmentation on?)", what);
+	}
+
+	/// a transform a structure can take: finite, of a sensible size, its 3x3 invertible (Vulkan's
+	/// instances must be; a part shrunk to nothing or a NaN can bring the GPU down)
+	bool Is_Good_Transform(const Matrix3D& m)
+	{
+		for (int r = 0; r < 3; ++r)
+			for (int c = 0; c < 4; ++c)
+			{
+				const float v = m[r][c];
+				if (!(v == v) || v > 1.0e6f || v < -1.0e6f)
+					return false;
+			}
+		const double det = (double)m[0][0] * ((double)m[1][1] * m[2][2] - (double)m[1][2] * m[2][1])
+			- (double)m[0][1] * ((double)m[1][0] * m[2][2] - (double)m[1][2] * m[2][0])
+			+ (double)m[0][2] * ((double)m[1][0] * m[2][1] - (double)m[1][1] * m[2][0]);
+		return det > 1.0e-9 || det < -1.0e-9;
 	}
 
 	bool Make_AO_Target(unsigned width, unsigned height)
@@ -393,7 +474,7 @@ namespace
 			return false;
 		}
 		s_aoTexture = static_cast<IDirect3DTexture9*>(resource);
-		s_aoImage = Import(s_aoTexture, rhi::TEXTURE_SAMPLED | rhi::TEXTURE_STORAGE, "ray-traced ambient occlusion");
+		s_aoImage = Import(s_aoTexture, rhi::TEXTURE_SAMPLED | rhi::TEXTURE_STORAGE, "ray-traced ambient occlusion", &s_aoHandle);
 		if (s_aoImage == nullptr)
 		{
 			Release(s_aoTexture);
@@ -460,9 +541,25 @@ namespace
 			m.unusable = true;
 			return false;
 		}
+		// (a structure is built from what it is given, unchecked: an index past the vertices or a
+		// position that is not a number is the GPU's to trip over)
+		for (int v = 0; v < vertexCount; ++v)
+		{
+			const Vector3& p = positions[v];
+			if (!(p.X == p.X && p.Y == p.Y && p.Z == p.Z) || fabsf(p.X) > 1.0e6f || fabsf(p.Y) > 1.0e6f || fabsf(p.Z) > 1.0e6f)
+			{
+				m.unusable = true;
+				return false;
+			}
+		}
 		std::vector<uint16_t> indices((size_t)polyCount * 3 + 1, 0);	// one more: a multiple of 4 bytes
 		for (int i = 0; i < polyCount; ++i)
 		{
+			if ((int)polys[i].I >= vertexCount || (int)polys[i].J >= vertexCount || (int)polys[i].K >= vertexCount)
+			{
+				m.unusable = true;
+				return false;
+			}
 			indices[i * 3 + 0] = polys[i].I;
 			indices[i * 3 + 1] = polys[i].J;
 			indices[i * 3 + 2] = polys[i].K;
@@ -532,7 +629,9 @@ void Sage2RayTracingClass::Set_Height_Map(const unsigned char* data, int width, 
 
 void Sage2RayTracingClass::Add_Mesh(MeshModelClass* model, const Matrix3D& transform)
 {
-	if (!s_enabled || s_state == UNAVAILABLE || model == nullptr || Sage2ShadowClass::Is_Rendering())
+	if (!s_enabled || s_state == UNAVAILABLE || model == nullptr || s_meshesPaused || Sage2ShadowClass::Is_Rendering())
+		return;
+	if (!Is_Good_Transform(transform))
 		return;
 	const unsigned frame = WW3D::Get_Frame_Count();
 	if (frame != s_instanceFrame)
@@ -596,21 +695,39 @@ IDirect3DTexture9* Sage2RayTracingClass::Trace_Ambient_Occlusion(IDirect3DDevice
 		return nullptr;
 	if (!Make_AO_Target(aoWidth, aoHeight))
 		return nullptr;
-	if (depth != s_depthTexture || s_depthImage == nullptr)
+	// where DXVK will have left them when the commands so far are done, and their images now: one
+	// DXVK moved to new storage is taken up again (the import of the old one would use freed memory)
+	uint64_t depthHandle = 0, aoHandle = 0;
+	const uint32_t depthLayout = Current_Layout(depth, &depthHandle);
+	const uint32_t aoLayout = Current_Layout(s_aoTexture, &aoHandle);
+	if (aoHandle != s_aoHandle)
 	{
+		Log_Move("the ambient occlusion target");
+		s_rhi->Destroy(s_aoImage);
+		s_aoImage = Import(s_aoTexture, rhi::TEXTURE_SAMPLED | rhi::TEXTURE_STORAGE, "ray-traced ambient occlusion", &s_aoHandle);
+		if (s_aoImage == nullptr)
+		{
+			Release(s_aoTexture);
+			s_aoWidth = s_aoHeight = 0;
+			return nullptr;
+		}
+	}
+	if (depth != s_depthTexture || s_depthImage == nullptr || depthHandle != s_depthHandle)
+	{
+		if (depth == s_depthTexture && s_depthImage != nullptr)
+			Log_Move("the frame's depth");
 		if (s_depthImage)
 			s_rhi->Destroy(s_depthImage);
 		s_depthTexture = depth;
-		s_depthImage = Import(depth, rhi::TEXTURE_SAMPLED, "the frame's depth");
+		s_depthImage = Import(depth, rhi::TEXTURE_SAMPLED, "the frame's depth", &s_depthHandle);
 		if (s_depthImage == nullptr)
 		{
 			s_depthTexture = nullptr;
 			return nullptr;
 		}
 	}
-	// where DXVK will have left them when the commands so far are done
-	s_rhi->Set_External_Layout(s_depthImage, Current_Layout(depth));
-	s_rhi->Set_External_Layout(s_aoImage, Current_Layout(s_aoTexture));
+	s_rhi->Set_External_Layout(s_depthImage, depthLayout);
+	s_rhi->Set_External_Layout(s_aoImage, aoLayout);
 
 	// the camera: clip space back to the world, and where the eye is
 	float viewProjection[16], clipToWorld[16], viewToWorld[16];
@@ -661,6 +778,7 @@ IDirect3DTexture9* Sage2RayTracingClass::Trace_Ambient_Occlusion(IDirect3DDevice
 	if (instances.empty())
 	{
 		s_rhi->Submit_Frame();
+		Check_Lost();
 		return nullptr;
 	}
 	if (instances.size() > s_tlasCapacity)
@@ -674,6 +792,7 @@ IDirect3DTexture9* Sage2RayTracingClass::Trace_Ambient_Occlusion(IDirect3DDevice
 		{
 			s_tlasCapacity = 0;
 			s_rhi->Submit_Frame();
+			Check_Lost();
 			return nullptr;
 		}
 	}
@@ -714,6 +833,8 @@ IDirect3DTexture9* Sage2RayTracingClass::Trace_Ambient_Occlusion(IDirect3DDevice
 	cl->Set_Acceleration_Structure(s_tlas);
 	cl->Dispatch((aoWidth + 7) / 8, (aoHeight + 7) / 8);
 	s_rhi->Submit_Frame();
+	if (Check_Lost())
+		return nullptr;
 	++s_frames;
 	if (!s_loggedOn || s_frames == 60)
 	{
@@ -738,6 +859,7 @@ void Sage2RayTracingClass::Release_Resources()
 	s_aoImage = nullptr;
 	s_depthImage = nullptr;
 	s_depthTexture = nullptr;
+	s_aoHandle = s_depthHandle = 0;
 	Release(s_aoTexture);
 	s_aoWidth = s_aoHeight = 0;
 }

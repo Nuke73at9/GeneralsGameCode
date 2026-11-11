@@ -758,7 +758,10 @@ void MeshClass::Render(RenderInfoClass & rinfo)
 				rendered_something = true;
 #ifdef RTS_RENDERER_D3D9
 				// Tiberium Project @feature rigid, opaque meshes go into the ray-traced scene
+				// Tiberium Project @bugfix nor those blended over the frame (additive glows, light cones):
+				// they shade nothing
 				if (!is_alpha && !Model->Get_Flag(MeshGeometryClass::SKIN)
+					&& Model->Get_Single_Shader().Get_Dst_Blend_Func() == ShaderClass::DSTBLEND_ZERO
 					&& (rinfo.Current_Override_Flags() & RenderInfoClass::RINFO_OVERRIDE_SHADOW_RENDERING) == 0)
 					Sage2RayTracingClass::Add_Mesh(Model, Get_Transform());
 #endif

@@ -390,6 +390,8 @@ public:
 	virtual CommandList* Begin_Frame() = 0;
 	virtual void Submit_Frame() = 0;
 	virtual void Wait_Idle() = 0;
+	/// A submission failed (the GPU is gone: a lost device); nothing more should be recorded
+	virtual bool Is_Lost() const { return false; }
 };
 
 struct VulkanOptions

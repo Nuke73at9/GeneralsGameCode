@@ -53,6 +53,9 @@ public:
 	static void Set_Height_Map(const unsigned char* data, int width, int height, int border, float cellSize, float heightScale);
 	/// A mesh drawn this frame (MeshClass::Render): rigid, opaque meshes go into the scene
 	static void Add_Mesh(MeshModelClass* model, const Matrix3D& transform);
+	/// Meshes drawn while paused stay out of the scene (the model particles: brief effects, each
+	/// particle a copy of its model with a structure of its own)
+	static void Pause_Meshes(bool paused);
 	/// The mesh model is going away (its bottom-level structure goes with it)
 	static void Forget_Model(MeshModelClass* model);
 

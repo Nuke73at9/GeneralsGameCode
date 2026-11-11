@@ -1,3 +1,62 @@
+diff --git a/src/d3d9/d3d9_interop.cpp b/src/d3d9/d3d9_interop.cpp
+index 9d833b3..17cc703 100644
+--- a/src/d3d9/d3d9_interop.cpp
++++ b/src/d3d9/d3d9_interop.cpp
+@@ -106,11 +106,54 @@ namespace dxvk {
+     return m_interface->QueryInterface(riid, ppvObject);
+   }
+ 
++  /**
++   * \brief Keeps an image the application uses directly where it is
++   *
++   * The application records its own Vulkan commands with the image handle it
++   * gets here, which DXVK does not track. Memory defragmentation would move
++   * the image to new storage and free the old one under those commands (a
++   * lost device), so the image gets a stable address first, as the D3D11
++   * interop does for its images (D3D11DeviceExt::LockImage).
++   */
++  static void LockInteropImage(
++          D3D9DeviceEx*         pDevice,
++    const Rc<DxvkImage>&        Image) {
++    if (pDevice == nullptr || !Image->canRelocate())
++      return;
++
++    bool feedback = false;
++
++    auto chunk = pDevice->AllocCsChunk();
++
++    chunk->push([
++      cImage = Image,
++      &feedback
++    ] (DxvkContext* ctx) {
++      DxvkImageUsageInfo usageInfo;
++      usageInfo.stableGpuAddress = VK_TRUE;
++
++      feedback = ctx->ensureImageCompatibility(cImage, usageInfo);
++    });
++
++    pDevice->InjectCsChunk(std::move(chunk), true);
++
++    if (!feedback) {
++      Logger::err(str::format("D3D9VkInteropTexture: Failed to lock image:"
++        "\n  Image format:  ", Image->info().format,
++        "\n  Image usage:   ", std::hex, Image->info().usage));
++    }
++  }
++
++
+   HRESULT STDMETHODCALLTYPE D3D9VkInteropTexture::GetVulkanImageInfo(
+           VkImage*              pHandle,
+           VkImageLayout*        pLayout,
+           VkImageCreateInfo*    pInfo) {
+     const Rc<DxvkImage> image = m_texture->GetImage();
++
++    // (before the handle: locking may give the image its stable storage)
++    LockInteropImage(m_texture->Device(), image);
++
+     const DxvkImageCreateInfo& info = image->info();
+     
+     if (pHandle != nullptr)
 diff --git a/src/dxvk/dxvk_adapter.cpp b/src/dxvk/dxvk_adapter.cpp
 index 11adc0e..a96e866 100644
 --- a/src/dxvk/dxvk_adapter.cpp
