@@ -86,6 +86,9 @@ public:
 	/// Once per engine update, after the client and the logic have run
 	static void update();
 
+	/// Once per engine update, after the client has drawn and before the logic runs (the fly step's tilt, as drawn)
+	static void beforeLogic();
+
 	/// A line in TiberiumTest.log (and on stderr)
 	static void log( const char *format, ... );
 

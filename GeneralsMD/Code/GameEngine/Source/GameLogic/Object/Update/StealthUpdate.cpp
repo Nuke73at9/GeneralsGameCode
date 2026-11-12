@@ -321,6 +321,14 @@ Bool StealthUpdate::allowedToStealth( Object *stealthOwner ) const
 		return FALSE;
 	}
 
+	// Tiberium Project @feature SAGE's STEALTH_AND_BURROW_FORBIDDEN: no stealth while it lasts, the stealthed shown (every one
+	// of C&C4's stealth templates forbids it; C&C4's Seismic Disturbance sets it on the enemies in its quake)
+	if( self->getStatusBits().test( OBJECT_STATUS_STEALTH_AND_BURROW_FORBIDDEN )
+		|| stealthOwner->getStatusBits().test( OBJECT_STATUS_STEALTH_AND_BURROW_FORBIDDEN ) )
+	{
+		return FALSE;
+	}
+
 	const UnsignedInt *lastDamageTimestamp = self->getBodyModule()->getLastDamageTimestamp();
 	if( flags & STEALTH_NOT_WHILE_TAKING_DAMAGE && lastDamageTimestamp && *lastDamageTimestamp >= now - 1 )
 	{

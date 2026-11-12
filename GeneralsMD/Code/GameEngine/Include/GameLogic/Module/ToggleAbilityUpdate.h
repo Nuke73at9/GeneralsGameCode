@@ -83,6 +83,7 @@ public:
 	Bool m_landOnSwitchBack;			///< comes down to the ground as it switches back
 	Bool m_normalArmsTimedWeapons;		///< Tiberium Project: switching into the first state arms its StartsInactive FireWeaponUpdates (C&C4's ACTIVATE_FIRE_WEAPON_UPDATE_MODULES: the Thunderhead's slam as it lands)
 	Bool m_toggledArmsTimedWeapons;		///< Tiberium Project: switching into the second state does
+	ObjectStatusMaskType m_forbiddenStatus;	///< Tiberium Project: no switching into the second state while it has any of these, and back out of it when it gains one (SAGE's ToggleState ObjectStatusValidation ForbiddenStatus: C&C4's burrowing, STEALTH_AND_BURROW_FORBIDDEN)
 
 	ToggleAbilityUpdateModuleData()
 	{
@@ -130,6 +131,7 @@ public:
 			{ "LandOnSwitchBack",		INI::parseBool,					nullptr, offsetof( ToggleAbilityUpdateModuleData, m_landOnSwitchBack ) },
 			{ "NormalArmsTimedWeapons",	INI::parseBool,				nullptr, offsetof( ToggleAbilityUpdateModuleData, m_normalArmsTimedWeapons ) },
 			{ "ToggledArmsTimedWeapons",	INI::parseBool,			nullptr, offsetof( ToggleAbilityUpdateModuleData, m_toggledArmsTimedWeapons ) },
+			{ "ForbiddenStatus",		ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( ToggleAbilityUpdateModuleData, m_forbiddenStatus ) },	// Tiberium Project
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 		p.add( dataFieldParse );

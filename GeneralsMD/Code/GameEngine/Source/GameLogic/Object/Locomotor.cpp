@@ -318,6 +318,7 @@ LocomotorTemplate::LocomotorTemplate()
 	m_rollDamping = 0.9f;
 	m_forwardVelCoef = 0;
 	m_pitchByZVelCoef = 0;
+	m_preferredHeightPitchingEpsilon = 0.0f;	// Tiberium Project
 	m_thrustRoll = 0.0f;
 	m_wobbleRate = 0.0f;
 	m_minWobble = 0.0f;
@@ -480,6 +481,7 @@ const FieldParse* LocomotorTemplate::getFieldParse() const
 		{ "ThrustMinWobble",	INI::parseReal, nullptr, offsetof(LocomotorTemplate, m_minWobble) },
 		{ "ThrustMaxWobble",	INI::parseReal, nullptr, offsetof(LocomotorTemplate, m_maxWobble) },
 		{ "PitchInDirectionOfZVelFactor", INI::parseReal, nullptr, offsetof(LocomotorTemplate, m_pitchByZVelCoef) },
+		{ "PreferredHeightPitchingEpsilon", INI::parseReal, nullptr, offsetof(LocomotorTemplate, m_preferredHeightPitchingEpsilon) },	// Tiberium Project
 		{ "ForwardVelocityPitchFactor", INI::parseReal, nullptr, offsetof(LocomotorTemplate, m_forwardVelCoef) },
 		{ "LateralVelocityRollFactor", INI::parseReal, nullptr, offsetof(LocomotorTemplate, m_lateralVelCoef) },
 		{ "ForwardAccelerationPitchFactor", INI::parseReal, nullptr, offsetof(LocomotorTemplate, m_forwardAccelCoef) },

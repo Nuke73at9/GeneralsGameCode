@@ -1634,9 +1634,21 @@ void Drawable::calcPhysicsXformHoverOrWings( const Locomotor *locomotor, Physics
 		if (Z_VEL_PITCH_COEFF != 0.0f)
 		{
 			const Real TINY_DZ = 0.001f;
-			if (fabs(vel->z) > TINY_DZ)
+			// Tiberium Project @bugfix SAGE's PreferredHeightPitchingEpsilon: no pitching by the climb this near its
+			// preferred height, nor while it hardly moves over the ground (C&C4's Medusa, bobbing about its height as it
+			// hovered to fire, was stood on its nose and tail by turns: a climb of any speed with none forward is 90 degrees)
+			const Real EPSILON = locomotor->getPreferredHeightPitchingEpsilon();
+			const Real groundSpeed = WWMath::SqrtOrigin(sqr(vel->x)+sqr(vel->y));
+			Bool level = FALSE;
+			if (EPSILON > 0.0f)
 			{
-				Real pitch = WWMath::Atan2Origin(vel->z, WWMath::SqrtOrigin(sqr(vel->x)+sqr(vel->y)));
+				const Real MIN_GROUND_SPEED = 1.0f;	// (a frame's)
+				level = groundSpeed < MIN_GROUND_SPEED
+					|| fabs(obj->getHeightAboveTerrain() - locomotor->getPreferredHeight()) < EPSILON;
+			}
+			if (fabs(vel->z) > TINY_DZ && !level)
+			{
+				Real pitch = WWMath::Atan2Origin(vel->z, groundSpeed);
 				m_locoInfo->m_pitch -= Z_VEL_PITCH_COEFF * pitch;
 			}
 		}

@@ -101,6 +101,11 @@ Bool ToggleAbilityUpdate::refusesSpecialPower( const SpecialPowerTemplate *speci
 Bool ToggleAbilityUpdate::isSpecialPowerUnavailable( const SpecialPowerTemplate *specialPowerTemplate ) const
 {
 	const ToggleAbilityUpdateModuleData *data = getToggleAbilityUpdateModuleData();
+	// Tiberium Project @feature SAGE's ToggleState ForbiddenStatus: not into the second state while it has one of them (C&C4's
+	// burrowing units in a Seismic Disturbance's quake; update() brings out those in it); back out of it is always allowed
+	if( specialPowerTemplate != nullptr && specialPowerTemplate == data->m_specialPowerTemplate && !m_toggled && !m_switching
+		&& data->m_forbiddenStatus.any() && getObject()->getStatusBits().testForAny( data->m_forbiddenStatus ) )
+		return TRUE;
 	if( data->m_offSpecialPowerTemplate == nullptr || specialPowerTemplate == nullptr )
 		return FALSE;
 	if( specialPowerTemplate == data->m_specialPowerTemplate )
@@ -305,6 +310,16 @@ UpdateSleepTime ToggleAbilityUpdate::update()
 		if( m_toggled && data->m_autoRevertTime > 0 )
 			m_revertFrame = now + data->m_autoRevertTime;
 	}
+	// Tiberium Project @feature SAGE's ToggleState ObjectStatusValidation: out of the second state as soon as it gains one of
+	// its forbidden statuses (C&C4's burrowed units brought up by a Seismic Disturbance's quake); looked at every few frames
+	// while it is in that state, as nothing tells it of a status set
+	const UnsignedInt forbiddenPoll = 5;
+	const Bool watchForbidden = m_toggled && !m_switching && data->m_forbiddenStatus.any();
+	if( watchForbidden && !me->isEffectivelyDead() && !me->isDisabled() && me->getStatusBits().testForAny( data->m_forbiddenStatus ) )
+	{
+		beginSwitch();
+		return m_switchEndFrame > now ? UPDATE_SLEEP( m_switchEndFrame - now ) : UPDATE_SLEEP_NONE;
+	}
 	if( m_toggled && m_revertFrame != 0 )
 	{
 		if( now >= m_revertFrame )
@@ -312,8 +327,11 @@ UpdateSleepTime ToggleAbilityUpdate::update()
 			beginSwitch();
 			return m_switchEndFrame > now ? UPDATE_SLEEP( m_switchEndFrame - now ) : UPDATE_SLEEP_NONE;
 		}
-		return UPDATE_SLEEP( m_revertFrame - now );
+		const UnsignedInt wait = m_revertFrame - now;
+		return UPDATE_SLEEP( watchForbidden && wait > forbiddenPoll ? forbiddenPoll : wait );
 	}
+	if( watchForbidden )
+		return UPDATE_SLEEP( forbiddenPoll );
 	return m_approaching ? UPDATE_SLEEP( 3 ) : UPDATE_SLEEP_FOREVER;
 }
 

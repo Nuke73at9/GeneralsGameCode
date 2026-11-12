@@ -28,6 +28,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <string>
+#include <map>
+#include <set>
 #include <vector>
 
 #include "Common/GameEngine.h"
@@ -60,6 +62,8 @@
 #include "Common/BuildAssistant.h"
 #include "GameLogic/Damage.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "GameLogic/Module/PhysicsUpdate.h"
+#include "GameLogic/Locomotor.h"
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Weapon.h"
 #include "Common/DrawModule.h"
@@ -520,6 +524,61 @@ void TiberiumTest::exitStage( const char *stage )
 	fprintf( stderr, "TIBTEST exit: %s\n", stage );
 	fflush( stderr );
 #endif
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature (the test) the fly step's watched templates (upper case) and each object's tilt as
+// last drawn (pitch, roll and yaw off its heading, in degrees): read before the logic runs, as the logic sets a
+// moving object's model back to its own position and heading until it is drawn again
+static std::set<std::string> s_flyTemplates;
+static std::map<UnsignedInt, Coord3D> s_drawnTilt;
+
+static std::string upperName( const char *name )
+{
+	std::string out( name != nullptr ? name : "" );
+	for ( size_t i = 0; i < out.size(); ++i )
+		out[i] = (char)toupper( (unsigned char)out[i] );
+	return out;
+}
+
+static Bool drawnTilt( const Object *obj, Coord3D &tilt )
+{
+	const Drawable *look = obj->getDrawable();
+	if ( look == nullptr )
+		return FALSE;
+	for ( const DrawModule *const *dm = look->getDrawModules(); *dm != nullptr; ++dm )
+	{
+		const ObjectDrawInterface *di = (*dm)->getObjectDrawInterface();
+		Coord3D at;
+		Real radius;
+		Matrix3D mtx;
+		if ( di == nullptr || !di->clientOnly_getRenderObjInfo( &at, &radius, &mtx ) )
+			continue;
+		const Vector3 fwd = mtx.Get_X_Vector();
+		const Vector3 side = mtx.Get_Y_Vector();
+		Real yaw = WWMath::Atan2( fwd.Y, fwd.X ) - obj->getOrientation();
+		while ( yaw > PI ) yaw -= 2.0f * PI;
+		while ( yaw < -PI ) yaw += 2.0f * PI;
+		tilt.x = WWMath::Asin( WWMath::Clamp( fwd.Z, -1.0f, 1.0f ) ) * 180.0f / PI;
+		tilt.y = WWMath::Asin( WWMath::Clamp( side.Z, -1.0f, 1.0f ) ) * 180.0f / PI;
+		tilt.z = yaw * 180.0f / PI;
+		return TRUE;
+	}
+	return FALSE;
+}
+
+void TiberiumTest::beforeLogic()
+{
+	if ( !s_active || s_flyTemplates.empty() || TheGameLogic == nullptr )
+		return;
+	for ( Object *obj = TheGameLogic->getFirstObject(); obj != nullptr; obj = obj->getNextObject() )
+	{
+		if ( s_flyTemplates.count( upperName( obj->getTemplate()->getName().str() ) ) == 0 )
+			continue;
+		Coord3D tilt;
+		if ( drawnTilt( obj, tilt ) )
+			s_drawnTilt[ (UnsignedInt)obj->getID() ] = tilt;
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1777,7 +1836,72 @@ void TiberiumTest::update()
 			}
 			log( "frame %d: ui: where%s", (int)s_frame, all.c_str() );
 		}
+		else if ( step.action == "victims" && TheGameLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) "victims=Template": what each of that kind (up to eight) is attacking,
+			// and each turret's target: name, id and health (a turret firing at something it never hurts)
+			Int shown = 0;
+			for ( Object *obj = TheGameLogic->getFirstObject(); obj != nullptr && shown < 8; obj = obj->getNextObject() )
+			{
+				if ( obj->getTemplate()->getName().compareNoCase( step.arg.c_str() ) != 0 || obj->getAI() == nullptr )
+					continue;
+				++shown;
+				AIUpdateInterface *ai = obj->getAI();
+				std::string what;
+				for ( Int t = -1; t < (Int)MAX_TURRETS; ++t )
+				{
+					const Object *v = t < 0 ? ai->getCurrentVictim() : ai->getTurretTargetObject( (WhichTurretType)t, FALSE );
+					if ( t >= 0 && !ai->isTurretEnabled( (WhichTurretType)t ) && v == nullptr )
+						continue;
+					char one[160], who[16];
+					const BodyModuleInterface *vb = v != nullptr ? v->getBodyModule() : nullptr;
+					snprintf( who, sizeof( who ), t < 0 ? "victim" : "turret %d", (int)t );
+					snprintf( one, sizeof( one ), "%s%s %s #%u (%s, health %.0f, %.0f away)", what.empty() ? "" : "; ",
+						who, v != nullptr ? v->getTemplate()->getName().str() : "none",
+						v != nullptr ? (unsigned)v->getID() : 0u,
+						v == nullptr ? "-" : ( obj->getRelationship( v ) == ENEMIES ? "enemy" : obj->getRelationship( v ) == NEUTRAL ? "neutral" : "ally" ),
+						vb != nullptr ? vb->getHealth() : -1.0f,
+						v != nullptr ? WWMath::Sqrt( ThePartitionManager->getDistanceSquared( obj, v, FROM_CENTER_2D ) ) : 0.0f );
+					what += one;
+				}
+				log( "frame %d: ui: victims %s #%u: %s", (int)s_frame, obj->getTemplate()->getName().str(), (unsigned)obj->getID(), what.c_str() );
+			}
+			if ( shown == 0 )
+				log( "frame %d: ui: victims %s: none", (int)s_frame, step.arg.c_str() );
+		}
 #endif
+		else if ( step.action == "fly" && TheGameLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) every object of a template in flight: its height, its velocity, the
+			// height its locomotor holds it at, and how its model was tilted as last drawn (pitch, roll and yaw off its
+			// heading, in degrees: an aircraft's shaking, C&C4's Medusa's and Arcus Bomber's)
+			s_flyTemplates.insert( upperName( step.arg.c_str() ) );
+			Int shown = 0;
+			for ( Object *obj = TheGameLogic->getFirstObject(); obj != nullptr && shown < 8; obj = obj->getNextObject() )
+			{
+				if ( obj->getTemplate()->getName().compareNoCase( step.arg.c_str() ) != 0 )
+					continue;
+				++shown;
+				const PhysicsBehavior *physics = obj->getPhysics();
+				const AIUpdateInterface *ai = obj->getAI();
+				const Locomotor *loco = ai != nullptr ? ai->getCurLocomotor() : nullptr;
+				Coord3D vel;
+				vel.zero();
+				if ( physics != nullptr )
+					vel = *physics->getVelocity();
+				char tilt[96] = ", not drawn";
+				std::map<UnsignedInt, Coord3D>::const_iterator drawn = s_drawnTilt.find( (UnsignedInt)obj->getID() );
+				if ( drawn != s_drawnTilt.end() )
+					snprintf( tilt, sizeof( tilt ), ", drawn pitch %.2f roll %.2f yaw %.2f", drawn->second.x, drawn->second.y, drawn->second.z );
+				log( "frame %d: ui: fly %s #%u at %.2f %.2f %.2f facing %.1f height %.2f (holds %.0f) velocity %.3f %.3f %.3f%s%s",
+					(int)s_frame, obj->getTemplate()->getName().str(), (unsigned)obj->getID(), obj->getPosition()->x,
+					obj->getPosition()->y, obj->getPosition()->z, obj->getOrientation() * 180.0f / PI, obj->getHeightAboveTerrain(),
+					loco != nullptr ? loco->getPreferredHeight() : 0.0f, vel.x, vel.y, vel.z, tilt,
+					obj->isAirborneTarget() ? ", airborne" : "" );
+			}
+			if ( shown == 0 )
+				log( "frame %d: ui: fly %s: none", (int)s_frame, step.arg.c_str() );
+		}
 		else if ( step.action == "yard" && TheGameLogic != nullptr && ThePlayerList != nullptr )
 		{
 			// the local player's construction yard (Kane's Wrath's base): its state; "place,dx,dy" places the
@@ -2589,7 +2713,9 @@ void TiberiumTest::update()
 						// (a claw's grip: the holder's and the held's, C&C4's Scorpion's)
 						OBJECT_STATUS_NO_ATTACK, OBJECT_STATUS_IMMOBILE, OBJECT_STATUS_UNSELECTABLE, OBJECT_STATUS_NO_COLLISIONS,
 						// (an aircraft in the air)
-						OBJECT_STATUS_AIRBORNE_TARGET };
+						OBJECT_STATUS_AIRBORNE_TARGET,
+						// (Tiberium Project: in a C&C4 Seismic Disturbance's quake, no stealth and no burrowing)
+						OBJECT_STATUS_STEALTH_AND_BURROW_FORBIDDEN, OBJECT_STATUS_CAN_STEALTH };
 					AsciiString had, sets;
 					for ( size_t k = 0; k < ARRAY_SIZE( s_shown ); ++k )
 					{

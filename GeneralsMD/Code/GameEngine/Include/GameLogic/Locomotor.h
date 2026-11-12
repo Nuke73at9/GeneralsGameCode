@@ -181,6 +181,7 @@ private:
 	Real											m_pitchDamping;					///< How good the shock absorbers are.
 	Real											m_rollDamping;					///< How good the shock absorbers are.
 	Real											m_pitchByZVelCoef;			///< How much we pitch in response to z-speed.
+	Real											m_preferredHeightPitchingEpsilon;	///< Tiberium Project: no pitching by z-speed this near its preferred height (SAGE's)
 	Real											m_thrustRoll;						///< Thrust roll around X axis
 	Real											m_wobbleRate;						///< how fast thrust things "wobble"
 	Real											m_minWobble;						///< how much thrust things "wobble"
@@ -268,6 +269,7 @@ public:
 	Real getPitchDamping() const { return m_template->m_pitchDamping;}	///< How good the shock absorbers are.
 	Real getRollDamping() const { return m_template->m_rollDamping;}	///< How good the shock absorbers are.
 	Real getPitchByZVelCoef() const { return m_template->m_pitchByZVelCoef;}		///< How much we pitch in response to speed.
+	Real getPreferredHeightPitchingEpsilon() const { return m_template->m_preferredHeightPitchingEpsilon; }	///< Tiberium Project
 	Real getThrustRoll() const { return m_template->m_thrustRoll; }  ///< Thrust roll
 	Real getWobbleRate() const { return m_template->m_wobbleRate; }  ///< how fast thrust things "wobble"
 	Real getMaxWobble() const { return m_template->m_maxWobble; }  ///< how much thrust things "wobble"

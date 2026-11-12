@@ -1122,6 +1122,9 @@ void GameEngine::update()
 		// TheSuperHackers @info Ignores frozen time because the script engine needs updating in the logic update regardless.
 		if (canUpdateGameLogic(FramePacer::IgnoreFrozenTime))
 		{
+			// Tiberium Project @feature (the test) what was drawn, before the logic moves it
+			TiberiumTest::beforeLogic();
+
 			TheGameLogic->UPDATE();
 
 			if (!TheFramePacer->isTimeFrozen())
