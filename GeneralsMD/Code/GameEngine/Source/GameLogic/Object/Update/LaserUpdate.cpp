@@ -233,6 +233,14 @@ void LaserUpdate::updateEndPos()
 	else
 	{
 		m_endPos = *targetDrawable->getPosition();
+		// Tiberium Project @feature at the target's bone, when it has it (setTargetBone)
+		Matrix3D endPosMatrix;
+		if( m_targetBoneName.isNotEmpty() && targetDrawable->getCurrentWorldspaceClientBonePositions( m_targetBoneName.str(), endPosMatrix ) )
+		{
+			m_endPos.x = endPosMatrix.Get_X_Translation();
+			m_endPos.y = endPosMatrix.Get_Y_Translation();
+			m_endPos.z = endPosMatrix.Get_Z_Translation();
+		}
 	}
 
 	if( !(m_endPos == oldEndPos) ) // No != operator.  Heh.
@@ -622,8 +630,8 @@ void LaserUpdate::xfer( Xfer *xfer )
 {
 
 	// version
-	// Tiberium Project: 2 saves the stream's systems and the frame it began to run out
-	XferVersion currentVersion = 2;
+	// Tiberium Project: 2 saves the stream's systems and the frame it began to run out; 3 the target's bone
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -658,6 +666,8 @@ void LaserUpdate::xfer( Xfer *xfer )
 			xfer->xferUser( &m_streamSystemIDs[i], sizeof( ParticleSystemID ) );
 		xfer->xferUnsignedInt( &m_streamStartFrame );
 	}
+	if( version >= 3 )
+		xfer->xferAsciiString( &m_targetBoneName );
 
 }
 

@@ -94,6 +94,7 @@ const char* const ObjectStatusMaskType::s_bitNameList[] =
 	"POINT_DEFENSE_DRONE_ATTACHED",	// Tiberium Project
 	"DISSIDENT",	// Tiberium Project
 	"STEALTH_AND_BURROW_FORBIDDEN",	// Tiberium Project
+	"BURROWING",	// Tiberium Project
 	nullptr
 };
 static_assert(ARRAY_SIZE(ObjectStatusMaskType::s_bitNameList) == ObjectStatusMaskType::NumBits + 1, "Incorrect array size");

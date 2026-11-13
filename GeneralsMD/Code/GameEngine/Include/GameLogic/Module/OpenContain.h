@@ -180,6 +180,10 @@ public:
 	virtual PlayerMaskType getPlayerWhoEntered() const override { return m_playerEnteredMask; }
 
 	virtual Int getContainMax() const override;
+	/// Tiberium Project @feature slots an upgrade adds to what it holds, or takes back (ContainerCapacityUpgrade)
+	void addCapacityBonus( Int slots ) { m_capacityBonus += slots; }
+	Int getCapacityBonus() const { return m_capacityBonus; }
+	void scatterRemoved( Object *obj ) { scatterToNearbyPosition( obj ); }	///< Tiberium Project: one taken out of it, set down beside it
 
 	// ExitInterface
 	virtual Bool isExitBusy() const override {return FALSE;}	///< Contain style exiters are getting the ability to space out exits, so ask this before reserveDoor as a kind of no-commitment check.
@@ -274,6 +278,7 @@ private:
 	PlayerMaskType			m_playerEnteredMask;					///< Mask of player that entered last, if any.
 	UnsignedInt					m_lastUnloadSoundFrame;					///< last frame we did an un-loading sound
 	UnsignedInt					m_lastLoadSoundFrame;						///< last frame we did a loading sound
+	Int									m_capacityBonus;								///< Tiberium Project: slots its upgrades have added (ContainerCapacityUpgrade)
 
 /// @todo srj -- move this to a lazily-allocated subobject
 	enum { MAX_FIRE_POINTS = 32 };

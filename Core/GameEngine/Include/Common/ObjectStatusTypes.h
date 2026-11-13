@@ -105,6 +105,7 @@ enum ObjectStatusTypes CPP_11(: Int)
 	OBJECT_STATUS_POINT_DEFENSE_DRONE_ATTACHED,	///< Tiberium Project: something stuck to it shields it (C&C4's AttachUpdate ParentStatus: the Personal Shields' shield, which a second cast passes over)
 	OBJECT_STATUS_DISSIDENT,	///< Tiberium Project: turned on whoever is nearest (Kane's Wrath's hallucinogen: EMOTION_DISSIDENT)
 	OBJECT_STATUS_STEALTH_AND_BURROW_FORBIDDEN,	///< Tiberium Project: it may neither stealth nor burrow (SAGE's: C&C4's Seismic Disturbance)
+	OBJECT_STATUS_BURROWING,	///< Tiberium Project: dug in under the ground (SAGE's: what C&C4's burrowing modifiers set; its weapons, filters and webs read it)
 	// add more status types here and don't forget to add to the string table ObjectStatusMaskType::s_bitNameList[]
 
 	OBJECT_STATUS_COUNT

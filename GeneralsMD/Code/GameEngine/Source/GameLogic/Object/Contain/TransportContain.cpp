@@ -175,8 +175,9 @@ void TransportContainModuleData::buildFieldParse(MultiIniFieldParse& p)
 //-------------------------------------------------------------------------------------------------
 Int TransportContain::getContainMax() const
 {
+	// Tiberium Project @feature and the slots its upgrades added (ContainerCapacityUpgrade)
 	if (getTransportContainModuleData())
-		return getTransportContainModuleData()->m_slotCapacity;
+		return max( 0, getTransportContainModuleData()->m_slotCapacity + getCapacityBonus() );
 
 	return 0;
 }

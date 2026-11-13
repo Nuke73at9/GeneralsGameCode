@@ -129,6 +129,7 @@ OpenContain::OpenContain( Thing *thing, const ModuleData* moduleData ) : UpdateM
 	m_playerEnteredMask = 0;
 	m_lastUnloadSoundFrame = 0;
 	m_lastLoadSoundFrame = 0;
+	m_capacityBonus = 0;
 	m_containListSize = 0;
 	m_stealthUnitsContained = 0;
 	m_heroUnitsContained = 0;
@@ -159,6 +160,10 @@ OpenContain::OpenContain( Thing *thing, const ModuleData* moduleData ) : UpdateM
 Int OpenContain::getContainMax() const
 {
 	const OpenContainModuleData *modData = getOpenContainModuleData();
+
+	// Tiberium Project @feature and the slots its upgrades added (none for one that holds any number)
+	if( modData->m_containMax >= 0 && m_capacityBonus != 0 )
+		return max( 0, modData->m_containMax + m_capacityBonus );
 
 	return modData->m_containMax;
 
@@ -1775,8 +1780,8 @@ void OpenContain::crc( Xfer *xfer )
 void OpenContain::xfer( Xfer *xfer )
 {
 
-	// version (Tiberium Project @feature 3: the player entered mask has 32 bits)
-	XferVersion currentVersion = 3;
+	// version (Tiberium Project @feature 3: the player entered mask has 32 bits; 4: the slots its upgrades added)
+	XferVersion currentVersion = 4;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1940,6 +1945,10 @@ void OpenContain::xfer( Xfer *xfer )
   {
     xfer->xferBool( &m_passengerAllowedToFire );
   }
+
+	// Tiberium Project @feature the slots its upgrades added
+	if( version >= 4 )
+		xfer->xferInt( &m_capacityBonus );
 
 
 }

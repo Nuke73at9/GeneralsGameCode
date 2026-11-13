@@ -127,6 +127,10 @@ public:
 	/// Tiberium Project @feature how far the beam has run out towards its end, 0 to 1 (StreamSpeed; 1 without)
 	Real getStreamReach() const;
 
+	/// Tiberium Project @feature the bone of the target the beam ends at (else at its feet): a beam kept between two
+	/// units (C&C4's Spider Tanks' web, crystal to crystal)
+	void setTargetBone( const AsciiString &bone ) { m_targetBoneName = bone; m_dirty = TRUE; }
+
 	void setDirty( Bool dirty ) { m_dirty = dirty; }
 	Bool isDirty() const { return m_dirty; }
 
@@ -149,6 +153,7 @@ protected:
 	ParticleSystemID m_particleSystemID;
 	ParticleSystemID m_targetParticleSystemID;
 	AsciiString m_parentBoneName;
+	AsciiString m_targetBoneName;	///< Tiberium Project: the target's bone it ends at (setTargetBone)
 
 	LaserRadiusUpdate m_laserRadius;
 

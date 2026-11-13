@@ -260,6 +260,7 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/AIUpdate.h
     Include/GameLogic/Module/AnimationSteeringUpdate.h
     Include/GameLogic/Module/ArmorUpgrade.h
+    Include/GameLogic/Module/ContainerCapacityUpgrade.h
     Include/GameLogic/Module/AssaultTransportAIUpdate.h
     Include/GameLogic/Module/AssistedTargetingUpdate.h
     Include/GameLogic/Module/AutoDepositUpdate.h
@@ -510,6 +511,9 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/VeterancyCrateCollide.h
     Include/GameLogic/Module/UpgradeCrateCollide.h
     Include/GameLogic/Module/SuppressionUpdate.h
+    Include/GameLogic/Module/MovementArmorUpdate.h
+    Include/GameLogic/Module/MultiConnectionDamageUpdate.h
+    Include/GameLogic/Module/NotifyWhenAttackingBehavior.h
     Include/GameLogic/Module/GrabSpecialAbilityUpdate.h
     Include/GameLogic/Module/VeterancyGainCreate.h
     Include/GameLogic/Module/WanderAIUpdate.h
@@ -954,6 +958,9 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Collide/CrateCollide/VeterancyCrateCollide.cpp
     Source/GameLogic/Object/Collide/CrateCollide/UpgradeCrateCollide.cpp
     Source/GameLogic/Object/Update/SuppressionUpdate.cpp
+    Source/GameLogic/Object/Update/MovementArmorUpdate.cpp
+    Source/GameLogic/Object/Update/MultiConnectionDamageUpdate.cpp
+    Source/GameLogic/Object/Update/NotifyWhenAttackingBehavior.cpp
     Source/GameLogic/Object/Update/GrabSpecialAbilityUpdate.cpp
     Source/GameLogic/Object/Collide/FireWeaponCollide.cpp
     Source/GameLogic/Object/Collide/SquishCollide.cpp
@@ -1145,6 +1152,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Update/WeaponBonusUpdate.cpp
     Source/GameLogic/Object/Upgrade/ActiveShroudUpgrade.cpp
     Source/GameLogic/Object/Upgrade/ArmorUpgrade.cpp
+    Source/GameLogic/Object/Upgrade/ContainerCapacityUpgrade.cpp
     Source/GameLogic/Object/Upgrade/CommandSetUpgrade.cpp
     Source/GameLogic/Object/Upgrade/CostModifierUpgrade.cpp
     Source/GameLogic/Object/Upgrade/ExperienceScalarUpgrade.cpp

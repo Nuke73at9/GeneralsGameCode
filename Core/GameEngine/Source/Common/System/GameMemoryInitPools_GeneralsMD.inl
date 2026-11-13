@@ -300,6 +300,10 @@ static PoolSizeRec PoolSizes[] =
 	{ "VeterancyCrateCollide", 32, 32 },
 	{ "UpgradeCrateCollide", 128, 64 },	// Tiberium Project
 	{ "SuppressionUpdate", 512, 256 },	// Tiberium Project
+	{ "MovementArmorUpdate", 64, 64 },	// Tiberium Project
+	{ "MultiConnectionDamageUpdate", 64, 64 },	// Tiberium Project
+	{ "NotifyWhenAttackingBehavior", 64, 64 },	// Tiberium Project
+	{ "AttackAssistResponseBehavior", 64, 64 },	// Tiberium Project
 	{ "GrabSpecialAbilityUpdate", 128, 64 },	// Tiberium Project
 	{ "VeterancyGainCreate", 512, 128 },
 	{ "ConvertToCarBombCrateCollide", 256, 128 },
@@ -372,6 +376,7 @@ static PoolSizeRec PoolSizes[] =
 	{ "StealthUpdate", 512, 128 },
 	{ "StealthUpgrade", 256, 32 },
 	{ "StealthDetectorUpgrade", 32, 32 },	// Tiberium Project
+	{ "ContainerCapacityUpgrade", 32, 32 },	// Tiberium Project
 	{ "StatusBitsUpgrade", 128, 128 },
 	{ "SubObjectsUpgrade", 128, 128 },
 	{ "ExperienceScalarUpgrade", 256, 128 },

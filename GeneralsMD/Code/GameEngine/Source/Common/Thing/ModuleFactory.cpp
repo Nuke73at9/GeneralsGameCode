@@ -236,6 +236,7 @@
 #include "GameLogic/Module/SubObjectsUpgrade.h"
 #include "GameLogic/Module/StealthUpgrade.h"
 #include "GameLogic/Module/StealthDetectorUpgrade.h"	// Tiberium Project
+#include "GameLogic/Module/ContainerCapacityUpgrade.h"	// Tiberium Project
 #include "GameLogic/Module/UnpauseSpecialPowerUpgrade.h"
 #include "GameLogic/Module/WeaponBonusUpgrade.h"
 #include "GameLogic/Module/WeaponSetUpgrade.h"
@@ -279,6 +280,9 @@
 #include "GameLogic/Module/VeterancyCrateCollide.h"
 #include "GameLogic/Module/UpgradeCrateCollide.h"	// Tiberium Project
 #include "GameLogic/Module/SuppressionUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/MovementArmorUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/MultiConnectionDamageUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/NotifyWhenAttackingBehavior.h"	// Tiberium Project
 #include "GameLogic/Module/GrabSpecialAbilityUpdate.h"	// Tiberium Project
 
 // body includes
@@ -549,6 +553,7 @@ void ModuleFactory::init()
 	addModule( SubObjectsUpgrade );
 	addModule( StealthUpgrade );
 	addModule( StealthDetectorUpgrade );	// Tiberium Project
+	addModule( ContainerCapacityUpgrade );	// Tiberium Project
 	addModule( RadarUpgrade );
 	addModule( PowerPlantUpgrade );
 	addModule( LocomotorSetUpgrade );
@@ -587,6 +592,10 @@ void ModuleFactory::init()
 	addModule( VeterancyCrateCollide );
 	addModule( UpgradeCrateCollide );	// Tiberium Project
 	addModule( SuppressionUpdate );	// Tiberium Project
+	addModule( MovementArmorUpdate );	// Tiberium Project
+	addModule( MultiConnectionDamageUpdate );	// Tiberium Project
+	addModule( NotifyWhenAttackingBehavior );	// Tiberium Project
+	addModule( AttackAssistResponseBehavior );	// Tiberium Project
 	addModule( GrabSpecialAbilityUpdate );	// Tiberium Project
 	addModule( ConvertToCarBombCrateCollide );
 	addModule( ConvertToHijackedVehicleCrateCollide );

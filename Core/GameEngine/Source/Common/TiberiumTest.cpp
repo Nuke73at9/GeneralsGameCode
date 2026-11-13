@@ -85,6 +85,8 @@
 #include "GameLogic/Module/ToggleAbilityUpdate.h"
 #include "GameLogic/Module/SuppressionUpdate.h"
 #include "GameLogic/Module/GrabSpecialAbilityUpdate.h"
+#include "GameLogic/Module/MultiConnectionDamageUpdate.h"
+#include "GameLogic/Module/NotifyWhenAttackingBehavior.h"
 #include "GameLogic/Module/StoredResourceUpdate.h"
 #include "GameLogic/Module/BannerCarrierUpdate.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
@@ -2704,7 +2706,7 @@ void TiberiumTest::update()
 				char field[768];
 				// (SAGE's general-purpose statuses, and the weapon set conditions following them: a crate's upgrade, a
 				// cannon broken)
-				char statuses[320] = "";
+				char statuses[400] = "";
 #if RTS_ZEROHOUR
 				{
 					static const ObjectStatusTypes s_shown[] = { OBJECT_STATUS_USER_1, OBJECT_STATUS_USER_2, OBJECT_STATUS_USER_3,
@@ -2715,7 +2717,7 @@ void TiberiumTest::update()
 						// (an aircraft in the air)
 						OBJECT_STATUS_AIRBORNE_TARGET,
 						// (Tiberium Project: in a C&C4 Seismic Disturbance's quake, no stealth and no burrowing)
-						OBJECT_STATUS_STEALTH_AND_BURROW_FORBIDDEN, OBJECT_STATUS_CAN_STEALTH };
+						OBJECT_STATUS_STEALTH_AND_BURROW_FORBIDDEN, OBJECT_STATUS_CAN_STEALTH, OBJECT_STATUS_BURROWING };
 					AsciiString had, sets;
 					for ( size_t k = 0; k < ARRAY_SIZE( s_shown ); ++k )
 					{
@@ -2768,8 +2770,31 @@ void TiberiumTest::update()
 				const Object *goal = obj->getAI() != nullptr ? obj->getAI()->getGoalObject() : nullptr;
 				if ( goal != nullptr )
 					snprintf( aiming, sizeof( aiming ), ", after #%u", (unsigned)goal->getID() );
-				snprintf( field, sizeof( field ), "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
-					statuses, aiming,
+				// (Tiberium Project: a web's links and shots, a linked defence's calls and answers, a shield's dome, the
+				// second user condition: C&C4's Spider Tank, Obelisk of Light and Centurion)
+				char links[160] = "";
+#if RTS_ZEROHOUR
+				{
+					static const NameKeyType webKey = NAMEKEY( "MultiConnectionDamageUpdate" );
+					static const NameKeyType notifyKey = NAMEKEY( "NotifyWhenAttackingBehavior" );
+					static const NameKeyType assistKey = NAMEKEY( "AttackAssistResponseBehavior" );
+					const MultiConnectionDamageUpdate *web = (const MultiConnectionDamageUpdate *)obj->findUpdateModule( webKey );
+					const NotifyWhenAttackingBehavior *notify = (const NotifyWhenAttackingBehavior *)obj->findUpdateModule( notifyKey );
+					const AttackAssistResponseBehavior *assist = (const AttackAssistResponseBehavior *)obj->findUpdateModule( assistKey );
+					if ( web != nullptr )
+						snprintf( links + strlen( links ), sizeof( links ) - strlen( links ), ", web %d links %u shots", (int)web->getConnectionCount(), (unsigned)web->getShotCount() );
+					if ( notify != nullptr )
+						snprintf( links + strlen( links ), sizeof( links ) - strlen( links ), ", called %d", (int)notify->getLastFriendCount() );
+					if ( assist != nullptr )
+						snprintf( links + strlen( links ), sizeof( links ) - strlen( links ), ", assists %u", (unsigned)assist->getAssistCount() );
+					if ( look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_SPHERE_MODULE_ACTIVE ) )
+						strlcat( links, ", dome", sizeof( links ) );
+					if ( look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_USER_2 ) )
+						strlcat( links, ", USER_2", sizeof( links ) );
+				}
+#endif
+				snprintf( field, sizeof( field ), "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+					statuses, aiming, links,
 					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_USER_1 ) ? ", USER_1" : "",
 					// (a burrowed unit, C&C4's: dug out by the Seismic Disturbance)
 					look != nullptr && look->getModelConditionFlags().test( MODELCONDITION_BURROWING ) ? ", BURROWING" : "",

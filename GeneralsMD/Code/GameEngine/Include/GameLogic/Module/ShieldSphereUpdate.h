@@ -98,6 +98,10 @@ public:
 		take of its most, and whether it is up; FALSE when the object has none or it is not raised yet */
 	static Bool getShieldOf( const Object *obj, Real *left, Real *most, Bool *up );
 
+	/** Tiberium Project @feature an object's shields held down, or let up again: taking nothing and not drawn
+		meanwhile (C&C4's MovementArmorUpdate: the Centurion's shield is off while it moves) */
+	static void suppress( Object *obj, Bool on );
+
 protected:
 
 	virtual void upgradeImplementation() override;
@@ -127,6 +131,7 @@ private:
 
 	Real m_damage;			///< what it has taken and not yet mended
 	Bool m_down;				///< brought down: back up once mended to RaiseAtPercent
+	Bool m_suppressed;	///< Tiberium Project: held down by another module (suppress)
 	Bool m_domeShown;		///< Tiberium Project: SPHERE_MODULE_ACTIVE set (the looks only, not saved)
 
 	static std::vector<ShieldSphereUpdate *> s_shields;		///< every one there is, in the order made

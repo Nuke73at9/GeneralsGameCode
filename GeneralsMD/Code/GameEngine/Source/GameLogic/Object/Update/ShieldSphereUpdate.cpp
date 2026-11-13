@@ -89,6 +89,7 @@ ShieldSphereUpdate::ShieldSphereUpdate( Thing *thing, const ModuleData* moduleDa
 	UpdateModule( thing, moduleData ),
 	m_damage( 0.0f ),
 	m_down( FALSE ),
+	m_suppressed( FALSE ),
 	m_domeShown( FALSE )
 {
 	s_shields.push_back( this );
@@ -133,7 +134,7 @@ Bool ShieldSphereUpdate::getShieldOf( const Object *obj, Real *left, Real *most,
 		return FALSE;
 	*most = full;
 	*left = shield->m_damage >= full ? 0.0f : full - shield->m_damage;
-	*up = !shield->m_down;
+	*up = !shield->m_down && !shield->m_suppressed;
 	return TRUE;
 }
 
@@ -182,7 +183,7 @@ UpdateSleepTime ShieldSphereUpdate::update()
 void ShieldSphereUpdate::showDome()
 {
 	Object *me = getObject();
-	const Bool up = isAlreadyUpgraded() && !m_down && !me->isEffectivelyDead();
+	const Bool up = isAlreadyUpgraded() && !m_down && !m_suppressed && !me->isEffectivelyDead();
 	if( up == m_domeShown || me->getDrawable() == nullptr )
 		return;	// (not drawn yet, as it is being made: its next update shows it)
 	m_domeShown = up;
@@ -199,7 +200,7 @@ Bool ShieldSphereUpdate::takeHit( Object *victim, Object *source, DamageType typ
 {
 	const ShieldSphereUpdateModuleData *d = getShieldSphereUpdateModuleData();
 	Object *me = getObject();
-	if( m_down || !isAlreadyUpgraded() || !getDamageTypeFlag( d->m_damageTypes, type ) )
+	if( m_down || m_suppressed || !isAlreadyUpgraded() || !getDamageTypeFlag( d->m_damageTypes, type ) )
 		return FALSE;
 	if( me->isEffectivelyDead() || me->isDisabled() || me->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
 		return FALSE;
@@ -275,6 +276,22 @@ Bool ShieldSphereUpdate::takeHit( Object *victim, Object *source, DamageType typ
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature every shield of the object held down, or let up again (see the header)
+void ShieldSphereUpdate::suppress( Object *obj, Bool on )
+{
+	if( obj == nullptr )
+		return;
+	for( size_t i = 0; i < s_shields.size(); ++i )
+	{
+		ShieldSphereUpdate *shield = s_shields[i];
+		if( shield->getObject() != obj || shield->m_suppressed == on )
+			continue;
+		shield->m_suppressed = on;
+		shield->showDome();
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 Bool ShieldSphereUpdate::absorbDamage( Object *victim, Object *source, DamageType type, Real amount )
 {
 	if( s_shields.empty() || victim == nullptr || amount <= 0.0f || s_reflecting )
@@ -297,16 +314,19 @@ void ShieldSphereUpdate::crc( Xfer *xfer )
 // Xfer method
 // Version Info:
 // 1: Initial version
+// 2: Tiberium Project: held down by another module (m_suppressed)
 //-------------------------------------------------------------------------------------------------
 void ShieldSphereUpdate::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 	UpdateModule::xfer( xfer );
 	UpgradeMux::upgradeMuxXfer( xfer );
 	xfer->xferReal( &m_damage );
 	xfer->xferBool( &m_down );
+	if( version >= 2 )
+		xfer->xferBool( &m_suppressed );
 }
 
 //-------------------------------------------------------------------------------------------------
