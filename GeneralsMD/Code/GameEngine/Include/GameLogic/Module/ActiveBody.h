@@ -31,6 +31,7 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "Common/DamageFX.h"
+#include "Common/ObjectStatusTypes.h"	// Tiberium Project
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Damage.h"
 #include "GameLogic/Armor.h"
@@ -80,6 +81,23 @@ public:
 		Bool m_negativeOnly;
 	};
 	std::vector<DamageRangeModifier> m_damageRangeModifiers;
+
+	/// Tiberium Project @feature SAGE 2's ZombieInfo: the blow that would kill it leaves it a zombie instead, once: its
+	/// health set to ZombieHealth of its most, ZombieModifier on it for good (the status and model condition that choose a
+	/// zombie's weapons and looks), disabled for ZombieTransitionTime as it turns. Not from a death of
+	/// ZombieForbiddenDeathTypes, with a status of ZombieForbiddenStatus, or without ZombieRequiredUpgrade (its own or its
+	/// player's) where one is named; a forced kill (Object::kill) kills. C&C4's Cyborg Commando crawls on to hijack a
+	/// vehicle, its upgraded Enlightened to blow themselves up:
+	///   ZombieModifier            = C4AM_Modifier_NODCommandoAZombie
+	///   ZombieHealth              = 50%
+	///   ZombieTransitionTime      = 3000
+	///   ZombieForbiddenStatus     = CLONED
+	AsciiString m_zombieModifier;
+	Real m_zombieHealth;											///< of its most health (0..1)
+	UnsignedInt m_zombieTransitionFrames;
+	DeathTypeFlags m_zombieForbiddenDeathTypes;
+	ObjectStatusMaskType m_zombieForbiddenStatus;
+	AsciiString m_zombieRequiredUpgrade;
 
 	ActiveBodyModuleData();
 
@@ -175,6 +193,7 @@ protected:
 
 	void checkDamageTriggers();	///< Tiberium Project: the upgrades its health has fallen below keeping
 	void checkDamageRangeModifiers( Real delta );	///< Tiberium Project: the modifiers its health level carries
+	Bool becomeZombie( const DamageInfo *damageInfo );	///< Tiberium Project: the killing blow leaves it a zombie (ZombieModifier)
 
 private:
 
@@ -194,6 +213,7 @@ private:
 	Bool									m_backCrushed;
 	Bool									m_lastDamageCleared;
 	Bool									m_indestructible;				///< is this object indestructible?
+	Bool									m_zombie;								///< Tiberium Project: risen once from a killing blow (ZombieModifier)
 
 	BodyParticleSystem *m_particleSystems;				///< particle systems created and attached to this object
 

@@ -2717,7 +2717,9 @@ void TiberiumTest::update()
 						// (an aircraft in the air)
 						OBJECT_STATUS_AIRBORNE_TARGET,
 						// (Tiberium Project: in a C&C4 Seismic Disturbance's quake, no stealth and no burrowing)
-						OBJECT_STATUS_STEALTH_AND_BURROW_FORBIDDEN, OBJECT_STATUS_CAN_STEALTH, OBJECT_STATUS_BURROWING };
+						OBJECT_STATUS_STEALTH_AND_BURROW_FORBIDDEN, OBJECT_STATUS_CAN_STEALTH, OBJECT_STATUS_BURROWING,
+						// (Tiberium Project: a decoy power's copy)
+						OBJECT_STATUS_CLONED };
 					AsciiString had, sets;
 					for ( size_t k = 0; k < ARRAY_SIZE( s_shown ); ++k )
 					{

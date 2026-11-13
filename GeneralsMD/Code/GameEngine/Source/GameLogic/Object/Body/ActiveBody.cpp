@@ -138,6 +138,9 @@ ActiveBodyModuleData::ActiveBodyModuleData()
 	m_subdualDamageHealAmount = 0;
 	m_dodgePercentage = 0.0f;			// Tiberium Project
 	m_dodgePercentageMax = 0.5f;
+	m_zombieHealth = 1.0f / 3.0f;	// Tiberium Project (SAGE 2's default)
+	m_zombieTransitionFrames = 0;
+	m_zombieForbiddenDeathTypes = DEATH_TYPE_FLAGS_NONE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -160,6 +163,13 @@ void ActiveBodyModuleData::buildFieldParse(MultiIniFieldParse& p)
 		// Tiberium Project @feature SAGE's DamageTrigger: "DamageTrigger = 66% Upgrade [Upgrade ...]"
 		{ "DamageTrigger",						ActiveBodyModuleData::parseDamageTrigger,	nullptr,	0 },
 		{ "DamageRangeModifier",			ActiveBodyModuleData::parseDamageRangeModifier,	nullptr,	0 },	// Tiberium Project
+		// Tiberium Project @feature SAGE 2's ZombieInfo (see the header)
+		{ "ZombieModifier",						INI::parseAsciiString,					nullptr,		offsetof( ActiveBodyModuleData, m_zombieModifier ) },
+		{ "ZombieHealth",							INI::parsePercentToReal,				nullptr,		offsetof( ActiveBodyModuleData, m_zombieHealth ) },
+		{ "ZombieTransitionTime",			INI::parseDurationUnsignedInt,	nullptr,		offsetof( ActiveBodyModuleData, m_zombieTransitionFrames ) },
+		{ "ZombieForbiddenDeathTypes",	INI::parseDeathTypeFlags,			nullptr,		offsetof( ActiveBodyModuleData, m_zombieForbiddenDeathTypes ) },
+		{ "ZombieForbiddenStatus",		ObjectStatusMaskType::parseFromINI,	nullptr,	offsetof( ActiveBodyModuleData, m_zombieForbiddenStatus ) },
+		{ "ZombieRequiredUpgrade",		INI::parseAsciiString,					nullptr,		offsetof( ActiveBodyModuleData, m_zombieRequiredUpgrade ) },
 		{ nullptr, nullptr, nullptr, 0 }
 	};
   p.add(dataFieldParse);
@@ -215,7 +225,8 @@ ActiveBody::ActiveBody( Thing *thing, const ModuleData* moduleData ) :
 	m_lastDamageCleared(false),
 	m_particleSystems(nullptr),
 	m_currentSubdualDamage(0),
-	m_indestructible(false)
+	m_indestructible(false),
+	m_zombie(false)	// Tiberium Project
 {
 	m_currentHealth = getActiveBodyModuleData()->m_initialHealth;
 	m_prevHealth = getActiveBodyModuleData()->m_initialHealth;
@@ -595,10 +606,20 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 			amount = m_currentHealth;
 		}
 
+		// Tiberium Project @feature SAGE 2's ZombieInfo: the blow that would kill it leaves it a zombie instead (not a
+		// forced kill: what calls Object::kill counts on a death)
+		Bool rose = FALSE;
 		if (!alreadyHandled)
 		{
-			// do the damage simplistic damage subtraction
-			internalChangeHealth( -amount );
+			if( !damageInfo->in.m_kill && amount >= m_currentHealth && becomeZombie( damageInfo ) )
+			{
+				rose = TRUE;
+			}
+			else
+			{
+				// do the damage simplistic damage subtraction
+				internalChangeHealth( -amount );
+			}
 		}
 
 #ifdef ALLOW_SURRENDER
@@ -626,6 +647,9 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 		// record the actual damage done from this, and when it happened
 		damageInfo->out.m_actualDamageDealt = amount;
 		damageInfo->out.m_actualDamageClipped = m_prevHealth - m_currentHealth;
+		// Tiberium Project @feature (a zombie may rise with more health than the blow found it with: no damage undone)
+		if( rose && damageInfo->out.m_actualDamageClipped < 0.0f )
+			damageInfo->out.m_actualDamageClipped = 0.0f;
 
 		// then copy the whole DamageInfo struct for easy lookup
 		// (object pointer loses scope as soon as atteptdamage's caller ends)
@@ -1350,6 +1374,48 @@ void ActiveBody::internalChangeHealth( Real delta )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature SAGE 2's ZombieInfo (see the header): whether the killing blow about to land leaves the
+	object a zombie instead. If so it has become one: its health the zombie's, the modifier on, disabled while it
+	turns. */
+// ------------------------------------------------------------------------------------------------
+Bool ActiveBody::becomeZombie( const DamageInfo *damageInfo )
+{
+	const ActiveBodyModuleData *d = getActiveBodyModuleData();
+	if( m_zombie || d->m_zombieModifier.isEmpty() || m_maxHealth <= 0.0f || TheAttributeModifierStore == nullptr )
+		return FALSE;
+	Object *obj = getObject();
+	if( damageInfo != nullptr && getDeathTypeFlag( d->m_zombieForbiddenDeathTypes, damageInfo->in.m_deathType ) )
+		return FALSE;
+	if( obj->getStatusBits().testForAny( d->m_zombieForbiddenStatus ) || obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
+		return FALSE;
+	if( d->m_zombieRequiredUpgrade.isNotEmpty() )
+	{
+		const UpgradeTemplate *upgrade = TheUpgradeCenter != nullptr ? TheUpgradeCenter->findUpgrade( d->m_zombieRequiredUpgrade ) : nullptr;
+		const Player *player = obj->getControllingPlayer();
+		if( upgrade == nullptr || !( obj->hasUpgrade( upgrade ) || ( player != nullptr && player->hasUpgradeComplete( upgrade ) ) ) )
+			return FALSE;
+	}
+	const AttributeModifierTemplate *modifier = TheAttributeModifierStore->find( d->m_zombieModifier );
+	if( modifier == nullptr )
+		return FALSE;
+
+	m_zombie = TRUE;
+	Real health = m_maxHealth * d->m_zombieHealth;
+	if( health < 1.0f )
+		health = 1.0f;
+	if( health > m_maxHealth )
+		health = m_maxHealth;
+	internalChangeHealth( health - m_currentHealth );
+	obj->applyAttributeModifier( modifier, obj->getID() );
+
+	// it lies there while it turns (its AI is not told to stop from in here: the blow may come from within its own
+	// state's update; disabled, it does nothing, and takes up its order again as what it now is)
+	if( d->m_zombieTransitionFrames > 0 )
+		obj->setDisabledUntil( DISABLED_DEFAULT, TheGameLogic->getFrame() + d->m_zombieTransitionFrames );
+	return TRUE;
+}
+
+// ------------------------------------------------------------------------------------------------
 /** Tiberium Project @feature SAGE 2's DamageRangeModifier: each modifier on while the health is within its range, off as
 	it leaves (one only put on by damage, NEGATIVE_ONLY, is left to wear off) */
 //-------------------------------------------------------------------------------------------------
@@ -1701,13 +1767,14 @@ void ActiveBody::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer method
 	* Version Info:
-	* 1: Initial version */
+	* 1: Initial version
+	* 2: Tiberium Project: risen as a zombie (m_zombie) */
 // ------------------------------------------------------------------------------------------------
 void ActiveBody::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1757,6 +1824,10 @@ void ActiveBody::xfer( Xfer *xfer )
 
 	// indestructible
 	xfer->xferBool( &m_indestructible );
+
+	// Tiberium Project: risen as a zombie
+	if( version >= 2 )
+		xfer->xferBool( &m_zombie );
 
 	// particle system count
 	BodyParticleSystem *system;

@@ -106,6 +106,7 @@ enum ObjectStatusTypes CPP_11(: Int)
 	OBJECT_STATUS_DISSIDENT,	///< Tiberium Project: turned on whoever is nearest (Kane's Wrath's hallucinogen: EMOTION_DISSIDENT)
 	OBJECT_STATUS_STEALTH_AND_BURROW_FORBIDDEN,	///< Tiberium Project: it may neither stealth nor burrow (SAGE's: C&C4's Seismic Disturbance)
 	OBJECT_STATUS_BURROWING,	///< Tiberium Project: dug in under the ground (SAGE's: what C&C4's burrowing modifiers set; its weapons, filters and webs read it)
+	OBJECT_STATUS_CLONED,	///< Tiberium Project: a decoy power's copy (SAGE's: C&C4's filters leave copies out; one never rises as a zombie)
 	// add more status types here and don't forget to add to the string table ObjectStatusMaskType::s_bitNameList[]
 
 	OBJECT_STATUS_COUNT

@@ -218,6 +218,8 @@ void DecoyArmyUpdate::makeCopies( const std::vector<Copy> &copies, const Coord3D
 		ExperienceTracker *xp = copy->getExperienceTracker();
 		if( xp != nullptr && c.level > LEVEL_REGULAR && c.level <= LEVEL_LAST )
 			xp->setVeterancyLevel( (VeterancyLevel)c.level, FALSE );
+		// Tiberium Project @feature (a copy is CLONED, SAGE's status: what C&C4's filters leave out, and no zombie)
+		copy->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_CLONED ) );
 		if( modifier != nullptr )
 			copy->applyAttributeModifier( modifier, me->getID(), d->m_lifetime );
 		// (to its own side, a copy shows faint: C&C4's decoy shader for its owner and allies)
