@@ -419,6 +419,8 @@ public:
 
 	void draw();													///< render the drawable to the given view
 	Bool drawnWorldToScreen(const Coord3D* logicPos, ICoord2D* screen) const;	///< Tiberium Project: a point given by the logic's place, on screen where the drawable is drawn
+	void getDrawnPosition(Coord3D* pos);	///< Tiberium Project: where it is drawn at this update (between its last two logic frames' places)
+	void placeModelWhereDrawn();	///< Tiberium Project: stands its model where it is drawn at this update, for a bone asked of it before the draw
 	void updateDrawable(Real timeScale);														///< update the drawable
 
 	void drawIconUI();													///< draw "icon"(s) needed on drawable (health bars, veterency, etc)

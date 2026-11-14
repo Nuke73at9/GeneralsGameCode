@@ -2531,6 +2531,39 @@ void W3DModelDraw::adjustSpotlight(Matrix3D& mtx) const
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @tweak the render object stood at the draw transform (already scaled): out of doDrawModule, for
+// clientOnly_placeModelAt to do the same before a draw
+void W3DModelDraw::placeRenderObject(const Matrix3D* transformMtx)
+{
+	if (m_renderObject)
+	{
+		Matrix3D mtx = *transformMtx;
+		adjustTransformMtx(mtx);
+		if (getW3DModelDrawModuleData()->m_spotlightRefreshFrames > 0)
+			adjustSpotlight(mtx);
+		m_renderObject->Set_Transform(mtx);
+	}
+}
+
+#if RTS_ZEROHOUR
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature (client only) the model stood where a draw with this transform will put it: a bone asked
+// of the model between two draws (a beam's start at a muzzle) is then where it will be drawn, not where the last draw
+// or the logic left the model
+void W3DModelDraw::clientOnly_placeModelAt(const Matrix3D* transformMtx)
+{
+	Matrix3D scaledTransform;
+	if (getDrawable()->getInstanceScale() != 1.0f)
+	{
+		scaledTransform = *transformMtx;
+		scaledTransform.Scale(getDrawable()->getInstanceScale());
+		transformMtx = &scaledTransform;
+	}
+	placeRenderObject(transformMtx);
+}
+#endif
+
+//-------------------------------------------------------------------------------------------------
 void W3DModelDraw::doDrawModule(const Matrix3D* transformMtx)
 {
 	// update whether or not we should be animating.
@@ -2587,14 +2620,7 @@ void W3DModelDraw::doDrawModule(const Matrix3D* transformMtx)
 	adjustAnimFrameToConstruction();	// Tiberium Project @feature
 
 	// set our position in the render object to our position of the drawable
-	if (m_renderObject)
-	{
-		Matrix3D mtx = *transformMtx;
-		adjustTransformMtx(mtx);
-		if (getW3DModelDrawModuleData()->m_spotlightRefreshFrames > 0)
-			adjustSpotlight(mtx);
-		m_renderObject->Set_Transform(mtx);
-	}
+	placeRenderObject(transformMtx);
 
 	handleClientTurretPositioning();
 	recalcBonesForClientParticleSystems();

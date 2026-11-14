@@ -1504,6 +1504,67 @@ Bool Drawable::drawnWorldToScreen(const Coord3D* logicPos, ICoord2D* screen) con
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature where the drawable is drawn at this update: between its last two logic frames' places
+	(interpolateDrawnTransform; the same answer as its draw gets, whichever is asked first), or the logic's place when
+	motion is not drawn between logic frames. For what the client ties to a drawable's place itself and draws at every
+	frame: a beam's ends, the camera that follows an object. Asked from within a logic frame (a beam set up as its
+	weapon fires) it answers with the logic's place and leaves the drawn state alone: the logic never depends on what
+	is drawn, and a place read halfway through a logic frame would be taken for a jump. */
+//-------------------------------------------------------------------------------------------------
+void Drawable::getDrawnPosition(Coord3D* pos)
+{
+	*pos = *getPosition();
+	if (TheFramePacer->isInterpolatingDrawables() && TheGameLogic != nullptr && !TheGameLogic->isInGameLogicUpdate())
+	{
+		Matrix3D mtx = *getTransformMatrix();
+		interpolateDrawnTransform(&mtx);
+		const Vector3 place = mtx.Get_Translation();
+		pos->set(place.X, place.Y, place.Z);
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature stands the drawable's model where it is drawn at this update, as its draw will: between
+	its last two logic frames' places, with its instance matrix and its suspension's lean. The client's own updates run
+	before the draw, and the model is then where the last draw left it, or at the logic's place (without the lean) when
+	a logic frame has moved the object since; a bone asked of it then (a beam's start at a muzzle, its end at a
+	target's bone) would be off the model as drawn, by a different amount from one drawn frame to the next. Does
+	nothing when motion is not drawn between logic frames (the game as it was) or within a logic frame. */
+//-------------------------------------------------------------------------------------------------
+void Drawable::placeModelWhereDrawn()
+{
+	if (!TheFramePacer->isInterpolatingDrawables() || TheGameLogic == nullptr || TheGameLogic->isInGameLogicUpdate())
+	{
+		return;
+	}
+
+	// (the same steps as draw())
+	Matrix3D transformMtx = *getTransformMatrix();
+	interpolateDrawnTransform(&transformMtx);
+	if (!isInstanceIdentity())
+	{
+#ifdef ALLOW_TEMPORARIES
+		transformMtx = transformMtx * (*getInstanceMatrix());
+#else
+		transformMtx.postMul(*getInstanceMatrix());
+#endif
+	}
+	if (TheGlobalData->m_showClientPhysics && getObject() && !getObject()->isDisabledByType( DISABLED_HELD ))
+	{
+		applyPhysicsXform(&transformMtx);
+	}
+
+	for (DrawModule** dm = getDrawModules(); *dm; ++dm)
+	{
+		ObjectDrawInterface* di = (*dm)->getObjectDrawInterface();
+		if (di)
+		{
+			di->clientOnly_placeModelAt(&transformMtx);
+		}
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 void Drawable::applyPhysicsXform(Matrix3D* mtx)
 {
 	if (m_physicsXform != nullptr)
@@ -4952,6 +5013,9 @@ ClientUpdateModule* Drawable::findClientUpdateModule( NameKeyType key )
 			{
 				return *clientModules;
 			}
+			// Tiberium Project @bugfix on to the next one: the search never left the first module, so it hung for good
+			// on any drawable whose first client update module was not the one asked for
+			++clientModules;
 		}
 	}
 	return nullptr;

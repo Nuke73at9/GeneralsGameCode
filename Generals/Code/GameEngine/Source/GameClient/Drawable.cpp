@@ -4735,6 +4735,9 @@ ClientUpdateModule* Drawable::findClientUpdateModule( NameKeyType key )
 			{
 				return *clientModules;
 			}
+			// Tiberium Project @bugfix on to the next one: the search never left the first module, so it hung for good
+			// on any drawable whose first client update module was not the one asked for
+			++clientModules;
 		}
 	}
 	return nullptr;

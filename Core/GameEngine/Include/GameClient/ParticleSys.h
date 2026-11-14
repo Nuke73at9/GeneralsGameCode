@@ -127,6 +127,7 @@ public:
 	Coord3D m_vel;															///< initial velocity
 	Coord3D m_pos;															///< initial position
 	Coord3D m_emitterPos;												///< position of the emitter
+	Real m_bornPhase;														///< Tiberium Project: how far along its emitter's move of that logic frame it was put (0 to 1; not saved)
 	Real m_velDamping;													///< velocity damping coefficient
 
 #if PARTICLE_USE_XY_ROTATION
@@ -202,6 +203,7 @@ public:
 
 	Bool isInvisible();										///< return true if this particle is invisible
 	Bool isCulled () {return m_isCulled;}				///< return true if the particle falls off the edge of the screen
+	Bool isAheadOfDrawnEmitter( Real logicFramePhase ) const;	///< Tiberium Project: put where its moving emitter is not drawn yet (drawables drawn between logic frames)
 	void setIsCulled (Bool enable) { m_isCulled = enable;}		///< set particle to not visible because it's outside view frustum
 
 	void controlParticleSystem( ParticleSystem *sys ) { m_systemUnderControl = sys; }
@@ -241,6 +243,7 @@ protected:
 	Coord3D						m_accel;														///< current acceleration
 	UnsignedInt				m_lifetimeLeft;									///< lifetime remaining, if zero -> destroy
 	UnsignedInt				m_createTimestamp;							///< frame this particle was created
+	UnsignedInt				m_bornUpdate;										///< Tiberium Project: the manager's update it was made in (not saved)
 
 	Real							m_alpha;																///< current alpha of this particle
 	Real							m_alphaRate;														///< current rate of alpha change
@@ -1089,6 +1092,7 @@ public:
 
 	// @todo const this jkmcd
 	ParticleSystemList &getAllParticleSystems() { return m_allParticleSystemList; }
+	UnsignedInt getUpdateCount() const { return m_updateCount; }	///< Tiberium Project: the updates so far
 
 	virtual void doParticles(RenderInfoClass &rinfo) = 0;
 	virtual void queueParticleRender() = 0;
@@ -1122,6 +1126,7 @@ protected:
 	Int m_onScreenParticleCount;                ///< number of particles displayed on screen per frame
 	Int m_localPlayerIndex;	///<used to tell particle systems which particles can be skipped due to player shroud status
 	Real m_drawnLogicFramePhase; ///< How far the render updates have integrated the current logic frame, ranging 0 to 1.
+	UnsignedInt m_updateCount; ///< Tiberium Project: the updates so far (which particles are of the latest one)
 
 private:
 	TemplateMap m_templateMap;		///< a hash map of all particle system templates

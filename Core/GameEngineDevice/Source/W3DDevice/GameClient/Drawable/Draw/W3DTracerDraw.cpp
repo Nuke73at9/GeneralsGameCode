@@ -30,6 +30,7 @@
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include <stdlib.h>
 
+#include "Common/FramePacer.h"
 #include "Common/Thing.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
@@ -133,11 +134,16 @@ void W3DTracerDraw::doDrawModule(const Matrix3D* transformMtx)
 
 	}
 
+	// Tiberium Project @bugfix a tracer flew its speed, and faded its step, once every drawn frame: at four drawn frames
+	// to a logic frame it flew four times as fast and was gone early. Both go by the share of a logic frame this drawn
+	// frame covers now (1 when a frame is drawn for every logic frame, as the game was made).
+	const Real frameShare = TheFramePacer->getActualLogicTimeScaleOverFpsRatio();
+
 	UnsignedInt expDate = getDrawable()->getExpirationDate();
 	if (expDate != 0)
 	{
 		Real decay = m_opacity / (expDate - TheGameLogic->getFrame());
-		m_opacity -= decay;
+		m_opacity -= decay * frameShare;
 		m_theTracer->Set_Opacity( m_opacity );
 	}
 
@@ -145,7 +151,7 @@ void W3DTracerDraw::doDrawModule(const Matrix3D* transformMtx)
 	if (m_speedInDistPerFrame != 0.0f)
 	{
 		Matrix3D pos = m_theTracer->Get_Transform();
-		pos.Translate( Vector3( m_speedInDistPerFrame, 0.0f, 0.0 ) );
+		pos.Translate( Vector3( m_speedInDistPerFrame * frameShare, 0.0f, 0.0 ) );
 		m_theTracer->Set_Transform( pos );
 	}
 

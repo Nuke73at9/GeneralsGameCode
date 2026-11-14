@@ -288,6 +288,8 @@ void W3DParticleSystemManager::renderModelParticles(RenderInfoClass &rinfo)
 			const Real alpha = fades ? p->getAlpha() : 1.0f;
 			if (alpha < 0.004f)
 				continue;
+			if (p->isAheadOfDrawnEmitter(phase))	// (its moving emitter is not drawn there yet)
+				continue;
 			const Real age = (Real)p->getElapsedFrames() + phase;
 			Real scale[3];
 			t->getModelScale(p->getPersonality(), age, scale);
@@ -553,6 +555,9 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		TheSmudgeManager->resetDraw();
 	}
 
+	// Tiberium Project @feature (which particles of the latest logic frame wait for their emitter: isAheadOfDrawnEmitter)
+	const Real logicFramePhase = TheFramePacer != nullptr ? TheFramePacer->getLogicFramePhase() : 0.0f;
+
 	// Number of particles/points being rendered.
 	UnsignedInt pointCount = 0;
 
@@ -579,6 +584,13 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 			if (WWMath::Fabs(pos->x - bcX) > (beX + psize) ||
 				WWMath::Fabs(pos->y - bcY) > (beY + psize) ||
 				WWMath::Fabs(pos->z - bcZ) > (beZ + psize))
+			{
+				vp->setIsCulled(true);
+				continue;
+			}
+
+			// Tiberium Project @feature not drawn yet where its moving emitter, drawn between logic frames, has not come
+			if (vp->isAheadOfDrawnEmitter(logicFramePhase))
 			{
 				vp->setIsCulled(true);
 				continue;

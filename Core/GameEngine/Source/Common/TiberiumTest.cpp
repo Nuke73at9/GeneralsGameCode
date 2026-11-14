@@ -93,6 +93,7 @@
 #include "GameLogic/Module/SuppressionUpdate.h"
 #include "GameLogic/Module/GrabSpecialAbilityUpdate.h"
 #include "GameLogic/Module/MultiConnectionDamageUpdate.h"
+#include "GameLogic/Module/LaserUpdate.h"
 #include "GameLogic/Module/NotifyWhenAttackingBehavior.h"
 #include "GameLogic/Module/StoredResourceUpdate.h"
 #include "GameLogic/Module/BannerCarrierUpdate.h"
@@ -630,7 +631,77 @@ static void traceDrawn( Int update )
 		// (with "turret" for a third word: the main turret's angle by the logic and as handed to its bone, and where the
 		// health bar is anchored on screen, by the logic's place and as drawn)
 		char more[ 192 ] = "";
-		if ( drawn && model != nullptr && !s_traceBone.empty() )
+		const Real phase = TheFramePacer != nullptr ? TheFramePacer->getLogicFramePhase() : 0.0f;
+		if ( drawn && s_traceBone == "trail" && TheParticleSystemManager != nullptr )
+		{
+			// ("trail": the particles of the systems tied to it that are drawn, and how far the foremost of them is
+			// ahead of where it is drawn, along its way; a trail must not lead what leaves it)
+			Vector3 way( obj->getPosition()->x - place.X, obj->getPosition()->y - place.Y, obj->getPosition()->z - place.Z );
+			if ( way.Length2() < 0.0001f )
+				way = fwd;
+			way.Normalize();
+			Int shown = 0, held = 0;
+			Real lead = -100000.0f;
+			ParticleSystemManager::ParticleSystemList &systems = TheParticleSystemManager->getAllParticleSystems();
+			for ( ParticleSystemManager::ParticleSystemListIt it = systems.begin(); it != systems.end(); ++it )
+			{
+				ParticleSystem *sys = *it;
+				if ( sys == nullptr || ( sys->getAttachedObject() != obj->getID() && ( look == nullptr || sys->getAttachedDrawable() != look->getID() ) ) )
+					continue;
+				for ( Particle *p = sys->getFirstParticle(); p != nullptr; p = p->m_systemNext )
+				{
+					if ( p->isAheadOfDrawnEmitter( phase ) )
+					{
+						++held;
+						continue;
+					}
+					++shown;
+					const Coord3D *at = p->getPosition();
+					lead = std::max( lead, ( at->x - place.X ) * way.X + ( at->y - place.Y ) * way.Y + ( at->z - place.Z ) * way.Z );
+				}
+			}
+			snprintf( more, sizeof( more ), "; trail %d particles drawn (%d held back), the foremost %.2f ahead of where it is drawn",
+				(int)shown, (int)held, shown > 0 ? lead : 0.0f );
+		}
+#if RTS_ZEROHOUR
+		else if ( drawn && s_traceBone == "beam" && TheGameClient != nullptr )
+		{
+			// ("beam": the end of the laser nearest to it, from where it is drawn and from the logic's place)
+			static const NameKeyType key_LaserUpdate = NAMEKEY( "LaserUpdate" );
+			Real nearest = -1.0f, nearestLogic = 0.0f;
+			for ( Drawable *beam = TheGameClient->firstDrawable(); beam != nullptr; beam = beam->getNextDrawable() )
+			{
+				LaserUpdate *laser = (LaserUpdate *)beam->findClientUpdateModule( key_LaserUpdate );
+				if ( laser == nullptr )
+					continue;
+				const Coord3D *ends[ 2 ] = { laser->getStartPos(), laser->getEndPos() };
+				for ( Int e = 0; e < 2; ++e )
+				{
+					const Real dist = WWMath::Sqrt( sqr( ends[ e ]->x - place.X ) + sqr( ends[ e ]->y - place.Y ) );
+					if ( nearest < 0.0f || dist < nearest )
+					{
+						nearest = dist;
+						nearestLogic = WWMath::Sqrt( sqr( ends[ e ]->x - obj->getPosition()->x ) + sqr( ends[ e ]->y - obj->getPosition()->y ) );
+					}
+				}
+			}
+			if ( nearest >= 0.0f )
+				snprintf( more, sizeof( more ), "; beam end %.2f from where it is drawn, %.2f from the logic's place", nearest, nearestLogic );
+			else
+				snprintf( more, sizeof( more ), "; no beam" );
+		}
+#endif
+		else if ( drawn && s_traceBone == "camera" && TheTacticalView != nullptr )
+		{
+			// ("camera": where the view looks and where the unit, as drawn, is on screen; steady when it is followed well)
+			Coord3D at;
+			at.set( place.X, place.Y, place.Z );
+			ICoord2D onScreen = { 0, 0 };
+			TheTacticalView->worldToScreen( &at, &onScreen );
+			const Coord3D &view = TheTacticalView->getPosition();
+			snprintf( more, sizeof( more ), "; view at %.3f %.3f, the unit drawn at screen %d %d", view.x, view.y, (int)onScreen.x, (int)onScreen.y );
+		}
+		else if ( drawn && model != nullptr && s_traceBone == "turret" )
 		{
 			Real turretAngle = 0.0f;
 			const AIUpdateInterface *ai = obj->getAIUpdateInterface();
@@ -653,7 +724,7 @@ static void traceDrawn( Int update )
 				(int)asDrawn.x, (int)byLogic.x );
 		}
 		TiberiumTest::log( "trace: update %d, logic frame %u, phase %.3f, %.1f ms: %s #%u logic %.3f %.3f facing %.2f, drawn %.3f %.3f facing %.2f%s%s",
-			(int)update, (unsigned)TheGameLogic->getFrame(), TheFramePacer != nullptr ? TheFramePacer->getLogicFramePhase() : 0.0f, ms,
+			(int)update, (unsigned)TheGameLogic->getFrame(), phase, ms,
 			obj->getTemplate()->getName().str(), (unsigned)obj->getID(), obj->getPosition()->x, obj->getPosition()->y,
 			obj->getOrientation() * 180.0f / PI, drawn ? place.X : 0.0f, drawn ? place.Y : 0.0f,
 			drawn ? WWMath::Atan2( fwd.Y, fwd.X ) * 180.0f / PI : 0.0f, drawn ? "" : " (not drawn)", more );
@@ -2029,6 +2100,16 @@ void TiberiumTest::update()
 				log( "frame %d: ui: victims %s: none", (int)s_frame, step.arg.c_str() );
 		}
 #endif
+		else if ( step.action == "follow" && TheGameLogic != nullptr && TheTacticalView != nullptr )
+		{
+			// "follow=k": the camera follows the k-th spawned object (as a script's follow does); "follow=-1" lets go
+			const Int index = atoi( step.arg.c_str() );
+			Object *obj = index >= 0 && index < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[ index ] ) : nullptr;
+			TheTacticalView->setCameraLock( obj != nullptr ? obj->getID() : INVALID_ID );
+			if ( obj != nullptr )
+				TheTacticalView->setSnapMode( View::LOCK_FOLLOW, 0.0f );
+			log( "frame %d: ui: the camera %s", (int)s_frame, obj != nullptr ? "follows the object" : "follows nothing" );
+		}
 		else if ( step.action == "trace" && TheGameLogic != nullptr )
 		{
 			char kind[128] = "";

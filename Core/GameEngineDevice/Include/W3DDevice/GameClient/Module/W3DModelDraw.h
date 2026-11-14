@@ -433,6 +433,9 @@ public:
 	// this method must ONLY be called from the client, NEVER From the logic, not even indirectly.
 	virtual Bool clientOnly_getRenderObjInfo(Coord3D* pos, Real* boundingSphereRadius, Matrix3D* transform) const override;
 #if RTS_ZEROHOUR
+	virtual void clientOnly_placeModelAt(const Matrix3D* transformMtx) override;	///< Tiberium Project
+#endif
+#if RTS_ZEROHOUR
 	virtual Bool clientOnly_getAnimationFrame(AsciiString* name, Real* frame) const override;	///< Tiberium Project
 #endif
 	virtual Bool clientOnly_getRenderObjBoundBox(OBBoxClass * boundbox) const override;
@@ -586,6 +589,7 @@ private:
 	Real													m_turretDrawnToPitch[MAX_TURRETS];
 	UnsignedInt										m_turretDrawnLogicFrame;
 	void interpolateDrawnTurrets(Real* angle, Real* pitch);	///< Tiberium Project: the angles to draw the turrets at
+	void placeRenderObject(const Matrix3D* transformMtx);	///< Tiberium Project: the render object at the (scaled) draw transform
 	void updateTreadScroll();	///< Tiberium Project @feature C&C4's scrolling treads
 	void adjustSpotlight(Matrix3D& mtx) const;	///< Tiberium Project @feature a spotlight's sweep
 

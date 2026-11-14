@@ -71,6 +71,7 @@ ParticleSystemManager *TheParticleSystemManager = nullptr;
 // ------------------------------------------------------------------------------------------------
 ParticleInfo::ParticleInfo()
 {
+	m_bornPhase = 0.0f;	// Tiberium Project
 #if PARTICLE_USE_XY_ROTATION
 	m_angleX = 0.0f;
 	m_angleY = 0.0f;
@@ -343,6 +344,9 @@ Particle::Particle( ParticleSystem *system, const ParticleInfo *info )
 	m_lifetime = info->m_lifetime;
 	m_lifetimeLeft = info->m_lifetime;
 	m_createTimestamp = TheGameClient->getFrame();
+	// Tiberium Project @feature (see isAheadOfDrawnEmitter)
+	m_bornPhase = info->m_bornPhase;
+	m_bornUpdate = TheParticleSystemManager != nullptr ? TheParticleSystemManager->getUpdateCount() : 0;
 	m_personality = 0;
 
 	m_size = info->m_size;
@@ -751,6 +755,19 @@ ParticlePriorityType Particle::getPriority()
 UnsignedInt Particle::getElapsedFrames() const
 {
 	return TheGameClient->getFrame() - m_createTimestamp;
+}
+
+// ------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature With drawables drawn between their last two logic frames' places, a moving emitter (a
+	missile's exhaust, a jet's trail) is drawn up to a logic frame's move behind where the logic has it, but a logic
+	frame's particles are put along the whole of that move at once: the trail would reach ahead of what leaves it. A
+	particle of the latest update is therefore not drawn until the frame's phase has come to its share of the move
+	(m_bornPhase), which is when the drawn emitter passes the place it was put. Drawing only: the particle lives and
+	ages as before. */
+// ------------------------------------------------------------------------------------------------
+Bool Particle::isAheadOfDrawnEmitter( Real logicFramePhase ) const
+{
+	return m_bornPhase > logicFramePhase && m_bornUpdate == TheParticleSystemManager->getUpdateCount();
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -2136,6 +2153,7 @@ const ParticleInfo *ParticleSystem::generateParticleInfo( Int particleNum, Int p
 
 	// NOTE: position MUST be computed before velocity, in case OUTWARD velocity is
 	// specified, which must know where the particle is in space.
+	info.m_bornPhase = 0.0f;	// Tiberium Project
 	info.m_pos = *computeParticlePosition();
 	info.m_vel = *computeParticleVelocity( &info.m_pos );
 	// Tiberium Project @feature the template's volume offset, after the velocity (outward from the
@@ -2164,6 +2182,14 @@ const ParticleInfo *ParticleSystem::generateParticleInfo( Int particleNum, Int p
 
 		const Coord3D frameDeltaPos = m_pos - m_lastPos;
 		const Real frameStep = 1 - (INT_TO_REAL(particleNum) / particleCount);
+
+		// Tiberium Project @feature its share of the emitter's move, for the draw to hold it back until the emitter
+		// drawn between logic frames has come to it (Particle::isAheadOfDrawnEmitter)
+		if (TheFramePacer->isInterpolatingDrawables()
+			&& (frameDeltaPos.x != 0.0f || frameDeltaPos.y != 0.0f || frameDeltaPos.z != 0.0f))
+		{
+			info.m_bornPhase = 1.0f - frameStep;
+		}
 
 		Coord3D emissionAdjustment;	// this is the adjustment for inter-frame emission
 		emissionAdjustment.x = frameStep * frameDeltaPos.x;
@@ -3574,6 +3600,7 @@ ParticleSystemManager::ParticleSystemManager()
 	m_onScreenParticleCount = 0;
 	m_localPlayerIndex = 0;
 	m_drawnLogicFramePhase = 1.0f;
+	m_updateCount = 0;	// Tiberium Project
 
 	m_particleCount = 0;
 	m_fieldParticleCount = 0;
@@ -3676,6 +3703,7 @@ void ParticleSystemManager::update()
 	// TheSuperHackers @tweak Complete the render update of the previous logic frame before the logic update
 	// changes the rates, so that every logic frame integrates exactly one logic time step.
 	completeLogicFrameDrawUpdate();
+	++m_updateCount;	// Tiberium Project: the particles made from here on are this update's
 
 	ParticleSystemListIt it = m_allParticleSystemList.begin();
 	while( it != m_allParticleSystemList.end() )

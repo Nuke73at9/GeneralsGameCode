@@ -160,13 +160,17 @@ void LaserUpdate::updateStartPos()
 	if( m_parentID == INVALID_DRAWABLE_ID )
 		return;// Can't update if not told to update
 
-	const Drawable *parentDrawable = TheGameClient->findDrawableByID(m_parentID);
+	Drawable *parentDrawable = TheGameClient->findDrawableByID(m_parentID);
 	if( parentDrawable == nullptr )
 		return;// Can't update if no one to ask
 
 	if( m_parentBoneName.isNotEmpty() )
 	{
 		Matrix3D startPosMatrix;
+
+		// Tiberium Project @feature the bone where the model is drawn at this update (between logic frames), so the
+		// beam stays on its muzzle at every drawn frame
+		parentDrawable->placeModelWhereDrawn();
 
 		if( !parentDrawable->getCurrentWorldspaceClientBonePositions( m_parentBoneName.str(), startPosMatrix ) )
 		{
@@ -192,7 +196,8 @@ void LaserUpdate::updateStartPos()
 	else
 	{
 		// Just use parent position
-		m_startPos = *parentDrawable->getPosition();
+		// Tiberium Project @feature where it is drawn (between logic frames), so the beam stays on it at every drawn frame
+		parentDrawable->getDrawnPosition( &m_startPos );
 	}
 
 	if( !(m_startPos == oldStartPos) ) // No != operator.  Heh.
@@ -208,7 +213,7 @@ void LaserUpdate::updateEndPos()
 	if( m_targetID == INVALID_DRAWABLE_ID )
 		return;// Can't update if not told to update
 
-	const Drawable *targetDrawable = TheGameClient->findDrawableByID(m_targetID);
+	Drawable *targetDrawable = TheGameClient->findDrawableByID(m_targetID);
 	Bool targetDead = (targetDrawable && targetDrawable->getObject())
 										? targetDrawable->getObject()->isEffectivelyDead()
 										: FALSE;
@@ -232,9 +237,12 @@ void LaserUpdate::updateEndPos()
 	}
 	else
 	{
-		m_endPos = *targetDrawable->getPosition();
+		// Tiberium Project @feature where it is drawn (between logic frames), so the beam stays on it at every drawn frame
+		targetDrawable->getDrawnPosition( &m_endPos );
 		// Tiberium Project @feature at the target's bone, when it has it (setTargetBone)
 		Matrix3D endPosMatrix;
+		if( m_targetBoneName.isNotEmpty() )
+			targetDrawable->placeModelWhereDrawn();	// (the bone where the model is drawn at this update)
 		if( m_targetBoneName.isNotEmpty() && targetDrawable->getCurrentWorldspaceClientBonePositions( m_targetBoneName.str(), endPosMatrix ) )
 		{
 			m_endPos.x = endPosMatrix.Get_X_Translation();

@@ -1433,12 +1433,16 @@ void W3DView::update()
 		}
 		else
 		{
+			// Tiberium Project @bugfix the steps by which the camera closes in on what it follows were made for 30 drawn
+			// frames a second and taken once a drawn frame: the camera caught up faster the higher the frame rate. They
+			// are scaled to the frame's length now (the same at 30 frames a second).
+			const Real fpsRatio = TheFramePacer->getBaseOverUpdateFpsRatio();
 			if (followFactor<0) {
-				followFactor = 0.05f;
+				followFactor = 0.05f * fpsRatio;
 			} else {
-				followFactor += 0.05f;
-				if (followFactor>1.0f) followFactor = 1.0f;
+				followFactor += 0.05f * fpsRatio;
 			}
+			if (followFactor>1.0f) followFactor = 1.0f;
 			if (getCameraLockDrawable() != nullptr)
 			{
 				Drawable* cameraLockDrawable = (Drawable *)getCameraLockDrawable();
@@ -1472,7 +1476,7 @@ void W3DView::update()
 
 						Vector3 tranDiff = (camtran - prevCamTran);	//vector old position to new position.
 
-						camtran = prevCamTran + tranDiff * 0.1f;	//slowly move camera to new position.
+						camtran = prevCamTran + tranDiff * std::min(0.1f * fpsRatio, 1.0f);	//slowly move camera to new position.
 
 						Matrix3D camXForm;
 						camXForm.Look_At(camtran,objPos,0);
@@ -1483,6 +1487,14 @@ void W3DView::update()
 			}
 			else
 			{	Coord3D objpos = *cameraLockObj->getPosition();
+#if RTS_ZEROHOUR
+				// Tiberium Project @feature follow it where it is drawn (between its last two logic frames' places), or it
+				// would shake on screen: the camera stepping at the logic's rate, the unit moving at every drawn frame
+				if (Drawable *lockedDrawable = cameraLockObj->getDrawable())
+				{
+					lockedDrawable->getDrawnPosition(&objpos);
+				}
+#endif
 				Coord3D curpos = getPosition();
 				// don't "snap" directly to the pos, but move there smoothly.
 				Real snapThreshSqr = sqr(TheGlobalData->m_partitionCellSize);
@@ -1506,13 +1518,14 @@ void W3DView::update()
 							Real ratio = 1.0f - snapThreshSqr/curDistSqr;
 
 							// move halfway there.
-							curpos.x += dx*ratio*0.5f;
-							curpos.y += dy*ratio*0.5f;
+							const Real halfway = std::min(0.5f * fpsRatio, 1.0f);
+							curpos.x += dx*ratio*halfway;
+							curpos.y += dy*ratio*halfway;
 						}
 						else
 						{
 							// we're inside our 'play' tolerance.  Move slowly to the obj
-							Real ratio = 0.01f * m_lockDist;
+							Real ratio = std::min(0.01f * m_lockDist * fpsRatio, 1.0f);
 							Real dx = objpos.x-curpos.x;
 							Real dy = objpos.y-curpos.y;
 							curpos.x += dx*ratio;
@@ -1521,8 +1534,10 @@ void W3DView::update()
 					}
 					else
 					{
-						curpos.x += dx*followFactor;
-						curpos.y += dy*followFactor;
+						// (followFactor is the share of the way taken in a 30th of a second; once it is all of it, all of it)
+						const Real share = followFactor >= 1.0f ? 1.0f : std::min(followFactor * fpsRatio, 1.0f);
+						curpos.x += dx*share;
+						curpos.y += dy*share;
 					}
 				}
 				if (!(TheScriptEngine->isTimeFrozenDebug() || TheScriptEngine->isTimeFrozenScript()) && !TheGameLogic->isGamePaused()) {
@@ -1549,7 +1564,7 @@ void W3DView::update()
 							normAngle(oldZRot);
 							Real diffRot = idealZRot - oldZRot;
 							normAngle(diffRot);
-							View::setAngle(m_angle + diffRot * 0.1f);
+							View::setAngle(m_angle + diffRot * std::min(0.1f * fpsRatio, 1.0f));
 						}
 					}
 				}

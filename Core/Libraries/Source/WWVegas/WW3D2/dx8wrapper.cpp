@@ -442,6 +442,7 @@ int								DX8Wrapper::TextureBitDepth							= DEFAULT_TEXTURE_BIT_DEPTH;
 bool								DX8Wrapper::IsWindowed									= false;
 D3DFORMAT					DX8Wrapper::DisplayFormat	= D3DFMT_UNKNOWN;
 D3DMULTISAMPLE_TYPE DX8Wrapper::MultiSampleAntiAliasing	= DEFAULT_MSAA;
+bool DX8Wrapper::VSyncEnabled = true;	// Tiberium Project
 
 // shader system additions KJM v
 DWORD								DX8Wrapper::Vertex_Shader								= 0;
@@ -1649,7 +1650,9 @@ bool DX8Wrapper::Set_Render_Device(int dev, int width, int height, int bits, int
 	_PresentParameters.EnableAutoDepthStencil = TRUE;				// Driver will attempt to match Z-buffer depth
 	_PresentParameters.Flags=0;											// We're not going to lock the backbuffer
 
-	_PresentParameters.FullScreen_PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT;
+	// Tiberium Project @feature VSync = no in Options.ini: frames are shown as they are drawn, not held for the display's
+	// sync (the default, as before: one frame a refresh)
+	_PresentParameters.FullScreen_PresentationInterval = VSyncEnabled ? D3DPRESENT_INTERVAL_DEFAULT : D3DPRESENT_INTERVAL_IMMEDIATE;
 	_PresentParameters.FullScreen_RefreshRateInHz = D3DPRESENT_RATE_DEFAULT;
 
 	/*

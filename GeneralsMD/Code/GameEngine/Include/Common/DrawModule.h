@@ -158,6 +158,9 @@ public:
 
 	// this method must ONLY be called from the client, NEVER From the logic, not even indirectly.
 	virtual Bool clientOnly_getRenderObjInfo(Coord3D* pos, Real* boundingSphereRadius, Matrix3D* transform) const = 0;
+	// Tiberium Project @feature (client only) stands the model where a draw with this transform puts it, so a bone
+	// asked of it before the draw is where it will be drawn (Drawable::placeModelWhereDrawn)
+	virtual void clientOnly_placeModelAt(const Matrix3D* transformMtx) { }
 
 	/// Tiberium Project @feature the animation playing now (its name, upper case) and its frame, for
 	/// sounds on frames; client only, like the above
