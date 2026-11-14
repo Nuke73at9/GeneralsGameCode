@@ -175,6 +175,14 @@ WeaponStore *TheWeaponStore = nullptr;					///< the weapon store definition
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // PRIVATE DATA ///////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+// Tiberium Project @feature (C&C4's MissType)
+static const char *const TheWeaponMissTypeNames[] =
+{
+	"SCATTER",
+	"OVERSHOOT",
+	nullptr
+};
+
 const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 {
 
@@ -247,6 +255,13 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "ParalyzeRemove",							INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_paralyzeRemove) },	// Tiberium Project
 	{ "ParalyzeFX",									INI::parseFXList,											nullptr,							offsetof(WeaponTemplate, m_paralyzeFX) },	// Tiberium Project
 	{ "CanBeDodged",								INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_canBeDodged) },	// Tiberium Project
+	// Tiberium Project @feature C&C4's AccuracyParameters
+	{ "HitChance",									INI::parsePercentToReal,							nullptr,							offsetof(WeaponTemplate, m_hitChance) },
+	{ "HitChanceWhileMoving",				INI::parsePercentToReal,							nullptr,							offsetof(WeaponTemplate, m_hitChanceWhileMoving) },
+	{ "HitChanceVersusMoving",			INI::parsePercentToReal,							nullptr,							offsetof(WeaponTemplate, m_hitChanceVersusMoving) },
+	{ "MissType",										INI::parseIndexList,									TheWeaponMissTypeNames,	offsetof(WeaponTemplate, m_missType) },
+	{ "MissDistance",								INI::parseReal,												nullptr,							offsetof(WeaponTemplate, m_missDistance) },
+	{ "NeverMisses",								INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_neverMisses) },
 	{ "VictimVeterancy",						INI::parseInt,												nullptr,							offsetof(WeaponTemplate, m_victimVeterancy) },	// Tiberium Project
 	{ "JamEnemyRadar",							INI::parseDurationUnsignedInt,				nullptr,							offsetof(WeaponTemplate, m_jamRadarFrames) },	// Tiberium Project
 	{ "SuppressionAmount",					INI::parseReal,												nullptr,							offsetof(WeaponTemplate, m_suppressionAmount) },	// Tiberium Project
@@ -378,6 +393,12 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_paralyzeFX = nullptr;
 	m_victimFX[0] = m_victimFX[1] = m_victimFX[2] = nullptr;	// Tiberium Project
 	m_canBeDodged = TRUE;	// Tiberium Project
+	m_hitChance = 1.0f;	// Tiberium Project
+	m_hitChanceWhileMoving = 0.0f;
+	m_hitChanceVersusMoving = 0.0f;
+	m_missType = WEAPON_MISS_SCATTER;
+	m_missDistance = 0.0f;
+	m_neverMisses = FALSE;
 	m_forbiddenTargetStatus.clear();
 	m_victimVeterancy = 0;
 	m_jamRadarFrames = 0;
@@ -982,6 +1003,19 @@ Bool WeaponTemplate::shouldProjectileCollideWith(
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature whether the object's place is changing (C&C4's test for a moving firer or target in its
+// hit chance: its place is not last frame's): it has a velocity
+static Bool hasPlaceChanging( const Object *obj )
+{
+	const PhysicsBehavior *physics = obj->getPhysics();
+	if( physics == nullptr )
+		return FALSE;
+	const Coord3D *velocity = physics->getVelocity();
+	const Real STILL = 0.01f;
+	return velocity->x * velocity->x + velocity->y * velocity->y + velocity->z * velocity->z > STILL * STILL;
+}
+
+//-------------------------------------------------------------------------------------------------
 UnsignedInt WeaponTemplate::fireWeaponTemplate
 (
 	const Object *sourceObj,
@@ -1250,29 +1284,97 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 		projectileDestination.z = TheTerrainLogic->getLayerHeight( projectileDestination.x, projectileDestination.y, targetLayer );
 	}
 
-	// Tiberium Project @feature a shot that misses (C&C4's dodge and aim): its target's dodge (DodgePercentage and its
-	// DODGE_PERCENTAGE_ADD modifiers) less what the firer's modifiers add to its aim (HIT_PERCENTAGE_ADD: an accuracy
-	// boost beats a dodge; a berserk Hammerhead misses outright), but for a weapon that cannot be dodged
-	// (CanBeDodged = No) and a friend's shot (a heal). It lands just beside its target, as a scattered shot does
+	// Tiberium Project @feature a shot that misses, as C&C4 rolls it (read from CNC4.game: the chance at 0x74BA30, the
+	// roll at 0x761EF0, where a miss goes at 0x761FF0). The chance is the weapon's own (HitChance; C&C4's
+	// BaseHitPercentage), plus HitChanceWhileMoving if the firer moves, plus HitChanceVersusMoving if the target
+	// moves, plus what the firer's modifiers add to its aim (HIT_PERCENTAGE_ADD), less the target's dodge
+	// (DodgePercentage and its DODGE_PERCENTAGE_ADD modifiers) unless the weapon cannot be dodged (CanBeDodged = No).
+	// All added, none multiplied. Only a chance under 1 is rolled: one random number, a miss when it is above the
+	// chance. A friend's shot (a heal) is not dodged. NeverMisses = Yes (a C&C4 weapon without AccuracyParameters): no
+	// roll at all. A weapon of Zero Hour's has a chance of 1 and nothing to dodge it: no roll, nothing changes.
 	Bool missed = FALSE;
-	if( victimObj != nullptr && !isProjectileDetonation && m_canBeDodged && getDamageType() != DAMAGE_HEALING &&
-			sourceObj->getRelationship( victimObj ) != ALLIES )
+	if( victimObj != nullptr && !isProjectileDetonation && !m_neverMisses )
 	{
-		Real miss = victimObj->getDodgeChance();
-		if( sourceObj->hasAttributeModifiers() )
-			miss -= sourceObj->getAttributeModifierChance( MODIFIER_CHANCE_HIT );
-		if( miss > 0.0f && GameLogicRandomValueReal( 0.0f, 1.0f ) < miss )
+		Real chance = m_hitChance;
+		if( m_hitChanceWhileMoving != 0.0f && hasPlaceChanging( sourceObj ) )
+			chance += m_hitChanceWhileMoving;
+		if( m_hitChanceVersusMoving != 0.0f && hasPlaceChanging( victimObj ) )
+			chance += m_hitChanceVersusMoving;
+		if( getDamageType() != DAMAGE_HEALING && sourceObj->getRelationship( victimObj ) != ALLIES )
+		{
+			if( sourceObj->hasAttributeModifiers() )
+				chance += sourceObj->getAttributeModifierChance( MODIFIER_CHANCE_HIT );
+			if( m_canBeDodged )
+				chance -= victimObj->getDodgeChance();
+		}
+		const Bool rolled = chance < 1.0f;
+		if( rolled && GameLogicRandomValueReal( 0.0f, 1.0f ) > chance )
 		{
 			missed = TRUE;
-			const Real off = victimObj->getGeometryInfo().getBoundingCircleRadius() + 5.0f;
-			const Real side = GameLogicRandomValueReal( 0.0f, 2.0f * PI );
-			projectileDestination = *victimObj->getPosition();
-			projectileDestination.x += off * Cos( side );
-			projectileDestination.y += off * Sin( side );
-			projectileDestination.z = TheTerrainLogic->getLayerHeight( projectileDestination.x, projectileDestination.y, victimObj->getLayer() );
+			const Coord3D *aim = victimObj->getPosition();
+			Real off = 0.0f;
+			Bool placed = FALSE;
+			if( m_missType == WEAPON_MISS_OVERSHOOT )
+			{
+				// past the target: through a point at its edge, beside or above it (its centre, plus its radius along the
+				// firing line's level side turned about the line by a random half turn), on to three times the range
+				Coord3D centre;
+				victimObj->getGeometryInfo().getCenterPosition( *aim, centre );
+				Vector3 line( centre.x - sourcePos->x, centre.y - sourcePos->y, centre.z - sourcePos->z );
+				Vector3 side( -line.Y, line.X, 0.0f );
+				const Real lineLength = line.Length();
+				const Real sideLength = side.Length();
+				const Real turn = GameLogicRandomValueReal( 0.0f, 1.0f ) * PI;
+				if( lineLength > 0.001f && sideLength > 0.001f )
+				{
+					line /= lineLength;
+					side /= sideLength;
+					// (side turned about the line: side cos + (line x side) sin; line x side points up)
+					Vector3 up;
+					Vector3::Cross_Product( line, side, &up );
+					const Real radius = victimObj->getGeometryInfo().getBoundingSphereRadius();
+					const Real c = Cos( turn ) * radius;
+					const Real sn = Sin( turn ) * radius;
+					Vector3 past( centre.x + side.X * c + up.X * sn - sourcePos->x, centre.y + side.Y * c + up.Y * sn - sourcePos->y,
+						centre.z + side.Z * c + up.Z * sn - sourcePos->z );
+					const Real pastLength = past.Length();
+					if( pastLength > 0.001f )
+					{
+						const Real reach = 3.0f * getAttackRange( bonus ) / pastLength;
+						projectileDestination.set( sourcePos->x + past.X * reach, sourcePos->y + past.Y * reach, sourcePos->z + past.Z * reach );
+						// (a projectile comes down where its line ends; a beam or a bullet goes on into the air)
+						if( getProjectileTemplate() != nullptr )
+							projectileDestination.z = TheTerrainLogic->getLayerHeight( projectileDestination.x, projectileDestination.y, victimObj->getLayer() );
+						const Real dx = projectileDestination.x - aim->x;
+						const Real dy = projectileDestination.y - aim->y;
+						off = WWMath::Sqrt( dx * dx + dy * dy );
+						placed = TRUE;
+					}
+				}
+			}
+			if( !placed )
+			{
+				// beside the target, on the firer's side of it: within a quarter turn either way of the direction to the
+				// firer, from the target's edge up to MissDistance beyond it (more likely further out)
+				const Real toFirer = WWMath::Atan2Origin( sourcePos->y - aim->y, sourcePos->x - aim->x );
+				const Real angle = GameLogicRandomValueReal( toFirer - PI / 2.0f, toFirer + PI / 2.0f );
+				const Real share = GameLogicRandomValueReal( 0.0f, 1.0f );
+				off = victimObj->getGeometryInfo().getBoundingCircleRadius() + m_missDistance * WWMath::Sqrt( share );
+				projectileDestination = *aim;
+				projectileDestination.x += off * Cos( angle );
+				projectileDestination.y += off * Sin( angle );
+				// (at the target's height when it flies, else on the ground there)
+				if( !victimObj->isAirborneTarget() )
+					projectileDestination.z = TheTerrainLogic->getLayerHeight( projectileDestination.x, projectileDestination.y, victimObj->getLayer() );
+			}
 			if( scatterRadius < off )
-				scatterRadius = off;	// (a laser draws to the ground; a projectile flies to the spot, following nothing)
+				scatterRadius = off;	// (a laser draws to the place; a projectile flies to it, following nothing)
 		}
+		// (the test's log of every rolled shot: reads only)
+		if( rolled && TiberiumTest::isActive() )
+			TiberiumTest::log( "frame %u: %s fires %s at %s: chance %.2f, %s%s", TheGameLogic->getFrame(),
+				sourceObj->getTemplate()->getName().str(), getName().str(), victimObj->getTemplate()->getName().str(), chance,
+				missed ? "a miss" : "a hit", missed ? ( m_missType == WEAPON_MISS_OVERSHOOT ? " (overshoot)" : " (scatter)" ) : "" );
 	}
 
 	if (getProjectileTemplate() == nullptr || isProjectileDetonation)

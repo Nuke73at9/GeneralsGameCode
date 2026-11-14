@@ -404,6 +404,14 @@ struct WeaponDamageScalar
 	Bool takes( const Object *source, const Object *victim ) const;
 };
 
+// Tiberium Project @feature where a shot that misses goes (C&C4's MissType)
+enum WeaponMissType CPP_11(: Int)
+{
+	WEAPON_MISS_SCATTER = 0,	///< beside its target, on the firer's side, up to MissDistance from its edge
+	WEAPON_MISS_OVERSHOOT,		///< past its target's edge and on, to three times the weapon's range
+	WEAPON_MISS_COUNT
+};
+
 class WeaponTemplate : public MemoryPoolObject
 {
 	friend class WeaponStore;
@@ -538,6 +546,7 @@ public:
 	const WeaponTemplate *getUpgradedFor( const Object *firer ) const;
 	Bool isParalyzer() const { return m_paralyzeFrames > 0 && !m_paralyzeRemove; }	///< Tiberium Project: disables what it reaches
 	Bool canBeDodged() const { return m_canBeDodged; }	///< Tiberium Project: a dodge may make it miss (C&C4's CanBeDodged)
+	Bool neverMisses() const { return m_neverMisses; }	///< Tiberium Project: no shot of it misses, whatever its target's dodge or its firer's aim (a C&C4 weapon without AccuracyParameters)
 	const ObjectCreationList* getProjectileDetonationOCL(VeterancyLevel v) const { return m_projectileDetonationOCLs[v]; }
 	const ParticleSystemTemplate* getProjectileExhaust(VeterancyLevel v) const { return m_projectileExhausts[v]; }
 
@@ -683,6 +692,13 @@ private:
 	UnsignedInt m_victimTintSustain;												///< Tiberium Project: ... held this long
 	UnsignedInt m_victimTintDecay;													///< Tiberium Project: ... and fading over this long
 	Bool m_canBeDodged;																///< Tiberium Project: its target's dodge may make it miss (C&C4's CanBeDodged; default Yes)
+	// Tiberium Project: C&C4's AccuracyParameters (how the shot is rolled and where a miss goes: fireWeaponTemplate)
+	Real m_hitChance;																	///< the chance a shot at an object hits (BaseHitPercentage; 1)
+	Real m_hitChanceWhileMoving;											///< added while the firer moves (HitModifierWhileMoving)
+	Real m_hitChanceVersusMoving;											///< added against a target that moves (the modifier versus moving)
+	Int m_missType;																		///< WeaponMissType: where a miss goes
+	Real m_missDistance;															///< a scattered miss lands up to this far beyond its target's edge
+	Bool m_neverMisses;																///< no roll at all (C&C4: no AccuracyParameters)
 	Int m_victimVeterancy;															///< Tiberium Project: veterancy levels each object its damage reaches gains (C&C4's ExperienceNugget)
 	UnsignedInt m_jamRadarFrames;													///< Tiberium Project: as it is dealt, the radars of its firer's enemies go dark this long (C&C4's InformationWarfareNugget)
 	Real m_suppressionAmount;															///< Tiberium Project: as it is dealt, this much suppression on those within SuppressionRadius (Kane's Wrath's SuppressionNugget: SuppressionUpdate)
