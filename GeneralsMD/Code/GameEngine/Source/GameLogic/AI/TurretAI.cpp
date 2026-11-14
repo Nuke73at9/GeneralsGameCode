@@ -1369,6 +1369,12 @@ StateReturnType TurretAIAimTurretState::update()
 		{
 			return STATE_CONTINUE;
 		}
+		// Tiberium Project @feature a weapon that may not fire while its unit moves (SAGE 2's CanFireWhileMoving, No):
+		// the turret keeps its aim and holds its fire until the unit stands
+		if (!curWeapon->getTemplate()->canFireWhileMoving() && ai->isMoving())
+		{
+			return STATE_CONTINUE;
+		}
 		return STATE_SUCCESS;
 	}
 

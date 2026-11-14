@@ -503,6 +503,7 @@ public:
 	Real getContinueAttackRange() const { return m_continueAttackRange; }
 	Real getInfantryInaccuracyDist() const { return m_infantryInaccuracyDist; }
 	Real getAimDelta() const { return m_aimDelta; }
+	Bool canFireWhileMoving() const { return m_canFireWhileMoving; }	///< Tiberium Project: SAGE 2's CanFireWhileMoving
 	Real getScatterRadius() const { return m_scatterRadius; }
 	Real getScatterTargetScalar() const { return m_scatterTargetScalar; }
 	Bool isScatterTargetsOrdered() const { return m_scatterTargetsOrdered; }	///< Tiberium Project
@@ -618,6 +619,7 @@ private:
 	Real m_minimumAttackRange;							///< Min distance the weapon should be fired from
 	Real m_requestAssistRange;							///< My object will look this far around to get people to join in the attack.
 	Real m_aimDelta;												///< when aiming, consider yourself "aimed" if you are within +/- this much of an angle
+	Bool m_canFireWhileMoving;							///< Tiberium Project: No: a turret with this weapon holds its fire while its unit moves (as Zero Hour's do not: Yes)
 	Real m_scatterRadius;										///< Radius of area actual fire point will be in, default is zero for no deviation
 	Real m_scatterTargetScalar;							///< Radius of area covered by the coordinates in the scatterTarget table
 	std::vector<Coord2D> m_scatterTargets;	///< instead of pure randomness, this is the list of places I will randomly choose from to attack

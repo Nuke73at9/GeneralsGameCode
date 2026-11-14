@@ -191,6 +191,10 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "MinimumAttackRange",				INI::parseReal,													nullptr,							offsetof(WeaponTemplate, m_minimumAttackRange) },
 	{ "RequestAssistRange",				INI::parseReal,													nullptr,							offsetof(WeaponTemplate, m_requestAssistRange) },
 	{ "AcceptableAimDelta",				INI::parseAngleReal,										nullptr,							offsetof(WeaponTemplate, m_aimDelta) },
+	// Tiberium Project @feature SAGE 2's CanFireWhileMoving. No: a turret aimed with this weapon holds its fire while its
+	// unit moves (C&C4's lasers and blast weapons; its cannons, guns and rockets fire on the move). Yes, as before, if
+	// not given: Zero Hour's turrets fire at what comes within reach as their unit drives by.
+	{ "CanFireWhileMoving",				INI::parseBool,													nullptr,							offsetof(WeaponTemplate, m_canFireWhileMoving) },
 	{ "ScatterRadius",						INI::parseReal,													nullptr,							offsetof(WeaponTemplate, m_scatterRadius) },
 	{ "ScatterTargetScalar",			INI::parseReal,													nullptr,							offsetof(WeaponTemplate, m_scatterTargetScalar) },
 	{ "ScatterRadiusVsInfantry",	INI::parseReal,													nullptr,							offsetof( WeaponTemplate, m_infantryInaccuracyDist ) },
@@ -331,6 +335,7 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_minimumAttackRange						= 0.0f;
 	m_requestAssistRange						= 0.0f;
 	m_aimDelta											= 0.0f;
+	m_canFireWhileMoving						= TRUE;	// Tiberium Project
 	m_scatterRadius									= 0.0f;
 	m_scatterTargetScalar						= 0.0f;
 	m_scatterTargetsOrdered					= FALSE;
