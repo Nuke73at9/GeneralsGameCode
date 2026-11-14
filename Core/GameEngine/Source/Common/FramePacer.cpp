@@ -47,6 +47,11 @@ FramePacer::FramePacer()
 	m_enableLogicTimeScale = TRUE;
 	m_isTimeFrozen = FALSE;
 	m_isGameHalted = FALSE;
+	// Tiberium Project @feature (off unless Options.ini asks: GameEngine::init)
+	m_realTimeLogic = FALSE;
+	m_interpolateDrawables = FALSE;
+	m_maxLogicTicksPerUpdate = 4;
+	m_renderFpsOverride = -1;
 }
 
 FramePacer::~FramePacer()
@@ -64,7 +69,10 @@ void FramePacer::update()
 	const UnsignedInt maxFps = getActualFramesPerSecondLimit();
 	m_updateTime = m_frameRateLimit.wait(maxFps);
 
-	if (TheGameLogic != nullptr)
+	// Tiberium Project @feature (real-time logic: the engine sets the phase from the time it has gathered towards the next
+	// logic frame, setLogicFramePhase, which runs on evenly where this estimate from the update rate jumps at each logic
+	// frame)
+	if (TheGameLogic != nullptr && !m_realTimeLogic)
 	{
 		// Set or advance the logic frame phase by the render step that the next update will draw.
 		// It is capped at a whole logic frame, because the render steps in between can add up to more than one.
@@ -136,7 +144,39 @@ Bool FramePacer::isActualFramesPerSecondLimitEnabled() const
 
 Int FramePacer::getActualFramesPerSecondLimit() const
 {
+	// Tiberium Project @feature the draw rate set apart from the game's speed setting (Options.ini MaxRenderFPS); a fast
+	// forward still runs unlimited
+	if (m_renderFpsOverride >= 0)
+	{
+		Bool fastForward = false;
+		if (TheTacticalView != nullptr)
+		{
+			fastForward = TheTacticalView->getTimeMultiplier() > 1 || TheScriptEngine->isTimeFast();
+		}
+		if (fastForward || m_renderFpsOverride == 0)
+		{
+			return RenderFpsPreset::UncappedFpsValue;
+		}
+		return m_renderFpsOverride;
+	}
+
 	return isActualFramesPerSecondLimitEnabled() ? getFramesPerSecondLimit() : RenderFpsPreset::UncappedFpsValue;
+}
+
+void FramePacer::setRealTimeLogic( Bool enable, Int maxLogicTicksPerUpdate )
+{
+	m_realTimeLogic = enable;
+	m_maxLogicTicksPerUpdate = maxLogicTicksPerUpdate < 1 ? 1 : (maxLogicTicksPerUpdate > 8 ? 8 : maxLogicTicksPerUpdate);
+}
+
+void FramePacer::setLogicFramePhase( Real phase )
+{
+	m_logicFramePhase = phase < 0.0f ? 0.0f : (phase > 1.0f ? 1.0f : phase);
+}
+
+void FramePacer::setRenderFpsOverride( Int fps )
+{
+	m_renderFpsOverride = fps < 0 ? -1 : fps;
 }
 
 Real FramePacer::getUpdateTime()  const
@@ -236,7 +276,16 @@ Real FramePacer::getActualLogicTimeScaleRatio(LogicTimeQueryFlags flags) const
 Real FramePacer::getActualLogicTimeScaleOverFpsRatio(LogicTimeQueryFlags flags) const
 {
 	// Clamps ratio to min 1, because the logic frame rate is currently capped by the render frame rate.
-	return min(1.0f, (Real)getActualLogicTimeScaleFps(flags) / getUpdateFps());
+	// Tiberium Project @feature real-time logic: it no longer is. An update slower than a logic frame covers as many
+	// logic frames as it may catch up with, so the renderer's clock and everything the client moves by this share
+	// (animations, fades, sway, water, the camera's shake) keep the game's pace too. Not in a network game, which is
+	// not paced that way.
+	const Real ratio = (Real)getActualLogicTimeScaleFps(flags) / getUpdateFps();
+	if (m_realTimeLogic && TheNetwork == nullptr)
+	{
+		return min((Real)m_maxLogicTicksPerUpdate, ratio);
+	}
+	return min(1.0f, ratio);
 }
 
 Real FramePacer::getLogicTimeStepSeconds(LogicTimeQueryFlags flags) const

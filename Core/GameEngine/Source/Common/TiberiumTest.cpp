@@ -20,9 +20,15 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include "Common/FramePacer.h"	// Tiberium Project (the test: the frame phase)
 #include "Common/TiberiumTest.h"
 
 #include <chrono>
+#if defined(__linux__) && defined(__GLIBC__)
+#include <execinfo.h>	// Tiberium Project (the test: a crash's call stack)
+#include <signal.h>
+#include <unistd.h>
+#endif
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,6 +44,7 @@
 #include "Common/SpecialPower.h"
 #include "GameClient/FXList.h"
 #include "WWMath/matrix3d.h"
+#include "WW3D2/ww3d.h"	// Tiberium Project (the test: the renderer's clock)
 #include "GameClient/Display.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/ParticleSys.h"
@@ -569,8 +576,72 @@ static Bool drawnTilt( const Object *obj, Coord3D &tilt )
 	return FALSE;
 }
 
+// Tiberium Project @feature (the test) "trace=Template,N": for the next N updates, where each object of the kind is by
+// the logic and where it was last drawn, with the frame pacer's phase and the wall clock (motion drawn between logic
+// frames); "pace": the logic frames and updates a second since the last "pace" (the game's pace against the draw rate)
+static std::string s_traceTemplate;
+static Int s_traceLeft = 0;
+static std::chrono::steady_clock::time_point s_traceStart;
+static std::chrono::steady_clock::time_point s_paceTime;
+static UnsignedInt s_paceLogicFrame = 0;
+static Int s_paceDrawn = -1;
+static UnsignedInt s_paceRenderClock = 0;
+
+static void traceDrawn( Int update )
+{
+	const double ms = std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() - s_traceStart ).count();
+	for ( Object *obj = TheGameLogic->getFirstObject(); obj != nullptr; obj = obj->getNextObject() )
+	{
+		if ( obj->getTemplate()->getName().compareNoCase( s_traceTemplate.c_str() ) != 0 )
+			continue;
+		const Drawable *look = obj->getDrawable();
+		Coord3D at;
+		Real radius;
+		Matrix3D mtx;
+		Bool drawn = FALSE;
+		for ( const DrawModule *const *dm = look != nullptr ? look->getDrawModules() : nullptr; dm != nullptr && *dm != nullptr && !drawn; ++dm )
+		{
+			const ObjectDrawInterface *di = (*dm)->getObjectDrawInterface();
+			drawn = di != nullptr && di->clientOnly_getRenderObjInfo( &at, &radius, &mtx );
+		}
+		const Vector3 place = mtx.Get_Translation();
+		const Vector3 fwd = mtx.Get_X_Vector();
+		TiberiumTest::log( "trace: update %d, logic frame %u, phase %.3f, %.1f ms: %s #%u logic %.3f %.3f facing %.2f, drawn %.3f %.3f facing %.2f%s",
+			(int)update, (unsigned)TheGameLogic->getFrame(), TheFramePacer != nullptr ? TheFramePacer->getLogicFramePhase() : 0.0f, ms,
+			obj->getTemplate()->getName().str(), (unsigned)obj->getID(), obj->getPosition()->x, obj->getPosition()->y,
+			obj->getOrientation() * 180.0f / PI, drawn ? place.X : 0.0f, drawn ? place.Y : 0.0f,
+			drawn ? WWMath::Atan2( fwd.Y, fwd.X ) * 180.0f / PI : 0.0f, drawn ? "" : " (not drawn)" );
+	}
+}
+
+// Tiberium Project @feature (the test) straight after the client has drawn, before any logic frame of this update: the
+// trace reads what was drawn (the logic sets a moved object's model to its new place as it runs)
+void TiberiumTest::afterDraw()
+{
+	if ( !s_active || s_traceLeft <= 0 || TheGameLogic == nullptr || !TheGameLogic->isInGame() )
+		return;
+	--s_traceLeft;
+	traceDrawn( s_drawnFrame + 1 );
+}
+
+// Tiberium Project @feature (the test) the logic's CRC at the frame asked for, read only. Looked for after every update
+// and before every logic frame: with several logic frames run in one update (real-time logic) it is still taken at that
+// very frame, so two runs paced differently are compared at the same one.
+static void logCRCWhenDue()
+{
+	if ( s_crcFrame < 0 || s_crcLogged || TheGameLogic == nullptr || !TheGameLogic->isInGame() )
+		return;
+	if ( (Int)TheGameLogic->getFrame() < s_crcFrame )
+		return;
+	s_crcLogged = TRUE;
+	const UnsignedInt crc = TheGameLogic->getCRC( CRC_RECALC );
+	TiberiumTest::log( "logic frame %u: CRC %08X", (unsigned)TheGameLogic->getFrame(), (unsigned)crc );
+}
+
 void TiberiumTest::beforeLogic()
 {
+	if ( s_active )
+		logCRCWhenDue();
 	if ( !s_active || s_flyTemplates.empty() || TheGameLogic == nullptr )
 		return;
 	for ( Object *obj = TheGameLogic->getFirstObject(); obj != nullptr; obj = obj->getNextObject() )
@@ -584,10 +655,41 @@ void TiberiumTest::beforeLogic()
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature (the test) a crash in a test run on Linux leaves its call stack in the log (stderr), as
+// module and offset for addr2line, before the signal takes its usual course
+#if defined(__linux__) && defined(__GLIBC__)
+static void crashTrace( int sig )
+{
+	static const char head[] = "TIBTEST crash: the call stack of the thread that crashed follows\n";
+	const ssize_t written = write( 2, head, sizeof( head ) - 1 );
+	(void)written;
+	void *frames[ 64 ];
+	const int count = backtrace( frames, 64 );
+	backtrace_symbols_fd( frames, count, 2 );
+	signal( sig, SIG_DFL );
+	raise( sig );
+}
+static void installCrashTrace()
+{
+	static bool installed = false;
+	if ( installed )
+		return;
+	installed = true;
+	signal( SIGSEGV, crashTrace );
+	signal( SIGBUS, crashTrace );
+	signal( SIGFPE, crashTrace );
+	signal( SIGILL, crashTrace );
+	signal( SIGABRT, crashTrace );
+}
+#else
+static void installCrashTrace() {}
+#endif
+
 void TiberiumTest::update()
 {
 	if ( !s_active )
 		return;
+	installCrashTrace();
 	++s_drawnFrame;
 	if ( TheGameLogic != nullptr && TheGameLogic->isInGame() )
 	{
@@ -1872,6 +1974,37 @@ void TiberiumTest::update()
 				log( "frame %d: ui: victims %s: none", (int)s_frame, step.arg.c_str() );
 		}
 #endif
+		else if ( step.action == "trace" && TheGameLogic != nullptr )
+		{
+			char kind[128] = "";
+			Int count = 60;
+			sscanf( step.arg.c_str(), "%127[^,],%d", kind, &count );
+			s_traceTemplate = kind;
+			s_traceLeft = count;
+			s_traceStart = std::chrono::steady_clock::now();
+			log( "frame %d: ui: trace %s for %d updates (logic frame %u)", (int)s_frame, kind, (int)count, (unsigned)TheGameLogic->getFrame() );
+		}
+		else if ( step.action == "pace" && TheGameLogic != nullptr )
+		{
+			const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+			if ( s_paceDrawn >= 0 )
+			{
+				const double seconds = std::chrono::duration<double>( now - s_paceTime ).count();
+				const UnsignedInt frames = TheGameLogic->getFrame() - s_paceLogicFrame;
+				// (the renderer's clock, which animations run by: its seconds against the logic's, 1.00 when they keep pace)
+				const double clockSeconds = ( WW3D::Get_Logic_Time_Milliseconds() - s_paceRenderClock ) * 0.001;
+				log( "frame %d: ui: pace: %u logic frames and %d updates in %.2f s: %.2f logic frames a second, %.2f updates a second, the renderer's clock %.2f s (%.2f of the logic's) (logic frame %u)",
+					(int)s_frame, (unsigned)frames, (int)( s_drawnFrame - s_paceDrawn ), seconds, seconds > 0.0 ? frames / seconds : 0.0,
+					seconds > 0.0 ? ( s_drawnFrame - s_paceDrawn ) / seconds : 0.0, clockSeconds,
+					frames > 0 ? clockSeconds * LOGICFRAMES_PER_SECOND / frames : 0.0, (unsigned)TheGameLogic->getFrame() );
+			}
+			else
+				log( "frame %d: ui: pace: started (logic frame %u)", (int)s_frame, (unsigned)TheGameLogic->getFrame() );
+			s_paceTime = now;
+			s_paceLogicFrame = TheGameLogic->getFrame();
+			s_paceDrawn = s_drawnFrame;
+			s_paceRenderClock = WW3D::Get_Logic_Time_Milliseconds();
+		}
 		else if ( step.action == "fly" && TheGameLogic != nullptr )
 		{
 			// Tiberium Project @feature (the test) every object of a template in flight: its height, its velocity, the
@@ -3122,12 +3255,7 @@ void TiberiumTest::update()
 			(unsigned)TheParticleSystemManager->getAllParticleSystems().size() );
 
 	// the logic's CRC, read only
-	if ( s_crcFrame >= 0 && !s_crcLogged && inGame && (Int)TheGameLogic->getFrame() >= s_crcFrame )
-	{
-		s_crcLogged = TRUE;
-		const UnsignedInt crc = TheGameLogic->getCRC( CRC_RECALC );
-		log( "logic frame %u: CRC %08X", (unsigned)TheGameLogic->getFrame(), (unsigned)crc );
-	}
+	logCRCWhenDue();
 
 	// screenshots, each with the average frame time since the one before (the first span starts
 	// in game, past the map load); the screenshot's own cost falls in the next span's first frame

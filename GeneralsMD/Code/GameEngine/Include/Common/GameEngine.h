@@ -85,6 +85,7 @@ protected:
 	Bool canUpdateGameLogic(UnsignedInt logicTimeQueryFlags = 0);
 	Bool canUpdateNetworkGameLogic();
 	Bool canUpdateRegularGameLogic(UnsignedInt logicTimeQueryFlags);
+	Bool takeExtraLogicTick();	///< Tiberium Project: one more logic frame due in this update (real-time logic)
 
 	virtual FileSystem *createFileSystem();								///< Factory for FileSystem classes
 	virtual LocalFileSystem *createLocalFileSystem() = 0;	///< Factory for LocalFileSystem classes

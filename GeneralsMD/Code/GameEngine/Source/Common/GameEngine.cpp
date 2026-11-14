@@ -809,6 +809,25 @@ void GameEngine::init()
 
 		TheFramePacer->setFramesPerSecondLimit(TheGlobalData->m_framesPerSecondLimit);
 
+		// Tiberium Project @feature the game's pace apart from the draw rate, each asked for in Options.ini (none there:
+		// as before): RealTimeLogic = yes (the logic keeps its rate when drawing is slower, catching up with at most
+		// MaxLogicTicksPerUpdate logic frames an update), MaxRenderFPS = <n> (the draw rate limit whatever a game's speed
+		// setting asks; 0: none), InterpolateMotion = yes (drawables drawn between logic frames)
+		{
+			OptionPreferences prefs;
+			const Bool realTime = prefs.getBool("RealTimeLogic", FALSE);
+			TheFramePacer->setRealTimeLogic(realTime, prefs.getInt("MaxLogicTicksPerUpdate", 4));
+			if (prefs.find("MaxRenderFPS") != prefs.end())
+			{
+				TheFramePacer->setRenderFpsOverride(prefs.getInt("MaxRenderFPS", -1));
+			}
+			TheFramePacer->setInterpolateDrawables(prefs.getBool("InterpolateMotion", FALSE));
+			if (realTime)
+			{
+				TheFramePacer->enableLogicTimeScale(TRUE);
+			}
+		}
+
 		TheAudio->setOn(TheGlobalData->m_audioOn && TheGlobalData->m_musicOn, AudioAffect_Music);
 		TheAudio->setOn(TheGlobalData->m_audioOn && TheGlobalData->m_soundsOn, AudioAffect_Sound);
 		TheAudio->setOn(TheGlobalData->m_audioOn && TheGlobalData->m_sounds3DOn, AudioAffect_Sound3D);
@@ -1062,7 +1081,10 @@ Bool GameEngine::canUpdateRegularGameLogic(UnsignedInt logicTimeQueryFlags)
 	const Bool useFastMode = TheGlobalData->m_TiVOFastMode && TheGameLogic->isInReplayGame();
 #endif
 
-	if (useFastMode || !enabled || logicTimeScaleFps >= maxRenderFps)
+	// Tiberium Project @feature real-time logic: the logic keeps its own rate even where the draw limit is no higher
+	const Bool realTime = TheFramePacer->isRealTimeLogic();
+
+	if (useFastMode || !enabled || (logicTimeScaleFps >= maxRenderFps && !realTime))
 	{
 		// Logic time scale is uncapped or larger equal Render FPS. Update straight away.
 		return true;
@@ -1072,7 +1094,10 @@ Bool GameEngine::canUpdateRegularGameLogic(UnsignedInt logicTimeQueryFlags)
 		// TheSuperHackers @tweak xezon 06/08/2025
 		// The logic time step is now decoupled from the render update.
 		const Real targetFrameTime = 1.0f / logicTimeScaleFps;
-		m_logicTimeAccumulator += min(TheFramePacer->getUpdateTime(), targetFrameTime);
+		// Tiberium Project @feature real-time logic: a slow update's time counts in full, up to the logic frames one
+		// update may catch up with (takeExtraLogicTick), so the game does not slow down when drawing does
+		const Real mostTime = realTime ? targetFrameTime * TheFramePacer->getMaxLogicTicksPerUpdate() : targetFrameTime;
+		m_logicTimeAccumulator += min(TheFramePacer->getUpdateTime(), mostTime);
 
 		if (m_logicTimeAccumulator >= targetFrameTime)
 		{
@@ -1082,6 +1107,45 @@ Bool GameEngine::canUpdateRegularGameLogic(UnsignedInt logicTimeQueryFlags)
 	}
 
 	return false;
+}
+
+/// -----------------------------------------------------------------------------------------------
+/** Tiberium Project @feature real-time logic: whether one more logic frame is due in this update (drawing fell behind
+	the logic rate), taking its time off what has gathered. Never in a network game, while the game is paused, halted or
+	frozen, or in a fast forward. */
+Bool GameEngine::takeExtraLogicTick()
+{
+	if (!TheFramePacer->isRealTimeLogic() || TheNetwork != nullptr || !TheFramePacer->isLogicTimeScaleEnabled())
+	{
+		return false;
+	}
+	if (isTimeFrozen() || isGameHalted() || TheGlobalData->m_TiVOFastMode)
+	{
+		return false;
+	}
+
+	const Int logicTimeScaleFps = TheFramePacer->getActualLogicTimeScaleFps();
+	if (logicTimeScaleFps <= 0)
+	{
+		return false;
+	}
+
+	const Real targetFrameTime = 1.0f / logicTimeScaleFps;
+	if (m_logicTimeAccumulator < targetFrameTime)
+	{
+		return false;
+	}
+
+	// One is due. The logic looks at its pause frame before every frame; only now, so the mark of the frame just run
+	// (GameLogic::hasUpdated, which the client and the renderer's clock go by) is not wiped when none follows.
+	TheGameLogic->preUpdate();
+	if (isGameHalted())
+	{
+		return false;
+	}
+
+	m_logicTimeAccumulator -= targetFrameTime;
+	return true;
 }
 
 /// -----------------------------------------------------------------------------------------------
@@ -1104,6 +1168,8 @@ void GameEngine::update()
 
 			TheAudio->UPDATE();
 			TheGameClient->UPDATE();
+			// Tiberium Project @feature (the test) what was drawn, before any logic frame of this update
+			TiberiumTest::afterDraw();
 			TheMessageStream->propagateMessages();
 
 			if (TheNetwork != nullptr)
@@ -1131,6 +1197,33 @@ void GameEngine::update()
 			{
 				TheGameClient->step();
 			}
+
+			// Tiberium Project @feature real-time logic: the logic frames a slow update fell behind by, caught up with.
+			// What the frame before posted (its CRC for the replay check, a selection group remade) reaches the command
+			// list before each one, as it does between two updates: every logic frame sees the same commands however
+			// many run in one update, and a replay's CRCs are compared in the same order.
+			for (Int extra = 1; extra < TheFramePacer->getMaxLogicTicksPerUpdate() && takeExtraLogicTick(); ++extra)
+			{
+				TheMessageStream->propagateMessages();
+				TiberiumTest::beforeLogic();
+				TheGameLogic->UPDATE();
+				TheGameClient->step();
+			}
+		}
+
+		// Tiberium Project @feature real-time logic: how far the next draw reaches into the logic frame is the share of a
+		// logic frame's time gathered since the last one ran, so what is drawn between logic frames moves on evenly at
+		// every drawn frame (one logic frame and one drawn frame behind the logic). A game not paced that way (a network
+		// game, a fast forward, time frozen) is drawn where the logic is.
+		if (TheFramePacer->isRealTimeLogic())
+		{
+			Real phase = 1.0f;
+			const Int logicTimeScaleFps = TheFramePacer->getActualLogicTimeScaleFps();
+			if (TheNetwork == nullptr && TheFramePacer->isLogicTimeScaleEnabled() && logicTimeScaleFps > 0 && !TheGlobalData->m_TiVOFastMode)
+			{
+				phase = m_logicTimeAccumulator * logicTimeScaleFps;
+			}
+			TheFramePacer->setLogicFramePhase(phase);
 		}
 
 		// Tiberium Project @feature Renderer test options, inert unless given on the command line

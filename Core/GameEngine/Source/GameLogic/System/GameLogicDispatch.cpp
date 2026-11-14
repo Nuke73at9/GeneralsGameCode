@@ -308,7 +308,8 @@ void GameLogic::clearGameData( Bool showScoreScreen )
 	// GeneralsX @feature felipebraz 17/09/2026 Reset simulation tick rate and FPS cap to global defaults (#281)
 	TheFramePacer->setLogicTimeScaleFps(LOGICFRAMES_PER_SECOND);
 	TheFramePacer->setFramesPerSecondLimit(TheGlobalData->m_framesPerSecondLimit);
-	TheFramePacer->enableLogicTimeScale(LOGICFRAMES_PER_SECOND < TheGlobalData->m_framesPerSecondLimit);
+	// Tiberium Project @feature (real-time logic: the logic rate its own even where the draw limit is no higher)
+	TheFramePacer->enableLogicTimeScale(LOGICFRAMES_PER_SECOND < TheGlobalData->m_framesPerSecondLimit || TheFramePacer->isRealTimeLogic());
 //	m_background->bringForward();
 //	if(shellGame)
 
@@ -987,7 +988,7 @@ bool GameLogic::onNewGame(MAYBE_UNUSED GameMessage *msg)
 		}
 
 		TheFramePacer->setLogicTimeScaleFps(tickRate);
-		TheFramePacer->enableLogicTimeScale(tickRate < TheFramePacer->getFramesPerSecondLimit());
+		TheFramePacer->enableLogicTimeScale(tickRate < TheFramePacer->getFramesPerSecondLimit() || TheFramePacer->isRealTimeLogic());	// Tiberium Project
 
 		fprintf(stderr, "[SKIRMISH] Simulation tick rate configured: %d Hz (base: %d Hz)\n", tickRate, LOGICFRAMES_PER_SECOND);
 		fflush(stderr);
@@ -995,7 +996,7 @@ bool GameLogic::onNewGame(MAYBE_UNUSED GameMessage *msg)
 	else
 	{
 		TheFramePacer->setLogicTimeScaleFps(LOGICFRAMES_PER_SECOND);
-		TheFramePacer->enableLogicTimeScale(LOGICFRAMES_PER_SECOND < TheFramePacer->getFramesPerSecondLimit());
+		TheFramePacer->enableLogicTimeScale(LOGICFRAMES_PER_SECOND < TheFramePacer->getFramesPerSecondLimit() || TheFramePacer->isRealTimeLogic());	// Tiberium Project
 	}
 
 	// prepare for new game

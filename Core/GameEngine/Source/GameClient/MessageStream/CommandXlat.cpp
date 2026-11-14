@@ -227,7 +227,13 @@ bool changeLogicTimeScale(FpsValueChange change)
 	// Ceil the value at the max render fps value plus a bit so that the next fps
 	// value decrease would undercut the max render fps at the correct step value.
 	// Example: render fps 72 -> logic value ceiled to 75 -> decreased to 70.
-	logicTimeScaleFps = min(logicTimeScaleFps, maxRenderFps + maxRenderRemainder);
+	// Tiberium Project @feature real-time logic: the game's speed is its own, above the draw limit too (the logic then
+	// runs more than one frame an update), and the time scale stays on whatever it is set to
+	const Bool realTimeLogic = TheFramePacer->isRealTimeLogic();
+	if (!realTimeLogic)
+	{
+		logicTimeScaleFps = min(logicTimeScaleFps, maxRenderFps + maxRenderRemainder);
+	}
 	logicTimeScaleFps = LogicTimeScaleFpsPreset::changeFpsValue(logicTimeScaleFps, change);
 
 	// Set value before potentially disabling it.
@@ -236,7 +242,7 @@ bool changeLogicTimeScale(FpsValueChange change)
 		TheFramePacer->setLogicTimeScaleFps(logicTimeScaleFps);
 	}
 
-	TheFramePacer->enableLogicTimeScale(logicTimeScaleFps < maxRenderFps);
+	TheFramePacer->enableLogicTimeScale(logicTimeScaleFps < maxRenderFps || realTimeLogic);
 
 	// Set value after potentially enabling it.
 	if (TheFramePacer->isLogicTimeScaleEnabled())

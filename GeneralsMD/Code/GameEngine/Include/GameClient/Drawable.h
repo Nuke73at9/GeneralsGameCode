@@ -620,6 +620,7 @@ protected:
 	}
 
 	void applyPhysicsXform(Matrix3D* mtx);
+	void interpolateDrawnTransform(Matrix3D* mtx);	///< Tiberium Project: where it is drawn between its last two logic frames
 
 	struct PhysicsXformInfo
 	{
@@ -717,6 +718,13 @@ private:
 	DrawableLocoInfo*	m_locoInfo;	// lazily allocated
 
 	PhysicsXformInfo* m_physicsXform;
+
+	// Tiberium Project @feature drawn between logic frames (FramePacer::isInterpolatingDrawables): where it stood at the
+	// logic frame before the last and at the last, and which logic frame the latter was (NOT_DRAWN_YET: none)
+	enum { NOT_DRAWN_YET = 0xFFFFFFFF };
+	Matrix3D m_drawnFromTransform;
+	Matrix3D m_drawnToTransform;
+	UnsignedInt m_drawnLogicFrame;
 
 	RefCountPtr<DynamicAudioEventRTS> m_ambientSound;		///< sound module for ambient sound (lazily allocated)
 

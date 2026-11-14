@@ -69,6 +69,19 @@ public:
 
 	Real getLogicFramePhase() const; ///< Get how far the current render step reaches into the current logic frame, in [0,1]. Used to interpolate render updates between logic updates.
 
+	// Tiberium Project @feature the game's pace apart from the draw rate (Options.ini; off unless asked for):
+	// real-time logic keeps the logic at its rate whatever the draw rate (a new game leaves the logic time scale on, and
+	// up to MaxLogicTicksPerUpdate logic frames run in one update when drawing falls behind); the draw rate override sets
+	// the fps limit itself (0: none), whatever a game's speed setting asks for.
+	void setRealTimeLogic( Bool enable, Int maxLogicTicksPerUpdate = 4 );
+	Bool isRealTimeLogic() const { return m_realTimeLogic; }
+	Int  getMaxLogicTicksPerUpdate() const { return m_maxLogicTicksPerUpdate; }
+	void setRenderFpsOverride( Int fps ); ///< -1: none (the limit set as before), 0: no limit, else the limit
+	void setLogicFramePhase( Real phase ); ///< Real-time logic: the engine's own measure of how far the next draw reaches into the logic frame (the time gathered towards the next one)
+	Int  getRenderFpsOverride() const { return m_renderFpsOverride; }
+	void setInterpolateDrawables( Bool enable ) { m_interpolateDrawables = enable; }
+	Bool isInterpolatingDrawables() const { return m_interpolateDrawables; } ///< drawables are drawn between their last two logic frames' places
+
 protected:
 
 	FrameRateLimit m_frameRateLimit;
@@ -83,6 +96,10 @@ protected:
 	Bool m_enableLogicTimeScale;
 	Bool m_isTimeFrozen;
 	Bool m_isGameHalted;
+	Bool m_realTimeLogic; ///< Tiberium Project: logic kept at its rate whatever the draw rate
+	Bool m_interpolateDrawables; ///< Tiberium Project: drawables drawn between logic frames
+	Int m_maxLogicTicksPerUpdate; ///< Tiberium Project: the most logic frames one update catches up with
+	Int m_renderFpsOverride; ///< Tiberium Project: -1 none, 0 no limit, else the draw rate limit
 };
 
 extern FramePacer* TheFramePacer;

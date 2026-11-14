@@ -83,6 +83,7 @@
 #include "GameClient/GameText.h"
 
 #include "WW3D2/ww3d.h"
+#include "WWMath/quat.h"	// Tiberium Project
 
 #define VERY_TRANSPARENT_MATERIAL_PASS_OPACITY (0.001f)
 #define MATERIAL_PASS_OPACITY_FADE_SCALAR (0.8f)
@@ -420,6 +421,10 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatusBits statu
 
 	m_locoInfo = nullptr;
 	m_physicsXform = nullptr;
+	// Tiberium Project @feature (drawn between logic frames: not drawn yet)
+	m_drawnFromTransform.Make_Identity();
+	m_drawnToTransform.Make_Identity();
+	m_drawnLogicFrame = NOT_DRAWN_YET;
 
 	// sanity
 	if( TheGameClient == nullptr || thingTemplate == nullptr )
@@ -1404,6 +1409,83 @@ void Drawable::flashAsSelected( const RGBColor *color ) ///< drawable takes care
 
 		}
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature a transform the share t of the way from one to another: the place on the line between
+	them, the facing turned the short way. */
+//-------------------------------------------------------------------------------------------------
+static void blendTransforms(const Matrix3D& from, const Matrix3D& to, Real t, Matrix3D* out)
+{
+	Vector3 fromPos, toPos;
+	from.Get_Translation(&fromPos);
+	to.Get_Translation(&toPos);
+	Quaternion turned;
+	Fast_Slerp(turned, Build_Quaternion(from), Build_Quaternion(to), t);
+	Matrix3D blended;
+	Build_Matrix3D(turned, blended);
+	blended.Set_Translation(fromPos + (toPos - fromPos) * t);
+	*out = blended;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature the transform to draw with: between where the drawable stood at the logic frame before the
+	last and at the last, by how far the frame being drawn reaches into the logic frame (FramePacer's phase). So it is
+	drawn up to one logic frame behind the logic, and moves at every drawn frame. Where frames are drawn more slowly
+	than the logic runs, several logic frames have gone by since it was last drawn: where it stood one logic frame ago
+	is then taken as on the line from where it was last drawn to where it is, so it is still drawn that one frame
+	behind, not a changing number of them. One not drawn before (new, or out of view for long), or that jumped (a
+	teleport), is drawn where it is. */
+//-------------------------------------------------------------------------------------------------
+void Drawable::interpolateDrawnTransform(Matrix3D* mtx)
+{
+	// (the most logic frames between two draws that are still bridged: FramePacer's most in one update)
+	const UnsignedInt MAX_FRAMES_BRIDGED = 8;
+	const UnsignedInt logicFrame = TheGameLogic != nullptr ? TheGameLogic->getFrame() : 0;
+	if (m_drawnLogicFrame != logicFrame)
+	{
+		// (a new game counts its frames from the start again: the difference wraps to a large number, drawn where it is)
+		const UnsignedInt frames = logicFrame - m_drawnLogicFrame;
+		if (m_drawnLogicFrame == NOT_DRAWN_YET || frames > MAX_FRAMES_BRIDGED)
+		{
+			m_drawnFromTransform = *mtx;
+		}
+		else if (frames == 1)
+		{
+			m_drawnFromTransform = m_drawnToTransform;
+		}
+		else
+		{
+			blendTransforms(m_drawnToTransform, *mtx, (Real)(frames - 1) / (Real)frames, &m_drawnFromTransform);
+		}
+		m_drawnToTransform = *mtx;
+		m_drawnLogicFrame = logicFrame;
+	}
+	else if (memcmp(&m_drawnToTransform, mtx, sizeof(Matrix3D)) != 0)
+	{
+		// moved without a logic frame (placed by the client, a script, the editor): drawn where it is
+		m_drawnFromTransform = *mtx;
+		m_drawnToTransform = *mtx;
+	}
+
+	const Real t = TheFramePacer->getLogicFramePhase();
+	if (t >= 1.0f || memcmp(&m_drawnFromTransform, &m_drawnToTransform, sizeof(Matrix3D)) == 0)
+	{
+		return;
+	}
+
+	Vector3 from, to;
+	m_drawnFromTransform.Get_Translation(&from);
+	m_drawnToTransform.Get_Translation(&to);
+	// (further than anything travels in a logic frame: a jump, not a move)
+	const Real MAX_STEP = 60.0f;
+	if ((to - from).Length2() > MAX_STEP * MAX_STEP)
+	{
+		m_drawnFromTransform = m_drawnToTransform;
+		return;
+	}
+
+	blendTransforms(m_drawnFromTransform, m_drawnToTransform, t, mtx);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2717,6 +2799,12 @@ void Drawable::draw()
 
 	// call the database defined draw action method
 	Matrix3D transformMtx = *getTransformMatrix();
+	// Tiberium Project @feature drawn between its last two logic frames' places, so its motion is smooth when frames are
+	// drawn faster than the logic runs (the look only: the drawable's own transform is the logic's, untouched)
+	if (TheFramePacer->isInterpolatingDrawables())
+	{
+		interpolateDrawnTransform(&transformMtx);
+	}
 	if (!isInstanceIdentity())
 	{
 #ifdef ALLOW_TEMPORARIES
