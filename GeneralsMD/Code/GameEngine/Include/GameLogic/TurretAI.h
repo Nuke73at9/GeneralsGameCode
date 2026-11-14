@@ -236,6 +236,7 @@ public:
 	Bool						m_firesWhileTurning;    ///< so the firing state does not instantly expire the turning state
 	Bool						m_isAllowsPitch;				///< This type of turret can pitch up and down as well as spin
 	Bool						m_independent;					///< Tiberium Project @feature SAGE 2's weapon slots: it picks its own targets and fires its own slots' weapons, whatever the object's current weapon
+	Bool						m_whileMovingOnly;			///< Tiberium Project @feature the turret has its weapons only while its unit moves (a unit without a turret that fires on the move); standing, they are the unit's own
 
 	TurretAIData();
 	static void buildFieldParse(MultiIniFieldParse& p);
@@ -314,6 +315,7 @@ public:
 	virtual Bool isWeaponSlotOkToFire(WeaponSlotType wslot) const override;
 	virtual Bool getIndependentWeaponSlot( WeaponSlotType* slot ) const override;	///< Tiberium Project
 	Bool isIndependent() const { return m_data->m_independent; }
+	Bool isActiveNow() const;	///< Tiberium Project: FALSE for a WhileMovingOnly turret whose unit stands
 	UnsignedInt getControlledWeaponSlots() const { return m_data->m_turretWeaponSlots; }
 
 	// these are only for use by the state machines... don't call them otherwise, please

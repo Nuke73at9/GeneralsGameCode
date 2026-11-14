@@ -212,6 +212,7 @@ TurretAIData::TurretAIData()
 	m_firesWhileTurning = FALSE;
 	m_isAllowsPitch = false;
 	m_independent = false;
+	m_whileMovingOnly = false;	// Tiberium Project
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -258,6 +259,7 @@ void TurretAIData::buildFieldParse(MultiIniFieldParse& p)
 		{ "ControlledWeaponSlots",	parseTWS,															nullptr, offsetof( TurretAIData, m_turretWeaponSlots ) },
 		{ "AllowsPitch",						INI::parseBool,												nullptr, offsetof( TurretAIData, m_isAllowsPitch ) },
 		{ "Independent",						INI::parseBool,												nullptr, offsetof( TurretAIData, m_independent ) },	// Tiberium Project
+		{ "WhileMovingOnly",				INI::parseBool,												nullptr, offsetof( TurretAIData, m_whileMovingOnly ) },	// Tiberium Project
 #ifdef INTER_TURRET_DELAY
 		{ "InterTurretDelay",				INI::parseDurationUnsignedInt,				nullptr, offsetof( TurretAIData, m_interTurretDelay ) },
 #endif
@@ -820,6 +822,19 @@ Bool TurretAI::isTurretInNaturalPosition() const
 }
 
 //----------------------------------------------------------------------------------------------------------
+// Tiberium Project @feature a WhileMovingOnly turret (C&C4's units without a turret whose weapons fire on the move:
+// its soldiers, bikes and gunships) is a turret in the logic only, with no bone to turn. While its unit moves it has
+// its weapons: it finds its own targets and fires at them in any direction, as an independent turret does. While the
+// unit stands, the weapons are the unit's own again: it turns to face what it attacks, as a unit without a turret.
+Bool TurretAI::isActiveNow() const
+{
+	if (!m_data->m_whileMovingOnly)
+		return TRUE;
+	const AIUpdateInterface *ai = m_owner->getAI();
+	return ai != nullptr && ai->isMoving();
+}
+
+//----------------------------------------------------------------------------------------------------------
 void TurretAI::friend_notifyStateMachineChanged()
 {
 	m_sleepUntil = TheGameLogic->getFrame();
@@ -843,6 +858,30 @@ UpdateSleepTime TurretAI::updateTurretAI()
 #endif
 
 	UnsignedInt now = TheGameLogic->getFrame();
+	// Tiberium Project @feature a WhileMovingOnly turret whose unit stands lets go of its target and waits, looking
+	// again in a few frames for the unit to move
+	if (m_data->m_whileMovingOnly && m_enabled && !isActiveNow())
+	{
+		Object *cur = nullptr;
+		Coord3D pos;
+		if (friend_getTurretTarget(cur, pos) != TARGET_NONE)
+		{
+			m_settingIndependentTarget = TRUE;
+			setTurretTargetObject(nullptr, FALSE);
+			m_settingIndependentTarget = FALSE;
+		}
+		m_angle = getNaturalTurretAngle();
+		m_pitch = getNaturalTurretPitch();
+		if (m_data->m_independent)
+		{
+			for (Int i = 0; i < WEAPONSLOT_COUNT; ++i)
+				if (isWeaponSlotOnTurret((WeaponSlotType)i))
+					m_owner->adjustModelConditionForIndependentWeapon((WeaponSlotType)i, FALSE);
+		}
+		const UnsignedInt STANDING_LOOK_FRAMES = 5;
+		m_sleepUntil = now + STANDING_LOOK_FRAMES;
+		return UPDATE_SLEEP(STANDING_LOOK_FRAMES);
+	}
 	// Tiberium Project @feature an independent turret chooses its own target, waking for it
 	if (m_data->m_independent && m_enabled)
 	{

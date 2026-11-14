@@ -774,7 +774,7 @@ UnsignedInt AIUpdateInterface::getIndependentWeaponSlotMask() const
 {
 	UnsignedInt mask = 0;
 	for (int i = 0; i < MAX_TURRETS; ++i)
-		if (m_turretAI[i] && m_turretAI[i]->isIndependent())
+		if (m_turretAI[i] && m_turretAI[i]->isIndependent() && m_turretAI[i]->isActiveNow())	// (not a WhileMovingOnly turret's while the unit stands)
 			mask |= m_turretAI[i]->getControlledWeaponSlots();
 	return mask;
 }
@@ -783,7 +783,7 @@ UnsignedInt AIUpdateInterface::getIndependentWeaponSlotMask() const
 WhichTurretType AIUpdateInterface::getWhichTurretForCurWeapon() const
 {
 	for (int i = 0; i < MAX_TURRETS; ++i)
-		if (m_turretAI[i] && m_turretAI[i]->isOwnersCurWeaponOnTurret())
+		if (m_turretAI[i] && m_turretAI[i]->isActiveNow() && m_turretAI[i]->isOwnersCurWeaponOnTurret())	// Tiberium Project: isActiveNow
 			return (WhichTurretType)i;
 
 	return TURRET_INVALID;
@@ -794,7 +794,7 @@ WhichTurretType AIUpdateInterface::getWhichTurretForWeaponSlot(WeaponSlotType ws
 {
 	for (int i = 0; i < MAX_TURRETS; ++i)
 	{
-		if (m_turretAI[i] && m_turretAI[i]->isWeaponSlotOnTurret(wslot))
+		if (m_turretAI[i] && m_turretAI[i]->isActiveNow() && m_turretAI[i]->isWeaponSlotOnTurret(wslot))	// Tiberium Project: isActiveNow
 		{
 			if (turretAngle)
 				*turretAngle = m_turretAI[i]->getTurretAngle();

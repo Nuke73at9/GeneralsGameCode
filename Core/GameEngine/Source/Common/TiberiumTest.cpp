@@ -2124,6 +2124,29 @@ void TiberiumTest::update()
 		}
 		else if ( step.action == "pace" && TheGameLogic != nullptr )
 		{
+#if defined(_WIN32)
+			// (the displays attached to the desktop and their refresh rates: what a synced frame rate is held to)
+			if ( s_paceDrawn < 0 )
+			{
+				for ( DWORD n = 0; n < 16; ++n )
+				{
+					DISPLAY_DEVICEA dev;
+					memset( &dev, 0, sizeof( dev ) );
+					dev.cb = sizeof( dev );
+					if ( !EnumDisplayDevicesA( nullptr, n, &dev, 0 ) )
+						break;
+					if ( ( dev.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP ) == 0 )
+						continue;
+					DEVMODEA mode;
+					memset( &mode, 0, sizeof( mode ) );
+					mode.dmSize = sizeof( mode );
+					if ( EnumDisplaySettingsA( dev.DeviceName, ENUM_CURRENT_SETTINGS, &mode ) )
+						log( "frame %d: ui: display %s (%s)%s: %lu by %lu at %lu Hz", (int)s_frame, dev.DeviceName, dev.DeviceString,
+							( dev.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE ) != 0 ? ", the primary" : "",
+							(unsigned long)mode.dmPelsWidth, (unsigned long)mode.dmPelsHeight, (unsigned long)mode.dmDisplayFrequency );
+				}
+			}
+#endif
 			const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 			if ( s_paceDrawn >= 0 )
 			{
