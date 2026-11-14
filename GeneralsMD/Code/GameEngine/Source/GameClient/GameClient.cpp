@@ -769,6 +769,21 @@ void GameClient::step()
 	TheDisplay->step();
 }
 
+// Tiberium Project @feature real-time logic: when an update runs several logic frames (drawing fell behind the logic
+// rate), the client's own share of each logic frame but the last still has to happen once a logic frame, as it does
+// when every logic frame is followed by an update: the particle systems' step (emission, ageing, motion). Otherwise
+// effects thin out and slow down with the frame rate. Called before each caught-up logic frame, for the one just run.
+void GameClient::stepCaughtUpLogicFrame()
+{
+	if (TheGameEngine->isTimeFrozen() || TheGameEngine->isGameHalted())
+		return;
+	if (TiberiumTest::isNoDraw() && TheGameLogic->getFrame() > 0)
+		return;
+
+	TheParticleSystemManager->setLocalPlayerIndex(rts::getObservedOrLocalPlayer()->getPlayerIndex());
+	TheParticleSystemManager->UPDATE();
+}
+
 void GameClient::updateHeadless()
 {
 	// TheSuperHackers @info helmutbuhler 03/05/2025 bobtista 02/02/2026

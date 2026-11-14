@@ -50,6 +50,8 @@
 #include "GameClient/GameClient.h"	// Tiberium Project @feature spotlights (the client frame)
 #include "GameClient/Shadow.h"
 #include "GameLogic/GameLogic.h"		// for real-time frame
+#include "Common/FramePacer.h"	// Tiberium Project (turrets drawn between logic frames)
+#include "Common/TiberiumTest.h"	// Tiberium Project (the test: the turret angle drawn)
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/WeaponSet.h"
@@ -2139,6 +2141,13 @@ W3DModelDraw::W3DModelDraw(Thing *thing, const ModuleData* moduleData) : DrawMod
 	m_damageLook = 0.0f;
 	m_treadScrollRobj = nullptr;
 	m_treadScrollLastAngle = 0.0f;
+	// Tiberium Project @feature (turrets drawn between logic frames: not drawn yet)
+	for (Int turret = 0; turret < MAX_TURRETS; ++turret)
+	{
+		m_turretDrawnFromAngle[turret] = m_turretDrawnToAngle[turret] = 0.0f;
+		m_turretDrawnFromPitch[turret] = m_turretDrawnToPitch[turret] = 0.0f;
+	}
+	m_turretDrawnLogicFrame = TURRET_NOT_DRAWN_YET;
 	m_shadow = nullptr;
 	m_shadowEnabled = TRUE;
 	m_terrainDecal = nullptr;
@@ -3038,10 +3047,89 @@ static Matrix3D turretBoneRotation( const HTreeClass *tree, Int bone, const Vect
 	return out;
 }
 
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature the angles to draw the turrets at: given the logic's, between each turret's angle at the
+	logic frame before the last and at the last, by how far the frame being drawn reaches into the logic frame, as the
+	drawable itself is drawn (Drawable::interpolateDrawnTransform): the turret turns at every drawn frame, up to one
+	logic frame behind the logic. A turn of more than a quarter circle in a frame is a jump (a reset), not a turn. */
+//-------------------------------------------------------------------------------------------------
+void W3DModelDraw::interpolateDrawnTurrets(Real* angle, Real* pitch)
+{
+	if (TheFramePacer == nullptr || !TheFramePacer->isInterpolatingDrawables() || TheGameLogic == nullptr)
+		return;
+
+	// (the most logic frames between two draws that are still bridged, as for the drawable)
+	const UnsignedInt MAX_FRAMES_BRIDGED = 8;
+	const Real MAX_TURN = PI * 0.5f;
+	const UnsignedInt logicFrame = TheGameLogic->getFrame();
+	if (m_turretDrawnLogicFrame != logicFrame)
+	{
+		const UnsignedInt frames = logicFrame - m_turretDrawnLogicFrame;
+		for (Int turret = 0; turret < MAX_TURRETS; ++turret)
+		{
+			if (m_turretDrawnLogicFrame == TURRET_NOT_DRAWN_YET || frames > MAX_FRAMES_BRIDGED)
+			{
+				m_turretDrawnFromAngle[turret] = angle[turret];
+				m_turretDrawnFromPitch[turret] = pitch[turret];
+			}
+			else if (frames == 1)
+			{
+				m_turretDrawnFromAngle[turret] = m_turretDrawnToAngle[turret];
+				m_turretDrawnFromPitch[turret] = m_turretDrawnToPitch[turret];
+			}
+			else
+			{
+				// drawn more slowly than the logic runs: one logic frame back, on the way from where it was last drawn
+				const Real share = (Real)(frames - 1) / (Real)frames;
+				m_turretDrawnFromAngle[turret] = m_turretDrawnToAngle[turret] + normalizeAngle(angle[turret] - m_turretDrawnToAngle[turret]) * share;
+				m_turretDrawnFromPitch[turret] = m_turretDrawnToPitch[turret] + (pitch[turret] - m_turretDrawnToPitch[turret]) * share;
+			}
+			m_turretDrawnToAngle[turret] = angle[turret];
+			m_turretDrawnToPitch[turret] = pitch[turret];
+		}
+		m_turretDrawnLogicFrame = logicFrame;
+	}
+
+	const Real t = TheFramePacer->getLogicFramePhase();
+	if (t >= 1.0f)
+		return;
+	for (Int turret = 0; turret < MAX_TURRETS; ++turret)
+	{
+		const Real turn = normalizeAngle(m_turretDrawnToAngle[turret] - m_turretDrawnFromAngle[turret]);
+		if (fabs(turn) > MAX_TURN)
+		{
+			m_turretDrawnFromAngle[turret] = m_turretDrawnToAngle[turret];
+			m_turretDrawnFromPitch[turret] = m_turretDrawnToPitch[turret];
+			continue;
+		}
+		angle[turret] = m_turretDrawnFromAngle[turret] + turn * t;
+		pitch[turret] = m_turretDrawnFromPitch[turret] + (m_turretDrawnToPitch[turret] - m_turretDrawnFromPitch[turret]) * t;
+	}
+}
+
 void W3DModelDraw::handleClientTurretPositioning()
 {
 	if (!m_curState || !(m_curState->m_validStuff & ModelConditionInfo::TURRETS_VALID))
 		return;
+
+	// Tiberium Project @feature each turret's angle and pitch as drawn: the logic's, or between its last two logic
+	// frames' (interpolateDrawnTurrets)
+	Real turretRot[MAX_TURRETS];
+	Real turretTilt[MAX_TURRETS];
+	{
+		const Object *obj = getDrawable()->getObject();
+		const AIUpdateInterface* ai = obj ? obj->getAIUpdateInterface() : nullptr;
+		for (int s = 0; s < MAX_TURRETS; ++s)
+		{
+			turretRot[s] = 0.0f;
+			turretTilt[s] = 0.0f;
+			if (ai && (m_curState->m_turrets[s].m_turretAngleBone || m_curState->m_turrets[s].m_turretPitchBone))
+				ai->getTurretRotAndPitch((WhichTurretType)s, &turretRot[s], &turretTilt[s]);
+		}
+		interpolateDrawnTurrets(turretRot, turretTilt);
+		if (m_curState->m_turrets[TURRET_MAIN].m_turretAngleBone != 0)
+			TiberiumTest::noteDrawnTurret(getDrawable(), turretRot[TURRET_MAIN]);	// (the test's trace)
+	}
 
 	// Tiberium Project @feature a turret on a turret (C&C4's hierarchical turrets): its bone hangs under
 	// the other turret's bone, so it already turns with that one; it is turned by the difference, so it
@@ -3050,13 +3138,11 @@ void W3DModelDraw::handleClientTurretPositioning()
 	for (int s = 0; s < MAX_TURRETS; ++s)
 	{
 		drawnAngle[s] = 0.0f;
-		Real pitch = 0.0f;
 		const Object *obj = getDrawable()->getObject();
 		const AIUpdateInterface* ai = obj ? obj->getAIUpdateInterface() : nullptr;
 		if (ai && m_curState->m_turrets[s].m_turretAngleBone != 0)
 		{
-			ai->getTurretRotAndPitch((WhichTurretType)s, &drawnAngle[s], &pitch);
-			drawnAngle[s] += m_curState->m_turrets[s].m_turretArtAngle;
+			drawnAngle[s] = turretRot[s] + m_curState->m_turrets[s].m_turretArtAngle;
 		}
 	}
 	const HTreeClass *tree = m_renderObject ? m_renderObject->Get_HTree() : nullptr;
@@ -3068,13 +3154,9 @@ void W3DModelDraw::handleClientTurretPositioning()
 		Real turretPitch = 0;
 		if (tur.m_turretAngleBone || tur.m_turretPitchBone)
 		{
-			const Object *obj = getDrawable()->getObject();
-			if (obj)
-			{
-				const AIUpdateInterface* ai = obj->getAIUpdateInterface();
-				if (ai)
-					ai->getTurretRotAndPitch((WhichTurretType)tslot, &turretAngle, &turretPitch);
-			}
+			// (Tiberium Project: as read and drawn between logic frames above)
+			turretAngle = turretRot[tslot];
+			turretPitch = turretTilt[tslot];
 
 			// do turret, if any
 			if (tur.m_turretAngleBone != 0)

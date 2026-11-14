@@ -49,6 +49,8 @@
 
 #include "Lib/BaseType.h"
 
+class Drawable;
+
 class TiberiumTest
 {
 public:
@@ -89,6 +91,7 @@ public:
 	/// Once per engine update, after the client has drawn and before the logic runs (the fly step's tilt, as drawn)
 	static void beforeLogic();
 	static void afterDraw();	///< Tiberium Project (the test): straight after the client has drawn (the trace of what was drawn)
+	static void noteDrawnTurret( const Drawable *draw, Real angle );	///< the main turret's angle as handed to its bone (the trace)
 
 	/// A line in TiberiumTest.log (and on stderr)
 	static void log( const char *format, ... );

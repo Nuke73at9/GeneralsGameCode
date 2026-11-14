@@ -124,6 +124,10 @@ public:
 	Real getHeight();													///< Returns the height of the world
 
 	Bool isInGameLogicUpdate() const { return m_isInUpdate; }
+	// Tiberium Project @feature (the test) what the test harness makes between logic frames is made as within one, as
+	// every object of a real game is: a model's bones and turrets are validated only then (W3DModelDraw), so a turret
+	// made otherwise stands still until its first shot
+	void friend_setInGameLogicUpdate(Bool inUpdate) { m_isInUpdate = inUpdate; }
 	Bool hasUpdated() const { return m_hasUpdated; } ///< Returns true if the logic frame has advanced in the current client/render update
 	UnsignedInt getFrame();										///< Returns the current simulation frame number
 	UnsignedInt getCRC( Int mode = CRC_CACHED, AsciiString deepCRCFileName = AsciiString::TheEmptyString );		///< Returns the CRC

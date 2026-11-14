@@ -577,6 +577,15 @@ private:
 	std::vector<Real>										m_treadScrollOffsets;	///< Tiberium Project: their offsets so far
 	const RenderObjClass*									m_treadScrollRobj;		///< Tiberium Project: the render object the bones were found in
 	Real													m_treadScrollLastAngle;	///< Tiberium Project: the facing at the last draw
+	// Tiberium Project @feature turrets drawn between logic frames (FramePacer::isInterpolatingDrawables): each turret's
+	// angle and pitch at the logic frame before the last and at the last, and which logic frame the latter was
+	enum { TURRET_NOT_DRAWN_YET = 0xFFFFFFFF };
+	Real													m_turretDrawnFromAngle[MAX_TURRETS];
+	Real													m_turretDrawnToAngle[MAX_TURRETS];
+	Real													m_turretDrawnFromPitch[MAX_TURRETS];
+	Real													m_turretDrawnToPitch[MAX_TURRETS];
+	UnsignedInt										m_turretDrawnLogicFrame;
+	void interpolateDrawnTurrets(Real* angle, Real* pitch);	///< Tiberium Project: the angles to draw the turrets at
 	void updateTreadScroll();	///< Tiberium Project @feature C&C4's scrolling treads
 	void adjustSpotlight(Matrix3D& mtx) const;	///< Tiberium Project @feature a spotlight's sweep
 

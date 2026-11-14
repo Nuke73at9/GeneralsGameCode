@@ -1205,6 +1205,7 @@ void GameEngine::update()
 			for (Int extra = 1; extra < TheFramePacer->getMaxLogicTicksPerUpdate() && takeExtraLogicTick(); ++extra)
 			{
 				TheMessageStream->propagateMessages();
+				TheGameClient->stepCaughtUpLogicFrame();
 				TiberiumTest::beforeLogic();
 				TheGameLogic->UPDATE();
 				TheGameClient->step();

@@ -576,10 +576,28 @@ static Bool drawnTilt( const Object *obj, Coord3D &tilt )
 	return FALSE;
 }
 
-// Tiberium Project @feature (the test) "trace=Template,N": for the next N updates, where each object of the kind is by
+// Tiberium Project @feature (the test) an object the test makes, made as within a logic frame (the test runs between
+// them): every object of a real game is made within one, and its model's bones and turrets are validated only then
+// (W3DModelDraw), so one made otherwise would stand with its turret still until its first shot
+static Object *makeAsInLogicFrame( const ThingTemplate *tmpl, Team *team )
+{
+#if RTS_ZEROHOUR
+	const Bool was = TheGameLogic->isInGameLogicUpdate();
+	TheGameLogic->friend_setInGameLogicUpdate( TRUE );
+	Object *obj = TheThingFactory->newObject( tmpl, team );
+	TheGameLogic->friend_setInGameLogicUpdate( was );
+	return obj;
+#else
+	return TheThingFactory->newObject( tmpl, team );
+#endif
+}
+
+// Tiberium Project @feature (the test) "trace=Template,N[,turret]": for the next N updates, where each object of the kind is by
 // the logic and where it was last drawn, with the frame pacer's phase and the wall clock (motion drawn between logic
 // frames); "pace": the logic frames and updates a second since the last "pace" (the game's pace against the draw rate)
 static std::string s_traceTemplate;
+static std::string s_traceBone;
+static std::map<UnsignedInt, Real> s_traceTurret;	// drawable id: the main turret's angle as last handed to its bone
 static Int s_traceLeft = 0;
 static std::chrono::steady_clock::time_point s_traceStart;
 static std::chrono::steady_clock::time_point s_paceTime;
@@ -599,19 +617,56 @@ static void traceDrawn( Int update )
 		Real radius;
 		Matrix3D mtx;
 		Bool drawn = FALSE;
+		const ObjectDrawInterface *model = nullptr;
 		for ( const DrawModule *const *dm = look != nullptr ? look->getDrawModules() : nullptr; dm != nullptr && *dm != nullptr && !drawn; ++dm )
 		{
 			const ObjectDrawInterface *di = (*dm)->getObjectDrawInterface();
 			drawn = di != nullptr && di->clientOnly_getRenderObjInfo( &at, &radius, &mtx );
+			if ( drawn )
+				model = di;
 		}
 		const Vector3 place = mtx.Get_Translation();
 		const Vector3 fwd = mtx.Get_X_Vector();
-		TiberiumTest::log( "trace: update %d, logic frame %u, phase %.3f, %.1f ms: %s #%u logic %.3f %.3f facing %.2f, drawn %.3f %.3f facing %.2f%s",
+		// (with "turret" for a third word: the main turret's angle by the logic and as handed to its bone, and where the
+		// health bar is anchored on screen, by the logic's place and as drawn)
+		char more[ 192 ] = "";
+		if ( drawn && model != nullptr && !s_traceBone.empty() )
+		{
+			Real turretAngle = 0.0f;
+			const AIUpdateInterface *ai = obj->getAIUpdateInterface();
+			if ( ai != nullptr )
+				ai->getTurretRotAndPitch( TURRET_MAIN, &turretAngle, nullptr );
+			const std::map<UnsignedInt, Real>::const_iterator turned = s_traceTurret.find( (UnsignedInt)look->getID() );
+			const Bool found = turned != s_traceTurret.end();
+			Coord3D box;
+			obj->getHealthBoxPosition( box );
+			ICoord2D byLogic = { 0, 0 }, asDrawn = { 0, 0 };
+			if ( TheTacticalView != nullptr )
+				TheTacticalView->worldToScreen( &box, &byLogic );
+#if RTS_ZEROHOUR
+			look->drawnWorldToScreen( &box, &asDrawn );
+#else
+			asDrawn = byLogic;
+#endif
+			snprintf( more, sizeof( more ), "; turret logic %.2f, %s %.2f; bar x %d (the logic's %d)",
+				turretAngle * 180.0f / PI, found ? "drawn" : "not drawn", found ? turned->second * 180.0f / PI : 0.0f,
+				(int)asDrawn.x, (int)byLogic.x );
+		}
+		TiberiumTest::log( "trace: update %d, logic frame %u, phase %.3f, %.1f ms: %s #%u logic %.3f %.3f facing %.2f, drawn %.3f %.3f facing %.2f%s%s",
 			(int)update, (unsigned)TheGameLogic->getFrame(), TheFramePacer != nullptr ? TheFramePacer->getLogicFramePhase() : 0.0f, ms,
 			obj->getTemplate()->getName().str(), (unsigned)obj->getID(), obj->getPosition()->x, obj->getPosition()->y,
 			obj->getOrientation() * 180.0f / PI, drawn ? place.X : 0.0f, drawn ? place.Y : 0.0f,
-			drawn ? WWMath::Atan2( fwd.Y, fwd.X ) * 180.0f / PI : 0.0f, drawn ? "" : " (not drawn)" );
+			drawn ? WWMath::Atan2( fwd.Y, fwd.X ) * 180.0f / PI : 0.0f, drawn ? "" : " (not drawn)", more );
 	}
+}
+
+// Tiberium Project @feature (the test) the model draw tells the angle it turns the main turret's bone to (the logic's,
+// or between two logic frames'), while a trace runs
+void TiberiumTest::noteDrawnTurret( const Drawable *draw, Real angle )
+{
+	if ( s_traceLeft <= 0 || draw == nullptr )
+		return;
+	s_traceTurret[ (UnsignedInt)draw->getID() ] = angle;
 }
 
 // Tiberium Project @feature (the test) straight after the client has drawn, before any logic frame of this update: the
@@ -970,7 +1025,7 @@ void TiberiumTest::update()
 		for ( Int k = 0; k < (Int)( sizeof( THINGS ) / sizeof( THINGS[0] ) ); ++k )
 		{
 			const ThingTemplate *tmpl = TheThingFactory->findTemplate( THINGS[k].name );
-			Object *obj = tmpl != nullptr && team != nullptr ? TheThingFactory->newObject( tmpl, team ) : nullptr;
+			Object *obj = tmpl != nullptr && team != nullptr ? makeAsInLogicFrame( tmpl, team ) : nullptr;
 			if ( obj == nullptr )
 				continue;
 			Coord3D p = center;
@@ -998,7 +1053,7 @@ void TiberiumTest::update()
 		for ( Int k = 0; k < count; ++k )
 		{
 			const ThingTemplate *tmpl = TheThingFactory->findTemplate( s_spawnNames[k].c_str() );
-			Object *obj = tmpl != nullptr && team != nullptr ? TheThingFactory->newObject( tmpl, team ) : nullptr;
+			Object *obj = tmpl != nullptr && team != nullptr ? makeAsInLogicFrame( tmpl, team ) : nullptr;
 			if ( obj == nullptr )
 			{
 				log( "frame %d: no object %s", (int)s_frame, s_spawnNames[k].c_str() );
@@ -1058,7 +1113,7 @@ void TiberiumTest::update()
 					continue;
 				if ( s_spawnFoeAI && !candidate->isSkirmishAIPlayer() )
 					continue;
-				Object *probe = TheThingFactory->newObject( tt, candidate->getDefaultTeam() );
+				Object *probe = makeAsInLogicFrame( tt, candidate->getDefaultTeam() );
 				if ( probe != nullptr && probe->getControllingPlayer() != ours )
 					foe = probe->getControllingPlayer();
 				if ( probe != nullptr )
@@ -1081,7 +1136,7 @@ void TiberiumTest::update()
 					// (Tiberium Project: "eachtarget": the k-th object's kind is the k-th, whatever it can attack)
 					if ( s_spawnEachTarget && n != k % kinds.size() )
 						continue;
-					Object *candidate = TheThingFactory->newObject( kinds[n], owner->getDefaultTeam() );
+					Object *candidate = makeAsInLogicFrame( kinds[n], owner->getDefaultTeam() );
 					if ( candidate == nullptr )
 						continue;
 					Coord3D q = *obj->getPosition();
@@ -1101,7 +1156,7 @@ void TiberiumTest::update()
 						if ( able < ATTACKRESULT_POSSIBLE_AFTER_MOVING )
 						{
 							TheGameLogic->destroyObject( candidate );
-							candidate = TheThingFactory->newObject( kinds[0], owner->getDefaultTeam() );
+							candidate = makeAsInLogicFrame( kinds[0], owner->getDefaultTeam() );
 							if ( candidate != nullptr )
 							{
 								candidate->setPosition( &q );
@@ -1553,7 +1608,7 @@ void TiberiumTest::update()
 					how = " (no door free: its parking spaces taken)";
 				else
 				{
-					Object *made = TheThingFactory->newObject( kind, factory->getControllingPlayer()->getDefaultTeam() );
+					Object *made = makeAsInLogicFrame( kind, factory->getControllingPlayer()->getDefaultTeam() );
 					made->setProducer( factory );
 					exit->exitObjectViaDoor( made, door );
 					for ( BehaviorModule **m = made->getBehaviorModules(); *m; ++m )
@@ -1912,7 +1967,7 @@ void TiberiumTest::update()
 					rally.z = TheTerrainLogic->getGroundHeight( rally.x, rally.y );
 					factory->getObjectExitInterface()->setRallyPoint( &rally );
 				}
-				Object *made = TheThingFactory->newObject( tmpl, me->getDefaultTeam() );
+				Object *made = makeAsInLogicFrame( tmpl, me->getDefaultTeam() );
 				Coord3D door = *factory->getPosition();
 				door.x += factory->getGeometryInfo().getBoundingCircleRadius() + 20.0f;
 				made->setPosition( &door );
@@ -1977,9 +2032,11 @@ void TiberiumTest::update()
 		else if ( step.action == "trace" && TheGameLogic != nullptr )
 		{
 			char kind[128] = "";
+			char bone[64] = "";
 			Int count = 60;
-			sscanf( step.arg.c_str(), "%127[^,],%d", kind, &count );
+			sscanf( step.arg.c_str(), "%127[^,],%d,%63[^,]", kind, &count, bone );
 			s_traceTemplate = kind;
+			s_traceBone = bone;
 			s_traceLeft = count;
 			s_traceStart = std::chrono::steady_clock::now();
 			log( "frame %d: ui: trace %s for %d updates (logic frame %u)", (int)s_frame, kind, (int)count, (unsigned)TheGameLogic->getFrame() );
@@ -1991,12 +2048,27 @@ void TiberiumTest::update()
 			{
 				const double seconds = std::chrono::duration<double>( now - s_paceTime ).count();
 				const UnsignedInt frames = TheGameLogic->getFrame() - s_paceLogicFrame;
+				// (the particles alive, summed over the systems)
+				UnsignedInt particles = 0;
+				UnsignedInt particleSystems = 0;
+				if ( TheParticleSystemManager != nullptr )
+				{
+					ParticleSystemManager::ParticleSystemList &systems = TheParticleSystemManager->getAllParticleSystems();
+					for ( ParticleSystemManager::ParticleSystemListIt it = systems.begin(); it != systems.end(); ++it )
+					{
+						if ( *it == nullptr )
+							continue;
+						particles += (UnsignedInt)(*it)->getParticleCount();
+						++particleSystems;
+					}
+				}
 				// (the renderer's clock, which animations run by: its seconds against the logic's, 1.00 when they keep pace)
 				const double clockSeconds = ( WW3D::Get_Logic_Time_Milliseconds() - s_paceRenderClock ) * 0.001;
-				log( "frame %d: ui: pace: %u logic frames and %d updates in %.2f s: %.2f logic frames a second, %.2f updates a second, the renderer's clock %.2f s (%.2f of the logic's) (logic frame %u)",
+				log( "frame %d: ui: pace: %u logic frames and %d updates in %.2f s: %.2f logic frames a second, %.2f updates a second, the renderer's clock %.2f s (%.2f of the logic's), %u particles in %u systems (logic frame %u)",
 					(int)s_frame, (unsigned)frames, (int)( s_drawnFrame - s_paceDrawn ), seconds, seconds > 0.0 ? frames / seconds : 0.0,
 					seconds > 0.0 ? ( s_drawnFrame - s_paceDrawn ) / seconds : 0.0, clockSeconds,
-					frames > 0 ? clockSeconds * LOGICFRAMES_PER_SECOND / frames : 0.0, (unsigned)TheGameLogic->getFrame() );
+					frames > 0 ? clockSeconds * LOGICFRAMES_PER_SECOND / frames : 0.0,
+					(unsigned)particles, (unsigned)particleSystems, (unsigned)TheGameLogic->getFrame() );
 			}
 			else
 				log( "frame %d: ui: pace: started (logic frame %u)", (int)s_frame, (unsigned)TheGameLogic->getFrame() );
@@ -3175,7 +3247,7 @@ void TiberiumTest::update()
 		for ( Int k = 0; k < (Int)( sizeof( THINGS ) / sizeof( THINGS[0] ) ); ++k )
 		{
 			const ThingTemplate *tmpl = TheThingFactory->findTemplate( THINGS[k].name );
-			Object *obj = tmpl != nullptr && team != nullptr ? TheThingFactory->newObject( tmpl, team ) : nullptr;
+			Object *obj = tmpl != nullptr && team != nullptr ? makeAsInLogicFrame( tmpl, team ) : nullptr;
 			if ( obj == nullptr )
 				continue;
 			Coord3D p = center;

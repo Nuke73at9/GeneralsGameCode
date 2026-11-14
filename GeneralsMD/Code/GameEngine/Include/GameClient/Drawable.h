@@ -418,6 +418,7 @@ public:
 	const Matrix3D *getTransformMatrix() const;	///< return the world transform
 
 	void draw();													///< render the drawable to the given view
+	Bool drawnWorldToScreen(const Coord3D* logicPos, ICoord2D* screen) const;	///< Tiberium Project: a point given by the logic's place, on screen where the drawable is drawn
 	void updateDrawable(Real timeScale);														///< update the drawable
 
 	void drawIconUI();													///< draw "icon"(s) needed on drawable (health bars, veterency, etc)
@@ -725,6 +726,7 @@ private:
 	Matrix3D m_drawnFromTransform;
 	Matrix3D m_drawnToTransform;
 	UnsignedInt m_drawnLogicFrame;
+	Coord3D m_drawnOffset;	///< from the logic's place to where it was last drawn (zero when drawn where it is)
 
 	RefCountPtr<DynamicAudioEventRTS> m_ambientSound;		///< sound module for ambient sound (lazily allocated)
 

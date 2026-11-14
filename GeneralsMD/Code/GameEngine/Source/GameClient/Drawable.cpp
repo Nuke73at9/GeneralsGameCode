@@ -425,6 +425,7 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatusBits statu
 	m_drawnFromTransform.Make_Identity();
 	m_drawnToTransform.Make_Identity();
 	m_drawnLogicFrame = NOT_DRAWN_YET;
+	m_drawnOffset.zero();
 
 	// sanity
 	if( TheGameClient == nullptr || thingTemplate == nullptr )
@@ -1486,6 +1487,20 @@ void Drawable::interpolateDrawnTransform(Matrix3D* mtx)
 	}
 
 	blendTransforms(m_drawnFromTransform, m_drawnToTransform, t, mtx);
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature a point given by the logic's place (the health box, a pip row, a caption) on screen where
+	the drawable is drawn: moved by as much as the drawable is drawn off the logic's place (interpolateDrawnTransform),
+	so what is drawn over a unit moves with it at every drawn frame and does not step ahead of it once a logic frame. */
+//-------------------------------------------------------------------------------------------------
+Bool Drawable::drawnWorldToScreen(const Coord3D* logicPos, ICoord2D* screen) const
+{
+	Coord3D pos = *logicPos;
+	pos.x += m_drawnOffset.x;
+	pos.y += m_drawnOffset.y;
+	pos.z += m_drawnOffset.z;
+	return TheTacticalView->worldToScreen( &pos, screen );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2803,7 +2818,15 @@ void Drawable::draw()
 	// drawn faster than the logic runs (the look only: the drawable's own transform is the logic's, untouched)
 	if (TheFramePacer->isInterpolatingDrawables())
 	{
+		// (what is drawn over it by its place, the health bar and the icons, goes where it is drawn: drawnWorldToScreen)
+		const Vector3 logicPlace = transformMtx.Get_Translation();
 		interpolateDrawnTransform(&transformMtx);
+		const Vector3 drawnPlace = transformMtx.Get_Translation();
+		m_drawnOffset.set(drawnPlace.X - logicPlace.X, drawnPlace.Y - logicPlace.Y, drawnPlace.Z - logicPlace.Z);
+	}
+	else
+	{
+		m_drawnOffset.zero();
 	}
 	if (!isInstanceIdentity())
 	{
@@ -2843,7 +2866,7 @@ static Bool computeHealthRegion( const Drawable *draw, IRegion2D& region )
 	Coord3D p;
 	obj->getHealthBoxPosition(p);
 	ICoord2D screenCenter;
-	if( !TheTacticalView->worldToScreen( &p, &screenCenter ) )
+	if( !draw->drawnWorldToScreen( &p, &screenCenter ) )	// Tiberium Project: where it is drawn
 		return FALSE;
 
 	Real healthBoxWidth, healthBoxHeight;
@@ -3063,7 +3086,7 @@ void Drawable::drawAmmo( const IRegion2D *healthBarRegion )
 	pos.x += TheGlobalData->m_ammoPipWorldOffset.x;
 	pos.y += TheGlobalData->m_ammoPipWorldOffset.y;
 	pos.z += TheGlobalData->m_ammoPipWorldOffset.z + obj->getGeometryInfo().getMaxHeightAbovePosition();
-	if( !TheTacticalView->worldToScreen( &pos, &screenCenter ) )
+	if( !drawnWorldToScreen( &pos, &screenCenter ) )	// Tiberium Project: where it is drawn
 		return;
 
 	Real bounding = obj->getGeometryInfo().getBoundingSphereRadius() * scale;
@@ -3130,7 +3153,7 @@ void Drawable::drawContained( const IRegion2D *healthBarRegion )
 	pos.x += TheGlobalData->m_containerPipWorldOffset.x;
 	pos.y += TheGlobalData->m_containerPipWorldOffset.y;
 	pos.z += TheGlobalData->m_containerPipWorldOffset.z + obj->getGeometryInfo().getMaxHeightAbovePosition();
-	if( !TheTacticalView->worldToScreen( &pos, &screenCenter ) )
+	if( !drawnWorldToScreen( &pos, &screenCenter ) )	// Tiberium Project: where it is drawn
 		return;
 
 	Real bounding = obj->getGeometryInfo().getBoundingSphereRadius() * scale;
@@ -3311,7 +3334,7 @@ void Drawable::drawUIText()
 		Coord3D p;
 		ICoord2D screenCenter;
 		obj->getHealthBoxPosition(p);
-		if( ! TheTacticalView->worldToScreen( &p, &screenCenter ) )
+		if( ! drawnWorldToScreen( &p, &screenCenter ) )	// Tiberium Project: where it is drawn
 			return;
 
 		Real healthBoxWidth, healthBoxHeight;
@@ -3849,7 +3872,7 @@ void Drawable::drawConstructPercent( const IRegion2D *healthBarRegion )
 	getDrawableGeometryInfo().getCenterPosition(*getPosition(), pos);
 
 	// convert drawable center position to screen coords
-	TheTacticalView->worldToScreen( &pos, &screen );
+	drawnWorldToScreen( &pos, &screen );	// Tiberium Project: where it is drawn
 
 	if ( screen.x < 1 )
 		return;
@@ -3877,7 +3900,7 @@ void Drawable::drawCaption( const IRegion2D *healthBarRegion )
 	getDrawableGeometryInfo().getCenterPosition(*getPosition(), pos);
 
 	// convert drawable center position to screen coords
-	TheTacticalView->worldToScreen( &pos, &screen );
+	drawnWorldToScreen( &pos, &screen );	// Tiberium Project: where it is drawn
 	screen.x -= (m_captionDisplayString->getWidth() / 2);
 
 	// draw background
@@ -3937,7 +3960,7 @@ void Drawable::drawVeterancy( const IRegion2D *healthBarRegion )
 	Coord3D p;
 	ICoord2D screenCenter;
 	obj->getHealthBoxPosition(p);
-	if( !TheTacticalView->worldToScreen( &p, &screenCenter ) )
+	if( !drawnWorldToScreen( &p, &screenCenter ) )	// Tiberium Project: where it is drawn
 		return;
 
 	Real healthBoxWidth, healthBoxHeight;

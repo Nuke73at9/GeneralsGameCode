@@ -98,6 +98,7 @@ public:
 	virtual void registerDrawable( Drawable *draw );										///< Given a drawable, register it with the GameClient and give it a unique ID
 
 	void step(); ///< Do one fixed time step
+	void stepCaughtUpLogicFrame(); ///< Tiberium Project: the client's share of a logic frame that is followed by another in the same update (real-time logic)
 
 	void updateHeadless();
 
