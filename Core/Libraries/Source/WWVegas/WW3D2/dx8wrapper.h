@@ -324,9 +324,10 @@ public:
 	static void Release_Render_State();
 
 	static void Set_DX8_Material(const D3DMATERIAL8* mat);
-	// Tiberium Project @feature whether a frame waits for the display's sync (Options.ini VSync); set before the device is made
-	static void Set_VSync(bool enabled) { VSyncEnabled = enabled; }
-	static bool Get_VSync() { return VSyncEnabled; }
+	// Tiberium Project @feature whether a frame waits for the display's sync (Options.ini VSync): -1 not said (as the game
+	// was), 0 no, 1 yes; set before the device is made
+	static void Set_VSync_Preference(int preference) { VSyncPreference = preference; }
+	static int Get_VSync_Preference() { return VSyncPreference; }
 
 
 	static void Set_Gamma(float gamma,float bright,float contrast,bool calibrate=true,bool uselimit=true);
@@ -703,7 +704,7 @@ protected:
 	static bool								IsWindowed;
 	static D3DFORMAT					DisplayFormat;
 	static D3DMULTISAMPLE_TYPE	MultiSampleAntiAliasing;
-	static bool						VSyncEnabled;	// Tiberium Project
+	static int						VSyncPreference;	// Tiberium Project
 
 	static D3DMATRIX						old_world;
 	static D3DMATRIX						old_view;

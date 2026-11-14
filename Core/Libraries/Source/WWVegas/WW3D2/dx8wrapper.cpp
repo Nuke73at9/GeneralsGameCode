@@ -442,7 +442,7 @@ int								DX8Wrapper::TextureBitDepth							= DEFAULT_TEXTURE_BIT_DEPTH;
 bool								DX8Wrapper::IsWindowed									= false;
 D3DFORMAT					DX8Wrapper::DisplayFormat	= D3DFMT_UNKNOWN;
 D3DMULTISAMPLE_TYPE DX8Wrapper::MultiSampleAntiAliasing	= DEFAULT_MSAA;
-bool DX8Wrapper::VSyncEnabled = true;	// Tiberium Project
+int DX8Wrapper::VSyncPreference = -1;	// Tiberium Project
 
 // shader system additions KJM v
 DWORD								DX8Wrapper::Vertex_Shader								= 0;
@@ -1650,9 +1650,16 @@ bool DX8Wrapper::Set_Render_Device(int dev, int width, int height, int bits, int
 	_PresentParameters.EnableAutoDepthStencil = TRUE;				// Driver will attempt to match Z-buffer depth
 	_PresentParameters.Flags=0;											// We're not going to lock the backbuffer
 
-	// Tiberium Project @feature VSync = no in Options.ini: frames are shown as they are drawn, not held for the display's
-	// sync (the default, as before: one frame a refresh)
-	_PresentParameters.FullScreen_PresentationInterval = VSyncEnabled ? D3DPRESENT_INTERVAL_DEFAULT : D3DPRESENT_INTERVAL_IMMEDIATE;
+	// Tiberium Project @feature Options.ini VSync. Not said: as the game was (the default interval: a full-screen game
+	// waits for the display's sync; a windowed one does not, which is how Direct3D 8 presents a window, measured on the
+	// PC: 180 frames a second either way). no: frames are shown as they are drawn, full screen too. yes: a windowed
+	// game waits for the sync as well, by the one way Direct3D 8 has for a window, its copy-with-sync swap effect; not
+	// with multisampling, which a copying swap cannot be combined with (the window then stays unsynced).
+	_PresentParameters.FullScreen_PresentationInterval = VSyncPreference == 0 ? D3DPRESENT_INTERVAL_IMMEDIATE : D3DPRESENT_INTERVAL_DEFAULT;
+	if (VSyncPreference == 1 && _PresentParameters.Windowed && MultiSampleAntiAliasing == D3DMULTISAMPLE_NONE) {
+		_PresentParameters.SwapEffect = D3DSWAPEFFECT_COPY_VSYNC;
+		_PresentParameters.BackBufferCount = 1;	// (a copying swap has one back buffer)
+	}
 	_PresentParameters.FullScreen_RefreshRateInHz = D3DPRESENT_RATE_DEFAULT;
 
 	/*

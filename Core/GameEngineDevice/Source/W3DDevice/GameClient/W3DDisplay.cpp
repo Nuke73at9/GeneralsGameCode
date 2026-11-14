@@ -1192,11 +1192,16 @@ void W3DDisplay::init()
 			// TheSuperHackers @feature Mauller 13/03/2026 Add native MSAA support, must be set before creating render device
 			WW3D::Set_MSAA_Mode((WW3D::MultiSampleModeEnum)TheWritableGlobalData->m_antiAliasLevel);
 
-			// Tiberium Project @feature Options.ini: VSync = no shows frames as they are drawn (no wait for the display's
-			// sync; with MaxRenderFPS = 0 the frame rate is then unlimited). Unset or yes: as before.
+			// Tiberium Project @feature Options.ini VSync: no shows frames as they are drawn, yes holds each for the
+			// display's sync, in a window too; not said: as the game was (DX8Wrapper::Set_Render_Device)
 			{
 				OptionPreferences vsyncPrefs;
-				DX8Wrapper::Set_VSync(vsyncPrefs.getBool("VSync", TRUE));
+				Int vsync = -1;
+				if (vsyncPrefs.getAsciiString("VSync", AsciiString::TheEmptyString).isNotEmpty())
+				{
+					vsync = vsyncPrefs.getBool("VSync", TRUE) ? 1 : 0;
+				}
+				DX8Wrapper::Set_VSync_Preference(vsync);
 			}
 
 			renderDeviceError = WW3D::Set_Render_Device(
