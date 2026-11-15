@@ -22,6 +22,7 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 #include "GameClient/TiberiumSettings.h"
+#include "GameClient/TiberiumSkin.h"
 #include "Common/FramePacer.h"
 #include "Common/GlobalData.h"
 #include "Common/OptionPreferences.h"
@@ -37,50 +38,8 @@
 
 #include <vector>
 
-namespace
+namespace TiberiumSkin
 {
-	//-----------------------------------------------------------------------------------------------
-	// the settings: each a row of choices on one of the pages
-	enum { ROW_FPS, ROW_VSYNC, ROW_SMOOTH, ROW_REALTIME, ROW_SKIRMISH, ROW_STYLE, ROW_COUNT };
-	enum { PAGE_PACE, PAGE_INTERFACE, PAGE_COUNT, TAB_ZERO_HOUR = PAGE_COUNT, TAB_COUNT };
-	enum { MAX_CHOICES = 7 };
-
-	struct RowDef
-	{
-		Int page;
-		const char *section;				///< a heading over the row, or null
-		const char *label, *note;
-		Int count;
-		const char *choices[MAX_CHOICES];
-	};
-
-	const RowDef s_rows[ROW_COUNT] =
-	{
-		{ PAGE_PACE, "FRAME RATE", "Frame-rate limit", "How many frames are drawn a second", 7, { "30", "60", "120", "144", "165", "240", "No limit" } },
-		{ PAGE_PACE, nullptr, "Sync to the display", "Stops tearing. Applies at the next start", 3, { "As the game was", "Off", "On" } },
-		{ PAGE_PACE, nullptr, "Smooth motion", "Units move at every drawn frame", 2, { "Off", "On" } },
-		{ PAGE_PACE, "GAME SPEED", "Real-time game speed", "The same speed at any frame rate", 2, { "Off", "On" } },
-		{ PAGE_PACE, nullptr, "Skirmish speed", "Logic frames a second in skirmish games", 4, { "Slow 20", "Normal 30", "Fast 45", "Very fast 60" } },
-		{ PAGE_INTERFACE, "LOOK", "Style", "The menus' look", 2, { "GDI", "Nod" } },
-	};
-	const char *const s_tabNames[TAB_COUNT] = { "FRAME RATE AND SPEED", "INTERFACE", "ZERO HOUR'S OPTIONS" };
-	const Int s_fpsValues[7] = { 30, 60, 120, 144, 165, 240, 0 };
-	const Int s_tickValues[4] = { 20, 30, 45, 60 };
-
-	// what a click lands on
-	enum HitKind { HIT_NONE, HIT_TAB, HIT_CHOICE, HIT_BACK, HIT_DEFAULTS, HIT_ACCEPT };
-	struct Hit
-	{
-		HitKind kind;
-		Int a, b;
-		Int x, y, w, h;
-	};
-
-	struct Look
-	{
-		Color accent, accentDim, hi, text, textDim, fill, fillOn, stripe, stripeOn, panel, grid, shade;
-	};
-
 	struct TextEntry
 	{
 		AsciiString text;
@@ -89,13 +48,7 @@ namespace
 		DisplayString *string;
 	};
 
-	GameWindow *s_window = nullptr;
-	Int s_page = PAGE_PACE;
-	Int s_choice[ROW_COUNT];						///< the choice lit in each row, -1: none (the key is not in Options.ini)
-	Int s_style = -1;										///< the look in use (-1: not read yet)
-	Int s_hover = -1;										///< index into s_hits
-	std::vector<Hit> s_hits;						///< as last drawn
-	std::vector<TextEntry> s_texts;
+	static std::vector<TextEntry> s_texts;
 
 	//-----------------------------------------------------------------------------------------------
 	Look lookOf( Int style )
@@ -221,6 +174,55 @@ namespace
 		TheDisplay->drawLine( x - nick, y + h / 3, x - nick, y + 2 * h / 3, 2.0f, l.accentDim );
 		TheDisplay->drawLine( x + w + nick, y + h / 3, x + w + nick, y + 2 * h / 3, 2.0f, l.accentDim );
 	}
+}
+
+using namespace TiberiumSkin;
+
+namespace
+{
+	//-----------------------------------------------------------------------------------------------
+	// the settings: each a row of choices on one of the pages
+	enum { ROW_FPS, ROW_VSYNC, ROW_SMOOTH, ROW_REALTIME, ROW_SKIRMISH, ROW_STYLE, ROW_COUNT };
+	enum { PAGE_PACE, PAGE_INTERFACE, PAGE_COUNT, TAB_ZERO_HOUR = PAGE_COUNT, TAB_COUNT };
+	enum { MAX_CHOICES = 7 };
+
+	struct RowDef
+	{
+		Int page;
+		const char *section;				///< a heading over the row, or null
+		const char *label, *note;
+		Int count;
+		const char *choices[MAX_CHOICES];
+	};
+
+	const RowDef s_rows[ROW_COUNT] =
+	{
+		{ PAGE_PACE, "FRAME RATE", "Frame-rate limit", "How many frames are drawn a second", 7, { "30", "60", "120", "144", "165", "240", "No limit" } },
+		{ PAGE_PACE, nullptr, "Sync to the display", "Stops tearing. Applies at the next start", 3, { "As the game was", "Off", "On" } },
+		{ PAGE_PACE, nullptr, "Smooth motion", "Units move at every drawn frame", 2, { "Off", "On" } },
+		{ PAGE_PACE, "GAME SPEED", "Real-time game speed", "The same speed at any frame rate", 2, { "Off", "On" } },
+		{ PAGE_PACE, nullptr, "Skirmish speed", "Logic frames a second in skirmish games", 4, { "Slow 20", "Normal 30", "Fast 45", "Very fast 60" } },
+		{ PAGE_INTERFACE, "LOOK", "Style", "The menus' look", 2, { "GDI", "Nod" } },
+	};
+	const char *const s_tabNames[TAB_COUNT] = { "FRAME RATE AND SPEED", "INTERFACE", "ZERO HOUR'S OPTIONS" };
+	const Int s_fpsValues[7] = { 30, 60, 120, 144, 165, 240, 0 };
+	const Int s_tickValues[4] = { 20, 30, 45, 60 };
+
+	// what a click lands on
+	enum HitKind { HIT_NONE, HIT_TAB, HIT_CHOICE, HIT_BACK, HIT_DEFAULTS, HIT_ACCEPT };
+	struct Hit
+	{
+		HitKind kind;
+		Int a, b;
+		Int x, y, w, h;
+	};
+
+	GameWindow *s_window = nullptr;
+	Int s_page = PAGE_PACE;
+	Int s_choice[ROW_COUNT];						///< the choice lit in each row, -1: none (the key is not in Options.ini)
+	Int s_style = -1;										///< the look in use (-1: not read yet)
+	Int s_hover = -1;										///< index into s_hits
+	std::vector<Hit> s_hits;						///< as last drawn
 
 	//-----------------------------------------------------------------------------------------------
 	/** the choices of Options.ini, as the rows show them */
@@ -494,6 +496,15 @@ Int TiberiumSettings::getStyle()
 		s_style = style.compareNoCase( "Nod" ) == 0 ? STYLE_NOD : STYLE_GDI;
 	}
 	return s_style;
+}
+
+//-------------------------------------------------------------------------------------------------
+void TiberiumSettings::setStyle( Int style )
+{
+	s_style = style == STYLE_NOD ? STYLE_NOD : STYLE_GDI;
+	OptionPreferences prefs;
+	prefs.setAsciiString( "InterfaceStyle", s_style == STYLE_NOD ? "Nod" : "GDI" );
+	prefs.write();
 }
 
 //-------------------------------------------------------------------------------------------------

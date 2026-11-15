@@ -35,6 +35,7 @@ public:
 	static void close( Bool keep );			///< keep: the choices are applied and written to Options.ini
 	static Bool isOpen();
 	static Int getStyle();							///< the menus' look (InterfaceStyle in Options.ini): STYLE_GDI or STYLE_NOD
+	static void setStyle( Int style );	///< the look, kept in Options.ini at once
 
 	// the test harness's: a click on a part ("tab", "option", "accept", "cancel", "defaults"), and what the panel shows
 	static Bool testClick( const char *part, Int row, Int index );

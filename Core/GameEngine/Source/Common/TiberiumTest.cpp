@@ -83,6 +83,7 @@
 #include "Common/Science.h"
 #include "GameClient/AbramSpawnMenu.h"
 #include "GameClient/AbramTeamMenu.h"
+#include "GameClient/TiberiumMenu.h"
 #include "GameClient/TiberiumSettings.h"
 #include "GameClient/TiberiumHUD.h"
 #include "GameClient/TiberiumSidebar.h"
@@ -2105,6 +2106,27 @@ void TiberiumTest::update()
 #endif
 #if RTS_ZEROHOUR
 #if RTS_ZEROHOUR
+		else if ( step.action == "menu" )
+		{
+			// the Tiberium main menu: "main,N", "side,N", "difficulty,N", "style,N" click a part; "pop" leaves the shell's top
+			// screen; nothing: what the menu shows.
+			// The shell's top screen is written with it.
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			Bool took = FALSE;
+			if ( !f.empty() && f[0] == "pop" && TheShell != nullptr )
+			{
+				// (the screen on top left, as its own Back button leaves it)
+				TheShell->pop();
+				took = TRUE;
+			}
+			else if ( !f.empty() && !f[0].empty() )
+				took = TiberiumMenu::testClick( f[0].c_str(), f.size() > 1 ? atoi( f[1].c_str() ) : 0 );
+			char what[256];
+			TiberiumMenu::describe( what, sizeof( what ) );
+			WindowLayout *top = TheShell != nullptr ? TheShell->top() : nullptr;
+			log( "frame %d: ui: menu %s%s: %s; the shell's screen %s", (int)s_frame, step.arg.c_str(), step.arg.empty() ? "" : ( took ? " (taken)" : " (missed)" ), what,
+				top != nullptr ? top->getFilename().str() : "none" );
+		}
 		else if ( step.action == "settings" )
 		{
 			// the Tiberium settings panel: "open"; "tab,N"; "option,ROW,CHOICE"; "accept", "cancel", "defaults"; nothing:

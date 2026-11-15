@@ -40,6 +40,7 @@
 #include "Common/OptionPreferences.h"
 #include "Common/version.h"
 #include "Common/GameLOD.h"
+#include "GameClient/TiberiumMenu.h"	// Tiberium Project
 #include "GameClient/TiberiumSettings.h"	// Tiberium Project
 #include "GameClient/AnimateWindowManager.h"
 #include "GameClient/ExtendedMessageBox.h"
@@ -501,6 +502,7 @@ static void initLabelVersion()
 //-------------------------------------------------------------------------------------------------
 void MainMenuInit( WindowLayout *layout, void *userData )
 {
+	TiberiumMenu::init();	// Tiberium Project: the Tiberium main menu may be drawn over this one again
 	TheWritableGlobalData->m_breakTheMovie = FALSE;
 
 	TheShell->showShellMap(TRUE);
@@ -727,6 +729,7 @@ void MainMenuInit( WindowLayout *layout, void *userData )
 //-------------------------------------------------------------------------------------------------
 void MainMenuShutdown( WindowLayout *layout, void *userData )
 {
+	TiberiumMenu::shutdown();	// Tiberium Project: the menu drawn over this one goes with it
 	if (!startGame)
 		isShuttingDown = TRUE;
 	if (fallbackCreditLabel)
@@ -880,12 +883,33 @@ void ResolutionDialogUpdate()
 /** Main menu update method */
 //-------------------------------------------------------------------------------------------------
 void DownloadMenuUpdate( WindowLayout *layout, void *userData );
+// Tiberium Project @feature for the Tiberium main menu drawn over this one (TiberiumMenu): whether a click can be
+// taken now, whether a campaign's difficulty is being asked, and the Mods screen as the Mods button opens it
+Bool MainMenuCanTakeClick()
+{
+	return !dontAllowTransitions && !buttonPushed;
+}
+
+Bool MainMenuAsksDifficulty()
+{
+	return campaignSelected && !buttonPushed;
+}
+
+void MainMenuOpenMods()
+{
+	if( dontAllowTransitions || buttonPushed )
+		return;
+	buttonPushed = TRUE;
+	TheShell->push( ABRAM_MOD_SELECT_MENU_LAYOUT );
+}
+
 void MainMenuUpdate( WindowLayout *layout, void *userData )
 {
 	if( TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() )
 	{
 		return;
 	}
+	TiberiumMenu::update( layout, parentMainMenu );	// Tiberium Project: the Tiberium main menu, where it is on
 	if(DontShowMainMenu && justEntered)
 		justEntered = FALSE;
 

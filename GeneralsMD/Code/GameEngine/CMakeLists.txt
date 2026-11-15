@@ -192,7 +192,9 @@ set(GAMEENGINE_SRC
     Include/GameClient/InGameUI.h
     Include/GameClient/AbramSpawnMenu.h
     Include/GameClient/TiberiumHUD.h
+    Include/GameClient/TiberiumMenu.h
     Include/GameClient/TiberiumSettings.h
+    Include/GameClient/TiberiumSkin.h
     Include/GameClient/TiberiumSidebar.h
     Include/GameClient/TiberiumMusic.h
     Include/GameClient/TiberiumZoneView.h
@@ -846,6 +848,7 @@ set(GAMEENGINE_SRC
     Source/GameClient/InGameUI.cpp
     Source/GameClient/GUI/AbramSpawnMenu.cpp
     Source/GameClient/GUI/TiberiumHUD.cpp
+    Source/GameClient/GUI/TiberiumMenu.cpp
     Source/GameClient/GUI/TiberiumSettings.cpp
     Source/GameClient/GUI/TiberiumSidebar.cpp
     Source/GameClient/TiberiumMusic.cpp
