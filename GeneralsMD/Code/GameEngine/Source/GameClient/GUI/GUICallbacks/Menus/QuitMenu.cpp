@@ -38,6 +38,7 @@
 #include "Common/PlayerList.h"
 #include "Common/RandomValue.h"
 #include "Common/Recorder.h"
+#include "GameClient/TiberiumSettings.h"	// Tiberium Project
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/WindowLayout.h"
 #include "GameClient/GameWindowManager.h"
@@ -495,6 +496,11 @@ WindowMsgHandledType QuitMenuSystem( GameWindow *window, UnsignedInt msg,
 				// hide this menu
 				ToggleQuitMenu();
 
+			}
+			else if( buttonOptions == controlID && TiberiumSettings::wanted() )
+			{
+				// Tiberium Project @feature the Tiberium interface's own settings panel in the options screen's place
+				TiberiumSettings::open();
 			}
 			else if( buttonOptions == controlID )
 			{

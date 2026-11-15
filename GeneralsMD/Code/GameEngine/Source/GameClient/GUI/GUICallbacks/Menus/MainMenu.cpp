@@ -40,6 +40,7 @@
 #include "Common/OptionPreferences.h"
 #include "Common/version.h"
 #include "Common/GameLOD.h"
+#include "GameClient/TiberiumSettings.h"	// Tiberium Project
 #include "GameClient/AnimateWindowManager.h"
 #include "GameClient/ExtendedMessageBox.h"
 #include "GameClient/MessageBox.h"
@@ -1702,6 +1703,13 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 			}
 			else if( controlID == optionsID )
 			{
+				// Tiberium Project @feature the Tiberium interface's own settings panel in the options screen's place
+				// (Zero Hour's options are a tab of it)
+				if( TiberiumSettings::wanted() )
+				{
+					TiberiumSettings::open();
+					break;
+				}
 				if(dontAllowTransitions)
 					break;
 				dontAllowTransitions = TRUE;

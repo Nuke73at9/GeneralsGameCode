@@ -83,6 +83,7 @@
 #include "Common/Science.h"
 #include "GameClient/AbramSpawnMenu.h"
 #include "GameClient/AbramTeamMenu.h"
+#include "GameClient/TiberiumSettings.h"
 #include "GameClient/TiberiumHUD.h"
 #include "GameClient/TiberiumSidebar.h"
 #include "GameLogic/AbramCheats.h"
@@ -2103,6 +2104,25 @@ void TiberiumTest::update()
 		}
 #endif
 #if RTS_ZEROHOUR
+#if RTS_ZEROHOUR
+		else if ( step.action == "settings" )
+		{
+			// the Tiberium settings panel: "open"; "tab,N"; "option,ROW,CHOICE"; "accept", "cancel", "defaults"; nothing:
+			// what it shows
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			Bool took = FALSE;
+			if ( !f.empty() && f[0] == "open" )
+			{
+				TiberiumSettings::open();
+				took = TiberiumSettings::isOpen();
+			}
+			else if ( !f.empty() && !f[0].empty() )
+				took = TiberiumSettings::testClick( f[0].c_str(), f.size() > 1 ? atoi( f[1].c_str() ) : 0, f.size() > 2 ? atoi( f[2].c_str() ) : 0 );
+			char what[256];
+			TiberiumSettings::describe( what, sizeof( what ) );
+			log( "frame %d: ui: settings %s%s: %s", (int)s_frame, step.arg.c_str(), step.arg.empty() ? "" : ( took ? " (taken)" : " (missed)" ), what );
+		}
+#endif
 		else if ( step.action == "stancekey" && TheMessageStream != nullptr )
 		{
 			// "stancekey=N": the N-th stance's hotkey, as the key map sends it (0 aggressive, 1 guard, 2 hold position,
