@@ -2100,6 +2100,38 @@ void TiberiumTest::update()
 				log( "frame %d: ui: victims %s: none", (int)s_frame, step.arg.c_str() );
 		}
 #endif
+#if RTS_ZEROHOUR
+		else if ( step.action == "stance" && TheGameLogic != nullptr )
+		{
+			// "stance=k,NAME": the k-th spawned object takes the stance (AGGRESSIVE, GUARD, HOLD_POSITION, HOLD_FIRE);
+			// "stance=sel,NAME": the selected units, by the command the stance buttons send
+			static const char *const names[] = { "AGGRESSIVE", "GUARD", "HOLD_POSITION", "HOLD_FIRE" };
+			char who[32] = "", name[32] = "";
+			sscanf( step.arg.c_str(), "%31[^,],%31s", who, name );
+			Int stance = STANCE_NONE;
+			for ( Int k = 0; k < STANCE_COUNT; ++k )
+				if ( strcmp( name, names[ k ] ) == 0 )
+					stance = k;
+			if ( stance == STANCE_NONE )
+				log( "frame %d: ui: stance %s: no such stance", (int)s_frame, name );
+			else if ( strcmp( who, "sel" ) == 0 && TheMessageStream != nullptr )
+			{
+				GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_TIBERIUM_SET_STANCE );
+				msg->appendIntegerArgument( stance );
+				log( "frame %d: ui: stance %s sent for the selection", (int)s_frame, name );
+			}
+			else
+			{
+				const Int index = atoi( who );
+				Object *obj = index >= 0 && index < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[ index ] ) : nullptr;
+				AIUpdateInterface *ai = obj != nullptr ? obj->getAI() : nullptr;
+				if ( ai != nullptr )
+					ai->setStance( (StanceType)stance );
+				log( "frame %d: ui: stance %s for object %d: %s", (int)s_frame, name, (int)index,
+					ai == nullptr ? "no such unit" : ( ai->getStance() == stance ? "taken" : "not one it can take" ) );
+			}
+		}
+#endif
 		else if ( step.action == "follow" && TheGameLogic != nullptr && TheTacticalView != nullptr )
 		{
 			// "follow=k": the camera follows the k-th spawned object (as a script's follow does); "follow=-1" lets go
@@ -3134,6 +3166,17 @@ void TiberiumTest::update()
 					obj->hasAttributeModifiers() ? 1 : 0,
 					obj->getAttributeModifierScalar( MODIFIER_DAMAGE ) != 1.0f ? " (damage scaled)" : "",
 					obj->getObjectCompletedUpgradeMask().any() ? "some" : "none", (int)obj->getVeterancyLevel(), field );
+#if RTS_ZEROHOUR
+				// (its stance, when it has stances, and what it is doing)
+				if ( obj->getAI() != nullptr && obj->getAI()->hasStances() )
+				{
+					static const char *const stanceNames[] = { "AGGRESSIVE", "GUARD", "HOLD_POSITION", "HOLD_FIRE" };
+					const Int st = obj->getAI()->getStance();
+					log( "frame %d: ui: stance of %s #%u: %s, %s", (int)s_frame, step.arg.c_str(), (unsigned)obj->getID(),
+						st >= 0 && st < STANCE_COUNT ? stanceNames[ st ] : "none",
+						obj->getAI()->isIdle() ? "idle" : ( obj->getAI()->isAttacking() ? "attacking" : ( obj->getAI()->isMoving() ? "moving" : "busy" ) ) );
+				}
+#endif
 			}
 			if ( shown == 0 )
 				log( "frame %d: ui: state %s: none", (int)s_frame, step.arg.c_str() );

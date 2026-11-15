@@ -60,6 +60,7 @@
 #include "GameClient/View.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
+#include "GameLogic/Module/AIUpdate.h"	// Tiberium Project (stances)
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/ProductionUpdate.h"
@@ -165,6 +166,13 @@ namespace
 	ObjectID s_viewed = INVALID_ID;		///< the one object shown (one selected)
 	Int s_hoverButton = -1;
 	Int s_hoverGroup = -1;
+	// Tiberium Project @feature the stance buttons on the unit card (the user's layout B: four small buttons under the
+	// health bar): the stances the selected units can take between them, the one they are all in (-1: mixed or none),
+	// and where the row was last drawn (in the panel art's units)
+	UnsignedInt s_stanceMask = 0;
+	Int s_stanceCommon = -1;
+	Int s_hoverStance = -1;
+	Real s_stanceLeft = 120.0f, s_stanceTop = 74.0f;
 	DisplayString *s_name = nullptr;
 	DisplayString *s_text = nullptr;
 	DisplayString *s_body = nullptr;
@@ -599,6 +607,9 @@ namespace
 		s_groups.clear();
 		s_selected = 0;
 		s_viewed = INVALID_ID;
+		s_stanceMask = 0;
+		s_stanceCommon = -1;
+		Bool stanceSeen = FALSE;
 		const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
 		for( DrawableList::const_iterator it = selected->begin(); it != selected->end(); ++it )
 		{
@@ -606,6 +617,19 @@ namespace
 			if( obj == nullptr || obj->isEffectivelyDead() )
 				continue;
 			++s_selected;
+			// (Tiberium Project: the stances of the player's own selected units)
+			const AIUpdateInterface *stanceAI = obj->getControllingPlayer() == localPlayer() ? obj->getAI() : nullptr;
+			if( stanceAI != nullptr && stanceAI->hasStances() )
+			{
+				for( Int st = 0; st < STANCE_COUNT; ++st )
+					if( stanceAI->canTakeStance( (StanceType)st ) )
+						s_stanceMask |= 1u << st;
+				if( !stanceSeen )
+					s_stanceCommon = stanceAI->getStance();
+				else if( s_stanceCommon != stanceAI->getStance() )
+					s_stanceCommon = -1;
+				stanceSeen = TRUE;
+			}
 			if( s_viewed == INVALID_ID )
 				s_viewed = obj->getID();
 			const BodyModuleInterface *body = obj->getBodyModule();
@@ -1146,6 +1170,111 @@ namespace
 
 	//-----------------------------------------------------------------------------------------------
 	/** the selection panel: C&C4's, with what is selected; the ability slots' frames */
+	//-----------------------------------------------------------------------------------------------
+	/** Tiberium Project @feature the stance buttons' row on the unit card: where it was last drawn */
+	Bool stancesShown()
+	{
+		return s_stanceMask != 0;
+	}
+
+	void stanceRect( const HUDLayout &L, Int i, Int *x, Int *y, Int *size )
+	{
+		*size = (Int)( 24.0f * L.s );
+		*x = L.px + (Int)( ( s_stanceLeft + 28.0f * i ) * L.s );
+		*y = L.py + (Int)( s_stanceTop * L.s );
+	}
+
+	//-----------------------------------------------------------------------------------------------
+	/** a stance's sign, drawn in lines: a crosshair (aggressive), a shield (guard), a post in the ground (hold
+		position), a barred ring (hold fire) */
+	void drawStanceSign( Int kind, Int x, Int y, Int size, Color color )
+	{
+		const Real cx = x + size * 0.5f, cy = y + size * 0.5f, r = size * 0.30f;
+		const Real w = max( 1.0f, size / 16.0f );
+		// (a ring as eight sides)
+		static const Real ring[9][2] = { { 1.0f, 0.0f }, { 0.707f, 0.707f }, { 0.0f, 1.0f }, { -0.707f, 0.707f }, { -1.0f, 0.0f },
+			{ -0.707f, -0.707f }, { 0.0f, -1.0f }, { 0.707f, -0.707f }, { 1.0f, 0.0f } };
+		if( kind == STANCE_AGGRESSIVE || kind == STANCE_HOLD_FIRE )
+		{
+			for( Int k = 0; k < 8; ++k )
+				TheDisplay->drawLine( (Int)( cx + ring[k][0] * r ), (Int)( cy + ring[k][1] * r ), (Int)( cx + ring[k + 1][0] * r ), (Int)( cy + ring[k + 1][1] * r ), w, color );
+		}
+		if( kind == STANCE_AGGRESSIVE )
+		{
+			static const Int arm[4][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
+			for( Int k = 0; k < 4; ++k )
+				TheDisplay->drawLine( (Int)( cx + arm[k][0] * r * 0.5f ), (Int)( cy + arm[k][1] * r * 0.5f ), (Int)( cx + arm[k][0] * r * 1.45f ), (Int)( cy + arm[k][1] * r * 1.45f ), w, color );
+		}
+		else if( kind == STANCE_GUARD )
+		{
+			const Real pts[6][2] = { { cx - r, cy - r }, { cx + r, cy - r }, { cx + r, cy + r * 0.2f }, { cx, cy + r * 1.25f }, { cx - r, cy + r * 0.2f }, { cx - r, cy - r } };
+			for( Int k = 0; k < 5; ++k )
+				TheDisplay->drawLine( (Int)pts[k][0], (Int)pts[k][1], (Int)pts[k + 1][0], (Int)pts[k + 1][1], w, color );
+		}
+		else if( kind == STANCE_HOLD_POSITION )
+		{
+			TheDisplay->drawLine( (Int)( cx - r * 1.2f ), (Int)( cy + r ), (Int)( cx + r * 1.2f ), (Int)( cy + r ), w, color );
+			TheDisplay->drawLine( (Int)cx, (Int)( cy - r * 0.3f ), (Int)cx, (Int)( cy + r ), w, color );
+			TheDisplay->drawLine( (Int)( cx - r * 0.7f ), (Int)( cy - r * 0.3f ), (Int)( cx + r * 0.7f ), (Int)( cy - r * 0.3f ), w, color );
+			TheDisplay->drawLine( (Int)( cx - r * 0.7f ), (Int)( cy - r * 0.3f ), (Int)cx, (Int)( cy - r * 1.3f ), w, color );
+			TheDisplay->drawLine( (Int)( cx + r * 0.7f ), (Int)( cy - r * 0.3f ), (Int)cx, (Int)( cy - r * 1.3f ), w, color );
+		}
+		else if( kind == STANCE_HOLD_FIRE )
+		{
+			TheDisplay->drawLine( (Int)( cx - r * 0.7f ), (Int)( cy + r * 0.7f ), (Int)( cx + r * 0.7f ), (Int)( cy - r * 0.7f ), w, color );
+		}
+	}
+
+	//-----------------------------------------------------------------------------------------------
+	/** the row of stance buttons, its left top at (left, top) of the panel's art: the units' stance lit, the ones
+		none of them can take dimmed */
+	void drawStances( const HUDLayout &L, const Art &a, Real left, Real top )
+	{
+		s_stanceLeft = left;
+		s_stanceTop = top;
+		for( Int i = 0; i < STANCE_COUNT; ++i )
+		{
+			Int x, y, size;
+			stanceRect( L, i, &x, &y, &size );
+			const Bool can = ( s_stanceMask & ( 1u << i ) ) != 0;
+			const Bool on = can && s_stanceCommon == i;
+			const Bool hover = can && s_hoverStance == i;
+			TheDisplay->drawFillRect( x, y, size, size, on ? GameMakeColor( 24, 62, 98, 255 ) : GameMakeColor( 6, 18, 32, 235 ) );
+			TheDisplay->drawOpenRect( x, y, size, size, on ? 2.0f : 1.0f, on || hover ? a.text : ( can ? a.accent : a.accentDim ) );
+			const Color sign = !can ? GameMakeColor( 70, 90, 100, 255 )
+				: ( on ? ( i == STANCE_AGGRESSIVE ? GameMakeColor( 255, 130, 100, 255 ) : GameMakeColor( 255, 255, 255, 255 ) ) : GameMakeColor( 150, 205, 230, 255 ) );
+			drawStanceSign( i, x, y, size, sign );
+		}
+	}
+
+	//-----------------------------------------------------------------------------------------------
+	/** what the stance button under the mouse does, in a plate over the row (drawn last, over the card's text) */
+	void drawStanceTip( const HUDLayout &L, const Art &a )
+	{
+		if( !stancesShown() || s_hoverStance < 0 || s_hoverStance >= STANCE_COUNT || ( s_stanceMask & ( 1u << s_hoverStance ) ) == 0 )
+			return;
+		static const char *const tips[STANCE_COUNT] = {
+			"Aggressive: attacks what it sees and goes after it",
+			"Guard: attacks what it sees, then returns to its post",
+			"Hold position: attacks what comes in reach, without moving",
+			"Hold fire: attacks only when ordered" };
+		Int x, y, size;
+		stanceRect( L, 0, &x, &y, &size );
+		const Int pad = max( 2, (Int)( 3.0f * L.s ) );
+		const UnicodeString line = plain( tips[s_hoverStance] );
+		s_text->setText( line );
+		const Int tw = s_text->getWidth() + 2 * pad, th = s_text->getFont()->height + 2 * pad;
+		// (under the row; over it where the panel ends below)
+		Int ty = y + size + pad;
+		if( ty + th > L.py + L.ph )
+			ty = y - th - pad;
+		if( x + tw > L.px + L.pw - 2 * pad )
+			x = L.px + L.pw - 2 * pad - tw;
+		TheDisplay->drawFillRect( x, ty, tw, th, GameMakeColor( 4, 12, 22, 240 ) );
+		TheDisplay->drawOpenRect( x, ty, tw, th, 1.0f, a.accentDim );
+		drawText( s_text, line, x + pad, ty + pad, a.text );
+	}
+
 	void drawPanel( GameWindow *, WinInstanceData * )
 	{
 		Player *me = localPlayer();
@@ -1218,6 +1347,13 @@ namespace
 					line = plain( "Shield down" );
 				drawText( s_text, line, labelX, y + ( barH - s_text->getFont()->height ) / 2, up ? a.text : a.textDim );
 				y += (Int)( 18.0f * s );
+			}
+
+			// Tiberium Project @feature the stance buttons, under the bars
+			if( stancesShown() )
+			{
+				drawStances( L, a, 120.0f, (Real)( y - L.py ) / s );
+				y += (Int)( 30.0f * s );
 			}
 
 			// the rank, or the building of it, or what it is building
@@ -1345,6 +1481,9 @@ namespace
 			UnicodeString head;
 			head.format( L"%d selected", s_selected );
 			drawText( s_name, head, L.px + (Int)( 18.0f * s ), L.py + (Int)( 12.0f * s ), a.text );
+			// Tiberium Project @feature the stance buttons, beside the count
+			if( stancesShown() )
+				drawStances( L, a, 150.0f, 7.0f );
 			for( size_t i = 0; i < s_groups.size(); ++i )
 			{
 				Int gx, gy, gs;
@@ -1377,6 +1516,7 @@ namespace
 			drawText( s_name, me->getPlayerDisplayName(), textX, L.py + (Int)( 14.0f * s ), a.text );
 			drawText( s_body, plain( isNod() ? "Brotherhood of Nod" : "Global Defense Initiative" ), textX, L.py + (Int)( 36.0f * s ), a.textDim );
 		}
+		drawStanceTip( L, a );
 	}
 
 	//-----------------------------------------------------------------------------------------------
@@ -1469,6 +1609,17 @@ namespace
 		computeLayout( &L );
 		if( mx < L.px || mx >= L.px + L.pw || my < L.py || my >= L.py + L.ph )
 			return -1;
+		// Tiberium Project @feature the stance buttons: 300 and on
+		if( stancesShown() && ( s_viewed != INVALID_ID || !s_groups.empty() ) )
+		{
+			for( Int i = 0; i < STANCE_COUNT; ++i )
+			{
+				Int x, y, size;
+				stanceRect( L, i, &x, &y, &size );
+				if( mx >= x && mx < x + size && my >= y && my < y + size )
+					return 300 + i;
+			}
+		}
 		if( s_viewed != INVALID_ID )
 		{
 			Int x, y, size;
@@ -1499,6 +1650,16 @@ namespace
 			if( obj != nullptr && TheTacticalView != nullptr )
 				TheTacticalView->lookAt( obj->getPosition() );
 		}
+		else if( hit >= 300 && hit < 300 + STANCE_COUNT )
+		{
+			// Tiberium Project @feature a stance button: the selected units take the stance (by the logic's command,
+			// so it is the same in a network game and in a replay)
+			if( !right && ( s_stanceMask & ( 1u << ( hit - 300 ) ) ) != 0 && TheMessageStream != nullptr )
+			{
+				GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_TIBERIUM_SET_STANCE );
+				msg->appendIntegerArgument( hit - 300 );
+			}
+		}
 		else if( hit >= 0 && hit < (Int)s_groups.size() )
 			keepKind( hit, right );
 	}
@@ -1512,9 +1673,11 @@ namespace
 		{
 			case GWM_MOUSE_POS:
 				s_hoverGroup = hit >= 0 && hit < 100 ? hit : -1;
+				s_hoverStance = hit >= 300 && hit < 300 + STANCE_COUNT ? hit - 300 : -1;
 				return hit >= 0 ? MSG_HANDLED : MSG_IGNORED;
 			case GWM_MOUSE_LEAVING:
 				s_hoverGroup = -1;
+				s_hoverStance = -1;
 				return MSG_IGNORED;
 			case GWM_LEFT_UP:
 			case GWM_RIGHT_UP:
@@ -1868,6 +2031,18 @@ Bool TiberiumHUD::testClickPart( const char *part, Int index, Bool right )
 		clickPanel( 100, right );
 		return TRUE;
 	}
+	if( strcmp( part, "stance" ) == 0 && index >= 0 && index < STANCE_COUNT && stancesShown() && ( s_stanceMask & ( 1u << index ) ) != 0 )
+	{
+		// Tiberium Project @feature a click on the index-th stance button
+		clickPanel( 300 + index, right );
+		return TRUE;
+	}
+	if( strcmp( part, "stancehover" ) == 0 )
+	{
+		// (the mouse over the index-th stance button: its plate shows)
+		s_hoverStance = index >= 0 && index < STANCE_COUNT ? index : -1;
+		return TRUE;
+	}
 	if( strcmp( part, "power" ) == 0 && powersWanted() )
 	{
 		// Tiberium Project @feature a click on the Powers bar's index-th power
@@ -1926,9 +2101,18 @@ void TiberiumHUD::describe( char *buffer, Int size )
 				++readyPowers;
 	}
 	const Player *me = localPlayer();
-	snprintf( buffer, size, "on%s; selected %d (%d kinds)%s%s%s; shield %s; row [%s]; slots [%s]; %s %d (next %d%%); radar at %d,%d; view %d high; powers %d (%d ready)%s, meter %d/%d",
+	// (Tiberium Project @feature the stance buttons: which can be pressed, which is lit, where the row is)
+	char stances[96] = "";
+	if( stancesShown() )
+	{
+		Int sx, sy, ssize;
+		stanceRect( L, 0, &sx, &sy, &ssize );
+		snprintf( stances, sizeof( stances ), "; stances %s%s%s%s lit %d at %d,%d size %d", ( s_stanceMask & 1 ) ? "A" : "-", ( s_stanceMask & 2 ) ? "G" : "-",
+			( s_stanceMask & 4 ) ? "P" : "-", ( s_stanceMask & 8 ) ? "F" : "-", (int)s_stanceCommon, (int)sx, (int)sy, (int)ssize );
+	}
+	snprintf( buffer, size, "on%s; selected %d (%d kinds)%s%s%s%s; shield %s; row [%s]; slots [%s]; %s %d (next %d%%); radar at %d,%d; view %d high; powers %d (%d ready)%s, meter %d/%d",
 		s_hidden ? " (hidden)" : "", (int)s_selected, (int)s_groups.size(), obj != nullptr ? ": " : "",
-		obj != nullptr ? obj->getTemplate()->getName().str() : "", obj != nullptr && obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) ? " (being built)" : "",
+		obj != nullptr ? obj->getTemplate()->getName().str() : "", obj != nullptr && obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) ? " (being built)" : "", stances,
 		shield ? ( up ? "up" : "down" ) : "none", row.str(), slots.str(), isTier ? "tier" : "rank", (int)tier, progress >= 0.0f ? (int)( progress * 100.0f ) : 0,
 		(int)rx, (int)ry, TheTacticalView != nullptr ? (int)TheTacticalView->getHeight() : -1, (int)powers, (int)readyPowers,
 		s_powersHidden ? " (put away)" : "", me != nullptr ? (int)me->getSupportPoints() : 0, me != nullptr ? (int)me->getSupportPointsMax() : 0 );

@@ -1486,6 +1486,7 @@ StateReturnType AIIdleState::update()
 				Object* enemy = ai->getNextMoodTarget( true, true );
 				if (enemy)
 				{
+					ai->noteStanceEngagement();	// Tiberium Project: a guarding unit remembers its post
 	 				ai->aiAttackObject(enemy, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI);
 					// weird but true. return state_continue, because if we're here, we're actually an attack state
 					// since we just changed the state, it doesn't really matter what we return here.
@@ -3051,7 +3052,7 @@ StateReturnType AIAttackPursueTargetState::onEnter()
 	{
 		if (source->getControllingPlayer()->getPlayerType() == PLAYER_HUMAN)
 		{
-			if (ai->getLastCommandSource() == CMD_FROM_AI)
+			if (ai->getLastCommandSource() == CMD_FROM_AI && !ai->stanceAllowsChase())	// Tiberium Project: unless its stance has it chase
 			{
 				return STATE_SUCCESS;
 

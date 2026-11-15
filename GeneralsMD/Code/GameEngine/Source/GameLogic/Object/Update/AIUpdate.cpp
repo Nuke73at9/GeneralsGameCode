@@ -31,6 +31,7 @@
 
 #define DEFINE_LOCOMOTORSET_NAMES					// for TheLocomotorSetNames[]
 #define DEFINE_AUTOACQUIRE_NAMES
+#define DEFINE_STANCE_NAMES	// Tiberium Project
 
 #include "Common/ActionManager.h"
 #include "Common/GameState.h"
@@ -83,6 +84,8 @@ AIUpdateModuleData::AIUpdateModuleData()
 	for (int i = 0; i < MAX_TURRETS; i++)
 		m_turretData[i] = nullptr;
 	m_autoAcquireEnemiesWhenIdle = 0;
+	m_stances = 0;	// Tiberium Project
+	m_defaultStance = STANCE_GUARD;
 	m_moodAttackCheckRate = LOGICFRAMES_PER_SECOND * 2;
 #ifdef ALLOW_SURRENDER
 	m_surrenderDuration = LOGICFRAMES_PER_SECOND * 120;
@@ -139,6 +142,9 @@ const LocomotorTemplateVector* AIUpdateModuleData::findLocomotorTemplateVector(L
 		{ "Turret7",										AIUpdateModuleData::parseTurret,	nullptr, offsetof(AIUpdateModuleData, m_turretData[6]) },
 		{ "Turret8",										AIUpdateModuleData::parseTurret,	nullptr, offsetof(AIUpdateModuleData, m_turretData[7]) },
 		{ "AutoAcquireEnemiesWhenIdle", INI::parseBitString32, TheAutoAcquireEnemiesNames, offsetof(AIUpdateModuleData, m_autoAcquireEnemiesWhenIdle) },
+		// Tiberium Project @feature the stances it can take and the one it starts in (StanceType)
+		{ "Stances",										INI::parseBitString32, TheStanceNames, offsetof(AIUpdateModuleData, m_stances) },
+		{ "DefaultStance",							INI::parseIndexList,	TheStanceNames, offsetof(AIUpdateModuleData, m_defaultStance) },
 		{ "MoodAttackCheckRate",				INI::parseDurationUnsignedInt,		nullptr, offsetof(AIUpdateModuleData, m_moodAttackCheckRate) },
 #ifdef ALLOW_SURRENDER
 		{ "SurrenderDuration",					INI::parseDurationUnsignedInt,		nullptr, offsetof(AIUpdateModuleData, m_surrenderDuration) },
@@ -262,6 +268,17 @@ AIUpdateInterface::AIUpdateInterface( Thing *thing, const ModuleData* moduleData
 		m_turretAI[i] = nullptr;
 	m_turretSyncFlag = TURRET_INVALID;
 	m_attitude = ATTITUDE_NORMAL;
+	// Tiberium Project @feature stances
+	m_stance = STANCE_NONE;
+	if (hasStances())
+	{
+		m_stance = canTakeStance((StanceType)getAIUpdateModuleData()->m_defaultStance) ? (StanceType)getAIUpdateModuleData()->m_defaultStance : STANCE_NONE;
+		for (Int st = 0; m_stance == STANCE_NONE && st < STANCE_COUNT; ++st)
+			if (canTakeStance((StanceType)st))
+				m_stance = (StanceType)st;
+	}
+	m_stanceHomeValid = FALSE;
+	m_stanceHome.zero();
 	m_nextMoodCheckTime = 0;
 #ifdef ALLOW_DEMORALIZE
 	m_demoralizedFramesLeft = 0;
@@ -1034,6 +1051,13 @@ UpdateSleepTime AIUpdateInterface::update()
 	UpdateSleepTime subMachineSleep = UPDATE_SLEEP_FOREVER;
 
 	StateReturnType stRet = getStateMachine()->updateStateMachine();
+
+	// Tiberium Project @feature a guarding unit and its post
+	if (m_stanceHomeValid)
+	{
+		updateStanceLeash();
+		stRet = STATE_CONTINUE;	// (looked at again next frame)
+	}
 
 	if (IS_STATE_SLEEP(stRet))
 	{
@@ -4241,6 +4265,92 @@ void AIUpdateInterface::transferAttack(ObjectID fromID, ObjectID toID)
 
 }
 
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the unit's stance (Kane's Wrath's and C&C4's). A unit that holds its fire or its position
+// drops what it had taken on by itself; a guard post is forgotten with any change.
+void AIUpdateInterface::setStance( StanceType stance )
+{
+	if (!canTakeStance(stance) || stance == m_stance)
+		return;
+	m_stance = stance;
+	m_stanceHomeValid = FALSE;
+	if (!stanceAllowsChase() && getLastCommandSource() == CMD_FROM_AI && isAttacking())
+	{
+		aiIdle(CMD_FROM_AI);
+	}
+	// (a look around under the new stance at once)
+	m_nextMoodCheckTime = TheGameLogic->getFrame();
+	wakeUpNow();
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature how far from its post a guarding unit goes after a target, in sights (ours: the games'
+// data holds no figure for it)
+static const Real STANCE_GUARD_LEASH_OF_SIGHT = 1.5f;
+
+// Tiberium Project @feature a guarding unit that takes on something by itself remembers where it stood
+void AIUpdateInterface::noteStanceEngagement()
+{
+	// (a player's unit: a computer player's units get their moves from their player by the same command source as
+	// the unit's own, and are not to walk back from them)
+	const Player *owner = getObject()->getControllingPlayer();
+	if (m_stance == STANCE_GUARD && !m_stanceHomeValid && owner != nullptr && owner->getPlayerType() == PLAYER_HUMAN)
+	{
+		m_stanceHome = *getObject()->getPosition();
+		m_stanceHomeValid = TRUE;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature a guarding unit out after a target of its own: further than one and a half times its
+// sight from its post it breaks off and goes back; with its target gone it takes on the next one it sees, and goes
+// back when there is none. Any order of its player's, or another stance, ends it.
+void AIUpdateInterface::updateStanceLeash()
+{
+	if (m_stance != STANCE_GUARD || getLastCommandSource() != CMD_FROM_AI)
+	{
+		m_stanceHomeValid = FALSE;
+		return;
+	}
+
+	const Object *obj = getObject();
+	const Coord3D *pos = obj->getPosition();
+	const Real dx = pos->x - m_stanceHome.x;
+	const Real dy = pos->y - m_stanceHome.y;
+	const Real distSqr = dx * dx + dy * dy;
+	const Coord3D home = m_stanceHome;
+	if (isIdle())
+	{
+		const Real AT_POST = 2.0f * PATHFIND_CELL_SIZE_F;
+		if (distSqr <= AT_POST * AT_POST)
+		{
+			m_stanceHomeValid = FALSE;
+			return;
+		}
+		// (the look around is due now, not at the idle state's next turn)
+		m_nextMoodCheckTime = TheGameLogic->getFrame();
+		Object *next = getNextMoodTarget(TRUE, TRUE);
+		if (next != nullptr)
+		{
+			aiAttackObject(next, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI);
+		}
+		else
+		{
+			aiMoveToPosition(&home, CMD_FROM_AI);
+		}
+	}
+	else if (isAttacking())
+	{
+		const Real leash = STANCE_GUARD_LEASH_OF_SIGHT * obj->getVisionRange();
+		if (distSqr > leash * leash)
+		{
+			// (idle first: a move the unit orders itself while attacking would only be a detour within the attack)
+			aiIdle(CMD_FROM_AI);
+			aiMoveToPosition(&home, CMD_FROM_AI);
+		}
+	}
+}
+
 //----------------------------------------------------------------------------------------------------------
 /**
  * Indicate who we are attacking.
@@ -4561,6 +4671,12 @@ Object* AIUpdateInterface::getNextMoodTarget( Bool calledByAI, Bool calledDuring
 
 	const AIUpdateModuleData* d = getAIUpdateModuleData();
 
+	// Tiberium Project @feature a unit holding its fire takes on nothing by itself
+	if (m_stance == STANCE_HOLD_FIRE)
+	{
+		return nullptr;
+	}
+
 	if (calledDuringIdle)
 	{
 		if ((d->m_autoAcquireEnemiesWhenIdle & AAS_Idle) == 0)
@@ -4634,6 +4750,13 @@ Object* AIUpdateInterface::getNextMoodTarget( Bool calledByAI, Bool calledDuring
 
 	// Use Guard Outer, which typically corresponds to the total range
 	Real rangeToFindWithin = TheAI->getAdjustedVisionRangeForObject(obj, AI_VISIONFACTOR_OWNERTYPE | AI_VISIONFACTOR_MOOD);
+	// Tiberium Project @feature a player's unit whose stance has it go after targets looks as far as it sees, or as
+	// far as it shoots (Zero Hour's wider guard range for players' units only ever found them what stood in reach)
+	if (hasStances() && stanceAllowsChase() && obj->getControllingPlayer() != nullptr
+			&& obj->getControllingPlayer()->getPlayerType() == PLAYER_HUMAN)
+	{
+		rangeToFindWithin = min(rangeToFindWithin, max(obj->getVisionRange(), obj->getLargestWeaponRange()));
+	}
 
 	if (rangeToFindWithin <= 0.0f)
 		return nullptr;
@@ -4680,6 +4803,17 @@ Object* AIUpdateInterface::getNextMoodTarget( Bool calledByAI, Bool calledDuring
 	// if we're called by AI, and are human controlled, then our AI will not
 	// allow us to pursue the target. therefore, we should ensure that we only
 	// look for targets that are already within attack range (as opposed to vision range).
+	// Tiberium Project @feature with stances: a unit holding its position takes on only what it can reach from where
+	// it stands, whoever commands it; an aggressive or a guarding one takes on what it sees, a player's too (as Zero
+	// Hour's computer players' units always did)
+	if (hasStances())
+	{
+		if (calledByAI && !stanceAllowsChase())
+		{
+			flags |= AI::WITHIN_ATTACK_RANGE;
+		}
+	}
+	else
 	if (calledByAI && obj->getControllingPlayer()->getPlayerType() == PLAYER_HUMAN)
 	{
 		flags |= AI::WITHIN_ATTACK_RANGE;
@@ -5344,6 +5478,15 @@ void AIUpdateInterface::xfer( Xfer *xfer )
 	{
 		Int repulsorCountdown = 0;
 		xfer->xferInt(&repulsorCountdown);
+	}
+
+	// Tiberium Project @feature its stance and guard post: only for a unit that has stances, so a unit of Zero Hour's
+	// saves, loads and sums as it did
+	if (hasStances())
+	{
+		xfer->xferUser(&m_stance, sizeof(m_stance));
+		xfer->xferBool(&m_stanceHomeValid);
+		xfer->xferCoord3D(&m_stanceHome);
 	}
 
 

@@ -869,6 +869,10 @@ Bool ActiveBody::shouldRetaliate(Object *obj)
 	} else {
 		return false; // Non-ai can't retaliate. [8/26/2003]
 	}
+	// Tiberium Project @feature a unit whose stance holds its fire or its position does not go after who hit it
+	if (obj->getAI()->hasStances() && !obj->getAI()->stanceAllowsChase()) {
+		return false;
+	}
 	// Stealthed units don't retaliate unless they're detected. [8/25/2003]
 	if ( obj->getStatusBits().test( OBJECT_STATUS_STEALTHED ) &&
 		!obj->getStatusBits().test( OBJECT_STATUS_DETECTED ) ) {

@@ -112,6 +112,30 @@ static const char *const TheLocomotorSetNames[] =
 static_assert(ARRAY_SIZE(TheLocomotorSetNames) == LOCOMOTORSET_COUNT + 1, "Incorrect array size");
 #endif
 
+// Tiberium Project @feature the stances of Kane's Wrath and C&C4 (their StancesBehavior): how a unit left to itself
+// takes on what comes near. Zero Hour's own units have none (AIUpdate's Stances not given): nothing changes for them.
+enum StanceType CPP_11(: Int)
+{
+	STANCE_NONE = -1,
+	STANCE_AGGRESSIVE = 0,		///< attacks what it sees and goes after it for as long as it lasts
+	STANCE_GUARD,							///< attacks what it sees, goes after it a way, and comes back to where it stood
+	STANCE_HOLD_POSITION,			///< attacks what it can reach from where it stands; does not move
+	STANCE_HOLD_FIRE,					///< attacks nothing unless ordered to
+	STANCE_COUNT
+};
+
+#ifdef DEFINE_STANCE_NAMES
+static const char *const TheStanceNames[] =
+{
+	"AGGRESSIVE",
+	"GUARD",
+	"HOLD_POSITION",
+	"HOLD_FIRE",
+
+	nullptr
+};
+#endif
+
 enum AutoAcquireStates CPP_11(: Int)
 {
 	AAS_Idle											= 0x01,
@@ -198,6 +222,8 @@ public:
   Bool        m_forbidPlayerCommands;     ///< Should isAllowedToRespondToAiCommands() filter out commands from the player, thus making it ai-controllable only?
   Bool        m_turretsLinked;						///< Turrets are linked together and attack together.
 	UnsignedInt						m_autoAcquireEnemiesWhenIdle;
+	UnsignedInt						m_stances;										///< Tiberium Project: the stances it can take (a bit for each StanceType); none: it has no stances
+	Int										m_defaultStance;							///< Tiberium Project: the one it starts in
 #ifdef ALLOW_SURRENDER
  	UnsignedInt						m_surrenderDuration;					///< when we surrender, how long we stay surrendered.
 #endif
@@ -348,6 +374,15 @@ public:
 	// AI Interface implementation -----------------------------------------------------------------------
 	virtual Bool isIdle() const;
 	virtual Bool isAttacking() const;
+
+	// Tiberium Project @feature stances (StanceType)
+	Bool hasStances() const { return getAIUpdateModuleData()->m_stances != 0; }
+	Bool canTakeStance( StanceType stance ) const { return stance > STANCE_NONE && stance < STANCE_COUNT && ( getAIUpdateModuleData()->m_stances & ( 1u << stance ) ) != 0; }
+	StanceType getStance() const { return m_stance; }
+	void setStance( StanceType stance );		///< (one it cannot take is ignored)
+	Bool stanceAllowsChase() const { return m_stance == STANCE_AGGRESSIVE || m_stance == STANCE_GUARD; }	///< it may leave its place for what it attacks by itself
+	void noteStanceEngagement();						///< it takes on something by itself: a guarding unit remembers where it stood
+
 	virtual Bool isClearingMines() const;
 	virtual Bool isTaxiingToParking() const { return FALSE; } //only applies to jets interacting with runways.
 
@@ -562,6 +597,7 @@ public:
 
 	// This function will return a combination of MoodMatrixParameter flags.
 	UnsignedInt getMoodMatrixValue() const;
+	void updateStanceLeash();	///< Tiberium Project: a guarding unit breaks off too far from its post, and goes back to it
 	UnsignedInt getMoodMatrixActionAdjustment( MoodMatrixAction action ) const;
 	void setAttitude( AttitudeType tude );	///< set the behavior modifier for this agent
 
@@ -679,7 +715,7 @@ public:
 	Bool getRetryPath() {return m_retryPath;}
 
 	void setAllowedToChase( Bool allow ) { m_allowedToChase = allow; }
-	Bool isAllowedToChase() const { return m_allowedToChase; }
+	Bool isAllowedToChase() const { return m_allowedToChase || stanceAllowsChase(); }	// Tiberium Project: or by its stance
 
 	// only for AIStateMachine.
 	virtual void friend_notifyStateMachineChanged();
@@ -769,6 +805,9 @@ private:
 
 	// AI -------------------------------------------------------------------------------------------
 	AttitudeType	m_attitude;
+	StanceType		m_stance;									///< Tiberium Project: its stance (STANCE_NONE without stances)
+	Bool					m_stanceHomeValid;				///< Tiberium Project: guarding, it left m_stanceHome for a target of its own
+	Coord3D				m_stanceHome;
 	UnsignedInt		m_nextMoodCheckTime;
 
 	// Common AI "status" effects -------------------------------------------------------------------

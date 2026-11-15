@@ -552,12 +552,14 @@ void TurretAI::updateIndependentTarget()
 	// Tiberium Project @feature nothing of its own while its unit uses a special ability, as the unit's own mood
 	// targets (getNextMoodTarget): Kane's Wrath's Beam Cannon, charging a defence or reflecting its beam, fires
 	// nothing else meanwhile
+	// (Tiberium Project: nor a target of its own while its unit holds its fire: the unit's ordered victim only)
+	const Bool holdsFire = ai->getStance() == STANCE_HOLD_FIRE;
 	const Bool busy = owner->testStatus(OBJECT_STATUS_IS_USING_ABILITY);
 	WeaponSlotType slot = m_independentSlot;
 	Object *want = busy ? nullptr : ai->getCurrentVictim();
 	if (want != nullptr && (want->isEffectivelyDead() || getIndependentWeaponFor(want, &slot, TRUE) == nullptr))
 		want = nullptr;
-	if (want == nullptr && !busy)
+	if (want == nullptr && !busy && !holdsFire)
 	{
 		Object *cur = nullptr;
 		Coord3D pos;
@@ -565,7 +567,7 @@ void TurretAI::updateIndependentTarget()
 			&& owner->getRelationship(cur) == ENEMIES && getIndependentWeaponFor(cur, &slot, TRUE) != nullptr)
 			want = cur;
 	}
-	if (want == nullptr && !busy)
+	if (want == nullptr && !busy && !holdsFire)
 	{
 		Real reach = 0.0f;
 		for (Int i = 0; i < WEAPONSLOT_COUNT; ++i)

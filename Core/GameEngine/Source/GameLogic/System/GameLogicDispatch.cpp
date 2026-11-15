@@ -556,6 +556,27 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, void *userData )
 #endif
 			break;
 		}
+		// Tiberium Project @feature the sender's selected units take a stance, those that can (Kane's Wrath's and C&C4's
+		// stances: AIUpdate's Stances)
+		case GameMessage::MSG_TIBERIUM_SET_STANCE:
+		{
+#if RTS_ZEROHOUR
+			if( currentlySelectedGroup == nullptr || msg->getArgumentCount() < 1 )
+				break;
+			const Int stance = msg->getArgument( 0 )->integer;
+			if( stance <= STANCE_NONE || stance >= STANCE_COUNT )
+				break;
+			const VecObjectID& selected = currentlySelectedGroup->getAllIDs();
+			for( VecObjectID::const_iterator it = selected.begin(); it != selected.end(); ++it )
+			{
+				Object *unit = findObjectByID( *it );
+				AIUpdateInterface *unitAI = unit != nullptr && unit->getControllingPlayer() == getMessagePlayer( msg ) ? unit->getAI() : nullptr;
+				if( unitAI != nullptr )
+					unitAI->setStance( (StanceType)stance );
+			}
+#endif
+			break;
+		}
 		// Tiberium Project @feature a unit's queue at a producer held, let go on, or cancelled whole (the sidebar's
 		// shift and right clicks); the sender's own producer only
 		case GameMessage::MSG_TIBERIUM_PRODUCTION_HOLD:
