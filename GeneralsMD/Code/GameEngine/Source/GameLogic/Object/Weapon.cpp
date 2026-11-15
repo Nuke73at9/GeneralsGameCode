@@ -262,6 +262,9 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "MissType",										INI::parseIndexList,									TheWeaponMissTypeNames,	offsetof(WeaponTemplate, m_missType) },
 	{ "MissDistance",								INI::parseReal,												nullptr,							offsetof(WeaponTemplate, m_missDistance) },
 	{ "NeverMisses",								INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_neverMisses) },
+	// Tiberium Project @feature RadiusDamageFollowsTurret: the damage cone of RadiusDamageAngle points where the turret
+	// holding the weapon points (C&C4's shotgun cones on turreted vehicles); as the hull points otherwise, as it was
+	{ "RadiusDamageFollowsTurret",	INI::parseBool,												nullptr,							offsetof(WeaponTemplate, m_radiusDamageFollowsTurret) },
 	{ "VictimVeterancy",						INI::parseInt,												nullptr,							offsetof(WeaponTemplate, m_victimVeterancy) },	// Tiberium Project
 	{ "JamEnemyRadar",							INI::parseDurationUnsignedInt,				nullptr,							offsetof(WeaponTemplate, m_jamRadarFrames) },	// Tiberium Project
 	{ "SuppressionAmount",					INI::parseReal,												nullptr,							offsetof(WeaponTemplate, m_suppressionAmount) },	// Tiberium Project
@@ -399,6 +402,7 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	m_missType = WEAPON_MISS_SCATTER;
 	m_missDistance = 0.0f;
 	m_neverMisses = FALSE;
+	m_radiusDamageFollowsTurret = FALSE;
 	m_forbiddenTargetStatus.clear();
 	m_victimVeterancy = 0;
 	m_jamRadarFrames = 0;
@@ -2474,6 +2478,25 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 
 				// People can only be hit in a cone oriented as the firer is oriented
 				Vector3 sourceVector = source->getTransformMatrix()->Get_X_Vector();
+				// Tiberium Project @feature RadiusDamageFollowsTurret: as the turret holding this weapon is turned
+				if( m_radiusDamageFollowsTurret && source->getAI() != nullptr )
+				{
+					for( Int slot = 0; slot < WEAPONSLOT_COUNT; ++slot )
+					{
+						const Weapon *held = source->getWeaponInWeaponSlot( (WeaponSlotType)slot );
+						if( held == nullptr || held->getTemplate() != this )
+							continue;
+						Real turretAngle = 0.0f;
+						if( source->getAI()->getWhichTurretForWeaponSlot( (WeaponSlotType)slot, &turretAngle ) != TURRET_INVALID )
+						{
+							const Real c = Cos( turretAngle ), s = Sin( turretAngle );
+							const Real x = sourceVector.X * c - sourceVector.Y * s;
+							sourceVector.Y = sourceVector.X * s + sourceVector.Y * c;
+							sourceVector.X = x;
+						}
+						break;
+					}
+				}
 				Vector3 damageVector(damageDirection.x, damageDirection.y, damageDirection.z);
 				sourceVector.Normalize();
 				damageVector.Normalize();

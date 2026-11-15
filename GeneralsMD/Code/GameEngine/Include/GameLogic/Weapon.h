@@ -699,6 +699,7 @@ private:
 	Int m_missType;																		///< WeaponMissType: where a miss goes
 	Real m_missDistance;															///< a scattered miss lands up to this far beyond its target's edge
 	Bool m_neverMisses;																///< no roll at all (C&C4: no AccuracyParameters)
+	Bool m_radiusDamageFollowsTurret;									///< Tiberium Project: the damage cone (RadiusDamageAngle) points where the turret holding the weapon points, not where the hull does
 	Int m_victimVeterancy;															///< Tiberium Project: veterancy levels each object its damage reaches gains (C&C4's ExperienceNugget)
 	UnsignedInt m_jamRadarFrames;													///< Tiberium Project: as it is dealt, the radars of its firer's enemies go dark this long (C&C4's InformationWarfareNugget)
 	Real m_suppressionAmount;															///< Tiberium Project: as it is dealt, this much suppression on those within SuppressionRadius (Kane's Wrath's SuppressionNugget: SuppressionUpdate)
