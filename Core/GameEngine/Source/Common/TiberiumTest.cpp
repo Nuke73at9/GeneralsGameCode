@@ -40,6 +40,8 @@
 
 #include "Common/GameEngine.h"
 #include "Common/GlobalData.h"
+#include "GameClient/KeyDefs.h"
+#include "GameClient/MetaEvent.h"
 #include "GameClient/ControlBar.h"
 #include "Common/SpecialPower.h"
 #include "GameClient/FXList.h"
@@ -2101,6 +2103,25 @@ void TiberiumTest::update()
 		}
 #endif
 #if RTS_ZEROHOUR
+		else if ( step.action == "stancekey" && TheMessageStream != nullptr )
+		{
+			// "stancekey=N": the N-th stance's hotkey, as the key map sends it (0 aggressive, 1 guard, 2 hold position,
+			// 3 hold fire)
+			const Int n = atoi( step.arg.c_str() );
+			if ( n >= 0 && n < 4 )
+				TheMessageStream->appendMessage( (GameMessage::Type)( GameMessage::MSG_META_TIBERIUM_STANCE_AGGRESSIVE + n ) );
+			// (and the key the map has for it: Alt+A, Alt+S, Alt+D, Alt+F unless the player's key map names another)
+			Int key = -1, mods = -1;
+			for ( const MetaMapRec *map = TheMetaMap != nullptr ? TheMetaMap->getFirstMetaMapRec() : nullptr; map != nullptr; map = map->m_next )
+				if ( map->m_meta == GameMessage::MSG_META_TIBERIUM_STANCE_AGGRESSIVE + n )
+				{
+					key = (Int)map->m_key;
+					mods = (Int)map->m_modState;
+				}
+			static const Int letters[4] = { MK_A, MK_S, MK_D, MK_F };
+			log( "frame %d: ui: stance key %d sent; bound to key %d (%s) with modifiers %d (%s)", (int)s_frame, (int)n, (int)key,
+				n >= 0 && n < 4 && key == letters[n] ? "its letter" : "another key", (int)mods, mods == ALT ? "Alt" : "not Alt alone" );
+		}
 		else if ( step.action == "stance" && TheGameLogic != nullptr )
 		{
 			// "stance=k,NAME": the k-th spawned object takes the stance (AGGRESSIVE, GUARD, HOLD_POSITION, HOLD_FIRE);

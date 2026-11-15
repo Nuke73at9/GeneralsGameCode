@@ -279,6 +279,12 @@ public:
 		MSG_META_STEP_FRAME,												///< TheSuperHackers @feature Step one frame
 		MSG_META_STEP_FRAME_ALT,										///< TheSuperHackers @feature Step one frame (alternative mapping)
 		MSG_META_ABRAM_TEAM_MENU,										///< Abram's Personal Test @feature Open the team menu (AI control, give and request units)
+		// Tiberium Project @feature the selected units' stance by key (C&C4's own second set: Alt+A, Alt+S, Alt+D, Alt+F);
+		// these four stay together, in StanceType's order
+		MSG_META_TIBERIUM_STANCE_AGGRESSIVE,
+		MSG_META_TIBERIUM_STANCE_GUARD,
+		MSG_META_TIBERIUM_STANCE_HOLD_POSITION,
+		MSG_META_TIBERIUM_STANCE_HOLD_FIRE,
 		MSG_META_DEMO_INSTANT_QUIT,									///< bail out of game immediately
 
 

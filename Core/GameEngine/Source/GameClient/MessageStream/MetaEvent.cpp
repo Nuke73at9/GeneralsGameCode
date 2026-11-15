@@ -192,6 +192,11 @@ static const LookupListRec GameMessageMetaTypeNames[] =
 	{ "STEP_FRAME",																GameMessage::MSG_META_STEP_FRAME },
 	{ "STEP_FRAME_ALT",														GameMessage::MSG_META_STEP_FRAME_ALT },
 	{ "ABRAM_TEAM_MENU",													GameMessage::MSG_META_ABRAM_TEAM_MENU },
+	// Tiberium Project @feature the stance keys
+	{ "TIBERIUM_STANCE_AGGRESSIVE",								GameMessage::MSG_META_TIBERIUM_STANCE_AGGRESSIVE },
+	{ "TIBERIUM_STANCE_GUARD",										GameMessage::MSG_META_TIBERIUM_STANCE_GUARD },
+	{ "TIBERIUM_STANCE_HOLD_POSITION",						GameMessage::MSG_META_TIBERIUM_STANCE_HOLD_POSITION },
+	{ "TIBERIUM_STANCE_HOLD_FIRE",								GameMessage::MSG_META_TIBERIUM_STANCE_HOLD_FIRE },
 	{ "DEMO_INSTANT_QUIT",												GameMessage::MSG_META_DEMO_INSTANT_QUIT },
 
 #if defined(_ALLOW_DEBUG_CHEATS_IN_RELEASE)//may be defined in GameCommon.h
@@ -754,6 +759,23 @@ void MetaMap::generateMetaMap()
 			map->m_transition = DOWN;
 			map->m_modState = CTRL;
 			map->m_usableIn = COMMANDUSABLE_GAME;
+		}
+	}
+	{
+		// Tiberium Project @feature the stance keys: C&C4's own second set (its first, K L J H, takes Zero Hour's
+		// key for the view of the base): Alt with A (aggressive), S (guard), D (hold position), F (hold fire). They
+		// do nothing unless a selected unit has stances, which no Zero Hour unit has.
+		static const MappableKeyType stanceKeys[4] = { MK_A, MK_S, MK_D, MK_F };
+		for (Int i = 0; i < 4; ++i)
+		{
+			MetaMapRec *map = getMetaMapRec((GameMessage::Type)(GameMessage::MSG_META_TIBERIUM_STANCE_AGGRESSIVE + i));
+			if (map->m_key == MK_NONE)
+			{
+				map->m_key = stanceKeys[i];
+				map->m_transition = DOWN;
+				map->m_modState = ALT;
+				map->m_usableIn = COMMANDUSABLE_GAME;
+			}
 		}
 	}
 	// TheSuperHackers @info A default mapping for MSG_META_SELECT_ALL_AIRCRAFT would be useful for Generals

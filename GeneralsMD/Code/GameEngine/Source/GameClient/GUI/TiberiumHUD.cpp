@@ -1254,10 +1254,10 @@ namespace
 		if( !stancesShown() || s_hoverStance < 0 || s_hoverStance >= STANCE_COUNT || ( s_stanceMask & ( 1u << s_hoverStance ) ) == 0 )
 			return;
 		static const char *const tips[STANCE_COUNT] = {
-			"Aggressive: attacks what it sees and goes after it",
-			"Guard: attacks what it sees, then returns to its post",
-			"Hold position: attacks what comes in reach, without moving",
-			"Hold fire: attacks only when ordered" };
+			"Aggressive (Alt+A): attacks what it sees and goes after it",
+			"Guard (Alt+S): attacks what it sees, then returns to its post",
+			"Hold position (Alt+D): attacks what comes in reach, without moving",
+			"Hold fire (Alt+F): attacks only when ordered" };
 		Int x, y, size;
 		stanceRect( L, 0, &x, &y, &size );
 		const Int pad = max( 2, (Int)( 3.0f * L.s ) );

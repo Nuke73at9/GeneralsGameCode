@@ -4485,6 +4485,33 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 			}
 			break;
 		}
+		// Tiberium Project @feature the stance keys: the selected units take the stance, as by the unit card's
+		// buttons; nothing is sent unless one of the player's selected units has stances
+		case GameMessage::MSG_META_TIBERIUM_STANCE_AGGRESSIVE:
+		case GameMessage::MSG_META_TIBERIUM_STANCE_GUARD:
+		case GameMessage::MSG_META_TIBERIUM_STANCE_HOLD_POSITION:
+		case GameMessage::MSG_META_TIBERIUM_STANCE_HOLD_FIRE:
+		{
+#if RTS_ZEROHOUR
+			const Int stance = (Int)t - (Int)GameMessage::MSG_META_TIBERIUM_STANCE_AGGRESSIVE;
+			Bool any = FALSE;
+			const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
+			for (DrawableList::const_iterator it = selected->begin(); it != selected->end() && !any; ++it)
+			{
+				const Object *obj = (*it)->getObject();
+				const AIUpdateInterface *ai = obj != nullptr && obj->getControllingPlayer() == ThePlayerList->getLocalPlayer() ? obj->getAI() : nullptr;
+				any = ai != nullptr && ai->canTakeStance((StanceType)stance);
+			}
+			if (any)
+			{
+				GameMessage *stanceMsg = TheMessageStream->appendMessage(GameMessage::MSG_TIBERIUM_SET_STANCE);
+				stanceMsg->appendIntegerArgument(stance);
+				disp = DESTROY_MESSAGE;
+			}
+#endif
+			break;
+		}
+
 		// Abram's Personal Test @feature Ctrl+G opens the team menu.
 		case GameMessage::MSG_META_ABRAM_TEAM_MENU:
 		{
