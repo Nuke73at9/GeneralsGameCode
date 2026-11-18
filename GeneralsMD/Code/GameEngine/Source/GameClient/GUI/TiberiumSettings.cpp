@@ -120,6 +120,54 @@ namespace TiberiumSkin
 	}
 
 	//-----------------------------------------------------------------------------------------------
+	Int drawWrapped( const char *text, Int size, Bool bold, Int x, Int y, Int width, Color color )
+	{
+		// (a font's letters are not as wide on every machine: what fits one line here need not there)
+		AsciiString line, word;
+		Int used = 0, lineHeight = 0;
+		const char *c = text;
+		for( ;; )
+		{
+			if( *c != 0 && *c != ' ' )
+			{
+				word.concat( *c++ );
+				continue;
+			}
+			AsciiString longer = line;
+			if( longer.isNotEmpty() && word.isNotEmpty() )
+				longer.concat( ' ' );
+			longer.concat( word );
+			if( line.isNotEmpty() && widthOf( longer.str(), size, bold ) > width )
+			{
+				DisplayString *s = textOf( line.str(), size, bold );
+				if( s != nullptr )
+				{
+					s->draw( x, y + used, color, GameMakeColor( 0, 0, 0, 160 ) );
+					lineHeight = s->getFont()->height + 2;
+				}
+				used += lineHeight;
+				line = word;
+			}
+			else
+				line = longer;
+			word.clear();
+			if( *c == 0 )
+				break;
+			++c;
+		}
+		if( line.isNotEmpty() )
+		{
+			DisplayString *s = textOf( line.str(), size, bold );
+			if( s != nullptr )
+			{
+				s->draw( x, y + used, color, GameMakeColor( 0, 0, 0, 160 ) );
+				used += s->getFont()->height + 2;
+			}
+		}
+		return used;
+	}
+
+	//-----------------------------------------------------------------------------------------------
 	/** C&C4's menu button, clean: a striped bar standing on a foot under each end */
 	void drawButton( const Look &l, Int x, Int y, Int w, Int h, Real u, const char *text, Int size, Bool on, Bool hover, Bool dim )
 	{

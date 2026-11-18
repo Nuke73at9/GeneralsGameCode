@@ -38,6 +38,8 @@ namespace TiberiumSkin
 	void freeTexts();
 	Int widthOf( const char *text, Int size, Bool bold );
 	void drawText( const char *text, Int size, Bool bold, Int x, Int y, Color color );
+	/// the text broken at its spaces to fit a width, a line under the other; returns the height it took
+	Int drawWrapped( const char *text, Int size, Bool bold, Int x, Int y, Int width, Color color );
 	/// C&C4's menu button, clean: a striped bar standing on a foot under each end (u: the screen's scale)
 	void drawButton( const Look &l, Int x, Int y, Int w, Int h, Real u, const char *text, Int size, Bool on, Bool hover, Bool dim );
 	/// C&C4's menu frame, clean: two outlines, a raised tab on its top edge, a nick in each side, a grid inside

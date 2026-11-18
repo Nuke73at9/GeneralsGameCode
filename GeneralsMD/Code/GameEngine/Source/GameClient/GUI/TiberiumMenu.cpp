@@ -302,11 +302,11 @@ namespace
 		// what the line under the mouse, or the open one, is for
 		if( note[0] != 0 )
 		{
-			const Int x = PX( 880 ), y = PY( 96 ), w = PS( 360 ), h = PS( 96 );
+			const Int x = PX( 880 ), y = PY( 96 ), w = PS( 360 ), h = PS( 108 );
 			drawFrame( l, x, y, w, h, u );
 			drawText( noteTitle, sideSize, TRUE, x + PS( 14 ), y + PS( 12 ), l.accent );
 			TheDisplay->drawLine( x + PS( 10 ), y + PS( 34 ), x + w - PS( 10 ), y + PS( 34 ), 1.0f, l.accentDim );
-			drawText( note, noteSize, FALSE, x + PS( 14 ), y + PS( 46 ), l.text );
+			drawWrapped( note, noteSize, FALSE, x + PS( 14 ), y + PS( 44 ), w - PS( 28 ), l.text );
 		}
 		#undef PX
 		#undef PY
