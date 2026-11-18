@@ -22,6 +22,7 @@
 #include "GameClient/TiberiumSkirmish.h"
 #include "GameClient/TiberiumSettings.h"
 #include "GameClient/TiberiumSkin.h"
+#include "GameClient/AbramMatchOptionsMenu.h"
 #include "Common/NameKeyGenerator.h"
 #include "GameClient/Display.h"
 #include "GameClient/DisplayString.h"
@@ -62,7 +63,10 @@ namespace
 		ACT_CHOOSE,		///< a: the open list's entry
 		ACT_START,		///< a: the start position on the map: taken, or handed to the next player
 		ACT_UNSTART,	///< a: the start position left
-		ACT_LIMIT, ACT_MAPS, ACT_OPTIONS, ACT_RESET, ACT_PLAY, ACT_BACK,
+		ACT_LIMIT, ACT_MAPS, ACT_RESET, ACT_PLAY, ACT_BACK,
+		ACT_OPTIONS,	///< the match options' menu opened, or shut again
+		ACT_OPTION,		///< a: the match option changed, as a click on its line in the mod's dialog changes it
+		ACT_OPTIONS_DONE,
 		ACT_MAP_ROW,	///< a: the map list's row, b: chosen at once (a double click)
 		ACT_MAP_TAB,	///< a: 0 the game's maps, 1 the player's
 		ACT_MAP_USE, ACT_MAP_BACK
@@ -85,7 +89,7 @@ namespace
 	Int s_rowCount = 0;									///< the slots its layout has rows for
 	GameWindow *s_start[MAX_SLOTS];			///< its start position buttons on the map
 	GameWindow *s_name = nullptr, *s_map = nullptr, *s_cash = nullptr, *s_limit = nullptr;
-	GameWindow *s_buttonBack = nullptr, *s_buttonPlay = nullptr, *s_buttonMaps = nullptr, *s_buttonOptions = nullptr, *s_buttonReset = nullptr;
+	GameWindow *s_buttonBack = nullptr, *s_buttonPlay = nullptr, *s_buttonMaps = nullptr, *s_buttonReset = nullptr;
 	GameWindow *s_stat[STAT_COUNT];
 
 	WindowLayout *s_mapLayout = nullptr;	///< Zero Hour's map list while it is up: shown here in its place
@@ -96,6 +100,8 @@ namespace
 	Int s_mapRows = 1;									///< the rows of it that fit, as last drawn
 
 	GameWindow *s_list = nullptr;				///< the combo box whose list is open
+	Bool s_options = FALSE;							///< the match options' menu is open over the screen
+	Bool s_under = FALSE;								///< what is being drawn lies under an open list or menu: it answers no mouse
 	Int s_listRow = 0, s_listField = 0;
 	Int s_listX = 0, s_listY = 0, s_listW = 0, s_listH = 0;	///< under its field, as last drawn
 	Int s_listTop = 0;
@@ -146,7 +152,6 @@ namespace
 		s_buttonPlay = find( s_parent, "SkirmishGameOptionsMenu.wnd", "ButtonStart" );
 		s_buttonMaps = find( s_parent, "SkirmishGameOptionsMenu.wnd", "ButtonSelectMap" );
 		s_buttonReset = find( s_parent, "SkirmishGameOptionsMenu.wnd", "ButtonReset" );
-		s_buttonOptions = find( s_parent, "AbramMatchOptions", "ButtonMatchOptions" );
 		for( Int i = 0; i < STAT_COUNT; ++i )
 			s_stat[i] = find( nullptr, "SkirmishGameOptionsMenu.wnd", s_statName[i] );
 	}
@@ -254,7 +259,7 @@ namespace
 			case ACT_LIST:
 			{
 				GameWindow *combo = comboOf( act.a, act.b );
-				if( maps || combo == nullptr || !combo->winGetEnabled() || combo == s_list )
+				if( maps || s_options || combo == nullptr || !combo->winGetEnabled() || combo == s_list )
 				{
 					s_list = nullptr;
 					break;
@@ -288,8 +293,17 @@ namespace
 					press( s_parent, s_buttonMaps, GBM_SELECTED );
 				break;
 			case ACT_OPTIONS:
-				if( !maps )
-					press( s_parent, s_buttonOptions, GBM_SELECTED );
+				// the mod's match options, as a menu of this screen (its own dialog, in Zero Hour's look, is not opened)
+				s_options = !maps && !s_options;
+				s_list = nullptr;
+				break;
+			case ACT_OPTION:
+				// (the mod's own code changes the option, as a click on its line in its dialog does)
+				if( s_options && !maps )
+					AbramMatchOptionsMenu::changeOption( act.a, TheSkirmishGameInfo );
+				break;
+			case ACT_OPTIONS_DONE:
+				s_options = FALSE;
 				break;
 			case ACT_RESET:
 				if( !maps )
@@ -330,7 +344,8 @@ namespace
 	}
 
 	//-----------------------------------------------------------------------------------------------
-	/** a part that answers a click; says whether the mouse is on it (never while a list is open over the screen) */
+	/** a part that answers a click; says whether the mouse is on it (never while a list or the match options' menu
+		is open over it) */
 	Bool addHit( ActKind kind, Int a, Int b, Int x, Int y, Int w, Int h )
 	{
 		Hit hit;
@@ -342,7 +357,7 @@ namespace
 		hit.w = w;
 		hit.h = h;
 		s_hits.push_back( hit );
-		return s_list == nullptr && s_mx >= x && s_mx < x + w && s_my >= y && s_my < y + h;
+		return !s_under && s_mx >= x && s_mx < x + w && s_my >= y && s_my < y + h;
 	}
 
 	UnicodeString wide( const char *text )
@@ -577,7 +592,10 @@ namespace
 		#define PS( v ) ( (Int)( ( v ) * u ) )
 		const Int buttonSize = max( 9, PS( 15.0f ) ), labelSize = max( 8, PS( 12.0f ) ), textSize = max( 8, PS( 12.0f ) ), nameSize = max( 9, PS( 16.0f ) );
 		const Bool maps = mapsUp();
+		if( maps )
+			s_options = FALSE;
 		s_hits.clear();
+		s_under = s_list != nullptr || s_options;
 
 		drawBackdrop( l, ox, u, sw, sh, maps ? "SKIRMISH: CHOOSE A MAP" : "SKIRMISH", 205 );
 
@@ -631,10 +649,9 @@ namespace
 				const Int x = PX( 436 ), y = PY( 444 ), w = PS( 198 ), h = PS( 36 );
 				drawButton( l, x, y, w, h, u, "SELECT MAP", labelSize, FALSE, addHit( ACT_MAPS, 0, 0, x, y, w, h ), FALSE );
 			}
-			if( s_buttonOptions != nullptr )
 			{
 				const Int x = PX( 646 ), y = PY( 444 ), w = PS( 198 ), h = PS( 36 );
-				drawButton( l, x, y, w, h, u, "MATCH OPTIONS", labelSize, FALSE, addHit( ACT_OPTIONS, 0, 0, x, y, w, h ), FALSE );
+				drawButton( l, x, y, w, h, u, "MATCH OPTIONS", labelSize, s_options, addHit( ACT_OPTIONS, 0, 0, x, y, w, h ), FALSE );
 			}
 			// (a font's letters are not as wide on every machine: a label is cut short before it runs into its field)
 			drawTextIn( wide( "STARTING CASH" ), labelSize, TRUE, PX( 436 ), PY( 500 ), PS( 202 ), l.textDim );
@@ -743,6 +760,62 @@ namespace
 			{
 				const Int bx = PX( 1026 ), by = PY( 636 ), bw = PS( 220 ), bh = PS( 46 );
 				drawButton( l, bx, by, bw, bh, u, "USE THIS MAP", buttonSize, TRUE, addHit( ACT_MAP_USE, 0, 0, bx, by, bw, bh ), chosen < 0 );
+			}
+		}
+
+		// the match options' menu, over the screen: the mod's options (cash multiplier, build speed, the long queue,
+		// the superweapon limit, the map revealed, everything unlocked, the Tiberium zones, the cheats), a line each as
+		// the mod words it, its name left and its setting in a field right; a click on a line changes it
+		if( s_options && !maps )
+		{
+			// (only this menu answers the mouse while it is open)
+			s_hits.clear();
+			s_under = FALSE;
+			const Int count = AbramMatchOptionsMenu::getOptionCount();
+			const Int rowH = PS( 30 ), pitch = PS( 36 );
+			const Int w = PS( 520 ), h = PS( 96 ) + count * pitch + PS( 70 );
+			const Int x = PX( 640 ) - w / 2, y = max( PS( 30 ), ( sh - h ) / 2 );
+			TheDisplay->drawFillRect( 0, 0, sw, sh, ( l.shade & 0x00FFFFFF ) | ( 150u << 24 ) );
+			drawFrame( l, x, y, w, h, u );
+			TheDisplay->drawFillRect( x + 2, y + 2, w - 4, h - 4, ( l.shade & 0x00FFFFFF ) | ( 120u << 24 ) );
+			drawText( "MATCH OPTIONS", nameSize, TRUE, x + PS( 20 ), y + PS( 16 ), l.text );
+			TheDisplay->drawLine( x + PS( 14 ), y + PS( 44 ), x + w - PS( 14 ), y + PS( 44 ), 1.0f, l.accentDim );
+			drawWrapped( "Click an option to change it. They apply to everyone in this match.", textSize, FALSE, x + PS( 20 ), y + PS( 54 ), w - PS( 40 ), l.textDim );
+			for( Int i = 0; i < count; ++i )
+			{
+				const Int rx = x + PS( 20 ), ry = y + PS( 96 ) + i * pitch, rw = w - PS( 40 );
+				const Bool hover = addHit( ACT_OPTION, i, 0, rx, ry, rw, rowH );
+				// the line as the mod words it, "name: setting", taken apart at its last colon
+				const UnicodeString line = AbramMatchOptionsMenu::getOptionText( i, TheSkirmishGameInfo );
+				UnicodeString name = line, setting;
+				const WideChar *text = line.str();
+				Int colon = -1;
+				for( Int c = 0; text != nullptr && text[c] != 0; ++c )
+					if( text[c] == L':' && text[c + 1] == L' ' )
+						colon = c;
+				if( colon >= 0 )
+				{
+					name.clear();
+					for( Int c = 0; c < colon; ++c )
+						name.concat( text[c] );
+					setting = UnicodeString( text + colon + 2 );
+				}
+				if( hover )
+					TheDisplay->drawFillRect( rx - PS( 6 ), ry - PS( 2 ), rw + PS( 12 ), rowH + PS( 4 ), l.fill );
+				DisplayString *ns = textOf( name, labelSize + 1, TRUE );
+				drawTextIn( name, labelSize + 1, TRUE, rx, ns != nullptr ? ry + ( rowH - ns->getFont()->height ) / 2 : ry, rw - PS( 200 ), hover ? l.text : l.textDim );
+				// (a setting other than the game's own stands out: "Off" and "x1" are the game as it always was)
+				const Bool plain = setting.compare( L"Off" ) == 0 || setting.compare( L"x1" ) == 0;
+				const Int fx = rx + rw - PS( 180 ), fw = PS( 180 );
+				TheDisplay->drawFillRect( fx, ry, fw, rowH, plain ? l.fill : l.fillOn );
+				TheDisplay->drawOpenRect( fx, ry, fw, rowH, plain ? 1.0f : 2.0f, hover || !plain ? l.hi : l.accentDim );
+				DisplayString *ss = textOf( setting, labelSize + 1, TRUE );
+				if( ss != nullptr )
+					ss->draw( fx + ( fw - ss->getWidth() ) / 2, ry + ( rowH - ss->getFont()->height ) / 2, plain ? l.textDim : l.text, GameMakeColor( 0, 0, 0, 160 ) );
+			}
+			{
+				const Int bw = PS( 200 ), bh = PS( 42 ), bx = PX( 640 ) - bw / 2, by = y + h - PS( 58 );
+				drawButton( l, bx, by, bw, bh, u, "DONE", buttonSize, TRUE, addHit( ACT_OPTIONS_DONE, 0, 0, bx, by, bw, bh ), FALSE );
 			}
 		}
 
@@ -863,11 +936,12 @@ namespace
 				return MSG_HANDLED;
 			}
 			case GWM_CHAR:
-				// Escape: the open list shut, else the map list left, else the screen (as Zero Hour's own do it)
+				// Escape: the open list shut, else the match options' menu, else the map list left, else the screen (as
+				// Zero Hour's own do it)
 				if( (UnsignedByte)mData1 == KEY_ESC && BitIsSet( mData2, KEY_STATE_UP ) )
 				{
 					Act act;
-					act.kind = s_list != nullptr ? ACT_CHOOSE : ( mapsUp() ? ACT_MAP_BACK : ACT_BACK );
+					act.kind = s_list != nullptr ? ACT_CHOOSE : ( s_options ? ACT_OPTIONS_DONE : ( mapsUp() ? ACT_MAP_BACK : ACT_BACK ) );
 					act.a = -1;
 					act.b = 0;
 					s_acts.push_back( act );
@@ -941,6 +1015,7 @@ void TiberiumSkirmish::update( WindowLayout *layout, GameWindow *parent )
 		findGadgets();
 		forgetMapGadgets();
 		s_list = nullptr;
+		s_options = FALSE;
 		s_hits.clear();
 		s_acts.clear();
 	}
@@ -981,6 +1056,7 @@ void TiberiumSkirmish::shutdown()
 	s_parent = nullptr;
 	s_rowCount = 0;
 	s_list = nullptr;
+	s_options = FALSE;
 	forgetMapGadgets();
 	s_hits.clear();
 	s_acts.clear();
@@ -1030,7 +1106,7 @@ Bool TiberiumSkirmish::testClick( const char *part, Int a, Int b )
 	static const struct { const char *name; ActKind kind; } simple[] =
 	{
 		{ "open", ACT_LIST }, { "start", ACT_START }, { "unstart", ACT_UNSTART }, { "limit", ACT_LIMIT }, { "maps", ACT_MAPS },
-		{ "options", ACT_OPTIONS }, { "reset", ACT_RESET }, { "play", ACT_PLAY }, { "back", ACT_BACK }, { "maprow", ACT_MAP_ROW },
+		{ "options", ACT_OPTIONS }, { "option", ACT_OPTION }, { "optionsdone", ACT_OPTIONS_DONE }, { "reset", ACT_RESET }, { "play", ACT_PLAY }, { "back", ACT_BACK }, { "maprow", ACT_MAP_ROW },
 		{ "maptab", ACT_MAP_TAB }, { "mapuse", ACT_MAP_USE }, { "mapback", ACT_MAP_BACK },
 	};
 	for( size_t i = 0; i < ARRAY_SIZE( simple ); ++i )
@@ -1073,9 +1149,18 @@ void TiberiumSkirmish::describe( char *buffer, Int size )
 		snprintf( part, sizeof( part ), "list open: row %d field %d, %d entries; ", (int)s_listRow, (int)s_listField, (int)GadgetComboBoxGetLength( s_list ) );
 		text += part;
 	}
-	snprintf( part, sizeof( part ), "cash %d; limit %d; players (slot:state/side/team/colour/start):", (int)TheSkirmishGameInfo->getStartingCash().countMoney(),
-		(int)TheSkirmishGameInfo->getSuperweaponRestriction() );
+	snprintf( part, sizeof( part ), "cash %d; limit %d; ", (int)TheSkirmishGameInfo->getStartingCash().countMoney(), (int)TheSkirmishGameInfo->getSuperweaponRestriction() );
 	text += part;
+	// the mod's match options, each as its own line words it
+	text += s_options ? "match options open:" : "match options:";
+	for( Int i = 0; i < AbramMatchOptionsMenu::getOptionCount(); ++i )
+	{
+		AsciiString line;
+		line.translate( AbramMatchOptionsMenu::getOptionText( i, TheSkirmishGameInfo ) );
+		text += i == 0 ? " " : " | ";
+		text += line.str();
+	}
+	text += "; players (slot:state/side/team/colour/start):";
 	for( Int i = 0; i < MAX_SLOTS; ++i )
 	{
 		const GameSlot *slot = TheSkirmishGameInfo->getConstSlot( i );

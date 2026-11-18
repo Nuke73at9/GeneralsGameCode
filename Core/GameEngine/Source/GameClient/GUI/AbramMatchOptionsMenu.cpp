@@ -106,16 +106,9 @@ void toggleRule( GameInfo *game, AbramGameRule rule )
 	game->setAbramRules( game->getAbramRules() ^ (UnsignedInt)rule );
 }
 
-void onChoice( Int choice, void *userData )
+/// the change a click on an option's line makes
+void applyChoice( GameInfo *game, Int choice )
 {
-	GameInfo *game = editedGame;
-	if (game == nullptr || choice == CHOICE_DONE || choice == AbramPopup::CHOICE_CANCEL)
-	{
-		AbramPopup::close();
-		editedGame = nullptr;
-		return;
-	}
-
 	UnsignedInt rules = game->getAbramRules();
 	switch (choice)
 	{
@@ -153,6 +146,19 @@ void onChoice( Int choice, void *userData )
 	default:
 		break;
 	}
+}
+
+void onChoice( Int choice, void *userData )
+{
+	GameInfo *game = editedGame;
+	if (game == nullptr || choice == CHOICE_DONE || choice == AbramPopup::CHOICE_CANCEL)
+	{
+		AbramPopup::close();
+		editedGame = nullptr;
+		return;
+	}
+
+	applyChoice( game, choice );
 
 	AbramPopup::setChoiceText( choice, choiceText( choice, game ) );
 	if (changedFunc != nullptr)
@@ -241,4 +247,27 @@ void AbramMatchOptionsMenu::shutdown()
 	editedGame = nullptr;
 	buttonMatchOptions = nullptr;
 	changedFunc = nullptr;
+}
+
+// Tiberium Project @feature for a screen that shows the options itself (the Tiberium skirmish screen): the options
+// the dialog lists, without its Done; an option's line as the dialog words it; the change a click on it makes there.
+Int AbramMatchOptionsMenu::getOptionCount()
+{
+	return CHOICE_DONE;
+}
+
+UnicodeString AbramMatchOptionsMenu::getOptionText( Int option, const GameInfo *game )
+{
+	if (game == nullptr || option < 0 || option >= CHOICE_DONE)
+		return UnicodeString::TheEmptyString;
+	return choiceText( option, game );
+}
+
+void AbramMatchOptionsMenu::changeOption( Int option, GameInfo *game )
+{
+	if (game == nullptr || option < 0 || option >= CHOICE_DONE)
+		return;
+	applyChoice( game, option );
+	if (changedFunc != nullptr)
+		changedFunc();
 }

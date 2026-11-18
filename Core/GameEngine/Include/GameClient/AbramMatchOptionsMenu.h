@@ -25,6 +25,8 @@
 // The button is created in code under the screen's SELECT MAP button and styled like it, so the
 // original window layouts (and mods' versions of them) need no changes.
 
+#include "Common/UnicodeString.h"
+
 class GameInfo;
 class GameWindow;
 
@@ -43,4 +45,11 @@ public:
 
 	// Closes the dialog, for when the screen goes away.
 	static void shutdown();
+
+	// Tiberium Project @feature for a screen that shows the options itself (the Tiberium skirmish screen): how many
+	// options the dialog lists (without its Done), an option's line as the dialog words it ("Cash Multiplier: x2"),
+	// and the change a click on that line makes. The screen's onChanged is called as after a click in the dialog.
+	static Int getOptionCount();
+	static UnicodeString getOptionText( Int option, const GameInfo *game );
+	static void changeOption( Int option, GameInfo *game );
 };
