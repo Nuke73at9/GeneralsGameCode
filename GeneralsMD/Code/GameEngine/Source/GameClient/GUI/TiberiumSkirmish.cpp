@@ -92,6 +92,7 @@ namespace
 	GameWindow *s_mapParent = nullptr, *s_mapList = nullptr, *s_mapPreview = nullptr, *s_mapBack = nullptr, *s_mapUse = nullptr;
 	GameWindow *s_mapTab[2];
 	Int s_mapTop = 0;										///< the first row of the map list shown
+	Bool s_mapCentre = FALSE;						///< the chosen map is to be brought in sight when the list is next drawn
 	Int s_mapRows = 1;									///< the rows of it that fit, as last drawn
 
 	GameWindow *s_list = nullptr;				///< the combo box whose list is open
@@ -173,6 +174,31 @@ namespace
 		s_mapParent = s_mapList = s_mapPreview = s_mapBack = s_mapUse = nullptr;
 		s_mapTab[0] = s_mapTab[1] = nullptr;
 		s_mapTop = 0;
+		s_mapCentre = FALSE;
+	}
+
+	//-----------------------------------------------------------------------------------------------
+	/** Zero Hour's map list is up and its gadgets here are its own. It makes and destroys that list itself, on its own
+		buttons and in the middle of a frame: nothing kept of it is touched unless this says so (its windows, once
+		destroyed, are freed memory: the first PC run crashed in the frame after its Back, drawing from them) */
+	Bool mapsUp()
+	{
+		return s_mapLayout != nullptr && s_mapLayout == skirmishMapSelectLayout;
+	}
+
+	/** what is kept of Zero Hour's map list brought in line with it: forgotten when it has gone, found when it came */
+	void followMapList()
+	{
+		if( skirmishMapSelectLayout == s_mapLayout )
+			return;
+		forgetMapGadgets();
+		s_mapLayout = skirmishMapSelectLayout;
+		s_list = nullptr;
+		if( s_mapLayout != nullptr )
+		{
+			findMapGadgets();
+			s_mapCentre = TRUE;
+		}
 	}
 
 	//-----------------------------------------------------------------------------------------------
@@ -221,7 +247,8 @@ namespace
 	//-----------------------------------------------------------------------------------------------
 	void run( const Act &act )
 	{
-		const Bool maps = s_mapLayout != nullptr;
+		followMapList();
+		const Bool maps = mapsUp();
 		switch( act.kind )
 		{
 			case ACT_LIST:
@@ -504,7 +531,7 @@ namespace
 		if( n != nullptr )
 			n->draw( x + 1 + ( tab - n->getWidth() ) / 2, y + ( h - n->getFont()->height ) / 2, in ? GameMakeColor( 255, 255, 255, 255 ) : l.textDim, GameMakeColor( 0, 0, 0, 255 ) );
 		const Int fh = CS( 22 ), x0 = x + tab + CS( 8 ), y0 = y + CS( 5 ), y1 = y + h - CS( 5 ) - fh;
-		const Int wide0 = CS( 178 ), gap = CS( 6 ), right = x + w - CS( 6 );
+		const Int wide0 = CS( 166 ), gap = CS( 6 ), right = x + w - CS( 6 );
 		// who plays it: the player's own name on the first, a list on the others
 		if( i == 0 )
 			drawField( l, x0, y0, wide0, fh, u, s_name != nullptr ? GadgetTextEntryGetText( s_name ) : slot->getName(), size, FALSE, FALSE, FALSE );
@@ -513,16 +540,18 @@ namespace
 		if( in )
 		{
 			drawCombo( l, u, i, FIELD_FACTION, x0 + wide0 + gap, y0, right - ( x0 + wide0 + gap ), fh, size, live );
-			const Int half = ( wide0 - gap ) / 2;
-			drawCombo( l, u, i, FIELD_TEAM, x0, y1, half, fh, size, live );
-			drawCombo( l, u, i, FIELD_COLOR, x0 + half + gap, y1, wide0 - half - gap, fh, size, live );
+			// (a team's name is a number or "None"; a colour's name needs more room, a font's letters being wider on some
+			// machines: "Purple" was cut short on the PC)
+			const Int teamW = CS( 70 ), colourW = CS( 112 );
+			drawCombo( l, u, i, FIELD_TEAM, x0, y1, teamW, fh, size, live );
+			drawCombo( l, u, i, FIELD_COLOR, x0 + teamW + gap, y1, colourW, fh, size, live );
 			UnicodeString start;
 			if( slot->getStartPos() >= 0 )
 				start.format( L"Start %d", (int)( slot->getStartPos() + 1 ) );
 			else
 				start = L"Start: any";
 			DisplayString *s = textOf( start, size, FALSE );
-			drawText( start, size, FALSE, x0 + wide0 + gap + CS( 6 ), s != nullptr ? y1 + ( fh - s->getFont()->height ) / 2 : y1, live ? l.textDim : l.accentDim );
+			drawText( start, size, FALSE, x0 + teamW + colourW + 2 * gap + CS( 6 ), s != nullptr ? y1 + ( fh - s->getFont()->height ) / 2 : y1, live ? l.textDim : l.accentDim );
 		}
 		#undef CS
 	}
@@ -547,7 +576,7 @@ namespace
 		#define PY( v ) ( (Int)( ( v ) * u ) )
 		#define PS( v ) ( (Int)( ( v ) * u ) )
 		const Int buttonSize = max( 9, PS( 15.0f ) ), labelSize = max( 8, PS( 12.0f ) ), textSize = max( 8, PS( 12.0f ) ), nameSize = max( 9, PS( 16.0f ) );
-		const Bool maps = s_mapLayout != nullptr;
+		const Bool maps = mapsUp();
 		s_hits.clear();
 
 		drawBackdrop( l, ox, u, sw, sh, maps ? "SKIRMISH: CHOOSE A MAP" : "SKIRMISH", 205 );
@@ -560,7 +589,7 @@ namespace
 			const Int side = perSide > 0 ? i / perSide : 0;
 			if( ( maps && side == 0 ) || ( alone && i > 0 ) )
 				continue;
-			drawCard( l, u, i, PX( side == 0 ? 34 : 876 ), PY( 74 + ( i - side * perSide ) * 64 ), PS( 370 ), PS( 58 ), textSize, !maps );
+			drawCard( l, u, i, PX( side == 0 ? 34 : 862 ), PY( 74 + ( i - side * perSide ) * 64 ), PS( 384 ), PS( 58 ), textSize, !maps );
 		}
 
 		// the map, in C&C4's frame between them
@@ -658,13 +687,13 @@ namespace
 		else
 		{
 			// Zero Hour's map list, in the first players' place: the game's maps or the player's own, a row a map
-			const Int x = PX( 34 ), y = PY( 82 ), w = PS( 370 ), h = PS( 498 );
+			const Int x = PX( 34 ), y = PY( 82 ), w = PS( 384 ), h = PS( 498 );
 			drawFrame( l, x, y, w, h, u );
 			for( Int t = 0; t < 2; ++t )
 			{
 				if( s_mapTab[t] == nullptr )
 					continue;
-				const Int tx = x + PS( 10 ) + t * PS( 178 ), ty = y + PS( 12 ), tw = PS( 172 ), th = PS( 24 );
+				const Int tx = x + PS( 10 ) + t * PS( 185 ), ty = y + PS( 12 ), tw = PS( 179 ), th = PS( 24 );
 				const Bool on = BitIsSet( s_mapTab[t]->winGetInstanceData()->getState(), WIN_STATE_SELECTED );
 				const Bool hover = addHit( ACT_MAP_TAB, t, 0, tx, ty, tw, th );
 				TheDisplay->drawFillRect( tx, ty, tw, th, on ? l.fillOn : l.fill );
@@ -675,10 +704,16 @@ namespace
 			const Int rowH = max( 12, PS( 24 ) ), top = y + PS( 46 );
 			const Int count = s_mapList != nullptr ? GadgetListBoxGetNumEntries( s_mapList ) : 0;
 			s_mapRows = max( 1, ( y + h - PS( 10 ) - top ) / rowH );
-			s_mapTop = max( 0, min( s_mapTop, count - s_mapRows ) );
 			Int chosen = -1;
 			if( s_mapList != nullptr )
 				GadgetListBoxGetSelected( s_mapList, &chosen );
+			if( s_mapCentre )
+			{
+				// (the map in use in the middle of the rows shown, when the list comes up)
+				s_mapTop = chosen - s_mapRows / 2;
+				s_mapCentre = FALSE;
+			}
+			s_mapTop = max( 0, min( s_mapTop, count - s_mapRows ) );
 			const Int column = mapColumn();
 			for( Int r = 0; r < s_mapRows && s_mapTop + r < count; ++r )
 			{
@@ -823,7 +858,7 @@ namespace
 				const Int step = msg == GWM_WHEEL_UP ? -3 : 3;
 				if( s_list != nullptr )
 					s_listTop = max( 0, s_listTop + step );
-				else if( s_mapLayout != nullptr )
+				else if( mapsUp() )
 					s_mapTop = max( 0, s_mapTop + step );
 				return MSG_HANDLED;
 			}
@@ -832,7 +867,7 @@ namespace
 				if( (UnsignedByte)mData1 == KEY_ESC && BitIsSet( mData2, KEY_STATE_UP ) )
 				{
 					Act act;
-					act.kind = s_list != nullptr ? ACT_CHOOSE : ( s_mapLayout != nullptr ? ACT_MAP_BACK : ACT_BACK );
+					act.kind = s_list != nullptr ? ACT_CHOOSE : ( mapsUp() ? ACT_MAP_BACK : ACT_BACK );
 					act.a = -1;
 					act.b = 0;
 					s_acts.push_back( act );
@@ -912,21 +947,7 @@ void TiberiumSkirmish::update( WindowLayout *layout, GameWindow *parent )
 	// Zero Hour's screen stays under this one, out of sight; its windows are hidden, not its screen (the shell goes on
 	// taking it for the screen that is up). Its map list the same, while that is up.
 	hideAll( layout );
-	if( skirmishMapSelectLayout != s_mapLayout )
-	{
-		forgetMapGadgets();
-		s_mapLayout = skirmishMapSelectLayout;
-		s_list = nullptr;
-		if( s_mapLayout != nullptr )
-		{
-			findMapGadgets();
-			// (the map in use in sight in the list)
-			Int chosen = -1;
-			if( s_mapList != nullptr )
-				GadgetListBoxGetSelected( s_mapList, &chosen );
-			s_mapTop = max( 0, chosen - s_mapRows / 2 );
-		}
-	}
+	followMapList();
 	hideAll( s_mapLayout );
 	// Escape comes here while no box or dialog of Zero Hour's has the keyboard: its own screen would leave at once,
 	// an open list or not, and its map list gives the keyboard to nothing (the misspelt name again)
@@ -940,8 +961,14 @@ void TiberiumSkirmish::update( WindowLayout *layout, GameWindow *parent )
 	for( size_t i = 0; i < acts.size() && s_window != nullptr && TheSkirmishGameInfo != nullptr; ++i )
 	{
 		run( acts[i] );
+		// (the act may have shut Zero Hour's map list, or opened it: what is kept of it follows at once, before
+		// anything is drawn from it; the acts after it were clicks on a screen that is no longer the one shown)
 		if( skirmishMapSelectLayout != s_mapLayout )
+		{
+			followMapList();
+			hideAll( s_mapLayout );
 			break;
+		}
 	}
 }
 
@@ -1031,7 +1058,7 @@ void TiberiumSkirmish::describe( char *buffer, Int size )
 	char part[160];
 	snprintf( part, sizeof( part ), "on; %d rows; %d parts; map %s; ", (int)s_rowCount, (int)s_hits.size(), TheSkirmishGameInfo->getMap().str() );
 	text += part;
-	if( s_mapLayout != nullptr )
+	if( mapsUp() )
 	{
 		Int chosen = -1;
 		if( s_mapList != nullptr )

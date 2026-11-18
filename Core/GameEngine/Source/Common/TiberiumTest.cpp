@@ -2133,6 +2133,28 @@ void TiberiumTest::update()
 			log( "frame %d: ui: menu %s%s: %s; the shell's screen %s", (int)s_frame, step.arg.c_str(), step.arg.empty() ? "" : ( took ? " (taken)" : " (missed)" ), what,
 				top != nullptr ? top->getFilename().str() : "none" );
 		}
+		else if ( step.action == "wclick" && TheWindowManager != nullptr && TheDisplay != nullptr && TheMouse != nullptr )
+		{
+			// "wclick=X,Y" (fractions of the screen; ",right" for the right button): a mouse click given to the window
+			// manager as the mouse gives it, so it finds the window under the point itself and that window's own input
+			// takes it (the menu= and skirmish= steps press a part's action without the mouse)
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			if ( f.size() >= 2 )
+			{
+				ICoord2D at;
+				at.x = (Int)( atof( f[0].c_str() ) * TheDisplay->getWidth() );
+				at.y = (Int)( atof( f[1].c_str() ) * TheDisplay->getHeight() );
+				const Bool right = f.size() > 2 && f[2] == "right";
+				s_uiMouse = TRUE;
+				s_uiMouseX = (Real)atof( f[0].c_str() );
+				s_uiMouseY = (Real)atof( f[1].c_str() );
+				TheMouse->setPosition( at.x, at.y );
+				const WinInputReturnCode down = TheWindowManager->winProcessMouseEvent( right ? GWM_RIGHT_DOWN : GWM_LEFT_DOWN, &at, nullptr );
+				const WinInputReturnCode up = TheWindowManager->winProcessMouseEvent( right ? GWM_RIGHT_UP : GWM_LEFT_UP, &at, nullptr );
+				log( "frame %d: ui: window click at %d,%d%s: %s", (int)s_frame, (int)at.x, (int)at.y, right ? " (right)" : "",
+					down == WIN_INPUT_USED || up == WIN_INPUT_USED ? "a window took it" : "no window took it" );
+			}
+		}
 		else if ( step.action == "leave" && TheGameLogic != nullptr )
 		{
 			// the game left for the shell, as the in-game menu's Exit and its Yes leave it (the menu itself pauses the
