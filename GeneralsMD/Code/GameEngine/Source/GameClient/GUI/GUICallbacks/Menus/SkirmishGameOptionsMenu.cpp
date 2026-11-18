@@ -42,6 +42,7 @@
 #include "Common/OptionPreferences.h"
 #include "GameLogic/GameLogic.h"
 #include "GameClient/AbramMatchOptionsMenu.h"
+#include "GameClient/TiberiumSkirmish.h"	// Tiberium Project
 #include "GameClient/AnimateWindowManager.h"
 #include "GameClient/ClientInstance.h"
 #include "GameClient/WindowLayout.h"
@@ -1497,6 +1498,7 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
 
 	// Show the Menu
 	layout->hide( FALSE );
+	TiberiumSkirmish::init( layout );	// Tiberium Project: the Tiberium skirmish screen may be drawn over this one
 
 	// Set Keyboard to Main Parent
 	TheWindowManager->winSetFocus( parentSkirmishGameOptions );
@@ -1545,6 +1547,8 @@ void SkirmishGameOptionsMenuShutdown( WindowLayout *layout, void *userData )
 {
 	SignalUIInteraction(SHELL_SCRIPT_HOOK_SKIRMISH_CLOSED);
 
+	TiberiumSkirmish::shutdown();	// Tiberium Project: the screen drawn over this one goes with it
+
 	// Abram's Personal Test @feature Close the match options dialog with the screen.
 	AbramMatchOptionsMenu::shutdown();
 
@@ -1576,6 +1580,8 @@ void SkirmishGameOptionsMenuShutdown( WindowLayout *layout, void *userData )
 //-------------------------------------------------------------------------------------------------
 void SkirmishGameOptionsMenuUpdate( WindowLayout * layout, void *userData)
 {
+	TiberiumSkirmish::update( layout, parentSkirmishGameOptions );	// Tiberium Project: the Tiberium skirmish screen, where it is on
+
 	if (TheGameLogic->isInShellGame() && TheGameLogic->getFrame() == 1)
 	{
 		SignalUIInteraction(SHELL_SCRIPT_HOOK_SKIRMISH_ENTERED_FROM_GAME);

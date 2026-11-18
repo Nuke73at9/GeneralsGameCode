@@ -85,6 +85,7 @@
 #include "GameClient/AbramTeamMenu.h"
 #include "GameClient/TiberiumMenu.h"
 #include "GameClient/TiberiumSettings.h"
+#include "GameClient/TiberiumSkirmish.h"
 #include "GameClient/TiberiumHUD.h"
 #include "GameClient/TiberiumSidebar.h"
 #include "GameLogic/AbramCheats.h"
@@ -2115,9 +2116,14 @@ void TiberiumTest::update()
 			Bool took = FALSE;
 			if ( !f.empty() && f[0] == "pop" && TheShell != nullptr )
 			{
-				// (the screen on top left, as its own Back button leaves it)
-				TheShell->pop();
-				took = TRUE;
+				// (the screen on top left, as its own Back button leaves it; never the main menu itself, where a screen
+				// that was to be left did not come up)
+				WindowLayout *onTop = TheShell->top();
+				if ( onTop != nullptr && strstr( onTop->getFilename().str(), "MainMenu.wnd" ) == nullptr )
+				{
+					TheShell->pop();
+					took = TRUE;
+				}
 			}
 			else if ( !f.empty() && !f[0].empty() )
 				took = TiberiumMenu::testClick( f[0].c_str(), f.size() > 1 ? atoi( f[1].c_str() ) : 0 );
@@ -2125,6 +2131,33 @@ void TiberiumTest::update()
 			TiberiumMenu::describe( what, sizeof( what ) );
 			WindowLayout *top = TheShell != nullptr ? TheShell->top() : nullptr;
 			log( "frame %d: ui: menu %s%s: %s; the shell's screen %s", (int)s_frame, step.arg.c_str(), step.arg.empty() ? "" : ( took ? " (taken)" : " (missed)" ), what,
+				top != nullptr ? top->getFilename().str() : "none" );
+		}
+		else if ( step.action == "leave" && TheGameLogic != nullptr )
+		{
+			// the game left for the shell, as the in-game menu's Exit and its Yes leave it (the menu itself pauses the
+			// game, and this test's frames are the logic's: it could not go on from there)
+			// (GameLogic::quit itself only opens that menu while none is up: what it does once one is, done here)
+			if ( TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() )
+			{
+				TheGameLogic->setGamePaused( FALSE );
+				TheGameLogic->exitGame();
+			}
+			log( "frame %d: ui: left the game", (int)s_frame );
+		}
+		else if ( step.action == "skirmish" )
+		{
+			// the Tiberium skirmish screen: "player|faction|team|color,ROW,ENTRY", "cash,ENTRY", "open,ROW,FIELD",
+			// "start|unstart,POSITION", "limit", "maps", "options", "reset", "play", "back", and with the map list up
+			// "maprow,ROW", "maptab,N", "mapuse", "mapback"; nothing: what the screen shows
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			Bool took = FALSE;
+			if ( !f.empty() && !f[0].empty() )
+				took = TiberiumSkirmish::testClick( f[0].c_str(), f.size() > 1 ? atoi( f[1].c_str() ) : 0, f.size() > 2 ? atoi( f[2].c_str() ) : 0 );
+			char what[1024];
+			TiberiumSkirmish::describe( what, sizeof( what ) );
+			WindowLayout *top = TheShell != nullptr ? TheShell->top() : nullptr;
+			log( "frame %d: ui: skirmish %s%s: %s; the shell's screen %s", (int)s_frame, step.arg.c_str(), step.arg.empty() ? "" : ( took ? " (taken)" : " (missed)" ), what,
 				top != nullptr ? top->getFilename().str() : "none" );
 		}
 		else if ( step.action == "settings" )

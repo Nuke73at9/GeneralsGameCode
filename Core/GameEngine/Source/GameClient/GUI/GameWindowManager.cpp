@@ -36,7 +36,7 @@
 #include "Common/Debug.h"
 #include "Common/Language.h"
 #if RTS_ZEROHOUR
-#include "GameClient/TiberiumMenu.h"	// Tiberium Project
+#include "GameClient/TiberiumSkin.h"	// Tiberium Project
 #endif
 #include "GameClient/Display.h"
 #include "GameClient/GameWindowManager.h"
@@ -1289,11 +1289,12 @@ void GameWindowManager::winRepaint()
 			drawWindow( window );
 	}
 
-	// Tiberium Project @bugfix where the Tiberium main menu stands in for Zero Hour's, that one's buttons still slide
-	// and flash in under it, and their effects are drawn here, after every window: they showed over the new menu as
-	// blank bars and the campaigns' emblems. They are not drawn while it is up.
+	// Tiberium Project @bugfix where a Tiberium screen stands in for Zero Hour's (the main menu, the skirmish
+	// screen), that one's buttons still slide and flash in under it, and their effects are drawn here, after every
+	// window: they showed over the new menu as blank bars and the campaigns' emblems. They are not drawn while one
+	// is up.
 #if RTS_ZEROHOUR
-	if(TheTransitionHandler && !TiberiumMenu::isOn())
+	if(TheTransitionHandler && !TiberiumSkin::overStockScreen())
 #else
 	if(TheTransitionHandler)
 #endif

@@ -58,6 +58,7 @@
 #include "GameClient/GadgetStaticText.h"
 #include "GameClient/AbramMainMenu.h"
 #include "GameClient/ModSelectMenu.h"
+#include "Common/FileSystem.h"	// Tiberium Project
 #include "GameClient/Mouse.h"
 #include "GameClient/WindowVideoManager.h"
 #include "GameClient/CampaignManager.h"
@@ -884,7 +885,8 @@ void ResolutionDialogUpdate()
 //-------------------------------------------------------------------------------------------------
 void DownloadMenuUpdate( WindowLayout *layout, void *userData );
 // Tiberium Project @feature for the Tiberium main menu drawn over this one (TiberiumMenu): whether a click can be
-// taken now, whether a campaign's difficulty is being asked, and the Mods screen as the Mods button opens it
+// taken now, whether a campaign's difficulty is being asked, whether the game has the Mods screen (its layout is a
+// file of the player's own, not of every game), and that screen as the Mods button opens it
 Bool MainMenuCanTakeClick()
 {
 	return !dontAllowTransitions && !buttonPushed;
@@ -895,9 +897,18 @@ Bool MainMenuAsksDifficulty()
 	return campaignSelected && !buttonPushed;
 }
 
+Bool MainMenuHasMods()
+{
+	// (looked for once: the layout is a file of the game's, there or not for the whole run)
+	static Int has = -1;
+	if( has < 0 )
+		has = TheFileSystem != nullptr && TheFileSystem->doesFileExist( "Window\\" ABRAM_MOD_SELECT_MENU_LAYOUT ) ? 1 : 0;
+	return has == 1;
+}
+
 void MainMenuOpenMods()
 {
-	if( dontAllowTransitions || buttonPushed )
+	if( dontAllowTransitions || buttonPushed || !MainMenuHasMods() )
 		return;
 	buttonPushed = TRUE;
 	TheShell->push( ABRAM_MOD_SELECT_MENU_LAYOUT );
@@ -1470,7 +1481,9 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 				}
 				else if( abramAction == AbramMainMenu::ACTION_OPEN_MODS )
 				{
-					if( dontAllowTransitions )
+					// Tiberium Project @bugfix a game without the Mods screen's layout crashed here: the shell had shut this
+					// menu down for a screen that could not be made
+					if( dontAllowTransitions || !MainMenuHasMods() )
 						break;
 					buttonPushed = TRUE;
 					TheShell->push( ABRAM_MOD_SELECT_MENU_LAYOUT );
@@ -1479,7 +1492,7 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 				else if( abramAction == AbramMainMenu::ACTION_OPEN_MODS_FROM_SINGLE_PLAYER )
 				{
 					// Leave the Single Player menu the same way the Skirmish button does.
-					if( campaignSelected || dontAllowTransitions )
+					if( campaignSelected || dontAllowTransitions || !MainMenuHasMods() )
 						break;
 					buttonPushed = TRUE;
 					campaignSelected = TRUE;

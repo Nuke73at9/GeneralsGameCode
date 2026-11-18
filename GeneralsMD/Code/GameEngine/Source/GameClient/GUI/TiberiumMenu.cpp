@@ -170,6 +170,15 @@ namespace
 	}
 
 	//-----------------------------------------------------------------------------------------------
+	/** a main line's place in the stack: the Mods line is left out of a game that has no Mods screen (-1) */
+	Int placeOf( Int line )
+	{
+		if( MainMenuHasMods() )
+			return line;
+		return line == MAIN_MODS ? -1 : ( line > MAIN_MODS ? line - 1 : line );
+	}
+
+	//-----------------------------------------------------------------------------------------------
 	void addHit( HitKind kind, Int index, Int x, Int y, Int w, Int h )
 	{
 		Hit hit;
@@ -211,22 +220,12 @@ namespace
 		#define PX( v ) ( ox + (Int)( ( v ) * u ) )
 		#define PY( v ) ( (Int)( ( v ) * u ) )
 		#define PS( v ) ( (Int)( ( v ) * u ) )
-		const Int titleSize = max( 12, PS( 19.0f ) ), mainSize = max( 9, PS( 15.0f ) ), sideSize = max( 8, PS( 12.0f ) ), noteSize = max( 8, PS( 13.0f ) );
+		const Int mainSize = max( 9, PS( 15.0f ) ), sideSize = max( 8, PS( 12.0f ) ), noteSize = max( 8, PS( 13.0f ) );
 		const Int oldHover = s_hover;
 		const Bool asking = MainMenuAsksDifficulty();
 		s_hits.clear();
 
-		// the menu map darkened
-		TheDisplay->drawFillRect( 0, 0, sw, sh, ( l.shade & 0x00FFFFFF ) | ( 175u << 24 ) );
-		// the screen's frame, as the settings': a line all round, a bright bar in its top edge, ticks down both sides
-		TheDisplay->drawOpenRect( PX( 14 ), PY( 12 ), PS( 1252 ), PS( 696 ), 1.0f, l.accentDim );
-		TheDisplay->drawFillRect( PX( 340 ), PY( 10 ), PS( 600 ), max( 2, PS( 4 ) ), l.accent );
-		for( Int ty = PY( 60 ); ty < PY( 660 ); ty += max( 4, PS( 9 ) ) )
-		{
-			TheDisplay->drawLine( PX( 20 ), ty, PX( 30 ), ty, 1.0f, l.accentDim );
-			TheDisplay->drawLine( PX( 1250 ), ty, PX( 1260 ), ty, 1.0f, l.accentDim );
-		}
-		drawText( "MAIN MENU", titleSize, TRUE, PX( 34 ), PY( 26 ), l.text );
+		drawBackdrop( l, ox, u, sw, sh, "MAIN MENU", 175 );
 
 		// the look's switch, top right
 		for( Int i = 0; i < 2; ++i )
@@ -257,7 +256,9 @@ namespace
 		const char *noteTitle = s_open >= 0 ? s_main[s_open].label : "";
 		for( Int i = 0; i < MAIN_COUNT; ++i )
 		{
-			const Int x = PX( 210 ), y = PY( 214 + i * 54 ), w = PS( 240 ), h = PS( 44 );
+			if( placeOf( i ) < 0 )
+				continue;
+			const Int x = PX( 210 ), y = PY( 214 + placeOf( i ) * 54 ), w = PS( 240 ), h = PS( 44 );
 			const Bool hover = oldHover == (Int)s_hits.size() && !asking;
 			drawButton( l, x, y, w, h, u, s_main[i].label, mainSize, i == s_open, hover, asking );
 			if( hover )
@@ -271,7 +272,7 @@ namespace
 		// the open line's menu beside it, and the difficulty beside that when a campaign asks for it
 		if( s_open >= 0 && s_open < SIDE_MENUS )
 		{
-			const Int top = 214 + s_open * 54;
+			const Int top = 214 + placeOf( s_open ) * 54;
 			TheDisplay->drawLine( PX( 450 ), PY( top + 20 ), PX( 482 ), PY( top + 20 ), 1.0f, l.hi );
 			for( Int i = 0; i < s_sideCount[s_open]; ++i )
 			{
@@ -378,8 +379,9 @@ void TiberiumMenu::update( WindowLayout *layout, GameWindow *parent )
 	s_parent = parent;
 	if( s_window == nullptr )
 	{
-		s_window = TheWindowManager->winCreate( nullptr, WIN_STATUS_ENABLED | WIN_STATUS_ABOVE, 0, 0, TheDisplay->getWidth(), TheDisplay->getHeight(),
-			nullptr, nullptr );
+		// (no window "above": Zero Hour's own boxes, the question before leaving the game among them, open over this
+		// one; an "above" window was drawn over them, and they took every click unseen)
+		s_window = TheWindowManager->winCreate( nullptr, WIN_STATUS_ENABLED, 0, 0, TheDisplay->getWidth(), TheDisplay->getHeight(), nullptr, nullptr );
 		if( s_window == nullptr )
 			return;
 		s_window->winSetDrawFunc( draw );

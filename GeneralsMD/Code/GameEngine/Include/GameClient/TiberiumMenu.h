@@ -45,4 +45,5 @@ public:
 // (Zero Hour's main menu, for the menu drawn over it)
 Bool MainMenuCanTakeClick();		///< no transition running and no screen being opened
 Bool MainMenuAsksDifficulty();	///< a campaign is chosen and its difficulty is being asked
+Bool MainMenuHasMods();					///< the game has the Mods screen's layout
 void MainMenuOpenMods();				///< the Mods screen, as the Mods button opens it
