@@ -25,6 +25,9 @@
 #include "GameLogic/Module/TiberiumArrivalUpdate.h"
 
 #include "Common/Player.h"
+#include "Common/ThingFactory.h"
+#include "Common/ThingTemplate.h"
+#include "Common/TiberiumTest.h"
 #include "Common/Xfer.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/FXList.h"
@@ -33,6 +36,7 @@
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/TiberiumZones.h"
+#include "GameLogic/Weapon.h"
 
 namespace
 {
@@ -48,6 +52,22 @@ TiberiumArrivalUpdateModuleData::TiberiumArrivalUpdateModuleData()
 	m_drillDepth = 40.0f;
 	m_startFX = nullptr;
 	m_landFX = nullptr;
+	m_flareTime = 0;
+	m_flareFX = nullptr;
+	m_podTime = 0;
+	m_podFX = nullptr;
+	m_landWeapon = nullptr;
+	m_busyTime = 0;
+	m_facing = 0.0f;
+	m_hasFacing = FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+static void parseFacing( INI *ini, void *instance, void *, const void * )
+{
+	TiberiumArrivalUpdateModuleData *d = (TiberiumArrivalUpdateModuleData *)instance;
+	d->m_facing = INI::scanReal( ini->getNextToken() ) * ( PI / 180.0f );
+	d->m_hasFacing = TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -61,6 +81,14 @@ void TiberiumArrivalUpdateModuleData::buildFieldParse( MultiIniFieldParse& p )
 		{ "DrillDepth",		INI::parseReal,									nullptr,			offsetof( TiberiumArrivalUpdateModuleData, m_drillDepth ) },
 		{ "StartFX",			INI::parseFXList,								nullptr,			offsetof( TiberiumArrivalUpdateModuleData, m_startFX ) },
 		{ "LandFX",				INI::parseFXList,								nullptr,			offsetof( TiberiumArrivalUpdateModuleData, m_landFX ) },
+		{ "FlareTime",		INI::parseDurationUnsignedInt,	nullptr,			offsetof( TiberiumArrivalUpdateModuleData, m_flareTime ) },
+		{ "FlareFX",			INI::parseFXList,								nullptr,			offsetof( TiberiumArrivalUpdateModuleData, m_flareFX ) },
+		{ "PodObject",		INI::parseAsciiString,					nullptr,			offsetof( TiberiumArrivalUpdateModuleData, m_podObject ) },
+		{ "PodTime",			INI::parseDurationUnsignedInt,	nullptr,			offsetof( TiberiumArrivalUpdateModuleData, m_podTime ) },
+		{ "PodFX",				INI::parseFXList,								nullptr,			offsetof( TiberiumArrivalUpdateModuleData, m_podFX ) },
+		{ "LandWeapon",		INI::parseWeaponTemplate,				nullptr,			offsetof( TiberiumArrivalUpdateModuleData, m_landWeapon ) },
+		{ "BusyTime",			INI::parseDurationUnsignedInt,	nullptr,			offsetof( TiberiumArrivalUpdateModuleData, m_busyTime ) },
+		{ "Facing",				parseFacing,										nullptr,			0 },
 		{ nullptr, nullptr, nullptr, 0 }
 	};
 	UpdateModuleData::buildFieldParse( p );
@@ -79,6 +107,54 @@ TiberiumArrivalUpdate::TiberiumArrivalUpdate( Thing *thing, const ModuleData* mo
 //-------------------------------------------------------------------------------------------------
 TiberiumArrivalUpdate::~TiberiumArrivalUpdate()
 {
+}
+
+//-------------------------------------------------------------------------------------------------
+/** C&C4's chain (a flare or a pod) rather than the unit's own drop or drill */
+Bool TiberiumArrivalUpdate::usesChain() const
+{
+	const TiberiumArrivalUpdateModuleData *d = getTiberiumArrivalUpdateModuleData();
+	return d->m_flareTime > 0 || d->m_podObject.isNotEmpty();
+}
+
+//-------------------------------------------------------------------------------------------------
+/** not seen, selected, targeted or run into while it is yet to come out */
+void TiberiumArrivalUpdate::setUnseen( Bool unseen )
+{
+	Object *me = getObject();
+	const ObjectStatusMaskType mask = MAKE_OBJECT_STATUS_MASK3( OBJECT_STATUS_NO_COLLISIONS, OBJECT_STATUS_MASKED, OBJECT_STATUS_UNSELECTABLE );
+	if( unseen )
+		me->setStatus( mask );
+	else
+		me->clearStatus( mask );
+	Drawable *draw = me->getDrawable();
+	if( draw != nullptr )
+		draw->setDrawableHidden( unseen );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** the unit comes out of its pod: seen again, facing the way C&C4 sets it, the spot's enemies killed (its
+	weapon), held for the busy time */
+void TiberiumArrivalUpdate::comeOut()
+{
+	const TiberiumArrivalUpdateModuleData *d = getTiberiumArrivalUpdateModuleData();
+	Object *me = getObject();
+	const UnsignedInt now = TheGameLogic->getFrame();
+	setUnseen( FALSE );
+	if( d->m_hasFacing )
+		me->setOrientation( d->m_facing );
+	if( d->m_landWeapon != nullptr )
+		TheWeaponStore->createAndFireTempWeapon( d->m_landWeapon, me, me->getPosition() );
+	if( d->m_landFX != nullptr )
+		FXList::doFXObj( d->m_landFX, me );
+	if( d->m_busyTime > 0 )
+		me->setDisabledUntil( DISABLED_HELD, now + d->m_busyTime );
+	else
+		me->clearDisabled( DISABLED_HELD );
+	m_stage = STAGE_DONE;
+	if( TiberiumTest::isActive() )
+		TiberiumTest::log( "frame %u: arrival: %s comes out at %.0f %.0f facing %.0f, busy until %u", now, me->getTemplate()->getName().str(),
+			me->getPosition()->x, me->getPosition()->y, me->getOrientation() * 180.0f / PI, now + d->m_busyTime );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -145,6 +221,23 @@ UpdateSleepTime TiberiumArrivalUpdate::update()
 			const Bool nod = player != nullptr && ( player->getSide().compareNoCase( "China" ) == 0 || player->getBaseSide().compareNoCase( "China" ) == 0 );
 			m_style = nod ? TIBERIUM_ARRIVAL_DRILL : TIBERIUM_ARRIVAL_DROP;
 		}
+		if( usesChain() )
+		{
+			// Tiberium Project @feature C&C4's chain: unseen at its spot through the flare and the pod (held until it
+			// comes out, and the busy time after)
+			setUnseen( TRUE );
+			m_startFrame = now;
+			m_endFrame = now + d->m_flareTime;
+			m_stage = STAGE_FLARE;
+			if( TiberiumTest::isActive() )
+				TiberiumTest::log( "frame %u: arrival: %s flare at %.0f %.0f until %u", now, me->getTemplate()->getName().str(), spot.x, spot.y, m_endFrame );
+			me->setDisabledUntil( DISABLED_HELD, FOREVER );
+			if( d->m_startFX != nullptr )
+				FXList::doFXPos( d->m_startFX, &spot );
+			if( d->m_flareFX != nullptr )
+				FXList::doFXPos( d->m_flareFX, &spot );
+			return UPDATE_SLEEP_NONE;
+		}
 		const UnsignedInt time = max( (UnsignedInt)1, d->m_arrivalTime );
 		m_startFrame = now;
 		m_endFrame = now + time;
@@ -154,6 +247,45 @@ UpdateSleepTime TiberiumArrivalUpdate::update()
 			FXList::doFXPos( d->m_startFX, &spot );
 		showOffset();
 		return UPDATE_SLEEP_NONE;
+	}
+
+	if( m_stage == STAGE_FLARE )
+	{
+		if( now < m_endFrame )
+			return UPDATE_SLEEP_NONE;
+		// the flare is over: the pod, the player's, at the spot facing as the unit will
+		const ThingTemplate *pod = d->m_podObject.isNotEmpty() ? TheThingFactory->findTemplate( d->m_podObject ) : nullptr;
+		Player *player = me->getControllingPlayer();
+		if( pod != nullptr && player != nullptr && player->getDefaultTeam() != nullptr )
+		{
+			Object *made = TheThingFactory->newObject( pod, player->getDefaultTeam() );
+			if( made != nullptr )
+			{
+				made->setPosition( me->getPosition() );
+				made->setOrientation( d->m_hasFacing ? d->m_facing : me->getOrientation() );
+				if( TiberiumTest::isActive() )
+					TiberiumTest::log( "frame %u: arrival: pod %s made for %s", now, pod->getName().str(), me->getTemplate()->getName().str() );
+			}
+		}
+		if( d->m_podFX != nullptr )
+			FXList::doFXPos( d->m_podFX, me->getPosition() );
+		m_startFrame = now;
+		m_endFrame = now + d->m_podTime;
+		m_stage = STAGE_POD;
+		if( d->m_podTime == 0 )
+		{
+			comeOut();
+			return UPDATE_SLEEP_FOREVER;
+		}
+		return UPDATE_SLEEP_NONE;
+	}
+
+	if( m_stage == STAGE_POD )
+	{
+		if( now < m_endFrame )
+			return UPDATE_SLEEP_NONE;
+		comeOut();
+		return UPDATE_SLEEP_FOREVER;
 	}
 
 	if( m_stage == STAGE_ARRIVING )
@@ -200,4 +332,11 @@ void TiberiumArrivalUpdate::loadPostProcess()
 {
 	UpdateModule::loadPostProcess();
 	showOffset();
+	// (Tiberium Project: a unit saved before it came out is unseen again: its drawable is made anew)
+	if( m_stage == STAGE_FLARE || m_stage == STAGE_POD )
+	{
+		Drawable *draw = getObject()->getDrawable();
+		if( draw != nullptr )
+			draw->setDrawableHidden( TRUE );
+	}
 }
