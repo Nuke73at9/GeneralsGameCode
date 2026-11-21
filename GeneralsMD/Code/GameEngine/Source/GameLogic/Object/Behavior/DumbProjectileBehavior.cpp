@@ -28,6 +28,8 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include "Common/TiberiumTest.h"	// Tiberium Project (the test: the shots' heights)
+
 #include "Common/BezierSegment.h"
 #include "Common/GameCommon.h"
 #include "Common/GameState.h"
@@ -62,6 +64,9 @@ DumbProjectileBehaviorModuleData::DumbProjectileBehaviorModuleData() :
 	m_tumbleRandomly(FALSE),
 	m_firstHeight(0.0f),
 	m_secondHeight(0.0f),
+	m_firstHeightMax(0.0f),
+	m_secondHeightMax(0.0f),
+	m_curveFlattenDistance(0.0f),
 	m_firstPercentIndent(0.0f),
 	m_secondPercentIndent(0.0f),
 	m_sidewaysDrift(0.0f),
@@ -89,6 +94,9 @@ void DumbProjectileBehaviorModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "FirstPercentIndent",		INI::parsePercentToReal,	nullptr, offsetof( DumbProjectileBehaviorModuleData, m_firstPercentIndent ) },
 		{ "SecondPercentIndent",	INI::parsePercentToReal,	nullptr, offsetof( DumbProjectileBehaviorModuleData, m_secondPercentIndent ) },
 		{ "SidewaysDrift",				INI::parseReal,						nullptr, offsetof( DumbProjectileBehaviorModuleData, m_sidewaysDrift ) },	// Tiberium Project
+		{ "FirstHeightMax",				INI::parseReal,						nullptr, offsetof( DumbProjectileBehaviorModuleData, m_firstHeightMax ) },	// Tiberium Project
+		{ "SecondHeightMax",			INI::parseReal,						nullptr, offsetof( DumbProjectileBehaviorModuleData, m_secondHeightMax ) },	// Tiberium Project
+		{ "CurveFlattenDistance",	INI::parseReal,						nullptr, offsetof( DumbProjectileBehaviorModuleData, m_curveFlattenDistance ) },	// Tiberium Project
 		{ "GroundHitFX",					INI::parseFXList,					nullptr, offsetof( DumbProjectileBehaviorModuleData, m_groundHitFX ) },	// Tiberium Project
 
 		{ "GarrisonHitKillRequiredKindOf", KindOfMaskType::parseFromINI, nullptr, offsetof( DumbProjectileBehaviorModuleData, m_garrisonHitKillKindof ) },
@@ -125,6 +133,8 @@ DumbProjectileBehavior::DumbProjectileBehavior( Thing *thing, const ModuleData* 
 	m_extraBonusFlags = 0;
 	m_driftFirst = 0.0f;
 	m_driftSecond = 0.0f;
+	m_heightFirst = 0.0f;
+	m_heightSecond = 0.0f;
 
   m_hasDetonated = FALSE;
 	m_hitObject = FALSE;	// Tiberium Project
@@ -401,6 +411,17 @@ void DumbProjectileBehavior::projectileFireAtObjectOrPosition( const Object *vic
 		m_driftFirst = GameLogicRandomValueReal( -d->m_sidewaysDrift, d->m_sidewaysDrift );
 		m_driftSecond = GameLogicRandomValueReal( -d->m_sidewaysDrift, d->m_sidewaysDrift );
 	}
+	// Tiberium Project @feature each shot's arc its own (FirstHeightMax, SecondHeightMax: the logic's random numbers only
+	// for a projectile that has them)
+	m_heightFirst = d->m_firstHeight;
+	m_heightSecond = d->m_secondHeight;
+	if (d->m_firstHeightMax > d->m_firstHeight)
+		m_heightFirst = GameLogicRandomValueReal( d->m_firstHeight, d->m_firstHeightMax );
+	if (d->m_secondHeightMax > d->m_secondHeight)
+		m_heightSecond = GameLogicRandomValueReal( d->m_secondHeight, d->m_secondHeightMax );
+	if (TiberiumTest::isActive() && (d->m_firstHeightMax > d->m_firstHeight || d->m_secondHeightMax > d->m_secondHeight))
+		TiberiumTest::log( "frame %d: %s flies at heights %.1f and %.1f", (int)TheGameLogic->getFrame(), getObject()->getTemplate()->getName().str(),
+			m_heightFirst, m_heightSecond );
 	if (!calcFlightPath(true))
 	{
 		//Can only fail if wildly incorrect points
@@ -464,8 +485,13 @@ Bool DumbProjectileBehavior::calcFlightPath(Bool recalcNumSegments)
 	// Z's are determined using the highest intervening height so they won't hit hills, low end bounded by current Zs
 	highestInterveningTerrain = max( highestInterveningTerrain, controlPoints[0].z );
 	highestInterveningTerrain = max( highestInterveningTerrain, controlPoints[3].z );
-	controlPoints[1].z = highestInterveningTerrain + d->m_firstHeight;
-	controlPoints[2].z = highestInterveningTerrain + d->m_secondHeight;
+	// Tiberium Project @feature the shot's own heights (FirstHeightMax), flatter near the target (CurveFlattenDistance:
+	// the heights in proportion to the distance under it; SAGE 2's CurveFlattenMinDist, its exact curve inferred)
+	Real heightScale = 1.0f;
+	if (d->m_curveFlattenDistance > 0.0f && targetDistance < d->m_curveFlattenDistance)
+		heightScale = targetDistance / d->m_curveFlattenDistance;
+	controlPoints[1].z = highestInterveningTerrain + m_heightFirst * heightScale;
+	controlPoints[2].z = highestInterveningTerrain + m_heightSecond * heightScale;
 
 	// With four control points, we have a curve.  We will decide how many frames we want to take to get to the target,
 	// and fill our vector with those curve points.
@@ -792,7 +818,7 @@ void DumbProjectileBehavior::xfer( Xfer *xfer )
 #if RETAIL_COMPATIBLE_XFER_SAVE
 	XferVersion currentVersion = 1;
 #else
-	XferVersion currentVersion = 3;	// Tiberium Project: 3, the sideways drift
+	XferVersion currentVersion = 4;	// Tiberium Project: 3, the sideways drift; 4, the shot's heights
 #endif
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
@@ -854,6 +880,18 @@ void DumbProjectileBehavior::xfer( Xfer *xfer )
 	{
 		xfer->xferReal( &m_driftFirst );
 		xfer->xferReal( &m_driftSecond );
+	}
+
+	// Tiberium Project: the shot's heights chosen at launch (older saves: the module's own)
+	if( version >= 4 )
+	{
+		xfer->xferReal( &m_heightFirst );
+		xfer->xferReal( &m_heightSecond );
+	}
+	else if( xfer->getXferMode() == XFER_LOAD )
+	{
+		m_heightFirst = getDumbProjectileBehaviorModuleData()->m_firstHeight;
+		m_heightSecond = getDumbProjectileBehaviorModuleData()->m_secondHeight;
 	}
 
 }

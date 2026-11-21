@@ -54,6 +54,9 @@ public:
 	Real m_firstPercentIndent;	///< The first point will be this percent along the target line
 	Real m_secondPercentIndent;	///< And the second, this.
 	Real m_sidewaysDrift;				///< Tiberium Project @feature the inner points move up to this far to either side (a volley weaves, as SAGE 2's)
+	Real m_firstHeightMax;			///< Tiberium Project @feature above FirstHeight: each shot's first height at random up to this (SAGE 2's FirstHeightMin/Max)
+	Real m_secondHeightMax;			///< Tiberium Project @feature and its second
+	Real m_curveFlattenDistance;	///< Tiberium Project @feature a shot nearer its target than this flies a flatter arc (SAGE 2's CurveFlattenMinDist)
 	const FXList *m_groundHitFX;	///< Tiberium Project @feature played where it bursts without hitting an object (SAGE 2's GroundHitFX: a miss)
 	UnsignedInt m_maxLifespan;
 	Bool m_tumbleRandomly;
@@ -116,6 +119,8 @@ private:
 	Int										m_currentFlightPathStep;	///< Our current index in the flight path vector.  Quicker than popping off.
 	Real									m_driftFirst;							///< Tiberium Project: the inner points' sideways drift, chosen at launch
 	Real									m_driftSecond;
+	Real									m_heightFirst;						///< Tiberium Project: the inner points' heights, chosen at launch
+	Real									m_heightSecond;
 	WeaponBonusConditionFlags		m_extraBonusFlags;
 
   Bool                  m_hasDetonated;           ///<
