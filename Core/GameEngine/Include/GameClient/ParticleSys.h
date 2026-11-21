@@ -637,6 +637,10 @@ public:
 	/// sheets; a colour stays within white otherwise). Drawing only.
 	Bool isBrightColors() const { return m_brightColors; }
 
+	/// Tiberium Project @feature each particle's colour keys times a brightness of its own (ColorBrightness = low high:
+	/// C&C4's ColorScale, a random brightness a particle; Zero Hour's ColorScale is a colour added each frame). Drawing only.
+	const GameClientRandomVariable &getColorBrightness() const { return m_colorBrightness; }
+
 	/// Tiberium Project @feature geometry particles (C&C4 and Red Alert 3's perpendicular GPU particles:
 	/// muzzle flashes, sparks, blade-like flames): each particle is two crossed quads, along its
 	/// velocity (or turned in the world, or as they lie), its pivot at the bottom (the quads grow
@@ -748,6 +752,7 @@ protected:
 	Int m_lighting;						///< ParticleLighting (Lighting; on the template only)
 	Bool m_exactKeyFrames;				///< ExactKeyFrames (on the template only)
 	Bool m_brightColors;				///< BrightColors (on the template only)
+	GameClientRandomVariable m_colorBrightness;	///< ColorBrightness (on the template only)
 	Int m_geometry;						///< ParticleGeometry (GeometryType; on the template only)
 	Int m_geometryRotation;				///< ParticleGeometryRotation (GeometryRotation)
 	GameClientRandomVariable m_geometryLength;			///< GeometryLength: the quads' length at the start

@@ -2263,6 +2263,23 @@ const ParticleInfo *ParticleSystem::generateParticleInfo( Int particleNum, Int p
 		info.m_colorKey[i] = m_colorKey[i];
 	}
 
+	// Tiberium Project @feature a brightness of the particle's own (ColorBrightness; the client's random numbers only
+	// when a template asks for it, so Zero Hour's systems draw as they did)
+	if( m_template != nullptr )
+	{
+		const GameClientRandomVariable &brightness = m_template->getColorBrightness();
+		if( brightness.getMinimumValue() != 1.0f || brightness.getMaximumValue() != 1.0f )
+		{
+			const Real b = brightness.getValue();
+			for( int i=0; i<MAX_KEYFRAMES; i++ )
+			{
+				info.m_colorKey[i].color.red *= b;
+				info.m_colorKey[i].color.green *= b;
+				info.m_colorKey[i].color.blue *= b;
+			}
+		}
+	}
+
 /*
 	info.m_color.red = m_color.red.getValue();
 	info.m_color.green = m_color.green.getValue();
@@ -3273,6 +3290,8 @@ const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 	{ "ExactKeyFrames",					INI::parseBool,					nullptr,	offsetof( ParticleSystemTemplate, m_exactKeyFrames ) },
 	// Tiberium Project @feature colours drawn twice as bright
 	{ "BrightColors",						INI::parseBool,					nullptr,	offsetof( ParticleSystemTemplate, m_brightColors ) },
+	// Tiberium Project @feature a brightness each particle (C&C4's ColorScale)
+	{ "ColorBrightness",				INI::parseGameClientRandomVariable,	nullptr,	offsetof( ParticleSystemTemplate, m_colorBrightness ) },
 	// Tiberium Project @feature geometry particles: crossed quads along the velocity
 	{ "GeometryType",						INI::parseIndexList,		ParticleGeometryNames,	offsetof( ParticleSystemTemplate, m_geometry ) },
 	{ "GeometryRotation",				INI::parseIndexList,		ParticleGeometryRotationNames,	offsetof( ParticleSystemTemplate, m_geometryRotation ) },
@@ -3402,6 +3421,7 @@ ParticleSystemTemplate::ParticleSystemTemplate( const AsciiString &name ) :
 	m_lighting = PARTICLE_LIGHTING_AUTO;
 	m_exactKeyFrames = FALSE;
 	m_brightColors = FALSE;
+	m_colorBrightness.setRange( 1.0f, 1.0f );
 	m_geometry = PARTICLE_GEOMETRY_NONE;
 	m_geometryRotation = PARTICLE_GEOMETRY_AROUND_VELOCITY;
 	m_geometryLength.setRange( 1.0f, 1.0f );

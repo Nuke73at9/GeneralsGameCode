@@ -98,6 +98,7 @@
 #include "WW3D2/ww3d.h"
 
 #include "W3DDevice/GameClient/CameraShakeSystem.h"
+#include "Common/TiberiumTest.h"	// Tiberium Project (the test: the camera shakers)
 
 // 30 fps
 Real TheW3DFrameLengthInMsec = MSEC_PER_LOGICFRAME_REAL; // default is 33msec/frame == 30fps. but we may change it depending on sys config.
@@ -387,8 +388,27 @@ void W3DView::buildCameraTransform( Matrix3D *transform, const Vector3 &sourcePo
 	//WST 11/12/2002 New camera shaker system
 	// TheSuperHackers @tweak The camera shaker is now decoupled from the render update.
 	// TheSuperHackers @todo Move Update_Camera_Shaker to the W3DView::update function.
-	CameraShakerSystem.Timestep(TheFramePacer->getLogicTimeStepMilliseconds());
+	// Tiberium Project @bugfix the shakers' time is in seconds (their durations, the scripts' "duration in seconds", are);
+	// stepped in milliseconds, a shaker ran out on its first step and the scripts' shakes were never seen
+	CameraShakerSystem.Timestep(TheFramePacer->getLogicTimeStepSeconds());
 	CameraShakerSystem.Update_Camera_Shaker(sourcePos, &m_shakerAngles);
+	if (TiberiumTest::isActive())
+	{
+		// (the test's trace) when the camera shakers start and stop turning the camera, and how far they turned it
+		static Bool s_turning = false;
+		static Real s_most = 0.0f;
+		static Int s_steps = 0;
+		const Real most = max(fabs(m_shakerAngles.X), max(fabs(m_shakerAngles.Y), fabs(m_shakerAngles.Z)));
+		const Bool turning = CameraShakerSystem.IsCameraShaking();
+		s_most = max(s_most, most);
+		if (turning != s_turning || (turning && ++s_steps >= LOGICFRAMES_PER_SECOND))
+		{
+			TiberiumTest::log("camera shaker: %s (turned %.2f degrees at the most)", turning ? (s_turning ? "turning" : "starts") : "stops", s_most * 180.0f / PI);
+			s_turning = turning;
+			s_most = 0.0f;
+			s_steps = 0;
+		}
+	}
 	transform->Rotate_X(m_shakerAngles.X);
 	transform->Rotate_Y(m_shakerAngles.Y);
 	transform->Rotate_Z(m_shakerAngles.Z);

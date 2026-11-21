@@ -381,7 +381,7 @@ class ViewShakeFXNugget : public FXNugget
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(ViewShakeFXNugget, "ViewShakeFXNugget")
 public:
 
-	ViewShakeFXNugget() : m_shake(View::SHAKE_NORMAL)
+	ViewShakeFXNugget() : m_shake(View::SHAKE_NORMAL), m_duration(0.0f), m_radius(300.0f), m_amplitude(10.0f), m_localPlayerOnly(FALSE)
 	{
 	}
 
@@ -390,7 +390,25 @@ public:
 		if (primary)
 		{
 			if (TheTacticalView)
-				TheTacticalView->shake(primary, m_shake);
+			{
+				// Tiberium Project @feature C&C4's CameraShakerVolume: the camera turned about (Amplitude degrees at the
+				// most) for Duration, fading with time and with its distance from the spot (Radius); the engine's
+				// own camera shaker (the scripts' "add camera shaker")
+				if (m_duration > 0.0f)
+				{
+					// the shaker measures from the camera's eye; this one from where the camera looks, on the ground
+					// (as Zero Hour's own shakes do): moved by the eye's offset from that spot
+					const Coord3D eye = TheTacticalView->get3DCameraPosition();
+					const Coord3D look = TheTacticalView->getPosition();
+					Coord3D at = *primary;
+					at.x += eye.x - look.x;
+					at.y += eye.y - look.y;
+					at.z = eye.z;
+					TheTacticalView->Add_Camera_Shake(at, m_radius, m_duration * SECONDS_PER_LOGICFRAME_REAL, m_amplitude);
+				}
+				else
+					TheTacticalView->shake(primary, m_shake);
+			}
 		}
 		else
 		{
@@ -398,11 +416,25 @@ public:
 		}
 	}
 
+	// Tiberium Project @feature LocalPlayerOnly: only for the local player's own objects (a Crawler's drop pod)
+	virtual void doFXObj(const Object* primary, const Object* secondary = nullptr) const override
+	{
+		if (m_localPlayerOnly && primary != nullptr && ThePlayerList != nullptr
+			&& primary->getControllingPlayer() != ThePlayerList->getLocalPlayer())
+			return;
+		FXNugget::doFXObj(primary, secondary);
+	}
+
 	static void parse(INI *ini, void *instance, void* /*store*/, const void* /*userData*/)
 	{
 		static const FieldParse myFieldParse[] =
 		{
 			{ "Type",				parseShakeType,								nullptr, offsetof( ViewShakeFXNugget, m_shake ) },
+			// Tiberium Project @feature C&C4's CameraShakerVolume
+			{ "Duration",		INI::parseDurationReal,				nullptr, offsetof( ViewShakeFXNugget, m_duration ) },
+			{ "Radius",			INI::parseReal,								nullptr, offsetof( ViewShakeFXNugget, m_radius ) },
+			{ "Amplitude",	INI::parseReal,								nullptr, offsetof( ViewShakeFXNugget, m_amplitude ) },
+			{ "LocalPlayerOnly",	INI::parseBool,					nullptr, offsetof( ViewShakeFXNugget, m_localPlayerOnly ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 
@@ -431,6 +463,10 @@ protected:
 
 private:
 	View::CameraShakeType m_shake;
+	Real m_duration;				///< Tiberium Project: logic frames (0: Zero Hour's shake of its Type)
+	Real m_radius;
+	Real m_amplitude;				///< degrees
+	Bool m_localPlayerOnly;
 
 };
 EMPTY_DTOR(ViewShakeFXNugget)
