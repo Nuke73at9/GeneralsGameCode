@@ -74,6 +74,7 @@
 #include "WW3D2/meshmdl.h"
 #include "WW3D2/ww3d.h"
 #include "Common/BitFlagsIO.h"
+#include <algorithm>	// Tiberium Project (std::find)
 #ifdef RTS_RENDERER_D3D9
 #include "WW3D2/sage2/sage2material.h"	// Tiberium Project @feature scrolling treads
 #endif
@@ -232,6 +233,7 @@ enum ACBits CPP_11(: Int)
 	MAINTAIN_FRAME_ACROSS_STATES3,
 	MAINTAIN_FRAME_ACROSS_STATES4,
 	ANIMATE_BY_CONSTRUCTION_PERCENT,	///< Tiberium Project @feature the animation's frame follows the construction (a build-up)
+	DO_NOT_PLAY_WHEN_UNPOWERED,				///< Tiberium Project @feature (C&C4's) the animation stands still while the object is unpowered
 
 	AC_BITS_COUNT
 };
@@ -249,6 +251,7 @@ static const char *const ACBitsNames[] =
 	"MAINTAIN_FRAME_ACROSS_STATES3",
 	"MAINTAIN_FRAME_ACROSS_STATES4",
 	"ANIMATE_BY_CONSTRUCTION_PERCENT",
+	"DO_NOT_PLAY_WHEN_UNPOWERED",
 
 	nullptr
 };
@@ -1187,6 +1190,8 @@ void ModelConditionInfo::clear()
 	}
 	m_extraTwinBones.clear();	// Tiberium Project
 	m_weaponBoneSets.clear();	// Tiberium Project
+	m_fxEvents.clear();				// Tiberium Project
+	m_spins.clear();					// Tiberium Project
 	m_particleSysBones.clear();
 	m_animations.clear();
 	m_flags = 0;
@@ -1621,6 +1626,39 @@ static void parseAnimBlendTime(INI* ini, void * /*instance*/, void * store, cons
 {
 	*(Real *)store = INI::scanReal(ini->getNextToken()) / 1000.0f;
 }
+
+// Tiberium Project @feature FXEvent = <frame> <FXList> [<bone> | NONE] [SKIPPED]
+static void parseFXEvent(INI* ini, void *instance, void * /*store*/, const void * /*userData*/)
+{
+	ModelConditionInfo* self = (ModelConditionInfo*)instance;
+	ModelConditionInfo::FXEventInfo ev;
+	ev.m_frame = INI::scanReal(ini->getNextToken());
+	ev.m_fxName = ini->getNextToken();
+	ev.m_fx = TheFXListStore->findFXList(ev.m_fxName.str());
+	DEBUG_ASSERTCRASH(ev.m_fx != nullptr || stricmp(ev.m_fxName.str(), "None") == 0, ("FXList %s not found!", ev.m_fxName.str()));
+	ev.m_whenSkipped = FALSE;
+	for (const char* token = ini->getNextTokenOrNull(); token != nullptr; token = ini->getNextTokenOrNull())
+	{
+		if (stricmp(token, "SKIPPED") == 0)
+			ev.m_whenSkipped = TRUE;
+		else if (stricmp(token, "NONE") != 0)
+			ev.m_bone = token;
+	}
+	if (ev.m_fx != nullptr)
+		self->m_fxEvents.push_back(ev);
+}
+
+// Tiberium Project @feature SpinBone = <bone> <X | Y | Z> <degrees a second>
+static void parseSpinBone(INI* ini, void *instance, void * /*store*/, const void * /*userData*/)
+{
+	ModelConditionInfo* self = (ModelConditionInfo*)instance;
+	ModelConditionInfo::SpinInfo spin;
+	spin.m_bone = ini->getNextToken();
+	const char* axis = ini->getNextToken();
+	spin.m_axis = (axis[0] == 'X' || axis[0] == 'x') ? 0 : ((axis[0] == 'Y' || axis[0] == 'y') ? 1 : 2);
+	spin.m_degreesPerSecond = INI::scanReal(ini->getNextToken());
+	self->m_spins.push_back(spin);
+}
 #endif
 
 static void parseBoneNameKey(INI* ini, void *instance, void * store, const void * /*userData*/)
@@ -1770,6 +1808,9 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 #if RTS_ZEROHOUR
 		// Tiberium Project @feature the time (msec) this state's animation fades in from the previous one's
 		{ "AnimationBlendTime", parseAnimBlendTime, nullptr, offsetof(ModelConditionInfo, m_animBlendTime) },
+		// Tiberium Project @feature C&C4's frame events and procedural spins
+		{ "FXEvent", parseFXEvent, nullptr, 0 },
+		{ "SpinBone", parseSpinBone, nullptr, 0 },
 #endif
 		// Tiberium Project @feature a second bone each turret turns and pitches alike (twin gun pods)
 		{ "TurretTwin",	parseTurretTwin, (void*)(uintptr_t)0, offsetof(ModelConditionInfo, m_turrets[0].m_twinAngleNameKey) },
@@ -2143,6 +2184,15 @@ W3DModelDraw::W3DModelDraw(Thing *thing, const ModuleData* moduleData) : DrawMod
 	m_damageLook = 0.0f;
 	for (Int i = 0; i < 8; ++i)
 		m_buffLook[i] = 0.0f;
+	m_fxEventState = nullptr;
+	m_fxEventAnim = nullptr;
+	m_fxEventFrame = -1.0f;
+	m_spinRobj = nullptr;
+	m_spinBones.clear();
+	for (Int i = 0; i < 4; ++i)
+		m_spinAngle[i] = 0.0f;
+	m_animSpeedFactor = 1.0f;
+	m_pausedUnpowered = false;
 	m_treadScrollRobj = nullptr;
 	m_treadScrollLastAngle = 0.0f;
 	// Tiberium Project @feature (turrets drawn between logic frames: not drawn yet)
@@ -2654,6 +2704,8 @@ void W3DModelDraw::doDrawModule(const Matrix3D* transformMtx)
 	}
 
 #if RTS_ZEROHOUR
+	handleAnimationExtras();	// Tiberium Project @feature frame events, spins, the unpowered pause
+
 	// Tiberium Project @feature C&C4's buff looks and upgrade flash (BuffLooks): what its object effects draw over the
 	// model (RenderBuffEffectA and B, FlashPct). EMP's grey for an object EMP'd, subdued or being sold (C&C4's
 	// ShaderOverride_EMP); the looks of its attribute modifiers (RenderBuff); the flash of an upgrade that showed parts.
@@ -2878,6 +2930,8 @@ void W3DModelDraw::adjustAnimation(const ModelConditionInfo* prevState, Real pre
 					HLodClass *hlod = (HLodClass*)m_renderObject;
 					Real factor = GameClientRandomValueReal( m_curState->m_animMinSpeedFactor, m_curState->m_animMaxSpeedFactor );
 					hlod->Set_Animation_Frame_Rate_Multiplier( factor );
+					m_animSpeedFactor = factor;	// Tiberium Project (the unpowered pause puts it back)
+					m_pausedUnpowered = false;
 				}
 			}
 		}
@@ -3083,6 +3137,120 @@ void W3DModelDraw::stopClientParticleSystems()
 // whatever way its own axes lie: about its own axis that is the object's at rest. C&C4's and Kane's Wrath's
 // Juggernauts' pitch bones lie a third of a turn round, so pitching about their own across axis spun the gun
 // head round its barrel. A bone whose axes are the object's turns as before.
+//-------------------------------------------------------------------------------------------------
+#if RTS_ZEROHOUR
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature C&C4's animation extras, drawn only (they read the object, change nothing in the game):
+	- DO_NOT_PLAY_WHEN_UNPOWERED: the state's animation stands still while the object is unpowered;
+	- FXEvent: an effect as the animation passes a frame, at a bone (stepped over by more than two frames, only when
+	  it fires when skipped);
+	- SpinBone: bones turned on their own, at so many degrees a second of the game (still while it is paused). */
+void W3DModelDraw::handleAnimationExtras()
+{
+	if (m_curState == nullptr || m_renderObject == nullptr || m_renderObject->Class_ID() != RenderObjClass::CLASSID_HLOD)
+		return;
+	HLodClass* hlod = (HLodClass*)m_renderObject;
+	const Object* obj = getDrawable()->getObject();
+
+	// the unpowered pause
+	const Bool unpowered = obj != nullptr && testFlagBit(m_curState->m_flags, DO_NOT_PLAY_WHEN_UNPOWERED)
+		&& obj->isDisabledByType(DISABLED_UNDERPOWERED);
+	if (unpowered != m_pausedUnpowered)
+	{
+		hlod->Set_Animation_Frame_Rate_Multiplier(unpowered ? 0.0f : m_animSpeedFactor);
+		m_pausedUnpowered = unpowered;
+		if (TiberiumTest::isActive())
+			TiberiumTest::log("anim %s unpowered: the animation %s", getDrawable()->getTemplate()->getName().str(), unpowered ? "stops" : "plays");
+	}
+
+	// the frame events
+	if (!m_curState->m_fxEvents.empty())
+	{
+		float frame = 0.0f, mult = 1.0f;
+		int numFrames = 0, mode = 0;
+		const HAnimClass* anim = hlod->Peek_Animation_And_Info(frame, numFrames, mode, mult);
+		if (anim != nullptr && numFrames > 0)
+		{
+			if (m_fxEventState != m_curState || m_fxEventAnim != anim)
+			{
+				m_fxEventState = m_curState;
+				m_fxEventAnim = anim;
+				m_fxEventFrame = -1.0f;
+			}
+			const Real last = m_fxEventFrame;
+			const Bool wrapped = frame < last;
+			const Real stepped = wrapped ? (numFrames - last) + frame : frame - last;
+			for (size_t i = 0; i < m_curState->m_fxEvents.size(); ++i)
+			{
+				const ModelConditionInfo::FXEventInfo& ev = m_curState->m_fxEvents[i];
+				const Bool crossed = wrapped ? (ev.m_frame > last || ev.m_frame <= frame) : (ev.m_frame > last && ev.m_frame <= frame);
+				if (!crossed || (!ev.m_whenSkipped && last >= 0.0f && stepped > 2.0f))
+					continue;
+				Coord3D pos = *getDrawable()->getPosition();
+				Matrix3D mtx = *getDrawable()->getTransformMatrix();
+				if (ev.m_bone.isNotEmpty())
+				{
+					const Int bone = m_renderObject->Get_Bone_Index(ev.m_bone.str());
+					if (bone > 0)
+					{
+						mtx = m_renderObject->Get_Bone_Transform(bone);
+						const Vector3 at = mtx.Get_Translation();
+						pos.set(at.X, at.Y, at.Z);
+					}
+				}
+				FXList::doFXPos(ev.m_fx, &pos, &mtx);
+				if (TiberiumTest::isActive())
+					TiberiumTest::log("anim %s fxevent at frame %g (frame %g of %d, from %g) %s at %s (%.0f %.0f %.0f)", getDrawable()->getTemplate()->getName().str(),
+						ev.m_frame, frame, numFrames, last, ev.m_fxName.str(), ev.m_bone.isNotEmpty() ? ev.m_bone.str() : "the object", pos.x, pos.y, pos.z);
+			}
+			m_fxEventFrame = frame;
+		}
+	}
+
+	// the spins: the bones held in this model, let go of when the state has none for them
+	if (m_spinRobj != m_renderObject)
+	{
+		m_spinRobj = m_renderObject;
+		m_spinBones.clear();
+	}
+	std::vector<Int> spun;
+	if (!m_curState->m_spins.empty())
+	{
+		Real seconds = TheFramePacer != nullptr ? TheFramePacer->getUpdateTime() : 1.0f / LOGICFRAMES_PER_SECOND;
+		if (TheGameLogic != nullptr && TheGameLogic->isGamePaused())
+			seconds = 0.0f;
+		for (size_t i = 0; i < m_curState->m_spins.size() && i < 4; ++i)
+		{
+			const ModelConditionInfo::SpinInfo& spin = m_curState->m_spins[i];
+			const Int bone = m_renderObject->Get_Bone_Index(spin.m_bone.str());
+			if (bone <= 0)
+				continue;
+			m_spinAngle[i] += spin.m_degreesPerSecond * seconds * (PI / 180.0f);
+			if (m_spinAngle[i] > 2.0f * PI || m_spinAngle[i] < -2.0f * PI)
+				m_spinAngle[i] = fmod(m_spinAngle[i], 2.0f * PI);
+			Matrix3D turn(1);
+			if (spin.m_axis == 0)
+				turn.Rotate_X(m_spinAngle[i]);
+			else if (spin.m_axis == 1)
+				turn.Rotate_Y(m_spinAngle[i]);
+			else
+				turn.Rotate_Z(m_spinAngle[i]);
+			m_renderObject->Capture_Bone(bone);
+			m_renderObject->Control_Bone(bone, turn);
+			spun.push_back(bone);
+			if (TiberiumTest::isActive() && std::find(m_spinBones.begin(), m_spinBones.end(), bone) == m_spinBones.end())
+				TiberiumTest::log("anim %s spins %s on %c at %g a second", getDrawable()->getTemplate()->getName().str(), spin.m_bone.str(), "XYZ"[spin.m_axis], spin.m_degreesPerSecond);
+		}
+	}
+	for (size_t i = 0; i < m_spinBones.size(); ++i)
+	{
+		if (std::find(spun.begin(), spun.end(), m_spinBones[i]) == spun.end())
+			m_renderObject->Release_Bone(m_spinBones[i]);
+	}
+	m_spinBones.swap(spun);
+}
+#endif
+
 //-------------------------------------------------------------------------------------------------
 static Matrix3D turretBoneRotation( const HTreeClass *tree, Int bone, const Vector3 &objectAxis, Real angle )
 {

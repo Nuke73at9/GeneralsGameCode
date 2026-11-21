@@ -62,6 +62,7 @@ class RenderObjClass;
 class Shadow;
 class TerrainTracksRenderObjClass;
 class HAnimClass;
+class FXList;
 enum GameLODLevel CPP_11(: Int);
 //-------------------------------------------------------------------------------------------------
 /** The default client update module */
@@ -262,6 +263,24 @@ struct ModelConditionInfo
 	mutable Bool											m_hasRecoilBonesOrMuzzleFlashes[WEAPONSLOT_COUNT];
 	mutable std::vector<ExtraTwinBone>	m_extraTwinBones;		///< Tiberium Project
 	std::vector<WeaponBoneSet>				m_weaponBoneSets;		///< Tiberium Project
+	/// Tiberium Project @feature C&C4's frame events (FXEvent: an effect at a frame of the state's animation, at a bone)
+	struct FXEventInfo
+	{
+		Real					m_frame;
+		const FXList*	m_fx;
+		AsciiString		m_fxName;
+		AsciiString		m_bone;					///< empty: where the object is
+		Bool					m_whenSkipped;	///< fired even when the frame is stepped over (C&C4's FireWhenSkipped)
+	};
+	std::vector<FXEventInfo>					m_fxEvents;
+	/// Tiberium Project @feature C&C4's procedural animation (SpinBone: a bone turned on its own, fans and radar dishes)
+	struct SpinInfo
+	{
+		AsciiString		m_bone;
+		Int						m_axis;									///< the bone's own 0 X, 1 Y, 2 Z
+		Real					m_degreesPerSecond;
+	};
+	std::vector<SpinInfo>							m_spins;
 	mutable Byte											m_validStuff;
 
 	enum
@@ -578,6 +597,16 @@ private:
 	Int														m_animationMode;
 	Real													m_damageLook;	///< Tiberium Project: shown damage 0..1, easing toward the real damage
 	Real													m_buffLook[8];	///< Tiberium Project: shown buff looks 0..1 (RenderObjClass::Set_Buff_Look), easing in and out
+	// Tiberium Project @feature frame events, spins and the unpowered pause (handleAnimationExtras)
+	const ModelConditionInfo*			m_fxEventState;			///< the state and animation the frame events last looked at
+	const HAnimClass*							m_fxEventAnim;
+	Real													m_fxEventFrame;			///< ... and the frame (-1: the animation's start)
+	RenderObjClass*								m_spinRobj;					///< the model the spun bones are held in
+	std::vector<Int>							m_spinBones;				///< the bones held there
+	Real													m_spinAngle[4];
+	Real													m_animSpeedFactor;	///< the animation's speed as last set (the unpowered pause puts it back)
+	Bool													m_pausedUnpowered;
+	void handleAnimationExtras();
 	std::vector<Int>										m_treadScrollBones;		///< Tiberium Project: left, right bone of each TreadScroll, in m_treadScrollRobj
 	std::vector<Real>										m_treadScrollOffsets;	///< Tiberium Project: their offsets so far
 	const RenderObjClass*									m_treadScrollRobj;		///< Tiberium Project: the render object the bones were found in
