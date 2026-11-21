@@ -37,6 +37,12 @@ public:
 	/// The map look: the grading table texture (Art\Textures\<name>.dds, a volume texture), how much
 	/// of it to blend in, and the bloom intensity, as C&C4 maps store them.
 	static void Set_Look(const char* lookupTexture, float lookupBlend, float bloomIntensity);
+	/// Tiberium Project @feature the map's other post effects (C&C4's PostEffect list): an overlay (vignette and centre
+	/// fill: overlay.dds), a falloff (soft light from the screen's edges) and a grain (pin light, by the height on the
+	/// screen), each a texture's name or null for none; a falloff without a grain uses a neutral grey one.
+	/// Sage2PostOverlays (default on) turns them off.
+	static void Set_Overlays(const char* overlayTexture, const char* falloffTexture, const char* grainTexture);
+	static void Set_Overlays_Enabled(bool enabled);
 	/// Exposure applied before the tone curve (1 = as C&C4)
 	static void Set_Exposure(float exposure);
 	/// Tiberium Project @feature How strongly the grading table applies, against the map look's own

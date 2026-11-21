@@ -34,6 +34,7 @@
 #include "Common/Thing.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
+#include "GameClient/ClientRandomValue.h"	// Tiberium Project (the light's flicker)
 #include "GameClient/Color.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/GameClient.h"
@@ -72,6 +73,7 @@ W3DLaserDrawModuleData::W3DLaserDrawModuleData()
 	m_tileLength = 0.0f;			// Tiberium Project
 	m_lightColor.red = m_lightColor.green = m_lightColor.blue = 0.0f;	// Tiberium Project: no light
 	m_lightRadius = 0.0f;
+	m_lightRadiusMin = 0.0f;
 	m_segmentOverlapRatio = 0.0f;
 	m_tilingScalar = 1.0f;
 	// Tiberium Project: C&C4's texturing, off
@@ -116,6 +118,7 @@ void W3DLaserDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "TileLength",						INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_tileLength ) },	// Tiberium Project
 		{ "LightColor",						INI::parseRGBColor,							nullptr, offsetof( W3DLaserDrawModuleData, m_lightColor ) },	// Tiberium Project
 		{ "LightRadius",					INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_lightRadius ) },	// Tiberium Project
+		{ "LightRadiusMin",				INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_lightRadiusMin ) },	// Tiberium Project
 		// Tiberium Project: C&C4's LaserDraw texturing
 		{ "TilesPerBeam",					INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_tilesPerBeam ) },
 		{ "UTile",								INI::parseReal,									nullptr, offsetof( W3DLaserDrawModuleData, m_uTile ) },
@@ -360,7 +363,12 @@ void W3DLaserDraw::doDrawModule(const Matrix3D* transformMtx)
 			at.y += ( update->getEndPos()->y - at.y ) * lit;
 			at.z += ( update->getEndPos()->z - at.z ) * lit;
 			const UnsignedInt lasts = data->m_maxIntensityFrames + data->m_fadeFrames;
-			TheDisplay->createLightPulse( &at, &data->m_lightColor, data->m_lightRadius * 0.4f, data->m_lightRadius * 0.6f,
+			// Tiberium Project @feature the light flickers between LightRadiusMin and LightRadius, light to light (C&C4's
+			// LightMin and LightMax; the client's random numbers only for a draw that has the range)
+			Real radius = data->m_lightRadius;
+			if( data->m_lightRadiusMin > 0.0f && data->m_lightRadiusMin < data->m_lightRadius )
+				radius = GameClientRandomValueReal( data->m_lightRadiusMin, data->m_lightRadius );
+			TheDisplay->createLightPulse( &at, &data->m_lightColor, radius * 0.4f, radius * 0.6f,
 				1, lasts > LIGHT_REPEAT ? lasts : LIGHT_REPEAT );
 		}
 

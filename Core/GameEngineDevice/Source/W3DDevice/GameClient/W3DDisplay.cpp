@@ -1022,6 +1022,7 @@ void W3DDisplay::init()
 			// 6.4 to 6.6 ms with them there)
 			D3D8On9_Set_Fixed_Function_Shaders(prefs.getBool("Sage2FixedFunctionShaders", !DX8Wrapper::Draws_On_DXVK()));
 			Sage2PostClass::Set_Exposure(prefs.getReal("Sage2Exposure", 1.0f));
+			Sage2PostClass::Set_Overlays_Enabled(prefs.getBool("Sage2PostOverlays", TRUE));	// Tiberium Project @feature the maps' overlay, falloff and grain
 			Sage2PostClass::Set_Lookup_Strength(prefs.getReal("Sage2LookupStrength", 1.0f));	// the grading table: 0 none, 1 as the look sets it
 			Sage2PostClass::Set_Auto_Exposure(prefs.getReal("Sage2AutoExposure", 0.5f));	// exposure for each map's ground: 0..1
 			Sage2PostClass::Set_Keep_Black(prefs.getBool("Sage2KeepBlack", TRUE));	// black past the map's edge stays black under the grade

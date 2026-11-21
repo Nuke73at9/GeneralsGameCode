@@ -206,6 +206,18 @@ const Sage2LightingPreset* Sage2LightingClass::Choose(int timeOfDay, bool snowy)
 	if (preset != nullptr)
 	{
 		Sage2PostClass::Set_Look(preset->lookupTexture, preset->lookupBlend, preset->bloomIntensity);
+		// Tiberium Project @feature the post effects C&C4's maps of the set list with their table (their map.xml
+		// PostEffect entries): every skirmish map the overlay; the Arctic maps PE_Arctic_Falloff_01; Junktown's
+		// PE_Junktown_GreenFalloff and PE_Junktown_Grain; RA3's look none of them
+		const char* name = preset->name;
+		if (strncmp(name, "arctic", 6) == 0)
+			Sage2PostClass::Set_Overlays("overlay", "PE_Arctic_Falloff_01", nullptr);
+		else if (strncmp(name, "junktown", 8) == 0)
+			Sage2PostClass::Set_Overlays("overlay", "PE_Junktown_GreenFalloff", "PE_Junktown_Grain");
+		else if (strncmp(name, "ra3", 3) == 0)
+			Sage2PostClass::Set_Overlays(nullptr, nullptr, nullptr);
+		else
+			Sage2PostClass::Set_Overlays("overlay", nullptr, nullptr);
 		Sage2_Log("lighting: map (time of day %d%s) gets preset '%s': ambient (%.2f %.2f %.2f), sun (%.2f %.2f %.2f) along (%.3f %.3f %.3f), table %s %.2f, bloom %.2f",
 			timeOfDay, snowy ? ", snow" : "", preset->name, preset->ambient[0], preset->ambient[1], preset->ambient[2],
 			preset->light[0].diffuse[0], preset->light[0].diffuse[1], preset->light[0].diffuse[2],
@@ -213,7 +225,10 @@ const Sage2LightingPreset* Sage2LightingClass::Choose(int timeOfDay, bool snowy)
 			preset->lookupTexture, preset->lookupBlend, preset->bloomIntensity);
 	}
 	else
+	{
+		Sage2PostClass::Set_Overlays(nullptr, nullptr, nullptr);	// Tiberium Project (none of a preset's overlays left over)
 		Sage2_Log("lighting: map (time of day %d%s) keeps its own lights", timeOfDay, snowy ? ", snow" : "");
+	}
 	return preset;
 }
 

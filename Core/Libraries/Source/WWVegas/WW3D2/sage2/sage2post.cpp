@@ -47,6 +47,10 @@ namespace
 	float s_lookupBlend = 0.745f;
 	float s_lookupStrength = 1.0f;		// Sage2LookupStrength
 	float s_bloomIntensity = 0.09f;
+	// Tiberium Project @feature the overlay, the falloff and the grain (Set_Overlays)
+	std::string s_overlayName, s_falloffName, s_grainName;
+	bool s_overlaysEnabled = true;
+	IDirect3DTexture9* s_grey = nullptr;		// the neutral grain (0.5: the pin light leaves the colour as it is)
 	float s_exposure = 1.0f;
 	float s_autoStrength = 0.5f;		// Sage2AutoExposure
 	float s_sceneAlbedo = -1.0f;		// the map's ground, linear (-1 unknown)
@@ -340,6 +344,16 @@ void Sage2PostClass::Set_Look(const char* lookupTexture, float lookupBlend, floa
 }
 
 //-------------------------------------------------------------------------------------------------
+void Sage2PostClass::Set_Overlays(const char* overlayTexture, const char* falloffTexture, const char* grainTexture)
+{
+	s_overlayName = overlayTexture != nullptr ? overlayTexture : "";
+	s_falloffName = falloffTexture != nullptr ? falloffTexture : "";
+	s_grainName = grainTexture != nullptr ? grainTexture : "";
+}
+
+void Sage2PostClass::Set_Overlays_Enabled(bool enabled) { s_overlaysEnabled = enabled; }
+
+//-------------------------------------------------------------------------------------------------
 void Sage2PostClass::Set_Anti_Aliasing(bool enabled, float subpixel, float threshold)
 {
 	s_aaEnabled = enabled;
@@ -475,8 +489,43 @@ bool Sage2PostClass::Apply()
 	float blend[4] = { lookup ? (strength > 1.0f ? 1.0f : strength) : 0.0f, 0.0f, 0.0f, 0.0f };
 	grade.Set_Float("BlendFactor", blend, 4);
 	grade.Set_Bool("ApplyLUT", lookup != nullptr);
-	grade.Set_Bool("ApplyOverlay", false);
-	grade.Set_Bool("ApplyFalloffAndGrain", false);
+	// Tiberium Project @feature the map's overlay, falloff and grain (C&C4's PostEffect list). The shader sets the overlay's
+	// blend and centre fill and the falloff's own values itself; the vignette's scale and colour shift are the values
+	// its notes give (0.827, 0.145: inferred, C&C4's engine sets them); the falloff blends by soft light (mode 0, not
+	// the "haze" mode 1).
+	IDirect3DBaseTexture9* overlay = s_overlaysEnabled && !s_overlayName.empty() ? Sage2TextureClass::Get(s_overlayName.c_str()) : nullptr;
+	IDirect3DBaseTexture9* falloff = s_overlaysEnabled && !s_falloffName.empty() ? Sage2TextureClass::Get(s_falloffName.c_str()) : nullptr;
+	IDirect3DBaseTexture9* grain = falloff != nullptr && !s_grainName.empty() ? Sage2TextureClass::Get(s_grainName.c_str()) : nullptr;
+	if (falloff != nullptr && grain == nullptr)
+	{
+		if (s_grey == nullptr && SUCCEEDED(device->CreateTexture(4, 4, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &s_grey, nullptr)))
+		{
+			D3DLOCKED_RECT locked;
+			if (SUCCEEDED(s_grey->LockRect(0, &locked, nullptr, 0)))
+			{
+				for (int y = 0; y < 4; ++y)
+					for (int x = 0; x < 4; ++x)
+						((DWORD*)((BYTE*)locked.pBits + y * locked.Pitch))[x] = 0x80808080;
+				s_grey->UnlockRect(0);
+			}
+		}
+		grain = s_grey;
+	}
+	if (overlay != nullptr)
+	{
+		const float factor[4] = { 0.2f, 0.05f, 0.827f, 0.145f };
+		grade.Set_Texture("Overlay", overlay);
+		grade.Set_Float("OverlayFactor", factor, 4);
+	}
+	if (falloff != nullptr)
+	{
+		const float mode[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+		grade.Set_Texture("Falloff", falloff);
+		grade.Set_Texture("Grain", grain);
+		grade.Set_Float("FalloffAndGrainBlendMode", mode, 4);
+	}
+	grade.Set_Bool("ApplyOverlay", overlay != nullptr);
+	grade.Set_Bool("ApplyFalloffAndGrain", falloff != nullptr && grain != nullptr);
 	grade.Set_Bool("ApplyColorMask", false);
 	// Tiberium Project @feature with edge anti-aliasing the grade goes to a copy, which the last
 	// pass smooths back into the frame
@@ -549,6 +598,7 @@ void Sage2PostClass::Shutdown()
 	Release(s_aaVertexShader);
 	Release(s_aaPixelShader);
 	Release(s_aaDeclaration);
+	Release(s_grey);
 	s_aaState = AA_NOT_TRIED;
 	s_bloom = s_lookup = s_keepBlack = nullptr;	// owned by the effect cache
 	s_keepBlackTried = false;
