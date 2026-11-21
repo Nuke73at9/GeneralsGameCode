@@ -30,6 +30,17 @@
 
 AttributeModifierStore *TheAttributeModifierStore = nullptr;
 
+const char *const TheAttributeModifierRenderBuffNames[] =
+{
+	"VEIN_DETONATION",
+	"INCINERATOR",
+	"MIRROR_COAT",
+	"PERSONAL_SHIELDS",
+	"BERZERK",
+	nullptr
+};
+static_assert( ARRAY_SIZE( TheAttributeModifierRenderBuffNames ) == MODIFIER_RENDER_COUNT + 1, "Incorrect array size" );
+
 const char *const TheAttributeModifierBuffNames[] =
 {
 	"NONE",
@@ -48,7 +59,8 @@ AttributeModifierTemplate::AttributeModifierTemplate() :
 	m_resistEMP( FALSE ),
 	m_killOnExpire( FALSE ),
 	m_buff( MODIFIER_BUFF_NONE ),
-	m_stackingLimit( 1 )
+	m_stackingLimit( 1 ),
+	m_renderBuff( 0 )
 {
 	for( Int i = 0; i < MODIFIER_ATTRIBUTE_COUNT; ++i )
 		m_scalar[i] = 1.0f;
@@ -95,6 +107,7 @@ const FieldParse *AttributeModifierTemplate::getFieldParse()
 		{ "ModelConditions",	ModelConditionFlags::parseFromINI,	nullptr,	offsetof( AttributeModifierTemplate, m_modelConditions ) },
 		{ "StackingLimit",		INI::parseInt,									nullptr,	offsetof( AttributeModifierTemplate, m_stackingLimit ) },
 		{ "StartFX",					INI::parseAsciiString,					nullptr,	offsetof( AttributeModifierTemplate, m_startFXName ) },
+		{ "RenderBuff",				INI::parseBitString32,					TheAttributeModifierRenderBuffNames,	offsetof( AttributeModifierTemplate, m_renderBuff ) },
 		{ nullptr, nullptr, nullptr, 0 }
 	};
 	return dataFieldParse;

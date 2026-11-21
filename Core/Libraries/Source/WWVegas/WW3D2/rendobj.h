@@ -440,6 +440,13 @@ public:
 	// that support C&C4-style procedural damage scorch and hole the meshes inside it accordingly.
 	void							Set_Damage_Look(float amount) { DamageLook=amount; }
 	float							Get_Damage_Look() const { return DamageLook; }
+	// Tiberium Project @feature C&C4's buff looks (its shaders' RenderBuffEffectA and B: EMP, Tiberium corrosion,
+	// incinerator, -; mirror coat, personal shield, -, -), each 0..1, and its upgrade flash (0..1 through the flash;
+	// 1 when none). Renderers with C&C4's object effects draw them.
+	void							Set_Buff_Look(const float look[8]) { for (int i = 0; i < 8; ++i) BuffLook[i]=look[i]; }
+	const float *				Get_Buff_Look() const { return BuffLook; }
+	void							Set_Flash_Pct(float pct) { FlashPct=pct; }
+	float							Get_Flash_Pct() const { return FlashPct; }
 
    virtual int						Get_Sort_Level() const													{ return 0; /* SORT_LEVEL_NONE */ }
    virtual void					Set_Sort_Level(int level)													{ }
@@ -535,6 +542,8 @@ protected:
  	float						ObjectScale;					//user applied scaling factor inside Transform matrix.
 	unsigned int				ObjectColor;					//user applied coloring to the asset/prototype used to make this robj. - For Generals -MW
 	float						DamageLook;						// Tiberium Project: see Set_Damage_Look
+	float						BuffLook[8];					// Tiberium Project: see Set_Buff_Look
+	float						FlashPct;						// Tiberium Project: see Set_Flash_Pct
 	mutable SphereClass			CachedBoundingSphere;
 	mutable AABoxClass			CachedBoundingBox;
 	float								NativeScreenSize;		// The screen size at which the object was designed to be viewed (used in texture resizing).

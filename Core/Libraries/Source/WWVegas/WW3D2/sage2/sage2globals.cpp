@@ -717,7 +717,8 @@ void Sage2GlobalsClass::Apply(Sage2EffectClass& effect, const Sage2DrawState& dr
 				effect.Set_Float(i, v, 4);
 				break;
 			case SAGE2_BIND_FLASH_PCT:
-				v[0] = 1.0f;
+				// Tiberium Project @feature C&C4's upgrade flash (1: none, the flash's curve is over)
+				v[0] = draw.flashPct;
 				effect.Set_Float(i, v, 1);
 				break;
 			case SAGE2_BIND_STEALTH_ENABLED:
@@ -725,7 +726,13 @@ void Sage2GlobalsClass::Apply(Sage2EffectClass& effect, const Sage2DrawState& dr
 				effect.Set_Float(i, v, 1);
 				break;
 			case SAGE2_BIND_RENDER_BUFF_A:
+				// Tiberium Project @feature C&C4's buff looks: its effects pick their shader by these (the shield, the
+				// mirror coat, the colour shift of EMP, corrosion and the incinerator) and blend them in by them
+				effect.Set_Float(i, draw.buffA, 4);
+				break;
 			case SAGE2_BIND_RENDER_BUFF_B:
+				effect.Set_Float(i, draw.buffB, 4);
+				break;
 			case SAGE2_BIND_FOG:
 				effect.Set_Float(i, v, 4);
 				break;

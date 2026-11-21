@@ -1207,6 +1207,7 @@ W3DModelDrawModuleData::W3DModelDrawModuleData() :
 	m_validated(0),
 	m_okToChangeModelColor(false),
 	m_proceduralDamage(false),
+	m_buffLooks(false),
 	m_spotlightRefreshFrames(0),
 	m_spotlightSweepFrames(0),
   m_particlesAttachedToAnimatedBones(false),
@@ -1414,6 +1415,7 @@ void W3DModelDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "RecoilSettleSpeed",	INI::parseVelocityReal, nullptr, offsetof(W3DModelDrawModuleData, m_recoilSettle) },
 		{ "OkToChangeModelColor",	INI::parseBool, nullptr, offsetof(W3DModelDrawModuleData, m_okToChangeModelColor) },
 		{ "ProceduralDamage",	INI::parseBool, nullptr, offsetof(W3DModelDrawModuleData, m_proceduralDamage) },	// Tiberium Project
+		{ "BuffLooks",	INI::parseBool, nullptr, offsetof(W3DModelDrawModuleData, m_buffLooks) },	// Tiberium Project
 		{ "TreadScroll",	W3DModelDrawModuleData::parseTreadScroll, nullptr, 0 },	// Tiberium Project
 		{ "SpotlightRefreshTime",	INI::parseDurationUnsignedInt, nullptr, offsetof(W3DModelDrawModuleData, m_spotlightRefreshFrames) },	// Tiberium Project
 		{ "SpotlightSweepTime",	INI::parseDurationUnsignedInt, nullptr, offsetof(W3DModelDrawModuleData, m_spotlightSweepFrames) },	// Tiberium Project
@@ -2139,6 +2141,8 @@ W3DModelDraw::W3DModelDraw(Thing *thing, const ModuleData* moduleData) : DrawMod
 	m_hexColor = 0;
 	m_renderObject = nullptr;
 	m_damageLook = 0.0f;
+	for (Int i = 0; i < 8; ++i)
+		m_buffLook[i] = 0.0f;
 	m_treadScrollRobj = nullptr;
 	m_treadScrollLastAngle = 0.0f;
 	// Tiberium Project @feature (turrets drawn between logic frames: not drawn yet)
@@ -2648,6 +2652,39 @@ void W3DModelDraw::doDrawModule(const Matrix3D* transformMtx)
 		m_damageLook += (target - m_damageLook) * EASE;
 		m_renderObject->Set_Damage_Look(m_damageLook);
 	}
+
+#if RTS_ZEROHOUR
+	// Tiberium Project @feature C&C4's buff looks and upgrade flash (BuffLooks): what its object effects draw over the
+	// model (RenderBuffEffectA and B, FlashPct). EMP's grey for an object EMP'd, subdued or being sold (C&C4's
+	// ShaderOverride_EMP); the looks of its attribute modifiers (RenderBuff); the flash of an upgrade that showed parts.
+	// Each look eases in and out. Visual only: reads the object, changes nothing in the game.
+	if (modData->m_buffLooks && m_renderObject)
+	{
+		const Object* obj = getDrawable()->getObject();
+		Real target[8] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+		if (obj != nullptr)
+		{
+			if (obj->isDisabledByType(DISABLED_EMP) || obj->isDisabledByType(DISABLED_SUBDUED) || obj->testStatus(OBJECT_STATUS_SOLD))
+				target[0] = 1.0f;
+			const UnsignedInt looks = obj->getAttributeModifierRenderBuff();
+			target[1] = (looks & (1u << MODIFIER_RENDER_VEIN_DETONATION)) ? 1.0f : 0.0f;
+			target[2] = (looks & (1u << MODIFIER_RENDER_INCINERATOR)) ? 1.0f : 0.0f;
+			target[4] = (looks & (1u << MODIFIER_RENDER_MIRROR_COAT)) ? 1.0f : 0.0f;
+			target[5] = (looks & (1u << MODIFIER_RENDER_PERSONAL_SHIELDS)) ? 1.0f : 0.0f;
+		}
+		float look[8];
+		const Real EASE = 0.15f;
+		for (Int i = 0; i < 8; ++i)
+		{
+			m_buffLook[i] += (target[i] - m_buffLook[i]) * EASE;
+			if (fabs(m_buffLook[i] - target[i]) < 0.01f)
+				m_buffLook[i] = target[i];
+			look[i] = m_buffLook[i];
+		}
+		m_renderObject->Set_Buff_Look(look);
+		m_renderObject->Set_Flash_Pct(getDrawable()->getUpgradeFlashPct());
+	}
+#endif
 
 	if (!modData->m_treadScrolls.empty())
 		updateTreadScroll();

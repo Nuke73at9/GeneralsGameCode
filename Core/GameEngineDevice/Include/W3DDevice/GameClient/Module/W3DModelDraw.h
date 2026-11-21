@@ -345,6 +345,7 @@ public:
 	ModelConditionFlags								m_ignoreConditionStates;
 	Bool															m_okToChangeModelColor;
 	Bool															m_proceduralDamage;		///< Tiberium Project: draw C&C4-style procedural damage (Direct3D 9 renderer)
+	Bool															m_buffLooks;					///< Tiberium Project: draw C&C4's buff looks and upgrade flash (its object effects)
 	/// Tiberium Project @feature C&C4's scrolling treads (its TreadScrollDraw): the treads bound to a left
 	/// and a right bone scroll by the distance driven times the multiplier (texture widths per world
 	/// unit), turning in place the two sides opposite; not below the fraction of the locomotor's speed
@@ -576,6 +577,7 @@ private:
 	Bool													m_pauseAnimation;
 	Int														m_animationMode;
 	Real													m_damageLook;	///< Tiberium Project: shown damage 0..1, easing toward the real damage
+	Real													m_buffLook[8];	///< Tiberium Project: shown buff looks 0..1 (RenderObjClass::Set_Buff_Look), easing in and out
 	std::vector<Int>										m_treadScrollBones;		///< Tiberium Project: left, right bone of each TreadScroll, in m_treadScrollRobj
 	std::vector<Real>										m_treadScrollOffsets;	///< Tiberium Project: their offsets so far
 	const RenderObjClass*									m_treadScrollRobj;		///< Tiberium Project: the render object the bones were found in

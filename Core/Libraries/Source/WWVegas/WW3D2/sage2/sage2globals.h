@@ -120,9 +120,14 @@ struct Sage2DrawState
 	bool stealth;
 	float boundsCenter[3];		// the drawn object's bounding sphere, world space
 	float boundsRadius;			// below 0: unknown (the mesh's own position stands for it)
-	Sage2DrawState() : opacity(1.0f), houseColor(0), damage(0.0f), stealth(false), boundsRadius(-1.0f)
+	float buffA[4];				// Tiberium Project: C&C4's RenderBuffEffectA (EMP, Tiberium corrosion, incinerator, -)
+	float buffB[4];				// ... and B (mirror coat, personal shield, -, -), 0..1
+	float flashPct;				// Tiberium Project: C&C4's FlashPct, through an upgrade flash (1: none)
+	Sage2DrawState() : opacity(1.0f), houseColor(0), damage(0.0f), stealth(false), boundsRadius(-1.0f), flashPct(1.0f)
 	{
 		boundsCenter[0] = boundsCenter[1] = boundsCenter[2] = 0.0f;
+		for (int i = 0; i < 4; ++i)
+			buffA[i] = buffB[i] = 0.0f;
 	}
 };
 

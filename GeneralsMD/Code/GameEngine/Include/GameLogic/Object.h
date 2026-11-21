@@ -646,6 +646,7 @@ public:
 	Real getAttributeModifierChance( AttributeModifierChance what ) const;	///< Tiberium Project: the sum of those in force (may be less than 0)
 	Real getDodgeChance() const;	///< Tiberium Project: its body's dodge and its modifiers', within its body's most
 	Bool isResistingEMPByModifier() const;	///< Tiberium Project: one in force keeps EMP off it
+	UnsignedInt getAttributeModifierRenderBuff() const;	///< Tiberium Project: the looks of those in force (1 << AttributeModifierRenderBuff)
 	Bool hasAttributeModifiers() const { return !m_attributeModifiers.empty(); }
 	Bool hasAttributeModifier( const AttributeModifierTemplate *tmpl ) const;	///< Tiberium Project: that one in force, from any source
 	void updateAttributeModifiers();	///< takes off those whose time is up (GameLogic, each frame)

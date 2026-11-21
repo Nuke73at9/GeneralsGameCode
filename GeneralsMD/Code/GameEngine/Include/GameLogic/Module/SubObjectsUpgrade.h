@@ -62,8 +62,9 @@ class SubObjectsUpgradeModuleData : public UpgradeModuleData
 public:
 	std::vector<AsciiString>					m_showSubObjectNames;
 	std::vector<AsciiString>					m_hideSubObjectNames;
+	UnsignedInt												m_flashTime;		///< Tiberium Project: C&C4's upgrade flash as the parts show (FlashTime, frames; 0: none)
 
-	SubObjectsUpgradeModuleData(){}
+	SubObjectsUpgradeModuleData() : m_flashTime( 0 ) {}
 
 	static void buildFieldParse(MultiIniFieldParse& p);
 };

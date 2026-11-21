@@ -330,6 +330,9 @@ public:
 	DrawableInfo *getDrawableInfo() {return &m_drawableInfo;}
 
 	void setDrawableHidden( Bool hidden );																		///< hide or unhide drawable
+	// Tiberium Project @feature C&C4's upgrade flash: an upgrade that shows parts starts it (SubObjectsUpgrade FlashTime)
+	void startUpgradeFlash( UnsignedInt frames );
+	Real getUpgradeFlashPct() const;																					///< 0..1 through the flash, 1 when none
 	//
 	// note that this is not necessarily the 'get' reflection of setDrawableHidden, since drawables
 	// can spontaneously hide via stealth. (srj)
@@ -760,6 +763,8 @@ private:
 	// --------- BYTE-SIZED THINGS GO HERE
 	Byte m_selected;						///< drawable is selected or not
 	Bool m_hidden;							///< drawable is "hidden" or not (overrides stealth effects)
+	UnsignedInt m_upgradeFlashStart;		///< Tiberium Project: the logic frame an upgrade flash began
+	UnsignedInt m_upgradeFlashFrames;		///< ... and how long it lasts (0: none)
 	Bool m_hiddenByStealth;			///< drawable is hidden due to stealth
 	Bool m_instanceIsIdentity;	///< If true, instance matrix can be skipped
 	Bool m_drawableFullyObscuredByShroud;	///<drawable is hidden by shroud/fog

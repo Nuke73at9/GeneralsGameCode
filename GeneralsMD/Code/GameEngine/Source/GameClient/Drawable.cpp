@@ -455,6 +455,8 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatusBits statu
 #endif
 
 	m_hidden = false;
+	m_upgradeFlashStart = 0;
+	m_upgradeFlashFrames = 0;
 	m_radarFalseReturns = 0;		// Tiberium Project
 	m_radarFalseReturnsRadius = 0.0f;
 	m_radarFalseReturnsUntil = 0;
@@ -4910,6 +4912,27 @@ void Drawable::updateHiddenStatus()
 
 //-------------------------------------------------------------------------------------------------
 /** Hide or un-hide drawable */
+//-------------------------------------------------------------------------------------------------
+void Drawable::startUpgradeFlash( UnsignedInt frames )
+{
+	// Tiberium Project @feature C&C4's upgrade flash (CalculateUpgradeFlash: its FlashPct over FlashTime)
+	m_upgradeFlashStart = TheGameLogic != nullptr ? TheGameLogic->getFrame() : 0;
+	m_upgradeFlashFrames = frames;
+}
+
+//-------------------------------------------------------------------------------------------------
+Real Drawable::getUpgradeFlashPct() const
+{
+	if( m_upgradeFlashFrames == 0 || TheGameLogic == nullptr )
+		return 1.0f;
+	// (between logic frames too, as the drawing goes)
+	Real elapsed = (Real)( TheGameLogic->getFrame() - m_upgradeFlashStart );
+	if( TheFramePacer != nullptr )
+		elapsed += TheFramePacer->getLogicFramePhase();
+	const Real pct = elapsed / (Real)m_upgradeFlashFrames;
+	return pct < 0.0f ? 0.0f : ( pct > 1.0f ? 1.0f : pct );
+}
+
 //-------------------------------------------------------------------------------------------------
 void Drawable::setDrawableHidden( Bool hidden )
 {

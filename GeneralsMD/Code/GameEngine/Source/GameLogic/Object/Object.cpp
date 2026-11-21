@@ -4803,6 +4803,21 @@ Real Object::getDodgeChance() const
 }
 
 //-------------------------------------------------------------------------------------------------
+UnsignedInt Object::getAttributeModifierRenderBuff() const
+{
+	// Tiberium Project @feature the looks of the modifiers in force (read by the drawing: nothing in the game reads it)
+	UnsignedInt looks = 0;
+	const UnsignedInt now = TheGameLogic->getFrame();
+	for (size_t i = 0; i < m_attributeModifiers.size(); ++i)
+	{
+		const AttributeModifierEntry &entry = m_attributeModifiers[i];
+		if (entry.expireFrame == 0 || entry.expireFrame > now)
+			looks |= entry.tmpl->getRenderBuff();
+	}
+	return looks;
+}
+
+//-------------------------------------------------------------------------------------------------
 Bool Object::isResistingEMPByModifier() const
 {
 	const UnsignedInt now = TheGameLogic->getFrame();

@@ -63,6 +63,7 @@ void SubObjectsUpgradeModuleData::buildFieldParse(MultiIniFieldParse& p)
 	{
 		{ "ShowSubObjects", INI::parseAsciiStringVectorAppend, nullptr, offsetof( SubObjectsUpgradeModuleData, m_showSubObjectNames ) },
 		{ "HideSubObjects", INI::parseAsciiStringVectorAppend, nullptr, offsetof( SubObjectsUpgradeModuleData, m_hideSubObjectNames ) },
+		{ "FlashTime", INI::parseDurationUnsignedInt, nullptr, offsetof( SubObjectsUpgradeModuleData, m_flashTime ) },	// Tiberium Project
 		{ nullptr, nullptr, nullptr, 0 }
 	};
   p.add(dataFieldParse);
@@ -126,6 +127,9 @@ void SubObjectsUpgrade::upgradeImplementation()
 		{
 			draw->updateSubObjects();
 		}
+		// Tiberium Project @feature C&C4's upgrade flash as the parts show (drawn only)
+		if( data->m_flashTime > 0 )
+			draw->startUpgradeFlash( data->m_flashTime );
 	}
 }
 

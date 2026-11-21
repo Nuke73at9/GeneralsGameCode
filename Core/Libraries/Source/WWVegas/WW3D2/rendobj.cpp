@@ -175,6 +175,8 @@ RenderObjClass::RenderObjClass() :
 	ObjectScale(1.0),
 	ObjectColor(0),
 	DamageLook(0.0f),
+	BuffLook(),
+	FlashPct(1.0f),
 	CachedBoundingSphere(Vector3(0,0,0),1.0f),
 	CachedBoundingBox(Vector3(0,0,0),Vector3(1,1,1)),
 	IsTransformIdentity(false)
@@ -205,6 +207,8 @@ RenderObjClass::RenderObjClass(const RenderObjClass & src) :
 	ObjectScale(1.0),
 	ObjectColor(0),
 	DamageLook(0.0f),
+	BuffLook(),
+	FlashPct(1.0f),
 	CachedBoundingSphere(src.CachedBoundingSphere),
 	CachedBoundingBox(src.CachedBoundingBox),
 	IsTransformIdentity(src.IsTransformIdentity)

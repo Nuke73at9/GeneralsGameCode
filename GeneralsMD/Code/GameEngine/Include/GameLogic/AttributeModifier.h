@@ -41,6 +41,7 @@
 //     Buff            = DEFENSE_NEGATIVE
 //     ModelConditions = USER_1
 //     StackingLimit   = 1
+//     RenderBuff      = VEIN_DETONATION   ; its look (C&C4's RenderBuffEffectFlags): drawn, nothing else
 //   End
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -68,6 +69,19 @@ enum AttributeModifierBuff CPP_11(: Int)
 	MODIFIER_BUFF_COUNT
 };
 extern const char *const TheAttributeModifierBuffNames[];	///< for INI: NONE, OFFENSE_POSITIVE, ... (a list as a bit mask: 1 << buff)
+
+/// Tiberium Project @feature how a modifier looks on the object (C&C4's RenderBuffEffectFlags, drawn by renderers with its
+/// object effects): a bit mask of 1 << these
+enum AttributeModifierRenderBuff CPP_11(: Int)
+{
+	MODIFIER_RENDER_VEIN_DETONATION = 0,		///< Tiberium corrosion: a flat green
+	MODIFIER_RENDER_INCINERATOR,						///< a burning glow
+	MODIFIER_RENDER_MIRROR_COAT,						///< a mirror's chrome
+	MODIFIER_RENDER_PERSONAL_SHIELDS,				///< a shield's coat in the house colour
+	MODIFIER_RENDER_BERZERK,								///< (C&C4's effects draw nothing for it)
+	MODIFIER_RENDER_COUNT
+};
+extern const char *const TheAttributeModifierRenderBuffNames[];	///< for INI: VEIN_DETONATION, INCINERATOR, ...
 
 /// what a modifier multiplies
 enum AttributeModifierAttribute CPP_11(: Int)
@@ -117,6 +131,7 @@ public:
 	AttributeModifierBuff getBuff() const { return m_buff; }
 	const ModelConditionFlags &getModelConditions() const { return m_modelConditions; }
 	Int getStackingLimit() const { return m_stackingLimit; }
+	UnsignedInt getRenderBuff() const { return m_renderBuff; }	///< Tiberium Project: its looks, 1 << AttributeModifierRenderBuff
 	const FXList *getStartFX() const;
 
 	static const FieldParse *getFieldParse();
@@ -133,6 +148,7 @@ public:
 	ModelConditionFlags m_modelConditions;	///< shown while it lasts
 	Int m_stackingLimit;										///< from how many sources at once
 	AsciiString m_startFXName;							///< played on the object when it is put on
+	UnsignedInt m_renderBuff;								///< Tiberium Project: how it looks on the object (RenderBuff)
 };
 
 //-------------------------------------------------------------------------------------------------

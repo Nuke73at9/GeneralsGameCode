@@ -829,6 +829,14 @@ bool Begin(MeshClass* mesh, TextureClass* base, TextureClass* damageSheet, const
 	while (top->Get_Container() != nullptr)
 		top = top->Get_Container();
 	draw.houseColor = top->Get_ObjectColor() & 0x00FFFFFF;
+	// Tiberium Project @feature the object's buff looks and upgrade flash (W3DModelDraw sets them on its model)
+	const float* buff = top->Get_Buff_Look();
+	for (int k = 0; k < 4; ++k)
+	{
+		draw.buffA[k] = buff[k];
+		draw.buffB[k] = buff[4 + k];
+	}
+	draw.flashPct = top->Get_Flash_Pct();
 	if (Sage2SceneClass::Get_Point_Light_Count() > 0)
 	{
 		const SphereClass& bounds = top->Get_Bounding_Sphere();
