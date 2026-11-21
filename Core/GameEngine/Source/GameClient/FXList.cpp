@@ -565,7 +565,7 @@ namespace
 	};
 
 	std::vector<DynamicDecal> s_dynamicDecals;
-	const size_t DYNAMIC_DECALS_MOST = 64;
+	const size_t DYNAMIC_DECALS_MOST = 128;	///< (a walker's footprints last seconds each: several walkers' fit)
 
 	Real dynamicDecalOpacity( const DynamicDecalSpec& d, UnsignedInt age )
 	{
