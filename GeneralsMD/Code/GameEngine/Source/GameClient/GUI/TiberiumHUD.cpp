@@ -31,6 +31,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
 #include "GameClient/TiberiumHUD.h"
+#include "GameClient/TiberiumMusic.h"
 #include "GameClient/TiberiumZoneView.h"
 
 #include "Common/GameUtility.h"
@@ -67,6 +68,7 @@
 #include "GameLogic/Module/ShieldSphereUpdate.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
 
+#include <ctype.h>
 #include <map>
 #include <vector>
 
@@ -196,6 +198,19 @@ namespace
 	UnsignedInt s_powerListFrame = 0xFFFFFFFFu;
 	Int s_hoverPower = -1;
 	Bool s_powersHidden = FALSE;		///< the column's Powers button hides the bar
+
+	/// Tiberium Project @feature the jukebox (top right): C&C4's music as it follows the game, the tracks it can
+	/// play now (the theme's calm ones, the fight set's, the winning one), a pick of the player's, the theme
+	enum
+	{
+		JUKEBOX_HEADER = 1000,
+		JUKEBOX_NEXT,
+		JUKEBOX_THEME,
+		JUKEBOX_HOLD
+	};
+	GameWindow *s_jukebox = nullptr;
+	Bool s_jukeboxOpen = FALSE;
+	Int s_hoverJukebox = -1;				///< a row of the list (its entry), or one of the parts above
 
 	//-----------------------------------------------------------------------------------------------
 	Player *localPlayer()
@@ -1565,6 +1580,231 @@ namespace
 	}
 
 	//-----------------------------------------------------------------------------------------------
+	//-----------------------------------------------------------------------------------------------
+	/** the jukebox's rows: a group's title, then its tracks */
+	struct JukeboxRow
+	{
+		Int entry;		///< the entry, or -1 for the group's title
+		Int group;
+	};
+
+	struct JukeboxLayout
+	{
+		Int x, y, w, h, pad, line, headerH, listY, footerY, buttonW;
+		std::vector<JukeboxRow> rows;
+	};
+
+	void jukeboxLayout( const HUDLayout &L, const std::vector<TiberiumMusic::Entry> &entries, JukeboxLayout *J )
+	{
+		J->w = max( 180, (Int)( 205.0f * L.b ) );
+		J->pad = max( 3, (Int)( 4.0f * L.b ) );
+		J->line = max( 13, (Int)( 13.5f * L.b ) );
+		J->headerH = J->line * 2 + J->pad;
+		const Int margin = max( 4, (Int)( 6.0f * L.b ) );
+		J->x = L.sw - J->w - margin;
+		J->y = margin + J->line + J->pad;		// (under the game's clock, top right)
+		J->rows.clear();
+		if( s_jukeboxOpen )
+		{
+			Int group = -1;
+			for( size_t i = 0; i < entries.size(); ++i )
+			{
+				if( entries[i].group != group )
+				{
+					group = entries[i].group;
+					JukeboxRow title = { -1, group };
+					J->rows.push_back( title );
+				}
+				JukeboxRow row = { (Int)i, group };
+				J->rows.push_back( row );
+			}
+		}
+		J->listY = J->y + J->headerH + J->pad;
+		J->footerY = J->listY + (Int)J->rows.size() * J->line + ( J->rows.empty() ? 0 : J->pad );
+		J->buttonW = ( J->w - J->pad * 4 ) / 3;
+		J->h = s_jukeboxOpen ? J->footerY - J->y + J->line + J->pad * 2 : J->headerH + J->pad;
+	}
+
+	/// "PanAmerica" as "Pan America"
+	UnicodeString themeText( const AsciiString &theme )
+	{
+		UnicodeString out;
+		const char *t = theme.str();
+		for( Int i = 0; t[i] != '\0'; ++i )
+		{
+			if( i > 0 && isupper( (unsigned char)t[i] ) && islower( (unsigned char)t[i - 1] ) )
+				out.concat( L' ' );
+			out.concat( (WideChar)t[i] );
+		}
+		return out;
+	}
+
+	/// what is under the mouse: a row's entry, a part (JUKEBOX_...), or -1
+	Int jukeboxHit( const JukeboxLayout &J, Int mx, Int my )
+	{
+		if( mx < J.x || mx >= J.x + J.w || my < J.y || my >= J.y + J.h )
+			return -1;
+		if( my < J.y + J.headerH )
+			return JUKEBOX_HEADER;
+		if( !s_jukeboxOpen )
+			return -1;
+		if( my >= J.listY && my < J.listY + (Int)J.rows.size() * J.line )
+		{
+			const JukeboxRow &row = J.rows[ ( my - J.listY ) / J.line ];
+			return row.entry;
+		}
+		if( my >= J.footerY && my < J.footerY + J.line + J.pad )
+		{
+			const Int k = ( mx - J.x - J.pad ) / ( J.buttonW + J.pad );
+			return k == 0 ? JUKEBOX_NEXT : ( k == 1 ? JUKEBOX_THEME : ( k == 2 ? JUKEBOX_HOLD : -1 ) );
+		}
+		return -1;
+	}
+
+	void pressJukebox( Int part, const std::vector<TiberiumMusic::Entry> &entries )
+	{
+		if( part == JUKEBOX_HEADER )
+			s_jukeboxOpen = !s_jukeboxOpen;
+		else if( part == JUKEBOX_NEXT )
+			TiberiumMusic::next();
+		else if( part == JUKEBOX_THEME )
+			TiberiumMusic::nextTheme();
+		else if( part == JUKEBOX_HOLD )
+			TiberiumMusic::setHeld( !TiberiumMusic::isHeld() );
+		else if( part >= 0 && part < (Int)entries.size() )
+			TiberiumMusic::pick( entries[part].track );
+	}
+
+	//-----------------------------------------------------------------------------------------------
+	/** the jukebox: what the music follows (the state, the theme), the track playing; open, the tracks it can
+		play now by group, the one playing lit, and Next, the theme and Hold */
+	void drawJukebox( GameWindow *, WinInstanceData * )
+	{
+		if( TheDisplay == nullptr || !TiberiumMusic::isActive() )
+			return;
+		HUDLayout L;
+		computeLayout( &L );
+		ensureStrings( L );
+		Art a;
+		getArt( &a );
+		std::vector<TiberiumMusic::Entry> entries;
+		TiberiumMusic::getEntries( entries );
+		JukeboxLayout J;
+		jukeboxLayout( L, entries, &J );
+		TheDisplay->drawFillRect( J.x, J.y, J.w, J.h, GameMakeColor( 2, 8, 14, 205 ) );
+		TheDisplay->drawOpenRect( J.x, J.y, J.w, J.h, 1.0f, s_hoverJukebox == JUKEBOX_HEADER ? a.accent : a.accentDim );
+
+		// the header: Music, what it follows, and the open or shut mark; the track playing under it
+		const Int state = TiberiumMusic::getState();
+		const Int group = TiberiumMusic::getGroupOf( state );
+		UnicodeString follows = TiberiumMusic::getGroupLabel( group );
+		if( group == TiberiumMusic::GROUP_CALM )
+		{
+			follows.concat( L", " );
+			follows.concat( themeText( TiberiumMusic::getTheme() ) );
+		}
+		else if( group == TiberiumMusic::GROUP_FIGHT )
+		{
+			UnicodeString set;
+			set.format( L", set %d", (int)TiberiumMusic::getFightSet() );
+			follows.concat( set );
+		}
+		drawText( s_text, plain( "MUSIC" ), J.x + J.pad, J.y + J.pad / 2, a.accent );
+		Int mw = 0, mh = 0;
+		s_text->getSize( &mw, &mh );
+		drawText( s_body, follows, J.x + J.pad * 3 + mw, J.y + J.pad / 2, a.text );
+		const UnicodeString mark = plain( s_jukeboxOpen ? "-" : "+" );
+		s_text->setText( mark );
+		Int kw = 0, kh = 0;
+		s_text->getSize( &kw, &kh );
+		drawText( s_text, mark, J.x + J.w - J.pad - kw, J.y + J.pad / 2, a.accent );
+		UnicodeString now = TiberiumMusic::getTrackLabel();
+		if( now.isEmpty() )
+			now = plain( "(silent)" );
+		const Bool held = TiberiumMusic::isHeld();
+		UnicodeString line2 = TiberiumMusic::getStateLabel( state );
+		line2.concat( L": " );
+		line2.concat( now );
+		if( held )
+			line2.concat( L" (held)" );
+		drawText( s_body, line2, J.x + J.pad, J.y + J.pad / 2 + J.line, a.textDim );
+
+		if( !s_jukeboxOpen )
+			return;
+		// the list
+		for( size_t r = 0; r < J.rows.size(); ++r )
+		{
+			const JukeboxRow &row = J.rows[r];
+			const Int y = J.listY + (Int)r * J.line;
+			if( row.entry < 0 )
+			{
+				UnicodeString title = TiberiumMusic::getGroupLabel( row.group );
+				if( row.group == TiberiumMusic::GROUP_CALM )
+				{
+					title.concat( L" (" );
+					title.concat( themeText( TiberiumMusic::getTheme() ) );
+					title.concat( TiberiumMusic::isThemeChosen() ? L")" : L", the map's)" );
+				}
+				drawText( s_text, title, J.x + J.pad, y, row.group == group ? a.accent : a.textDim );
+				continue;
+			}
+			const TiberiumMusic::Entry &e = entries[row.entry];
+			if( s_hoverJukebox == row.entry )
+				TheDisplay->drawFillRect( J.x + 1, y, J.w - 2, J.line, a.accentDim );
+			if( e.playing )
+				TheDisplay->drawFillRect( J.x + J.pad, y + J.line / 2 - 2, 4, 4, a.accent );
+			drawText( s_body, e.label, J.x + J.pad * 3, y, e.playing ? a.text : a.textDim );
+		}
+		// the buttons: Next, the theme, Hold
+		const char *const labels[3] = { "Next", "Theme", held ? "Follow" : "Hold" };
+		for( Int k = 0; k < 3; ++k )
+		{
+			const Int bx = J.x + J.pad + k * ( J.buttonW + J.pad ), by = J.footerY;
+			const Bool hover = s_hoverJukebox == JUKEBOX_NEXT + k;
+			TheDisplay->drawFillRect( bx, by, J.buttonW, J.line + J.pad, hover ? a.accentDim : GameMakeColor( 10, 20, 28, 220 ) );
+			TheDisplay->drawOpenRect( bx, by, J.buttonW, J.line + J.pad, 1.0f, hover ? a.accent : a.accentDim );
+			const UnicodeString label = plain( labels[k] );
+			s_text->setText( label );
+			Int tw = 0, th = 0;
+			s_text->getSize( &tw, &th );
+			drawText( s_text, label, bx + ( J.buttonW - tw ) / 2, by + ( J.line + J.pad - th ) / 2, a.text );
+		}
+	}
+
+	WindowMsgHandledType inputJukebox( GameWindow *, UnsignedInt msg, WindowMsgData mData1, WindowMsgData )
+	{
+		if( !TiberiumMusic::isActive() )
+			return MSG_IGNORED;
+		const Int mx = (Short)( mData1 & 0xFFFF ), my = (Short)( ( mData1 >> 16 ) & 0xFFFF );
+		HUDLayout L;
+		computeLayout( &L );
+		std::vector<TiberiumMusic::Entry> entries;
+		TiberiumMusic::getEntries( entries );
+		JukeboxLayout J;
+		jukeboxLayout( L, entries, &J );
+		const Int hit = jukeboxHit( J, mx, my );
+		switch( msg )
+		{
+			case GWM_MOUSE_POS:
+				s_hoverJukebox = hit;
+				return hit != -1 ? MSG_HANDLED : MSG_IGNORED;
+			case GWM_MOUSE_LEAVING:
+				s_hoverJukebox = -1;
+				return MSG_HANDLED;
+			case GWM_LEFT_UP:
+				if( hit == -1 )
+					return MSG_IGNORED;
+				pressJukebox( hit, entries );
+				return MSG_HANDLED;
+			case GWM_LEFT_DOWN:
+			case GWM_RIGHT_DOWN:
+			case GWM_RIGHT_UP:
+				return mx >= J.x && mx < J.x + J.w && my >= J.y && my < J.y + J.h ? MSG_HANDLED : MSG_IGNORED;
+			default:
+				return MSG_IGNORED;
+		}
+	}
+
 	WindowMsgHandledType inputColumn( GameWindow *, UnsignedInt msg, WindowMsgData mData1, WindowMsgData )
 	{
 		const Int mx = (Short)( mData1 & 0xFFFF ), my = (Short)( ( mData1 >> 16 ) & 0xFFFF );
@@ -1831,7 +2071,8 @@ void TiberiumHUD::update()
 		s_tier = makeWindow( L.tierX, L.tierY, L.tierW, L.tierH, drawTier, inputTier );
 		s_hold = TheWindowManager->winCreate( nullptr, WIN_STATUS_HIDDEN, 0, 0, 1, 1, nullptr, nullptr );
 		s_powers = makeWindow( 0, 0, 1, 1, drawPowers, inputPowers );
-		if( s_column == nullptr || s_panel == nullptr || s_tier == nullptr || s_hold == nullptr || s_powers == nullptr )
+		s_jukebox = makeWindow( 0, 0, 1, 1, drawJukebox, inputJukebox );
+		if( s_column == nullptr || s_panel == nullptr || s_tier == nullptr || s_hold == nullptr || s_powers == nullptr || s_jukebox == nullptr )
 		{
 			reset();
 			return;
@@ -1940,6 +2181,18 @@ void TiberiumHUD::update()
 			shortcut->winHide( TRUE );
 	}
 
+	// Tiberium Project @feature the jukebox, while C&C4's music has the game
+	const Bool music = TiberiumMusic::isActive();
+	if( music )
+	{
+		std::vector<TiberiumMusic::Entry> entries;
+		TiberiumMusic::getEntries( entries );
+		JukeboxLayout J;
+		jukeboxLayout( L, entries, &J );
+		fit( s_jukebox, J.x, J.y, J.w, J.h );
+	}
+	s_jukebox->winHide( !music || s_hidden );
+
 	placeTooltip( L );
 }
 
@@ -1961,9 +2214,12 @@ void TiberiumHUD::reset()
 			TheWindowManager->winDestroy( s_hold );
 		if( s_powers != nullptr )
 			TheWindowManager->winDestroy( s_powers );
+		if( s_jukebox != nullptr )
+			TheWindowManager->winDestroy( s_jukebox );
 	}
 	s_moved.clear();
-	s_column = s_panel = s_tier = s_hold = s_powers = nullptr;
+	s_column = s_panel = s_tier = s_hold = s_powers = s_jukebox = nullptr;
+	s_hoverJukebox = -1;
 	s_powerList.clear();
 	s_powerListFrame = 0xFFFFFFFFu;
 	s_hoverPower = -1;
@@ -2043,6 +2299,24 @@ Bool TiberiumHUD::testClickPart( const char *part, Int index, Bool right )
 		s_hoverStance = index >= 0 && index < STANCE_COUNT ? index : -1;
 		return TRUE;
 	}
+	if( strcmp( part, "jukebox" ) == 0 && TiberiumMusic::isActive() && index <= 3 )
+	{
+		// Tiberium Project @feature the jukebox: 0 its header (open or shut), 1 Next, 2 the theme, 3 Hold
+		std::vector<TiberiumMusic::Entry> entries;
+		TiberiumMusic::getEntries( entries );
+		pressJukebox( JUKEBOX_HEADER + index, entries );
+		return TRUE;
+	}
+	if( strcmp( part, "track" ) == 0 && TiberiumMusic::isActive() && s_jukeboxOpen )
+	{
+		// ... its index-th track (open)
+		std::vector<TiberiumMusic::Entry> entries;
+		TiberiumMusic::getEntries( entries );
+		if( index >= (Int)entries.size() )
+			return FALSE;
+		pressJukebox( index, entries );
+		return TRUE;
+	}
 	if( strcmp( part, "power" ) == 0 && powersWanted() )
 	{
 		// Tiberium Project @feature a click on the Powers bar's index-th power
@@ -2110,10 +2384,23 @@ void TiberiumHUD::describe( char *buffer, Int size )
 		snprintf( stances, sizeof( stances ), "; stances %s%s%s%s lit %d at %d,%d size %d", ( s_stanceMask & 1 ) ? "A" : "-", ( s_stanceMask & 2 ) ? "G" : "-",
 			( s_stanceMask & 4 ) ? "P" : "-", ( s_stanceMask & 8 ) ? "F" : "-", (int)s_stanceCommon, (int)sx, (int)sy, (int)ssize );
 	}
-	snprintf( buffer, size, "on%s; selected %d (%d kinds)%s%s%s%s; shield %s; row [%s]; slots [%s]; %s %d (next %d%%); radar at %d,%d; view %d high; powers %d (%d ready)%s, meter %d/%d",
+	// (Tiberium Project @feature the jukebox: where it is, open or not, its tracks, the one playing)
+	char jukebox[256] = "none";
+	if( TiberiumMusic::isActive() )
+	{
+		std::vector<TiberiumMusic::Entry> entries;
+		TiberiumMusic::getEntries( entries );
+		JukeboxLayout J;
+		jukeboxLayout( L, entries, &J );
+		AsciiString label;
+		label.translate( TiberiumMusic::getTrackLabel() );
+		snprintf( jukebox, sizeof( jukebox ), "%s at %d,%d size %dx%d, %d tracks, %d rows, playing %s",
+			s_jukeboxOpen ? "open" : "shut", (int)J.x, (int)J.y, (int)J.w, (int)J.h, (int)entries.size(), (int)J.rows.size(), label.str() );
+	}
+	snprintf( buffer, size, "on%s; selected %d (%d kinds)%s%s%s%s; shield %s; row [%s]; slots [%s]; %s %d (next %d%%); radar at %d,%d; view %d high; powers %d (%d ready)%s, meter %d/%d; jukebox %s",
 		s_hidden ? " (hidden)" : "", (int)s_selected, (int)s_groups.size(), obj != nullptr ? ": " : "",
 		obj != nullptr ? obj->getTemplate()->getName().str() : "", obj != nullptr && obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) ? " (being built)" : "", stances,
 		shield ? ( up ? "up" : "down" ) : "none", row.str(), slots.str(), isTier ? "tier" : "rank", (int)tier, progress >= 0.0f ? (int)( progress * 100.0f ) : 0,
 		(int)rx, (int)ry, TheTacticalView != nullptr ? (int)TheTacticalView->getHeight() : -1, (int)powers, (int)readyPowers,
-		s_powersHidden ? " (put away)" : "", me != nullptr ? (int)me->getSupportPoints() : 0, me != nullptr ? (int)me->getSupportPointsMax() : 0 );
+		s_powersHidden ? " (put away)" : "", me != nullptr ? (int)me->getSupportPoints() : 0, me != nullptr ? (int)me->getSupportPointsMax() : 0, jukebox );
 }

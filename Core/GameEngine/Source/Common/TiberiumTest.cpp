@@ -83,6 +83,7 @@
 #include "Common/Science.h"
 #include "GameClient/AbramSpawnMenu.h"
 #include "GameClient/AbramTeamMenu.h"
+#include "GameClient/TiberiumMusic.h"
 #include "GameClient/TiberiumMenu.h"
 #include "GameClient/TiberiumSettings.h"
 #include "GameClient/TiberiumSkirmish.h"
@@ -1979,10 +1980,43 @@ void TiberiumTest::update()
 			Bool took = FALSE;
 			if ( clicked )
 				took = TiberiumHUD::testClickPart( f[0].c_str(), f.size() > 1 ? atoi( f[1].c_str() ) : 0, f.size() > 2 && f[2] == "right" );
-			char what[640];
+			char what[1024];
 			TiberiumHUD::describe( what, sizeof( what ) );
 			log( "frame %d: ui: hud%s%s%s: %s", (int)s_frame, clicked ? " click " : "", clicked ? step.arg.c_str() : "",
 				clicked ? ( took ? " (taken)" : " (missed)" ) : "", what );
+		}
+		else if ( step.action == "music" )
+		{
+			// Tiberium Project @feature C&C4's music: what it follows and plays; with "theme" the jukebox's next theme,
+			// "next" its next track, "pick,N" its N-th track, "hold,1|0" held or following the game
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			if ( !f.empty() && f[0] == "theme" )
+				TiberiumMusic::nextTheme();
+			else if ( !f.empty() && f[0] == "next" )
+				TiberiumMusic::next();
+			else if ( f.size() >= 2 && f[0] == "pick" )
+			{
+				std::vector<TiberiumMusic::Entry> entries;
+				TiberiumMusic::getEntries( entries );
+				const Int n = atoi( f[1].c_str() );
+				if ( n >= 0 && n < (Int)entries.size() )
+					TiberiumMusic::pick( entries[n].track );
+			}
+			else if ( f.size() >= 2 && f[0] == "hold" )
+				TiberiumMusic::setHeld( f[1] == "1" );
+			char what[512];
+			TiberiumMusic::describe( what, sizeof( what ) );
+			log( "frame %d: music: %s", (int)s_frame, what );
+			std::vector<TiberiumMusic::Entry> entries;
+			TiberiumMusic::getEntries( entries );
+			for ( size_t i = 0; i < entries.size(); ++i )
+			{
+				AsciiString label, group;
+				label.translate( entries[i].label );
+				group.translate( TiberiumMusic::getGroupLabel( entries[i].group ) );
+				log( "frame %d: music: jukebox %d: %s %s \"%s\"%s", (int)s_frame, (int)i, group.str(), entries[i].track.str(), label.str(),
+					entries[i].playing ? " (playing)" : "" );
+			}
 		}
 #if RTS_ZEROHOUR
 		else if ( step.action == "zones" )
