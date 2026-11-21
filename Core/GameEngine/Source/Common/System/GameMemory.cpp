@@ -3452,10 +3452,19 @@ void operator delete[](void * p, const char *, int)
 #include <new>
 #include <cstdlib>
 
+// Tiberium Project @bugfix posix_memalign refuses an alignment under a pointer's size (EINVAL), and a library
+// may ask for one: LLVM 20's allocate_buffer does (Mesa's Lavapipe, while it makes its device), and its
+// "Buffer allocation failed" stopped the game. Such an alignment is met by a pointer's.
+static size_t alignmentForPosix(std::align_val_t alignment)
+{
+	const size_t a = static_cast<size_t>(alignment);
+	return a < sizeof(void *) ? sizeof(void *) : a;
+}
+
 void *operator new(size_t size, std::align_val_t alignment)
 {
 	void *p = nullptr;
-	if (::posix_memalign(&p, static_cast<size_t>(alignment), size) != 0)
+	if (::posix_memalign(&p, alignmentForPosix(alignment), size) != 0)
 		throw std::bad_alloc();
 	return p;
 }
@@ -3463,7 +3472,7 @@ void *operator new(size_t size, std::align_val_t alignment)
 void *operator new[](size_t size, std::align_val_t alignment)
 {
 	void *p = nullptr;
-	if (::posix_memalign(&p, static_cast<size_t>(alignment), size) != 0)
+	if (::posix_memalign(&p, alignmentForPosix(alignment), size) != 0)
 		throw std::bad_alloc();
 	return p;
 }

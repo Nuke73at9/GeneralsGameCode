@@ -315,10 +315,14 @@ void StdLocalFileSystem::getFileListInDirectory(const AsciiString& currentDirect
 		std::string fileExtStr = iter->path().extension().string();
 		// GeneralsX @bugfix felipebraz 16/09/2026 Case-insensitive extension comparison for Linux (e.g. .BIG vs .big)
 #ifdef _WIN32
-		const Bool extMatches = (_stricmp(fileExtStr.c_str(), searchExtStr.c_str()) == 0);
+		Bool extMatches = (_stricmp(fileExtStr.c_str(), searchExtStr.c_str()) == 0);
 #else
-		const Bool extMatches = (strcasecmp(fileExtStr.c_str(), searchExtStr.c_str()) == 0);
+		Bool extMatches = (strcasecmp(fileExtStr.c_str(), searchExtStr.c_str()) == 0);
 #endif
+		// Tiberium Project @bugfix "*" (and "*.*") is every file, as Win32's FindFirstFile has it: the mod folder's
+		// archives are listed so, whatever their extension, and none was found here (the extension of "*" is none)
+		if (searchName == "*" || searchName == "*.*")
+			extMatches = TRUE;
 		if (!iter->is_directory() && extMatches &&
 			(strcmp(filenameStr.c_str(), ".") != 0 && strcmp(filenameStr.c_str(), "..") != 0)) {
 			// if we haven't already, add this filename to the list.

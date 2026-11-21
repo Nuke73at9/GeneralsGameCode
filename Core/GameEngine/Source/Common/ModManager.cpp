@@ -22,6 +22,12 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifndef _WIN32
+#include <filesystem>
+#include <string>
+#include <system_error>
+#endif
+
 int ModManager::s_modCount = 0;
 char ModManager::s_modNames[MAX_MODS][NAME_SIZE] = { { 0 } };
 char ModManager::s_modFolders[MAX_MODS][260] = { { 0 } };
@@ -30,6 +36,7 @@ char ModManager::s_modsRoot[260] = { 0 };
 namespace
 {
 
+#ifdef _WIN32
 // Counts the game archives in a folder and its subfolders, up to a few levels deep.
 int countArchives(const char* folder, int depth)
 {
@@ -105,8 +112,78 @@ bool findFirstFile(const char* folder, const char* wildcard, char* path, unsigne
 	return found;
 }
 
+#else
+
+// Tiberium Project @bugfix the mods' folders listed through std::filesystem where there is no Win32
+// (the Linux build): the same archives, previews and descriptions, found by the same rules
+const char PATH_SEPARATOR = '/';
+
+bool matchesWildcard(const char* name, const char* wildcard)
+{
+	// "*.ext" (any name with that extension) or an exact name, ignoring case
+	if (wildcard[0] == '*')
+	{
+		const size_t nameLen = strlen(name);
+		const size_t tailLen = strlen(wildcard + 1);
+		return nameLen >= tailLen && _stricmp(name + nameLen - tailLen, wildcard + 1) == 0;
+	}
+	return _stricmp(name, wildcard) == 0;
+}
+
+// Counts the game archives in a folder and its subfolders, up to a few levels deep.
+int countArchives(const char* folder, int depth)
+{
+	std::error_code error;
+	int count = 0;
+	for (std::filesystem::directory_iterator it(folder, error), end; !error && it != end; it.increment(error))
+	{
+		char path[260];
+		_snprintf(path, sizeof(path), "%s%s", folder, it->path().filename().string().c_str());
+		path[sizeof(path) - 1] = '\0';
+		if (it->is_directory(error))
+		{
+			if (depth < 3)
+			{
+				const char separator[2] = { PATH_SEPARATOR, '\0' };
+				strncat(path, separator, sizeof(path) - strlen(path) - 1);
+				count += countArchives(path, depth + 1);
+			}
+		}
+		else if (ModManager::isBigArchive(path))
+		{
+			++count;
+		}
+	}
+	return count;
+}
+
+bool folderContainsBigFiles(const char* folder)
+{
+	return countArchives(folder, 0) > 0;
+}
+
+// Finds the first file matching the wildcard in the folder. Writes its full path.
+bool findFirstFile(const char* folder, const char* wildcard, char* path, unsigned int pathSize)
+{
+	std::error_code error;
+	for (std::filesystem::directory_iterator it(folder, error), end; !error && it != end; it.increment(error))
+	{
+		const std::string name = it->path().filename().string();
+		if (!it->is_directory(error) && matchesWildcard(name.c_str(), wildcard))
+		{
+			_snprintf(path, pathSize, "%s%s", folder, name.c_str());
+			path[pathSize - 1] = '\0';
+			return true;
+		}
+	}
+	return false;
+}
+
+#endif
+
 } // namespace
 
+#ifdef _WIN32
 void ModManager::scan()
 {
 	s_modCount = 0;
@@ -169,6 +246,55 @@ void ModManager::scan()
 
 	FindClose(find);
 }
+#else
+void ModManager::scan()
+{
+	s_modCount = 0;
+	s_modsRoot[0] = '\0';
+
+	// The Mods folder sits next to the game executable.
+	char exePath[260];
+	if (!GetModuleFileName(nullptr, exePath, sizeof(exePath)))
+		return;
+	char* lastSlash = strrchr(exePath, PATH_SEPARATOR);
+	if (lastSlash == nullptr)
+		return;
+	lastSlash[1] = '\0';
+
+	_snprintf(s_modsRoot, sizeof(s_modsRoot), "%sMods%c", exePath, PATH_SEPARATOR);
+	s_modsRoot[sizeof(s_modsRoot) - 1] = '\0';
+
+	std::error_code error;
+	std::filesystem::create_directories(s_modsRoot, error);
+
+	for (std::filesystem::directory_iterator it(s_modsRoot, error), end; !error && it != end && s_modCount < MAX_MODS; it.increment(error))
+	{
+		const std::string name = it->path().filename().string();
+		if (!it->is_directory(error) || name.size() >= NAME_SIZE)
+			continue;
+
+		char folder[260];
+		_snprintf(folder, sizeof(folder), "%s%s%c", s_modsRoot, name.c_str(), PATH_SEPARATOR);
+		folder[sizeof(folder) - 1] = '\0';
+
+		if (!folderContainsBigFiles(folder))
+			continue;
+
+		// Insert sorted by name, so the list order is stable.
+		int insertAt = s_modCount;
+		while (insertAt > 0 && _stricmp(s_modNames[insertAt - 1], name.c_str()) > 0)
+		{
+			strcpy(s_modNames[insertAt], s_modNames[insertAt - 1]);
+			strcpy(s_modFolders[insertAt], s_modFolders[insertAt - 1]);
+			--insertAt;
+		}
+		strcpy(s_modNames[insertAt], name.c_str());
+		strcpy(s_modFolders[insertAt], folder);
+		++s_modCount;
+	}
+}
+
+#endif
 
 int ModManager::getModCount()
 {
@@ -254,6 +380,7 @@ bool ModManager::readDescription(int index, char* text, unsigned int textSize)
 		&& !findFirstFile(s_modFolders[index], "readme.txt", path, sizeof(path)))
 		return false;
 
+#ifdef _WIN32
 	HANDLE file = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
 	if (file == INVALID_HANDLE_VALUE)
 		return false;
@@ -263,6 +390,13 @@ bool ModManager::readDescription(int index, char* text, unsigned int textSize)
 	CloseHandle(file);
 	if (!ok)
 		return false;
+#else
+	FILE* file = fopen(path, "rb");
+	if (file == nullptr)
+		return false;
+	const size_t bytesRead = fread(text, 1, textSize - 1, file);
+	fclose(file);
+#endif
 
 	text[bytesRead] = '\0';
 

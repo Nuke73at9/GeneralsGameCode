@@ -21,6 +21,8 @@
 
 #include <string.h>
 
+#ifdef _WIN32
+
 // Older Windows SDKs (Visual C++ 6) do not define these.
 #ifndef KEY_WOW64_64KEY
 #define KEY_WOW64_64KEY 0x0100
@@ -355,3 +357,62 @@ const wchar_t* GameSwitcher::getButtonLabel()
 {
 	return SwitchButtonLabel;
 }
+
+#else // !_WIN32
+
+// Tiberium Project @bugfix where there is no Win32 (the Linux build) there is no registry to find the other
+// game by and no CreateProcess to start it: the switch and the restart with a mod are not offered there
+// (the main menu leaves its button out; a mod is loaded with -mod).
+
+bool GameSwitcher::s_switchRequested = false;
+char GameSwitcher::s_exePath[MAX_PATH] = { 0 };
+char GameSwitcher::s_workingDir[MAX_PATH] = { 0 };
+char GameSwitcher::s_arguments[MAX_PATH * 2] = { 0 };
+
+bool GameSwitcher::findOtherGame(char* exePath, unsigned int exePathSize, char* workingDir, unsigned int workingDirSize)
+{
+	if (exePathSize > 0)
+		exePath[0] = '\0';
+	if (workingDirSize > 0)
+		workingDir[0] = '\0';
+	return false;
+}
+
+bool GameSwitcher::isOtherGameAvailable()
+{
+	return false;
+}
+
+bool GameSwitcher::requestSwitch()
+{
+	s_switchRequested = false;
+	return false;
+}
+
+bool GameSwitcher::requestRestartWithMod(const char*)
+{
+	s_switchRequested = false;
+	return false;
+}
+
+bool GameSwitcher::isSwitchRequested()
+{
+	return s_switchRequested;
+}
+
+bool GameSwitcher::launchRequested()
+{
+	s_switchRequested = false;
+	return false;
+}
+
+const wchar_t* GameSwitcher::getButtonLabel()
+{
+#if RTS_ZEROHOUR
+	return L"Switch to Generals";
+#else
+	return L"Switch to Zero Hour";
+#endif
+}
+
+#endif // _WIN32
