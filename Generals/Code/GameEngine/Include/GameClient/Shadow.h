@@ -104,6 +104,9 @@ public:
 		Bool isInvisibleEnabled() {return m_isInvisibleEnabled;}
 		virtual void release()=0;	///<release this shadow from suitable manager.
 		void setOpacity(Int value); ///<adjust opacity of decal/shadow
+		/// Tiberium Project @feature the decal's colour as drawn (0xAARRGGBB) set directly: an additive decal's in its own
+		/// colour (setOpacity and setColor put an additive decal's red and green in its blue: kept for Zero Hour's own)
+		void setDiffuseDirect(UnsignedInt diffuse) { m_diffuse = diffuse; }
 		void setColor(Color value);///<adjust ARGB color of decal/shadow
 		void setAngle(Real angle);		///<adjust orientation around z-axis
 		void setPosition(Real x, Real y, Real z);

@@ -139,6 +139,11 @@ public:
 	}
 
 	/// inline convenience method to avoid having to check for null.
+	/// Tiberium Project @feature the DynamicDecal nuggets' decals on the ground: their opacity over time, and gone
+	/// after their lifetime (GameClient::update), all gone (GameClient::reset)
+	static void updateDynamicDecals();
+	static void resetDynamicDecals();
+
 	inline static void doFXPos(const FXList* fx, const Coord3D *primary, const Matrix3D* primaryMtx = nullptr, const Real primarySpeed = 0.0f, const Coord3D *secondary = nullptr, const Real overrideRadius = 0.0f)
 	{
 		if (fx) fx->doFXPos(primary, primaryMtx, primarySpeed, secondary, overrideRadius);

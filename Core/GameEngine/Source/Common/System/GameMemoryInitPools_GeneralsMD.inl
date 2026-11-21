@@ -522,6 +522,7 @@ static PoolSizeRec PoolSizes[] =
 	{ "LightPulseFXNugget", 68, 32 },
 	{ "ViewShakeFXNugget", 140, 32 },
 	{ "TerrainScorchFXNugget", 48, 32 },
+	{ "DynamicDecalFXNugget", 32, 32 },	// Tiberium Project
 	{ "ParticleSystemFXNugget", 832, 32 },
 	{ "FXListAtBonePosFXNugget", 32, 32 },
 	{ "Squad", 256, 32 },

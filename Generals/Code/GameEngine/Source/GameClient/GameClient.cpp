@@ -30,6 +30,7 @@
 // SYSTEM INCLUDES ////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 #include "GameClient/GameClient.h"
+#include "GameClient/FXList.h"	// Tiberium Project (the dynamic decals)
 
 // USER INCLUDES //////////////////////////////////////////////////////////////
 #include "Common/ActionManager.h"
@@ -434,6 +435,7 @@ void GameClient::init()
 void GameClient::reset()
 {
 	Drawable *draw, *nextDraw;
+	FXList::resetDynamicDecals();	// Tiberium Project (before the decals' manager is reset)
 	m_drawableHash.clear();
 #if USING_STLPORT
 	m_drawableHash.resize(DRAWABLE_HASH_SIZE);
@@ -685,6 +687,7 @@ void GameClient::update()
 		TheParticleSystemManager->setLocalPlayerIndex(localPlayerIndex);
 		TheParticleSystemManager->UPDATE();
 	}
+	FXList::updateDynamicDecals();	// Tiberium Project
 
 	{
 		USE_PERF_TIMER(GameClient_draw)

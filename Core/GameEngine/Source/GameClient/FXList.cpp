@@ -41,6 +41,7 @@
 #include "Common/RandomValue.h"
 #include "Common/ThingTemplate.h"
 #include "Common/ThingFactory.h"
+#include "Common/TiberiumTest.h"	// Tiberium Project (the test: the dynamic decals)
 
 #include "GameLogic/Object.h"
 #include "GameLogic/GameLogic.h"
@@ -49,6 +50,7 @@
 #include "GameClient/GameClient.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/ParticleSys.h"
+#include "GameClient/Shadow.h"	// Tiberium Project (the dynamic decals)
 #include "GameLogic/PartitionManager.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -538,6 +540,187 @@ private:
 EMPTY_DTOR(TerrainScorchFXNugget)
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature C&C4's DynamicDecal: a texture laid on the ground for a time (its scorch and blast marks,
+// the Ion Cannon's glow), its opacity from OpacityStart to OpacityPeak over FadeIn, held for PeakTime, to OpacityEnd
+// over FadeOut, after StartingDelay; gone after Lifetime (counted from the effect). Drawn as the engine's decals
+// (alpha blended, or added with Additive), on the logic's time (still while paused). Drawing only.
+namespace
+{
+	struct DynamicDecalSpec
+	{
+		AsciiString texture;
+		Real size;
+		Bool additive;
+		Real opacityStart, opacityPeak, opacityEnd;
+		UnsignedInt fadeIn, peakTime, fadeOut, delay, lifetime;
+	};
+
+	struct DynamicDecal
+	{
+		const DynamicDecalSpec* spec;
+		Coord3D pos;
+		UnsignedInt start;			///< the logic frame of the effect
+		Shadow* decal;					///< made when its delay is over
+		Real angle;
+	};
+
+	std::vector<DynamicDecal> s_dynamicDecals;
+	const size_t DYNAMIC_DECALS_MOST = 64;
+
+	Real dynamicDecalOpacity( const DynamicDecalSpec& d, UnsignedInt age )
+	{
+		if( age < d.fadeIn )
+			return d.opacityStart + ( d.opacityPeak - d.opacityStart ) * ( (Real)age / (Real)d.fadeIn );
+		age -= d.fadeIn;
+		if( age < d.peakTime )
+			return d.opacityPeak;
+		age -= d.peakTime;
+		if( age < d.fadeOut )
+			return d.opacityPeak + ( d.opacityEnd - d.opacityPeak ) * ( (Real)age / (Real)d.fadeOut );
+		return d.opacityEnd;
+	}
+
+	void releaseDynamicDecal( DynamicDecal& d )
+	{
+		if( d.decal != nullptr )
+			d.decal->release();
+		d.decal = nullptr;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void FXList::updateDynamicDecals()
+{
+	if( s_dynamicDecals.empty() || TheGameLogic == nullptr )
+		return;
+	const UnsignedInt now = TheGameLogic->getFrame();
+	for( size_t i = 0; i < s_dynamicDecals.size(); )
+	{
+		DynamicDecal& d = s_dynamicDecals[i];
+		const DynamicDecalSpec& spec = *d.spec;
+		const UnsignedInt age = now >= d.start ? now - d.start : 0;
+		if( age >= spec.lifetime )
+		{
+			if( TiberiumTest::isActive() )
+				TiberiumTest::log( "frame %d: dynamic decal %s gone", (int)now, spec.texture.str() );
+			releaseDynamicDecal( d );
+			s_dynamicDecals.erase( s_dynamicDecals.begin() + i );
+			continue;
+		}
+		if( age >= spec.delay )
+		{
+			if( d.decal == nullptr && TheProjectedShadowManager != nullptr )
+			{
+				Shadow::ShadowTypeInfo info;
+				info.allowUpdates = FALSE;
+				info.allowWorldAlign = TRUE;
+				info.m_type = spec.additive ? SHADOW_ADDITIVE_DECAL : SHADOW_ALPHA_DECAL;
+				strlcpy( info.m_ShadowName, spec.texture.str(), ARRAY_SIZE( info.m_ShadowName ) );
+				info.m_sizeX = spec.size;
+				info.m_sizeY = spec.size;
+				d.decal = TheProjectedShadowManager->addDecal( &info );
+				if( d.decal != nullptr )
+				{
+					d.decal->setAngle( d.angle );
+					d.decal->setPosition( d.pos.x, d.pos.y, d.pos.z );
+				}
+				if( TiberiumTest::isActive() )
+					TiberiumTest::log( "frame %d: dynamic decal %s %s at %.0f %.0f, %.0f across", (int)now, spec.texture.str(),
+						d.decal != nullptr ? "laid" : "not laid", d.pos.x, d.pos.y, spec.size );
+			}
+			if( d.decal != nullptr )
+			{
+				Real o = dynamicDecalOpacity( spec, age - spec.delay );
+				o = o < 0.0f ? 0.0f : ( o > 1.0f ? 1.0f : o );
+				const UnsignedInt v = (UnsignedInt)REAL_TO_INT( o * 255.0f );
+				// white, at the opacity: alpha for an alpha-blended decal, brightness for an added one
+				d.decal->setDiffuseDirect( spec.additive ? ( 0xFF000000u | ( v << 16 ) | ( v << 8 ) | v ) : ( ( v << 24 ) | 0x00FFFFFFu ) );
+			}
+		}
+		++i;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void FXList::resetDynamicDecals()
+{
+	for( size_t i = 0; i < s_dynamicDecals.size(); ++i )
+		releaseDynamicDecal( s_dynamicDecals[i] );
+	s_dynamicDecals.clear();
+}
+
+//-------------------------------------------------------------------------------------------------
+class DynamicDecalFXNugget : public FXNugget
+{
+	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(DynamicDecalFXNugget, "DynamicDecalFXNugget")
+public:
+
+	DynamicDecalFXNugget() : m_onlyIfOnLand(FALSE)
+	{
+		m_spec.size = 50.0f;
+		m_spec.additive = FALSE;
+		m_spec.opacityStart = 0.0f;
+		m_spec.opacityPeak = 1.0f;
+		m_spec.opacityEnd = 0.0f;
+		m_spec.fadeIn = 0;
+		m_spec.peakTime = 0;
+		m_spec.fadeOut = 0;
+		m_spec.delay = 0;
+		m_spec.lifetime = LOGICFRAMES_PER_SECOND * 10;
+	}
+
+	virtual void doFXPos(const Coord3D *primary, const Matrix3D* /*primaryMtx*/, const Real /*primarySpeed*/, const Coord3D * /*secondary*/, const Real /*overrideRadius*/ ) const override
+	{
+		if (primary == nullptr || m_spec.texture.isEmpty() || TheGameLogic == nullptr)
+			return;
+		if (m_onlyIfOnLand && TheTerrainLogic != nullptr && TheTerrainLogic->isUnderwater(primary->x, primary->y))
+			return;
+		if (s_dynamicDecals.size() >= DYNAMIC_DECALS_MOST)
+		{
+			releaseDynamicDecal( s_dynamicDecals.front() );
+			s_dynamicDecals.erase( s_dynamicDecals.begin() );
+		}
+		DynamicDecal d;
+		d.spec = &m_spec;
+		d.pos = *primary;
+		d.start = TheGameLogic->getFrame();
+		d.decal = nullptr;
+		d.angle = GameClientRandomValueReal( 0.0f, 2.0f * PI );	// each its own turn (inferred)
+		s_dynamicDecals.push_back( d );
+		FXList::updateDynamicDecals();
+	}
+
+	static void parse(INI *ini, void *instance, void* /*store*/, const void* /*userData*/)
+	{
+		static const FieldParse myFieldParse[] =
+		{
+			{ "Texture",				INI::parseAsciiString,					nullptr, offsetof( DynamicDecalFXNugget, m_spec ) + offsetof( DynamicDecalSpec, texture ) },
+			{ "Size",						INI::parseReal,									nullptr, offsetof( DynamicDecalFXNugget, m_spec ) + offsetof( DynamicDecalSpec, size ) },
+			{ "Additive",				INI::parseBool,									nullptr, offsetof( DynamicDecalFXNugget, m_spec ) + offsetof( DynamicDecalSpec, additive ) },
+			{ "OpacityStart",		INI::parsePercentToReal,				nullptr, offsetof( DynamicDecalFXNugget, m_spec ) + offsetof( DynamicDecalSpec, opacityStart ) },
+			{ "OpacityPeak",		INI::parsePercentToReal,				nullptr, offsetof( DynamicDecalFXNugget, m_spec ) + offsetof( DynamicDecalSpec, opacityPeak ) },
+			{ "OpacityEnd",			INI::parsePercentToReal,				nullptr, offsetof( DynamicDecalFXNugget, m_spec ) + offsetof( DynamicDecalSpec, opacityEnd ) },
+			{ "FadeIn",					INI::parseDurationUnsignedInt,	nullptr, offsetof( DynamicDecalFXNugget, m_spec ) + offsetof( DynamicDecalSpec, fadeIn ) },
+			{ "PeakTime",				INI::parseDurationUnsignedInt,	nullptr, offsetof( DynamicDecalFXNugget, m_spec ) + offsetof( DynamicDecalSpec, peakTime ) },
+			{ "FadeOut",				INI::parseDurationUnsignedInt,	nullptr, offsetof( DynamicDecalFXNugget, m_spec ) + offsetof( DynamicDecalSpec, fadeOut ) },
+			{ "StartingDelay",	INI::parseDurationUnsignedInt,	nullptr, offsetof( DynamicDecalFXNugget, m_spec ) + offsetof( DynamicDecalSpec, delay ) },
+			{ "Lifetime",				INI::parseDurationUnsignedInt,	nullptr, offsetof( DynamicDecalFXNugget, m_spec ) + offsetof( DynamicDecalSpec, lifetime ) },
+			{ "OnlyIfOnLand",		INI::parseBool,									nullptr, offsetof( DynamicDecalFXNugget, m_onlyIfOnLand ) },
+			{ nullptr, nullptr, nullptr, 0 }
+		};
+
+		DynamicDecalFXNugget* nugget = newInstance( DynamicDecalFXNugget );
+		ini->initFromINI(nugget, myFieldParse);
+		((FXList*)instance)->addFXNugget(nugget);
+	}
+
+private:
+	DynamicDecalSpec m_spec;
+	Bool m_onlyIfOnLand;
+};
+EMPTY_DTOR(DynamicDecalFXNugget)
+
+//-------------------------------------------------------------------------------------------------
 class ParticleSystemFXNugget : public FXNugget
 {
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(ParticleSystemFXNugget, "ParticleSystemFXNugget")
@@ -842,6 +1025,7 @@ static const FieldParse TheFXListFieldParse[] =
 	{ "LightPulse",									LightPulseFXNugget::parse, nullptr, 0},
 	{ "ViewShake",									ViewShakeFXNugget::parse, nullptr, 0},
 	{ "TerrainScorch",							TerrainScorchFXNugget::parse, nullptr, 0},
+	{ "DynamicDecal",								DynamicDecalFXNugget::parse, nullptr, 0},	// Tiberium Project
 	{ "ParticleSystem",							ParticleSystemFXNugget::parse, nullptr, 0},
 	{ "FXListAtBonePos",						FXListAtBonePosFXNugget::parse, nullptr, 0},
 	{ nullptr, nullptr, nullptr, 0 }
