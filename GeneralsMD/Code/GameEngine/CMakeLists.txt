@@ -438,6 +438,7 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/TiberiumArrivalUpdate.h
     Include/GameLogic/Module/TiberiumZoneNodeUpdate.h
     Include/GameLogic/Module/AttributeModifierUpgrade.h
+    Include/GameLogic/Module/FXListUpgrade.h
     Include/GameLogic/Module/FireWeaponAbilityUpdate.h
     Include/GameLogic/Module/ToggleAbilityUpdate.h
     Include/GameLogic/Module/ReloadAmmoSpecialPower.h
@@ -1184,6 +1185,7 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Upgrade/UpgradeModule.cpp
     Source/GameLogic/Object/Upgrade/WeaponBonusUpgrade.cpp
     Source/GameLogic/Object/Upgrade/AttributeModifierUpgrade.cpp
+    Source/GameLogic/Object/Upgrade/FXListUpgrade.cpp
     Source/GameLogic/Object/Upgrade/WeaponSetUpgrade.cpp
     Source/GameLogic/Object/Weapon.cpp
     Source/GameLogic/Object/WeaponSet.cpp

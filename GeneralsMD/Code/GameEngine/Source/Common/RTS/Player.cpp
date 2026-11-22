@@ -3210,6 +3210,16 @@ Upgrade *Player::addUpgrade( const UpgradeTemplate *upgradeTemplate, UpgradeStat
 		m_upgradesInProgress.clear( newMask );
 		m_upgradesCompleted.set( newMask );
 		onUpgradeCompleted( upgradeTemplate );
+
+		// Tiberium Project @feature and what it stands for in the player's other classes (EquivalentUpgrades: C&C4's
+		// PlayerClassEquivalency, a class's upgrade kept when the player takes another class)
+		const std::vector<AsciiString> &same = upgradeTemplate->getEquivalentUpgrades();
+		for( size_t i = 0; i < same.size(); ++i )
+		{
+			const UpgradeTemplate *other = TheUpgradeCenter->findUpgrade( same[i] );
+			if( other != nullptr && other != upgradeTemplate && !hasUpgradeComplete( other ) )
+				addUpgrade( other, UPGRADE_STATUS_COMPLETE );
+		}
 	}
 
 	if( ThePlayerList->getLocalPlayer() == this )

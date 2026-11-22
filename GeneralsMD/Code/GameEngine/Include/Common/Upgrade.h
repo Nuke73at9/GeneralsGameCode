@@ -191,6 +191,9 @@ public:
 	/// NeededObjectsAny one of them (the Tiberium factions' Tier IV: a commando, their tech structures, the superweapon)
 	const std::vector<AsciiString>& getNeededObjects() const { return m_neededObjects; }
 	const std::vector<AsciiString>& getNeededObjectsAny() const { return m_neededObjectsAny; }
+	/// Tiberium Project @feature the player upgrades it stands for in the player's other classes (C&C4's PlayerClassEquivalency):
+	/// once the player has it, it has these too
+	const std::vector<AsciiString>& getEquivalentUpgrades() const { return m_equivalentUpgrades; }
 	static void parseNameList( INI *ini, void *instance, void *store, const void *userData );
 
 	/// inventory pictures
@@ -227,6 +230,7 @@ protected:
 	std::vector<AudioEventRTS> m_researchSideSounds;	///< Tiberium Project @feature and their sounds
 	std::vector<AsciiString> m_neededObjects;					///< Tiberium Project @feature NeededObjects
 	std::vector<AsciiString> m_neededObjectsAny;			///< Tiberium Project @feature NeededObjectsAny
+	std::vector<AsciiString> m_equivalentUpgrades;		///< Tiberium Project @feature EquivalentUpgrades
 
 	UpgradeTemplate *m_next;						///< next
 	UpgradeTemplate *m_prev;						///< prev

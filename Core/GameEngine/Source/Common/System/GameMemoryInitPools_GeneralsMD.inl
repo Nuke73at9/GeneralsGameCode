@@ -207,6 +207,7 @@ static PoolSizeRec PoolSizes[] =
 	{ "TiberiumZoneNodeUpdate", 32, 16 },
 	{ "TiberiumArrivalUpdate", 32, 16 },
 	{ "AttributeModifierUpgrade", 1024, 128 },
+	{ "FXListUpgrade", 1024, 128 },
 	{ "OrderAbilityUpdate", 128, 32 },
 	{ "AssembleStructureUpdate", 128, 32 },
 	{ "AIAbilityUseUpdate", 512, 128 },

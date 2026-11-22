@@ -129,6 +129,7 @@ const FieldParse UpgradeTemplate::m_upgradeFieldParseTable[] =
 	{ "NeededUpgrade",			INI::parseAsciiString,		nullptr, offsetof( UpgradeTemplate, m_neededUpgradeName ) },	// Tiberium Project
 	{ "NeededObjects",			UpgradeTemplate::parseNameList,	nullptr, offsetof( UpgradeTemplate, m_neededObjects ) },	// Tiberium Project
 	{ "NeededObjectsAny",		UpgradeTemplate::parseNameList,	nullptr, offsetof( UpgradeTemplate, m_neededObjectsAny ) },	// Tiberium Project
+	{ "EquivalentUpgrades",	UpgradeTemplate::parseNameList,	nullptr, offsetof( UpgradeTemplate, m_equivalentUpgrades ) },	// Tiberium Project
 	{ "SideResearchSound",	UpgradeTemplate::parseSideResearchSound,	nullptr, 0 },	// Tiberium Project
 	{ nullptr,						nullptr,												 nullptr, 0 }
 
