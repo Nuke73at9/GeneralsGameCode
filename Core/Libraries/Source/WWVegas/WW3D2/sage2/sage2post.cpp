@@ -50,6 +50,14 @@ namespace
 	// Tiberium Project @feature the overlay, the falloff and the grain (Set_Overlays)
 	std::string s_overlayName, s_falloffName, s_grainName;
 	bool s_overlaysEnabled = true;
+	// Tiberium Project @feature their values (Set_Overlay_Params): the overlay's blend and centre fill and the vignette's scale
+	// and colour shift (C&C4's shader notes), the falloff's (the shader's own default) and the grain's blend
+	const float DEFAULT_OVERLAY_FACTOR[4] = { 0.2f, 0.05f, 0.827f, 0.145f };
+	const float DEFAULT_FALLOFF_PARAMS[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+	const float DEFAULT_GRAIN_MODE[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	float s_overlayFactor[4] = { 0.2f, 0.05f, 0.827f, 0.145f };
+	float s_falloffParams[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+	float s_grainMode[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 	IDirect3DTexture9* s_grey = nullptr;		// the neutral grain (0.5: the pin light leaves the colour as it is)
 	float s_exposure = 1.0f;
 	float s_autoStrength = 0.5f;		// Sage2AutoExposure
@@ -353,6 +361,16 @@ void Sage2PostClass::Set_Overlays(const char* overlayTexture, const char* fallof
 
 void Sage2PostClass::Set_Overlays_Enabled(bool enabled) { s_overlaysEnabled = enabled; }
 
+void Sage2PostClass::Set_Overlay_Params(const float overlayFactor[4], const float falloffParams[4], const float grainMode[4])
+{
+	for (int i = 0; i < 4; ++i)
+	{
+		s_overlayFactor[i] = overlayFactor != nullptr ? overlayFactor[i] : DEFAULT_OVERLAY_FACTOR[i];
+		s_falloffParams[i] = falloffParams != nullptr ? falloffParams[i] : DEFAULT_FALLOFF_PARAMS[i];
+		s_grainMode[i] = grainMode != nullptr ? grainMode[i] : DEFAULT_GRAIN_MODE[i];
+	}
+}
+
 //-------------------------------------------------------------------------------------------------
 void Sage2PostClass::Set_Anti_Aliasing(bool enabled, float subpixel, float threshold)
 {
@@ -513,16 +531,15 @@ bool Sage2PostClass::Apply()
 	}
 	if (overlay != nullptr)
 	{
-		const float factor[4] = { 0.2f, 0.05f, 0.827f, 0.145f };
 		grade.Set_Texture("Overlay", overlay);
-		grade.Set_Float("OverlayFactor", factor, 4);
+		grade.Set_Float("OverlayFactor", s_overlayFactor, 4);
 	}
 	if (falloff != nullptr)
 	{
-		const float mode[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 		grade.Set_Texture("Falloff", falloff);
 		grade.Set_Texture("Grain", grain);
-		grade.Set_Float("FalloffAndGrainBlendMode", mode, 4);
+		grade.Set_Float("FalloffParams", s_falloffParams, 4);	// Tiberium Project (a C&C4 map's; the shader's own otherwise)
+		grade.Set_Float("FalloffAndGrainBlendMode", s_grainMode, 4);
 	}
 	grade.Set_Bool("ApplyOverlay", overlay != nullptr);
 	grade.Set_Bool("ApplyFalloffAndGrain", falloff != nullptr && grain != nullptr);

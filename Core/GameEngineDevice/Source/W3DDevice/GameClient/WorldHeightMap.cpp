@@ -751,6 +751,12 @@ Bool WorldHeightMap::ParseWorldDictDataChunk(DataChunkInput &file, DataChunkInfo
 	static const NameKeyType key_heightScale = NAMEKEY("heightScale");
 	const Real heightScale = MapObject::getWorldDict()->getReal(key_heightScale, &exists);
 	TheMapHeightScale = (exists && heightScale > 0.0f) ? heightScale : MAP_HEIGHT_SCALE_DEFAULT;
+#ifdef RTS_RENDERER_D3D9
+	// Tiberium Project @feature a C&C4 map's own light and post effects (the c4maps converter writes them), drawn only
+	static const NameKeyType key_sage2Lighting = NAMEKEY("sage2Lighting");
+	const AsciiString sage2Lighting = MapObject::getWorldDict()->getAsciiString(key_sage2Lighting, &exists);
+	Sage2LightingClass::Set_Map_Lighting(exists ? sage2Lighting.str() : nullptr);
+#endif
 	return true;
 }
 

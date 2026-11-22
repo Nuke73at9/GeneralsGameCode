@@ -43,6 +43,10 @@ public:
 	/// Sage2PostOverlays (default on) turns them off.
 	static void Set_Overlays(const char* overlayTexture, const char* falloffTexture, const char* grainTexture);
 	static void Set_Overlays_Enabled(bool enabled);
+	/// Tiberium Project @feature The overlay's factor, the falloff's parameters and the grain's blend mode (C&C4's
+	/// PostFX_LookupTable OverlayFactor, FalloffParams, FalloffAndGrainBlendMode, four values each), as a C&C4 map
+	/// sets them; null for the values the look uses otherwise
+	static void Set_Overlay_Params(const float overlayFactor[4], const float falloffParams[4], const float grainMode[4]);
 	/// Exposure applied before the tone curve (1 = as C&C4)
 	static void Set_Exposure(float exposure);
 	/// Tiberium Project @feature How strongly the grading table applies, against the map look's own

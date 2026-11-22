@@ -974,7 +974,7 @@ void W3DDisplay::init()
 			// maps that are not snowy get (Red Alert 3's light and saturating table, or C&C4's Pan-America).
 			OptionPreferences prefs;
 			Bool cnc4Style = prefs.getBool("CNC4Style", TRUE);
-			Sage2LightingClass::Set_Look(prefs.getAsciiString("Sage2Look", "ra3").str());
+			Sage2LightingClass::Set_Look(prefs.getAsciiString("Sage2Look", "cnc4").str());	// Tiberium Project @tweak C&C4's own look by default (22/11)
 			Sage2GlobalsClass::Set_Linear_Lights(prefs.getBool("Sage2LinearLights", FALSE));	// light colours to the effects in linear light
 			Sage2GlobalsClass::Set_Macro_Texture(prefs.getAsciiString("Sage2TerrainMacro", "tsnoiseurb").str());	// the ground's large-scale noise, as RA3 and C&C4
 			Sage2LightingClass::Select(cnc4Style ? prefs.getAsciiString("Sage2Lighting", "auto").str() : "map");

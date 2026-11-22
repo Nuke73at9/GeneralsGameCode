@@ -23,6 +23,7 @@
 #include <math.h>
 #include "sage2globals.h"
 #include "sage2post.h"
+#include <stdio.h>
 #include <string.h>
 
 namespace
@@ -100,7 +101,15 @@ namespace
 	};
 	const int PRESET_COUNT = sizeof(PRESETS) / sizeof(PRESETS[0]);
 
-	bool s_ra3Look = true;		// Sage2Look: RA3's light and table for maps that are not snowy
+	bool s_ra3Look = false;		// Sage2Look: RA3's light and table for maps that are not snowy (C&C4's by default)
+
+	// Tiberium Project @feature a C&C4 map's own light and post effects (Set_Map_Lighting)
+	bool s_hasMap = false;
+	Sage2LightingPreset s_map;
+	char s_mapLookup[64];
+	char s_mapOverlay[64], s_mapFalloff[64], s_mapGrain[64];
+	float s_mapOverlayFactor[4], s_mapFalloffParams[4], s_mapGrainMode[4];
+	bool s_mapHasOverlay = false, s_mapHasFalloff = false;
 	bool s_treeLight = true;	// Sage2TreeLight
 
 	// Tiberium Project @feature the map's mood: Zero Hour's default terrain light for each time of
@@ -184,6 +193,8 @@ const Sage2LightingPreset* Sage2LightingClass::Choose(int timeOfDay, bool snowy)
 	s_groundLight = 1.0f;	// until Adapt says otherwise
 	if (s_mode == MODE_FIXED)
 		preset = s_fixed;
+	else if (s_mode == MODE_AUTO && s_hasMap)
+		preset = &s_map;	// Tiberium Project @feature a C&C4 map: its own light, table and post effects
 	else if (s_mode == MODE_AUTO)
 	{
 		// Zero Hour's map themes to C&C4's: snow maps are Arctic, the rest Pan-America; the map's
@@ -210,7 +221,15 @@ const Sage2LightingPreset* Sage2LightingClass::Choose(int timeOfDay, bool snowy)
 		// PostEffect entries): every skirmish map the overlay; the Arctic maps PE_Arctic_Falloff_01; Junktown's
 		// PE_Junktown_GreenFalloff and PE_Junktown_Grain; RA3's look none of them
 		const char* name = preset->name;
-		if (strncmp(name, "arctic", 6) == 0)
+		Sage2PostClass::Set_Overlay_Params(nullptr, nullptr, nullptr);	// (the shader's own values, but a C&C4 map's)
+		if (preset == &s_map)
+		{
+			Sage2PostClass::Set_Overlays(s_mapHasOverlay ? s_mapOverlay : nullptr, s_mapHasFalloff ? s_mapFalloff : nullptr,
+				s_mapHasFalloff ? s_mapGrain : nullptr);
+			Sage2PostClass::Set_Overlay_Params(s_mapHasOverlay ? s_mapOverlayFactor : nullptr, s_mapHasFalloff ? s_mapFalloffParams : nullptr,
+				s_mapHasFalloff ? s_mapGrainMode : nullptr);
+		}
+		else if (strncmp(name, "arctic", 6) == 0)
 			Sage2PostClass::Set_Overlays("overlay", "PE_Arctic_Falloff_01", nullptr);
 		else if (strncmp(name, "junktown", 8) == 0)
 			Sage2PostClass::Set_Overlays("overlay", "PE_Junktown_GreenFalloff", "PE_Junktown_Grain");
@@ -283,6 +302,12 @@ void Sage2LightingClass::Get_Particle_Light(const float ambient[3], const float 
 Sage2LightingPreset Sage2LightingClass::Adapt(const Sage2LightingPreset& preset, int timeOfDay, bool snowy, const float mapAmbient[3], const float mapDiffuse[3][3])
 {
 	Sage2LightingPreset out = preset;
+	if (&preset == &s_map)
+	{
+		// Tiberium Project @feature a C&C4 map's own light: as C&C4 lights it, none of the changes made for Zero Hour's maps
+		s_groundLight = 1.0f;
+		return out;
+	}
 	const int t = timeOfDay < 1 ? 0 : (timeOfDay > 4 ? 3 : timeOfDay - 1);
 	const float mapLevel = Luminance(mapAmbient) + Luminance(mapDiffuse[0]);
 	const float defaultLevel = ZH_DEFAULT_AMBIENT[t] + ZH_DEFAULT_SUN[t];
@@ -340,6 +365,86 @@ Sage2LightingPreset Sage2LightingClass::Adapt(const Sage2LightingPreset& preset,
 	}
 	return out;
 }
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature a C&C4 map's own light and post effects, from its WorldInfo (c4maps writes them):
+//   "amb R G B|sun R G B X Y Z|fill R G B X Y Z|fill R G B X Y Z|lut NAME BLEND|bloom V|overlay NAME F0 F1 F2 F3
+//    |falloff NAME GRAIN P0 P1 P2 P3 M0 M1 M2 M3"
+// (C&C4's GlobalLighting for the time of day it plays at, its PostEffectsChunk); null or empty for none
+//-------------------------------------------------------------------------------------------------
+void Sage2LightingClass::Set_Map_Lighting(const char* spec)
+{
+	s_hasMap = false;
+	s_mapHasOverlay = s_mapHasFalloff = false;
+	if (spec == nullptr || *spec == '\0')
+		return;
+	memset(&s_map, 0, sizeof(s_map));
+	s_map.name = "map";
+	strcpy(s_mapLookup, "pan_am_lut_vol");
+	s_map.lookupTexture = s_mapLookup;
+	s_map.lookupBlend = 0.0f;
+	s_map.bloomIntensity = 0.0f;
+	int lights = 0;
+	bool ambient = false;
+	char part[256];
+	for (const char* p = spec; *p != '\0';)
+	{
+		const char* end = strchr(p, '|');
+		const size_t n = end != nullptr ? (size_t)(end - p) : strlen(p);
+		const size_t k = n < sizeof(part) - 1 ? n : sizeof(part) - 1;
+		memcpy(part, p, k);
+		part[k] = '\0';
+		p = end != nullptr ? end + 1 : p + n;
+		char name[64], grain[64];
+		float v[8];
+		if (sscanf(part, "amb %f %f %f", &v[0], &v[1], &v[2]) == 3)
+		{
+			for (int i = 0; i < 3; ++i)
+				s_map.ambient[i] = v[i];
+			ambient = true;
+		}
+		else if ((strncmp(part, "sun ", 4) == 0 || strncmp(part, "fill ", 5) == 0) && lights < 3
+			&& sscanf(part + (part[0] == 's' ? 4 : 5), "%f %f %f %f %f %f", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5]) == 6)
+		{
+			for (int i = 0; i < 3; ++i)
+			{
+				s_map.light[lights].diffuse[i] = v[i];
+				s_map.light[lights].direction[i] = v[3 + i];
+			}
+			++lights;
+		}
+		else if (sscanf(part, "lut %63s %f", name, &v[0]) == 2)
+		{
+			strcpy(s_mapLookup, name);
+			s_map.lookupBlend = v[0];
+		}
+		else if (sscanf(part, "bloom %f", &v[0]) == 1)
+			s_map.bloomIntensity = v[0];
+		else if (sscanf(part, "overlay %63s %f %f %f %f", name, &v[0], &v[1], &v[2], &v[3]) == 5)
+		{
+			strcpy(s_mapOverlay, name);
+			for (int i = 0; i < 4; ++i)
+				s_mapOverlayFactor[i] = v[i];
+			s_mapHasOverlay = true;
+		}
+		else if (sscanf(part, "falloff %63s %63s %f %f %f %f %f %f %f %f", name, grain, &v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6], &v[7]) == 10)
+		{
+			strcpy(s_mapFalloff, name);
+			strcpy(s_mapGrain, grain);
+			for (int i = 0; i < 4; ++i)
+			{
+				s_mapFalloffParams[i] = v[i];
+				s_mapGrainMode[i] = v[4 + i];
+			}
+			s_mapHasFalloff = true;
+		}
+	}
+	s_hasMap = ambient && lights == 3;
+	Sage2_Log("lighting: the map has C&C4's own light%s (table %s %.2f, bloom %.2f%s%s)", s_hasMap ? "" : " (incomplete: not used)",
+		s_mapLookup, s_map.lookupBlend, s_map.bloomIntensity, s_mapHasOverlay ? ", overlay" : "", s_mapHasFalloff ? ", falloff and grain" : "");
+}
+
+bool Sage2LightingClass::Has_Map_Lighting() { return s_hasMap; }
 
 //-------------------------------------------------------------------------------------------------
 float Sage2LightingClass::Get_Ground_Light()
