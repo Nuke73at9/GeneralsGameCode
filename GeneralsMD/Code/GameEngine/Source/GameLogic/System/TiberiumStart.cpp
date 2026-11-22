@@ -26,6 +26,7 @@
 
 #include "Common/GlobalData.h"
 #include "Common/MapObject.h"
+#include "Common/Money.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/PlayerTemplate.h"
@@ -33,6 +34,7 @@
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "Common/TiberiumTest.h"
+#include "Common/Upgrade.h"
 #include "Common/Xfer.h"
 #include "GameLogic/AI.h"
 #include "GameLogic/AIPathfind.h"
@@ -72,6 +74,10 @@ namespace
 		UnsignedInt graceUntil;	///< not defeated before this (a decommission)
 		ObjectID first;					///< the start's pick, its StartingUnits due beside it once it is out
 		Bool unitsDue;
+		Bool powerCrawler;			///< one of its Crawler power's list is on the map (as last looked)
+		UnsignedInt powerReady;	///< the frame its Crawler power may be used from (0: at once, once it has the upgrade)
+		UnsignedInt tierStart;	///< the Crawler power's upgrade being researched: since, and done on tierDone (0: not)
+		UnsignedInt tierDone;
 	};
 
 	std::vector<Entry> s_entries;
@@ -101,6 +107,39 @@ namespace
 		return player != nullptr ? player->getPlayerTemplate() : nullptr;
 	}
 
+	Int listCount( const PlayerTemplate *pt, Int list )
+	{
+		if( pt == nullptr )
+			return 0;
+		return list == TiberiumStart::LIST_POWER ? pt->getCrawlerPowerCount() : pt->getStartArrivalCount();
+	}
+
+	AsciiString listName( const PlayerTemplate *pt, Int list, Int i )
+	{
+		return list == TiberiumStart::LIST_POWER ? pt->getCrawlerPower( i ) : pt->getStartArrival( i );
+	}
+
+	/// the upgrade that gives the player its Crawler power, if one is named
+	const UpgradeTemplate *powerUpgrade( const Player *player )
+	{
+		const PlayerTemplate *pt = player != nullptr ? player->getPlayerTemplate() : nullptr;
+		if( pt == nullptr || pt->getCrawlerPowerUpgrade().isEmpty() || TheUpgradeCenter == nullptr )
+			return nullptr;
+		return TheUpgradeCenter->findUpgrade( pt->getCrawlerPowerUpgrade() );
+	}
+
+	/// the player has the upgrade that gives its Crawler power (none named: it has the power outright)
+	Bool powerUnlocked( const Player *player )
+	{
+		const PlayerTemplate *pt = player != nullptr ? player->getPlayerTemplate() : nullptr;
+		if( listCount( pt, TiberiumStart::LIST_POWER ) <= 0 )
+			return FALSE;
+		if( pt->getCrawlerPowerUpgrade().isEmpty() )
+			return TRUE;
+		const UpgradeTemplate *up = powerUpgrade( player );
+		return up != nullptr && player->hasUpgradeComplete( up );
+	}
+
 	Bool isFriend( const Player *me, const Player *other )
 	{
 		if( me == nullptr || other == nullptr )
@@ -112,16 +151,17 @@ namespace
 	}
 
 	//-----------------------------------------------------------------------------------------------
-	/** whether obj is one of the player's list, either form (the vehicle, or what it unpacks into: that packs
-		up into one of the list) */
-	Bool isCrawlerOf( const Object *obj, const PlayerTemplate *pt )
+	/** whether obj is one of the player's list (the start's or its Crawler power's), either form (the vehicle, or
+		what it unpacks into: that packs up into one of the list) */
+	Bool isCrawlerOf( const Object *obj, const PlayerTemplate *pt, Int list )
 	{
 		if( obj == nullptr || pt == nullptr || obj->isEffectivelyDead() )
 			return FALSE;
 		const ThingTemplate *t = obj->getTemplate();
-		for( Int i = 0; i < pt->getStartArrivalCount(); ++i )
+		const Int count = listCount( pt, list );
+		for( Int i = 0; i < count; ++i )
 		{
-			const ThingTemplate *c = TheThingFactory->findTemplate( pt->getStartArrival( i ) );
+			const ThingTemplate *c = TheThingFactory->findTemplate( listName( pt, list, i ) );
 			if( c != nullptr && t->isEquivalentTo( c ) )
 				return TRUE;
 		}
@@ -129,8 +169,8 @@ namespace
 		const ReplaceSelfUpdate *replace = (const ReplaceSelfUpdate *)obj->findUpdateModule( replaceKey );
 		if( replace != nullptr )
 		{
-			for( Int i = 0; i < pt->getStartArrivalCount(); ++i )
-				if( replace->getReplacementName().compareNoCase( pt->getStartArrival( i ) ) == 0 )
+			for( Int i = 0; i < count; ++i )
+				if( replace->getReplacementName().compareNoCase( listName( pt, list, i ) ) == 0 )
 					return TRUE;
 		}
 		return FALSE;
@@ -139,21 +179,22 @@ namespace
 	struct LookFor
 	{
 		const PlayerTemplate *pt;
+		Int list;
 		Bool found;
 	};
 
 	void lookOne( Object *obj, void *data )
 	{
 		LookFor *look = (LookFor *)data;
-		if( !look->found && isCrawlerOf( obj, look->pt ) )
+		if( !look->found && isCrawlerOf( obj, look->pt, look->list ) )
 			look->found = TRUE;
 	}
 
-	Bool lookForCrawler( const Entry &e )
+	Bool lookForCrawler( const Entry &e, Int list )
 	{
 		Player *player = playerOf( e );
-		LookFor look = { templateOf( player ), FALSE };
-		if( player == nullptr || look.pt == nullptr )
+		LookFor look = { templateOf( player ), list, FALSE };
+		if( player == nullptr || look.pt == nullptr || listCount( look.pt, list ) <= 0 )
 			return FALSE;
 		player->iterateObjects( lookOne, &look );
 		return look.found;
@@ -264,9 +305,9 @@ namespace
 		}
 	}
 
-	Int randomChoice( const PlayerTemplate *pt )
+	Int randomChoice( const PlayerTemplate *pt, Int list )
 	{
-		const Int count = pt != nullptr ? pt->getStartArrivalCount() : 0;
+		const Int count = listCount( pt, list );
 		return count > 1 ? GameLogicRandomValue( 0, count - 1 ) : 0;
 	}
 
@@ -329,7 +370,7 @@ namespace
 			if( slot == nullptr || !slot->isOccupied() || slot->getStartPos() < 0 )
 				continue;
 			Player *player = ThePlayerList->getPlayerFromSlotIndex( i );
-			if( player == nullptr || player->isPlayerObserver() || !TiberiumStart::usesArrival( templateOf( player ) ) )
+			if( player == nullptr || player->isPlayerObserver() || !TiberiumStart::hasEntryData( templateOf( player ) ) )
 				continue;
 			AsciiString name;
 			name.format( "Player_%d_Start", slot->getStartPos() + 1 );
@@ -353,9 +394,15 @@ Bool TiberiumStart::usesArrival( const PlayerTemplate *pt )
 }
 
 //-------------------------------------------------------------------------------------------------
+Bool TiberiumStart::hasEntryData( const PlayerTemplate *pt )
+{
+	return usesArrival( pt ) || listCount( pt, LIST_POWER ) > 0;
+}
+
+//-------------------------------------------------------------------------------------------------
 void TiberiumStart::addPlayer( Player *player, const PlayerTemplate *pt, const Coord3D *home )
 {
-	if( player == nullptr || !usesArrival( pt ) || entryOf( player ) != nullptr )
+	if( player == nullptr || !hasEntryData( pt ) || entryOf( player ) != nullptr )
 		return;
 	Entry e;
 	e.player = (Int)player->getPlayerIndex();
@@ -371,6 +418,11 @@ void TiberiumStart::addPlayer( Player *player, const PlayerTemplate *pt, const C
 	e.graceUntil = 0;
 	e.first = INVALID_ID;
 	e.unitsDue = FALSE;
+	e.powerCrawler = FALSE;
+	e.powerReady = 0;
+	e.tierStart = e.tierDone = 0;
+	// (a faction that starts as Zero Hour's, with a Crawler power only: as if it had landed)
+	e.landed = !usesArrival( pt );
 	s_entries.push_back( e );
 }
 
@@ -380,6 +432,16 @@ void TiberiumStart::begin( Bool loadingSaveGame )
 	if( loadingSaveGame || s_entries.empty() || TheGameLogic == nullptr )
 		return;
 	const UnsignedInt now = TheGameLogic->getFrame();
+	Bool arrivals = FALSE;
+	for( size_t i = 0; i < s_entries.size(); ++i )
+		arrivals = arrivals || !s_entries[i].landed;
+	if( !arrivals )
+	{
+		// (Crawler powers only: no match start)
+		s_introEnd = s_deployFrame = now;
+		s_deployed = TRUE;
+		return;
+	}
 	s_introEnd = now + TheGlobalData->m_startIntro;
 	s_deployFrame = s_introEnd + TheGlobalData->m_startCountdown;
 	s_deployed = FALSE;
@@ -390,7 +452,7 @@ void TiberiumStart::begin( Bool loadingSaveGame )
 		Player *player = playerOf( e );
 		if( !isAI( player ) )
 			continue;
-		e.chosen = randomChoice( templateOf( player ) );
+		e.chosen = randomChoice( templateOf( player ), LIST_START );
 	}
 	if( TiberiumTest::isActive() )
 		TiberiumTest::log( "frame %u: start: %d players arrive; the class box from frame %u, the arrivals on frame %u", now,
@@ -440,6 +502,19 @@ void TiberiumStart::update()
 			}
 		}
 
+		// Tiberium Project @feature the Crawler power's upgrade, researched (TiberiumStart::researchCrawlerPower)
+		if( e.tierDone != 0 && now >= e.tierDone )
+		{
+			e.tierStart = e.tierDone = 0;
+			const UpgradeTemplate *up = powerUpgrade( player );
+			if( up != nullptr && !player->hasUpgradeComplete( up ) )
+			{
+				player->addUpgrade( up, UPGRADE_STATUS_COMPLETE );
+				if( TiberiumTest::isActive() )
+					TiberiumTest::log( "frame %u: start: player %d has %s: its Crawler power", now, (int)e.player, up->getUpgradeName().str() );
+			}
+		}
+
 		// the start's units, beside its pick once it is out (or where it was to land, if it is gone)
 		if( e.unitsDue )
 		{
@@ -457,36 +532,84 @@ void TiberiumStart::update()
 
 		if( !e.landed || ( now % LOOK_EVERY ) != ( (UnsignedInt)i % LOOK_EVERY ) )
 			continue;
-		const Bool had = e.crawler;
-		e.crawler = lookForCrawler( e );
-		if( !e.crawler && e.lostFrame == 0 )
+		if( usesArrival( pt ) )
 		{
-			e.lostFrame = now;
-			if( TiberiumTest::isActive() && had )
-				TiberiumTest::log( "frame %u: start: player %d has no Crawler now%s", now, (int)e.player,
-					redeploys( player ) ? "; it may call another" : "" );
-		}
-		else if( e.crawler )
-			e.lostFrame = 0;
+			const Bool had = e.crawler;
+			e.crawler = lookForCrawler( e, LIST_START );
+			if( !e.crawler && e.lostFrame == 0 )
+			{
+				e.lostFrame = now;
+				if( TiberiumTest::isActive() && had )
+					TiberiumTest::log( "frame %u: start: player %d has no Crawler now%s", now, (int)e.player,
+						redeploys( player ) ? "; it may call another" : "" );
+			}
+			else if( e.crawler )
+				e.lostFrame = 0;
 
-		// the AI calls its next as soon as it may, at its start
-		if( !e.crawler && isAI( player ) && redeploys( player ) && player->isPlayerActive() && now >= getRedeployFrame( player ) )
+			// the AI calls its next as soon as it may, at its start
+			if( !e.crawler && isAI( player ) && redeploys( player ) && player->isPlayerActive() && now >= getRedeployFrame( player, LIST_START ) )
+			{
+				const Coord3D spot = findSpotNear( player, e.home );
+				pick( player, randomChoice( pt, LIST_START ), &spot, TRUE, LIST_START );
+			}
+		}
+
+		// Tiberium Project @feature its Crawler power: another may be used its CrawlerPowerWait after one is lost (or decommissioned)
+		if( listCount( pt, LIST_POWER ) > 0 )
 		{
-			const Coord3D spot = findSpotNear( player, e.home );
-			pick( player, randomChoice( pt ), &spot, TRUE );
+			// (the AI researches its upgrade once it can)
+			const UpgradeTemplate *up = powerUpgrade( player );
+			if( isAI( player ) && up != nullptr && e.tierDone == 0 && !player->hasUpgradeComplete( up ) && player->isPlayerActive()
+				&& TheUpgradeCenter->canAffordUpgrade( player, up, FALSE ) )
+				researchCrawlerPower( player );
+			const Bool had = e.powerCrawler;
+			e.powerCrawler = lookForCrawler( e, LIST_POWER );
+			if( had && !e.powerCrawler )
+			{
+				e.powerReady = now + pt->getCrawlerPowerWait();
+				if( TiberiumTest::isActive() )
+					TiberiumTest::log( "frame %u: start: player %d's Crawler power's Crawler is gone; another from frame %u", now, (int)e.player,
+						e.powerReady );
+			}
+			// the AI uses it as soon as it may, at its start
+			const UnsignedInt ready = getRedeployFrame( player, LIST_POWER );
+			if( !e.powerCrawler && ready != 0 && now >= ready && isAI( player ) && player->isPlayerActive() )
+			{
+				const Coord3D spot = findSpotNear( player, e.home );
+				pick( player, randomChoice( pt, LIST_POWER ), &spot, TRUE, LIST_POWER );
+			}
 		}
 	}
 }
 
 //-------------------------------------------------------------------------------------------------
-void TiberiumStart::pick( Player *player, Int choice, const Coord3D *spot, Bool hasSpot )
+void TiberiumStart::pick( Player *player, Int choice, const Coord3D *spot, Bool hasSpot, Int list )
 {
 	Entry *e = entryOf( player );
 	const PlayerTemplate *pt = templateOf( player );
 	if( e == nullptr || pt == nullptr || TheGameLogic == nullptr )
 		return;
 	const UnsignedInt now = TheGameLogic->getFrame();
-	const Bool validChoice = choice >= 0 && choice < pt->getStartArrivalCount();
+	const Bool validChoice = choice >= 0 && choice < listCount( pt, list );
+
+	// Tiberium Project @feature the Crawler power: after the start, with its upgrade, none of its list standing, its wait over
+	if( list == LIST_POWER )
+	{
+		if( !s_deployed || !validChoice || !hasSpot || spot == nullptr || !player->isPlayerActive() || !powerUnlocked( player ) )
+			return;
+		e->powerCrawler = lookForCrawler( *e, LIST_POWER );
+		const char *why = nullptr;
+		if( e->powerCrawler || now < e->powerReady || !isSpotAllowed( player, spot, &why ) )
+		{
+			if( TiberiumTest::isActive() )
+				TiberiumTest::log( "frame %u: start: player %d's Crawler power at %.0f %.0f: refused (%s)", now, (int)e->player, spot->x, spot->y,
+					why != nullptr ? why : ( e->powerCrawler ? "it has one" : "not yet" ) );
+			return;
+		}
+		if( makeArrival( player, TheThingFactory->findTemplate( listName( pt, LIST_POWER, choice ) ), *spot ) != nullptr )
+			e->powerCrawler = TRUE;
+		return;
+	}
 
 	// the start: its choice and spot, until the countdown ends
 	if( !s_deployed )
@@ -519,7 +642,7 @@ void TiberiumStart::pick( Player *player, Int choice, const Coord3D *spot, Bool 
 	// after it: another Crawler, when it has none and its wait is over (and it is still in the game)
 	if( !validChoice || !hasSpot || spot == nullptr || !redeploys( player ) || !player->isPlayerActive() )
 		return;
-	e->crawler = lookForCrawler( *e );
+	e->crawler = lookForCrawler( *e, LIST_START );
 	if( e->crawler && e->lostFrame == 0 )
 	{
 		if( TiberiumTest::isActive() )
@@ -529,7 +652,7 @@ void TiberiumStart::pick( Player *player, Int choice, const Coord3D *spot, Bool 
 	if( !e->crawler && e->lostFrame == 0 )
 		e->lostFrame = now;
 	const char *why = nullptr;
-	if( e->crawler || now < getRedeployFrame( player ) || !isSpotAllowed( player, spot, &why ) )
+	if( e->crawler || now < getRedeployFrame( player, LIST_START ) || !isSpotAllowed( player, spot, &why ) )
 	{
 		if( TiberiumTest::isActive() )
 			TiberiumTest::log( "frame %u: start: player %d calls another at %.0f %.0f: refused (%s)", now, (int)e->player, spot->x, spot->y,
@@ -545,16 +668,20 @@ void TiberiumStart::pick( Player *player, Int choice, const Coord3D *spot, Bool 
 }
 
 //-------------------------------------------------------------------------------------------------
-void TiberiumStart::decommission( Player *player )
+void TiberiumStart::decommission( Player *player, ObjectID id )
 {
 	Entry *e = entryOf( player );
-	if( e == nullptr || !e->landed || e->leaving != INVALID_ID || TheGameLogic == nullptr || !redeploys( player ) )
+	if( e == nullptr || !e->landed || e->leaving != INVALID_ID || TheGameLogic == nullptr )
 		return;
 	const PlayerTemplate *pt = templateOf( player );
 	const UnsignedInt now = TheGameLogic->getFrame();
 	for( Object *obj = TheGameLogic->getFirstObject(); obj != nullptr; obj = obj->getNextObject() )
 	{
-		if( obj->getControllingPlayer() != player || !isCrawlerOf( obj, pt ) )
+		if( obj->getControllingPlayer() != player || ( id != INVALID_ID && obj->getID() != id ) )
+			continue;
+		// one of the start's list (when it may call another), or of its Crawler power's
+		const Bool start = isCrawlerOf( obj, pt, LIST_START ) && redeploys( player );
+		if( !start && !isCrawlerOf( obj, pt, LIST_POWER ) )
 			continue;
 		// (still coming: not yet)
 		static const NameKeyType arrivalKey = NAMEKEY( "TiberiumArrivalUpdate" );
@@ -563,13 +690,54 @@ void TiberiumStart::decommission( Player *player )
 			return;
 		e->leaving = obj->getID();
 		e->leaveFrame = now + DECOMMISSION_TIME;
-		e->graceUntil = e->leaveFrame + pt->getStartRedeployTime() + GRACE;
+		if( start )
+			e->graceUntil = e->leaveFrame + pt->getStartRedeployTime() + GRACE;
 		obj->setDisabledUntil( DISABLED_EMP, e->leaveFrame );
 		if( TiberiumTest::isActive() )
 			TiberiumTest::log( "frame %u: start: player %d decommissions its %s: gone on frame %u", now, (int)e->player,
 				obj->getTemplate()->getName().str(), e->leaveFrame );
 		return;
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void TiberiumStart::researchCrawlerPower( Player *player )
+{
+	Entry *e = entryOf( player );
+	const UpgradeTemplate *up = powerUpgrade( player );
+	if( e == nullptr || up == nullptr || TheGameLogic == nullptr || !s_deployed || e->tierDone != 0 || !player->isPlayerActive()
+		|| player->hasUpgradeComplete( up ) || !TheUpgradeCenter->canAffordUpgrade( player, up, FALSE ) )
+		return;
+	const UnsignedInt now = TheGameLogic->getFrame();
+	player->getMoney()->withdraw( up->calcCostToBuild( player ) );
+	e->tierStart = now;
+	e->tierDone = now + max( 1, up->calcTimeToBuild( player ) );
+	if( TiberiumTest::isActive() )
+		TiberiumTest::log( "frame %u: start: player %d researches %s: done on frame %u", now, (int)e->player, up->getUpgradeName().str(),
+			e->tierDone );
+}
+
+//-------------------------------------------------------------------------------------------------
+Int TiberiumStart::getCrawlerPowerResearch( const Player *player, Real *progress )
+{
+	const Entry *e = entryOf( player );
+	const UpgradeTemplate *up = powerUpgrade( player );
+	if( progress != nullptr )
+		*progress = 0.0f;
+	if( e == nullptr || up == nullptr )
+		return RESEARCH_NONE;
+	if( player->hasUpgradeComplete( up ) )
+		return RESEARCH_DONE;
+	if( e->tierDone != 0 )
+	{
+		if( progress != nullptr && TheGameLogic != nullptr && e->tierDone > e->tierStart )
+		{
+			const Real t = (Real)( TheGameLogic->getFrame() - e->tierStart ) / (Real)( e->tierDone - e->tierStart );
+			*progress = t < 0.0f ? 0.0f : ( t > 1.0f ? 1.0f : t );
+		}
+		return RESEARCH_RUNNING;
+	}
+	return RESEARCH_OPEN;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -607,7 +775,7 @@ Bool TiberiumStart::isKeptIn( const Player *player )
 		return TRUE;
 	// its Crawler, either form, stands for its base (C&C4: a player is never out while it has one; Zero Hour's
 	// rule counts structures only)
-	if( lookForCrawler( *e ) )
+	if( lookForCrawler( *e, LIST_START ) || lookForCrawler( *e, LIST_POWER ) )
 		return TRUE;
 	// one that may call another is out only with nothing left
 	if( redeploys( player ) && player->hasAnyObjects() )
@@ -623,18 +791,24 @@ Bool TiberiumStart::hasEntry( const Player *player )
 }
 
 //-------------------------------------------------------------------------------------------------
-Int TiberiumStart::getChoiceCount( const Player *player )
+Bool TiberiumStart::startsByArrival( const Player *player )
 {
-	const PlayerTemplate *pt = entryOf( player ) != nullptr ? templateOf( player ) : nullptr;
-	return pt != nullptr ? min( (Int)MOST_CHOICES, pt->getStartArrivalCount() ) : 0;
+	return entryOf( player ) != nullptr && usesArrival( templateOf( player ) );
 }
 
 //-------------------------------------------------------------------------------------------------
-const ThingTemplate *TiberiumStart::getChoice( const Player *player, Int i )
+Int TiberiumStart::getChoiceCount( const Player *player, Int list )
 {
-	if( i < 0 || i >= getChoiceCount( player ) || TheThingFactory == nullptr )
+	const PlayerTemplate *pt = entryOf( player ) != nullptr ? templateOf( player ) : nullptr;
+	return min( (Int)MOST_CHOICES, listCount( pt, list ) );
+}
+
+//-------------------------------------------------------------------------------------------------
+const ThingTemplate *TiberiumStart::getChoice( const Player *player, Int i, Int list )
+{
+	if( i < 0 || i >= getChoiceCount( player, list ) || TheThingFactory == nullptr )
 		return nullptr;
-	return TheThingFactory->findTemplate( templateOf( player )->getStartArrival( i ) );
+	return TheThingFactory->findTemplate( listName( templateOf( player ), list, i ) );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -776,24 +950,41 @@ Bool TiberiumStart::redeploys( const Player *player )
 }
 
 //-------------------------------------------------------------------------------------------------
-Bool TiberiumStart::hasCrawler( const Player *player )
+Bool TiberiumStart::hasCrawler( const Player *player, Int list )
 {
 	const Entry *e = entryOf( player );
-	return e != nullptr && e->crawler;
+	if( e == nullptr )
+		return FALSE;
+	return list == LIST_POWER ? e->powerCrawler : e->crawler;
 }
 
 //-------------------------------------------------------------------------------------------------
 Bool TiberiumStart::isCrawler( const Object *obj )
 {
 	const Player *player = obj != nullptr ? obj->getControllingPlayer() : nullptr;
-	return entryOf( player ) != nullptr && isCrawlerOf( obj, templateOf( player ) );
+	return entryOf( player ) != nullptr
+		&& ( isCrawlerOf( obj, templateOf( player ), LIST_START ) || isCrawlerOf( obj, templateOf( player ), LIST_POWER ) );
 }
 
 //-------------------------------------------------------------------------------------------------
-UnsignedInt TiberiumStart::getRedeployFrame( const Player *player )
+Bool TiberiumStart::hasCrawlerPower( const Player *player )
+{
+	return entryOf( player ) != nullptr && powerUnlocked( player );
+}
+
+//-------------------------------------------------------------------------------------------------
+UnsignedInt TiberiumStart::getRedeployFrame( const Player *player, Int list )
 {
 	const Entry *e = entryOf( player );
-	if( e == nullptr || !e->landed || e->crawler || e->lostFrame == 0 || !redeploys( player ) )
+	if( e == nullptr || !e->landed )
+		return 0;
+	if( list == LIST_POWER )
+	{
+		if( e->powerCrawler || !powerUnlocked( player ) )
+			return 0;
+		return max( (UnsignedInt)1, e->powerReady );
+	}
+	if( e->crawler || e->lostFrame == 0 || !redeploys( player ) )
 		return 0;
 	return e->lostFrame + templateOf( player )->getStartRedeployTime();
 }
@@ -808,10 +999,11 @@ Bool TiberiumStart::isDecommissioning( const Player *player )
 //-------------------------------------------------------------------------------------------------
 // Version Info:
 // 1: Initial version
+// 2: the Crawler power (powerCrawler, powerReady, tierStart, tierDone)
 //-------------------------------------------------------------------------------------------------
 void TiberiumStart::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 	xfer->xferUnsignedInt( &s_introEnd );
@@ -837,6 +1029,19 @@ void TiberiumStart::xfer( Xfer *xfer )
 		xfer->xferUnsignedInt( &e.graceUntil );
 		xfer->xferObjectID( &e.first );
 		xfer->xferBool( &e.unitsDue );
+		if( version >= 2 )
+		{
+			xfer->xferBool( &e.powerCrawler );
+			xfer->xferUnsignedInt( &e.powerReady );
+			xfer->xferUnsignedInt( &e.tierStart );
+			xfer->xferUnsignedInt( &e.tierDone );
+		}
+		else if( xfer->getXferMode() == XFER_LOAD )
+		{
+			e.powerCrawler = FALSE;
+			e.powerReady = 0;
+			e.tierStart = e.tierDone = 0;
+		}
 	}
 	if( xfer->getXferMode() == XFER_LOAD )
 		s_loaded = TRUE;

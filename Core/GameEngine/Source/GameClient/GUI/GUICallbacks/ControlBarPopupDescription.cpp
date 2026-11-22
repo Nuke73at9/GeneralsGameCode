@@ -431,6 +431,15 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 							descrip.concat( L"\n\n" );
 							descrip.concat( neededText );
 						}
+						// Tiberium Project @feature and what must stand first (NeededObjects, NeededObjectsAny)
+						else if( !TheUpgradeCenter->hasNeededObjects( ThePlayerList->getLocalPlayer(), upgradeTemplate, nullptr ) )
+						{
+							UnicodeString missing, neededText;
+							TheUpgradeCenter->hasNeededObjects( ThePlayerList->getLocalPlayer(), upgradeTemplate, &missing );
+							neededText.format( TheGameText->fetch( "CONTROLBAR:Requirements" ).str(), missing.str() );
+							descrip.concat( L"\n\n" );
+							descrip.concat( neededText );
+						}
 #endif
 						else if( !TheUpgradeCenter->canAffordUpgrade( ThePlayerList->getLocalPlayer(), upgradeTemplate, FALSE ) )
 						{

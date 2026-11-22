@@ -2096,13 +2096,26 @@ void TiberiumTest::update()
 			// C&C4's match start (TiberiumStart): "start" logs the local player's; "start=k" picks the k-th class as the
 			// box's card does; "start=k,dx,dy" (k may be -1: the class kept) and then a click on the ground at its start
 			// + dx,dy (after the start: a Crawler called there)
+			// "start=p,k,dx,dy": the Crawler power's k-th class called there
 			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			Int list = TiberiumStart::LIST_START;
+			if ( !f.empty() && f[0] == "p" )
+			{
+				list = TiberiumStart::LIST_POWER;
+				f.erase( f.begin() );
+			}
 			if ( !f.empty() && !f[0].empty() )
 				TiberiumStartView::testPick( atoi( f[0].c_str() ), f.size() > 1 ? (Real)atof( f[1].c_str() ) : 0.0f,
-					f.size() > 2 ? (Real)atof( f[2].c_str() ) : 0.0f, f.size() > 2 );
-			char text[600];
+					f.size() > 2 ? (Real)atof( f[2].c_str() ) : 0.0f, f.size() > 2, list );
+			char text[1000];
 			TiberiumStartView::describe( text, sizeof( text ) );
 			log( "frame %d: ui: start: %s", (int)s_frame, text );
+		}
+		else if ( step.action == "tier" && TheMessageStream != nullptr )
+		{
+			// the Crawler power's upgrade researched, as its button does
+			TheMessageStream->appendMessage( GameMessage::MSG_TIBERIUM_CRAWLER_RESEARCH );
+			log( "frame %d: ui: tier research sent", (int)s_frame );
 		}
 		else if ( step.action == "decommission" )
 		{

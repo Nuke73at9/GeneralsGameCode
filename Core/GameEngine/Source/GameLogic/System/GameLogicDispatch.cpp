@@ -585,14 +585,21 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, void *userData )
 #if RTS_ZEROHOUR
 			if( msg->getArgumentCount() >= 3 )
 				TiberiumStart::pick( getMessagePlayer( msg ), msg->getArgument( 0 )->integer, &msg->getArgument( 1 )->location,
-					msg->getArgument( 2 )->integer != 0 );
+					msg->getArgument( 2 )->integer != 0, msg->getArgumentCount() >= 4 ? msg->getArgument( 3 )->integer : TiberiumStart::LIST_START );
 #endif
 			break;
 		}
 		case GameMessage::MSG_TIBERIUM_CRAWLER_DECOMMISSION:
 		{
 #if RTS_ZEROHOUR
-			TiberiumStart::decommission( getMessagePlayer( msg ) );
+			TiberiumStart::decommission( getMessagePlayer( msg ), msg->getArgumentCount() >= 1 ? msg->getArgument( 0 )->objectID : INVALID_ID );
+#endif
+			break;
+		}
+		case GameMessage::MSG_TIBERIUM_CRAWLER_RESEARCH:
+		{
+#if RTS_ZEROHOUR
+			TiberiumStart::researchCrawlerPower( getMessagePlayer( msg ) );
 #endif
 			break;
 		}

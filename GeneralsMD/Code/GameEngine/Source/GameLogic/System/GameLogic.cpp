@@ -2230,6 +2230,18 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 					}
 				}
 				placeNetworkBuildingsForPlayer(i, slot, player, pt);
+				// Tiberium Project @feature a faction with a Crawler power (its Tier IV) that starts as Zero Hour's
+				if (TiberiumStart::hasEntryData(pt))
+				{
+					AsciiString startName;
+					startName.format("Player_%d_Start", slot->getStartPos()+1);
+					Waypoint *start = findNamedWaypoint(startName);
+					Coord3D home;
+					home.zero();
+					if (start != nullptr)
+						home = *start->getLocation();
+					TiberiumStart::addPlayer(player, pt, &home);
+				}
 			}
 
 			updateLoadProgress(progressCount++);

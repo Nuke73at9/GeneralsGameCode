@@ -143,6 +143,12 @@ public:
 	AsciiString getStartArrival( Int i ) const { return ( i >= 0 && i < m_startArrivalCount ) ? m_startArrivals[i] : AsciiString::TheEmptyString; }
 	UnsignedInt getStartRedeployTime() const { return m_startRedeployTime; }
 	Bool hasStartArrivalUnits() const { return m_startArrivalUnits; }	///< its StartingUnits come out beside the start's pick
+	/// Tiberium Project @feature a general's power to call one of these (C&C4's Crawlers) as the start's are called, once
+	/// the player has CrawlerPowerUpgrade (the Tiberium factions' Tier IV); another CrawlerPowerWait after it is lost
+	Int getCrawlerPowerCount() const { return m_crawlerPowerCount; }
+	AsciiString getCrawlerPower( Int i ) const { return ( i >= 0 && i < m_crawlerPowerCount ) ? m_crawlerPowers[i] : AsciiString::TheEmptyString; }
+	const AsciiString& getCrawlerPowerUpgrade() const { return m_crawlerPowerUpgrade; }
+	UnsignedInt getCrawlerPowerWait() const { return m_crawlerPowerWait; }
 
 	static const FieldParse* getFieldParse();
 
@@ -155,6 +161,7 @@ protected:
 	static void parseProductionTimeChange( INI* ini, void *instance, void *store, const void* /*userData*/ );
 	static void parseProductionVeterancyLevel( INI* ini, void *instance, void *store, const void* /*userData*/ );
 	static void parseStartArrival( INI* ini, void *instance, void *store, const void* /*userData*/ );	///< Tiberium Project
+	static void parseCrawlerPower( INI* ini, void *instance, void *store, const void* /*userData*/ );	///< Tiberium Project
 
 private:
 
@@ -188,6 +195,10 @@ private:
 	Int								m_startArrivalCount;
 	UnsignedInt				m_startRedeployTime;								///< Tiberium Project: frames from a loss to the next (0: none)
 	Bool							m_startArrivalUnits;								///< Tiberium Project: the StartingUnits come with the start's pick
+	AsciiString				m_crawlerPowers[MAX_START_ARRIVALS];	///< Tiberium Project: the Crawler power's classes
+	Int								m_crawlerPowerCount;
+	AsciiString				m_crawlerPowerUpgrade;							///< Tiberium Project: the upgrade that gives the power
+	UnsignedInt				m_crawlerPowerWait;									///< Tiberium Project: frames from a loss to the next
 
 	Int								m_intrinsicSPP;
 

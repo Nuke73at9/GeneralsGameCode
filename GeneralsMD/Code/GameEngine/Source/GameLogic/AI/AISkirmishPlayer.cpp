@@ -1112,7 +1112,7 @@ void AISkirmishPlayer::newMap()
 			adjustBuildList(buildList); // adjust to  our start position.
 			// Tiberium Project @feature C&C4's match start: its command center is never built from the list (none at the
 			// start; the faction's MCV deploys into one, which then takes its place: AIPlayer::onStructureProduced)
-			if (TiberiumStart::hasEntry(m_player))
+			if (TiberiumStart::startsByArrival(m_player))
 			{
 				for( BuildListInfo *info = buildList; info; info = info->getNext() )
 				{

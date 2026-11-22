@@ -180,7 +180,7 @@ void AIPlayer::onStructureProduced( Object *factory, Object *bldg )
 
 	// Tiberium Project @feature C&C4's match start (TiberiumStart): a structure no dozer of the list built (the faction's
 	// MCV deployed into its command center) takes the first entry of its kind that stands empty, so the AI builds from it
-	if (TiberiumStart::hasEntry(m_player))
+	if (TiberiumStart::startsByArrival(m_player))
 	{
 		for( info = m_player->getBuildList(); info; info = info->getNext() )
 		{

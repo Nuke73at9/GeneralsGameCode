@@ -34,6 +34,8 @@
 #include "Common/AbramGameRules.h"
 #include "Common/Upgrade.h"
 #include "Common/Player.h"
+#include "Common/ThingFactory.h"	// Tiberium Project
+#include "Common/ThingTemplate.h"	// Tiberium Project
 #include "Common/Xfer.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/Image.h"
@@ -125,6 +127,8 @@ const FieldParse UpgradeTemplate::m_upgradeFieldParseTable[] =
 	{ "UnitSpecificSound",	INI::parseAudioEventRTS,	nullptr, offsetof( UpgradeTemplate, m_unitSpecificSound ) },
 	{ "AcademyClassify",		INI::parseIndexList,			TheAcademyClassificationTypeNames, offsetof( UpgradeTemplate, m_academyClassificationType ) },
 	{ "NeededUpgrade",			INI::parseAsciiString,		nullptr, offsetof( UpgradeTemplate, m_neededUpgradeName ) },	// Tiberium Project
+	{ "NeededObjects",			UpgradeTemplate::parseNameList,	nullptr, offsetof( UpgradeTemplate, m_neededObjects ) },	// Tiberium Project
+	{ "NeededObjectsAny",		UpgradeTemplate::parseNameList,	nullptr, offsetof( UpgradeTemplate, m_neededObjectsAny ) },	// Tiberium Project
 	{ "SideResearchSound",	UpgradeTemplate::parseSideResearchSound,	nullptr, 0 },	// Tiberium Project
 	{ nullptr,						nullptr,												 nullptr, 0 }
 
@@ -150,6 +154,17 @@ UpgradeTemplate::UpgradeTemplate()
 UpgradeTemplate::~UpgradeTemplate()
 {
 
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature a list of object names ("NeededObjects = A B C"); a later line replaces an earlier one's
+//-------------------------------------------------------------------------------------------------
+void UpgradeTemplate::parseNameList( INI *ini, void * /*instance*/, void *store, const void * /*userData*/ )
+{
+	std::vector<AsciiString> *names = (std::vector<AsciiString> *)store;
+	names->clear();
+	for( const char *token = ini->getNextTokenOrNull(); token != nullptr; token = ini->getNextTokenOrNull() )
+		names->push_back( AsciiString( token ) );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -496,6 +511,10 @@ Bool UpgradeCenter::canAffordUpgrade( Player *player, const UpgradeTemplate *upg
 			return FALSE;
 	}
 
+	// Tiberium Project @feature what must stand first (NeededObjects, NeededObjectsAny)
+	if( !hasNeededObjects( player, upgradeTemplate, nullptr ) )
+		return FALSE;
+
 	// money check
 	Money *money = player->getMoney();
 	if( money->countMoney() < upgradeTemplate->calcCostToBuild( player ) )
@@ -512,6 +531,77 @@ Bool UpgradeCenter::canAffordUpgrade( Player *player, const UpgradeTemplate *upg
 
 	return TRUE;  // all is well
 
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature whether the player has, finished and standing, every one of the upgrade's NeededObjects and
+	one of its NeededObjectsAny (names it does not know count as missing) */
+//-------------------------------------------------------------------------------------------------
+Bool UpgradeCenter::hasNeededObjects( const Player *player, const UpgradeTemplate *upgradeTemplate, UnicodeString *missing ) const
+{
+	if( player == nullptr || upgradeTemplate == nullptr )
+		return FALSE;
+	const std::vector<AsciiString> &all = upgradeTemplate->getNeededObjects();
+	const std::vector<AsciiString> &any = upgradeTemplate->getNeededObjectsAny();
+	if( all.empty() && any.empty() )
+		return TRUE;
+	Bool ok = TRUE;
+	for( size_t i = 0; i < all.size(); ++i )
+	{
+		const ThingTemplate *t = TheThingFactory->findTemplate( all[i] );
+		Int count = 0;
+		if( t != nullptr )
+			player->countObjectsByThingTemplate( 1, &t, TRUE, &count, TRUE );
+		if( count > 0 )
+			continue;
+		ok = FALSE;
+		if( missing != nullptr )
+		{
+			if( !missing->isEmpty() )
+				missing->concat( L", " );
+			if( t != nullptr )
+				missing->concat( t->getDisplayName() );
+			else
+			{
+				UnicodeString name;	// (a name no object has: shown as it is written)
+				name.translate( all[i] );
+				missing->concat( name );
+			}
+		}
+	}
+	if( !any.empty() )
+	{
+		Bool found = FALSE;
+		for( size_t i = 0; i < any.size() && !found; ++i )
+		{
+			const ThingTemplate *t = TheThingFactory->findTemplate( any[i] );
+			Int count = 0;
+			if( t != nullptr )
+				player->countObjectsByThingTemplate( 1, &t, TRUE, &count, TRUE );
+			found = count > 0;
+		}
+		if( !found )
+		{
+			ok = FALSE;
+			if( missing != nullptr )
+			{
+				const ThingTemplate *first = TheThingFactory->findTemplate( any[0] );
+				if( !missing->isEmpty() )
+					missing->concat( L", " );
+				if( first != nullptr )
+					missing->concat( first->getDisplayName() );
+				else
+				{
+					UnicodeString name;
+					name.translate( any[0] );
+					missing->concat( name );
+				}
+				if( any.size() > 1 )
+					missing->concat( L" (or another)" );
+			}
+		}
+	}
+	return ok;
 }
 
 //-------------------------------------------------------------------------------------------------

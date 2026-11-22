@@ -28,13 +28,16 @@
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/ThingTemplate.h"
+#include "Common/PlayerTemplate.h"
 #include "Common/TiberiumTest.h"
+#include "Common/Upgrade.h"
 #include "GameClient/Display.h"
 #include "GameClient/DisplayString.h"
 #include "GameClient/DisplayStringManager.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/GameFont.h"
 #include "GameClient/GameWindow.h"
+#include "GameClient/GameText.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/Image.h"
 #include "GameClient/InGameUI.h"
@@ -69,7 +72,9 @@ namespace
 		TOP_CLASS,				///< the start: the class picked; opens the box
 		TOP_DEPLOY,				///< after it: call another Crawler
 		TOP_DECOMMISSION,	///< the player's Crawler, selected
-		TOP_CANCEL				///< a redeployment's marker put away
+		TOP_CANCEL,				///< a redeployment's marker put away
+		TOP_POWER,				///< its Crawler power (the Tiberium factions' Tier IV)
+		TOP_TIER					///< the Crawler power's upgrade, researched
 	};
 
 	const UnsignedInt HOLD_FRAMES = LOGICFRAMES_PER_SECOND;						///< C&C4's CenterHoldDuration
@@ -80,6 +85,7 @@ namespace
 
 	Mode s_mode = MODE_NONE;
 	Bool s_redeploy = FALSE;					///< the box and the marker call a Crawler (after the start)
+	Int s_list = TiberiumStart::LIST_START;	///< whose list: the start's, or the Crawler power's
 	Int s_class = -1;									///< the card picked (a redeployment's; the start's goes to the logic at once)
 	Int s_hoverCard = -1;
 	Bool s_hoverCancel = FALSE;
@@ -156,6 +162,24 @@ namespace
 		return TheGameLogic != nullptr ? TheGameLogic->getFrame() : 0;
 	}
 
+	/// the upgrade that gives the local player its Crawler power
+	const UpgradeTemplate *tierUpgrade()
+	{
+		const Player *me = localPlayer();
+		const PlayerTemplate *pt = me != nullptr ? me->getPlayerTemplate() : nullptr;
+		if( pt == nullptr || pt->getCrawlerPowerUpgrade().isEmpty() || TheUpgradeCenter == nullptr )
+			return nullptr;
+		return TheUpgradeCenter->findUpgrade( pt->getCrawlerPowerUpgrade() );
+	}
+
+	UnicodeString tierName()
+	{
+		const UpgradeTemplate *up = tierUpgrade();
+		if( up != nullptr && TheGameText != nullptr && up->getDisplayNameLabel().isNotEmpty() )
+			return upper( TheGameText->fetchOrSubstitute( up->getDisplayNameLabel().str(), L"Tier IV" ) );
+		return UnicodeString( L"TIER IV" );
+	}
+
 	/// the player's own Crawler, the only one selected
 	Object *selectedCrawler()
 	{
@@ -179,6 +203,7 @@ namespace
 		msg->appendIntegerArgument( choice );
 		msg->appendLocationArgument( at );
 		msg->appendIntegerArgument( spot != nullptr ? 1 : 0 );
+		msg->appendIntegerArgument( s_redeploy ? s_list : (Int)TiberiumStart::LIST_START );
 		if( spot != nullptr && !s_redeploy )
 		{
 			s_sent = TRUE;
@@ -189,10 +214,11 @@ namespace
 			TiberiumTest::log( "frame %u: start view: pick %d sent%s (%.0f %.0f)", now(), (int)choice, spot != nullptr ? " with a spot" : "", at.x, at.y );
 	}
 
-	void openBox( Bool redeploy )
+	void openBox( Bool redeploy, Int list )
 	{
 		s_mode = MODE_BOX;
 		s_redeploy = redeploy;
+		s_list = redeploy ? list : (Int)TiberiumStart::LIST_START;
 		s_hoverCard = -1;
 		s_hoverCancel = FALSE;
 	}
@@ -201,6 +227,7 @@ namespace
 	{
 		s_mode = MODE_NONE;
 		s_redeploy = FALSE;
+		s_list = TiberiumStart::LIST_START;
 		s_class = -1;
 	}
 
@@ -208,7 +235,7 @@ namespace
 	void pickCard( Int i )
 	{
 		Player *me = localPlayer();
-		if( i < 0 || i >= TiberiumStart::getChoiceCount( me ) )
+		if( i < 0 || i >= TiberiumStart::getChoiceCount( me, s_list ) )
 			return;
 		s_class = i;
 		if( s_redeploy )
@@ -256,7 +283,7 @@ namespace
 	{
 		const Real u = scale();
 		B->u = u;
-		B->count = max( 1, TiberiumStart::getChoiceCount( localPlayer() ) );
+		B->count = max( 1, TiberiumStart::getChoiceCount( localPlayer(), s_list ) );
 		const Int pad = px( 14.0f ), gap = px( 10.0f );
 		B->cardW = px( 124.0f );
 		B->cardH = px( 150.0f );
@@ -301,7 +328,7 @@ namespace
 		const Int chosen = s_redeploy ? s_class : ( s_class >= 0 ? s_class : TiberiumStart::getChosen( me ) );
 		for( Int i = 0; i < B.count && i < TiberiumStart::MOST_CHOICES; ++i )
 		{
-			const ThingTemplate *t = TiberiumStart::getChoice( me, i );
+			const ThingTemplate *t = TiberiumStart::getChoice( me, i, s_list );
 			const Bool hover = s_hoverCard == i, on = chosen == i;
 			const Int x = B.cardX[i], y = B.cardY;
 			TheDisplay->drawFillRect( x, y, B.cardW, B.cardH, on || hover ? l.fillOn : l.fill );
@@ -317,7 +344,7 @@ namespace
 		if( s_hoverCard >= 0 )
 		{
 			UnicodeString line;
-			line.format( L"Select this button to play as the %ls.", nameOf( TiberiumStart::getChoice( me, s_hoverCard ) ).str() );
+			line.format( L"Select this button to play as the %ls.", nameOf( TiberiumStart::getChoice( me, s_hoverCard, s_list ) ).str() );
 			drawTextIn( line, lineSize, FALSE, B.x + px( 14.0f ), B.lineY, B.w - px( 28.0f ), l.textDim );
 		}
 		drawButton( l, B.cancelX, B.cancelY, B.cancelW, B.cancelH, u, "CANCEL", max( 8, px( 12.0f ) ), FALSE, s_hoverCancel, FALSE );
@@ -396,7 +423,7 @@ namespace
 			out.push_back( e );
 			return;
 		}
-		if( !TiberiumStart::redeploys( me ) || !me->isPlayerActive() )
+		if( !me->isPlayerActive() )
 			return;
 		if( s_redeploy && s_mode == MODE_PLACE )
 		{
@@ -406,19 +433,51 @@ namespace
 			e.label = UnicodeString( L"CANCEL DEPLOY" );
 			out.push_back( e );
 		}
-		else if( !TiberiumStart::hasCrawler( me ) && s_mode == MODE_NONE )
+		else if( s_mode == MODE_NONE )
 		{
-			const UnsignedInt when = TiberiumStart::getRedeployFrame( me );
-			TopEntry e;
-			e.what = TOP_DEPLOY;
-			e.dim = when == 0 || frame < when;
-			if( when != 0 && frame < when )
+			// a Crawler called again (the start's list), or by the Crawler power; each with its wait counted down
+			for( Int list = TiberiumStart::LIST_START; list <= TiberiumStart::LIST_POWER; ++list )
 			{
-				const UnsignedInt seconds = ( when - frame + LOGICFRAMES_PER_SECOND - 1 ) / LOGICFRAMES_PER_SECOND;
-				e.label.format( L"DEPLOY MCV  %u:%02u", seconds / 60, seconds % 60 );
+				if( list == TiberiumStart::LIST_START ? !TiberiumStart::redeploys( me ) : !TiberiumStart::hasCrawlerPower( me ) )
+					continue;
+				if( TiberiumStart::hasCrawler( me, list ) )
+					continue;
+				const UnsignedInt when = TiberiumStart::getRedeployFrame( me, list );
+				const wchar_t *name = list == TiberiumStart::LIST_START ? L"DEPLOY MCV" : L"CALL CRAWLER";
+				TopEntry e;
+				e.what = list == TiberiumStart::LIST_START ? TOP_DEPLOY : TOP_POWER;
+				e.dim = when == 0 || frame < when;
+				if( when != 0 && frame < when )
+				{
+					const UnsignedInt seconds = ( when - frame + LOGICFRAMES_PER_SECOND - 1 ) / LOGICFRAMES_PER_SECOND;
+					e.label.format( L"%ls  %u:%02u", name, seconds / 60, seconds % 60 );
+				}
+				else
+					e.label = UnicodeString( name );
+				out.push_back( e );
+			}
+		}
+		// the Crawler power's upgrade: its price, then its research's share done
+		Real progress = 0.0f;
+		const Int research = TiberiumStart::getCrawlerPowerResearch( me, &progress );
+		const UpgradeTemplate *up = tierUpgrade();
+		if( up != nullptr && ( research == TiberiumStart::RESEARCH_OPEN || research == TiberiumStart::RESEARCH_RUNNING ) )
+		{
+			TopEntry e;
+			e.what = TOP_TIER;
+			UnicodeString amount;
+			if( research == TiberiumStart::RESEARCH_RUNNING )
+			{
+				amount.format( L"  %d%%", (Int)( progress * 100.0f ) );
+				e.dim = TRUE;
 			}
 			else
-				e.label = UnicodeString( L"DEPLOY MCV" );
+			{
+				amount.format( L"  $%d", up->calcCostToBuild( me ) );
+				e.dim = !TheUpgradeCenter->canAffordUpgrade( me, up, FALSE );
+			}
+			e.label = tierName();
+			e.label.concat( amount );
 			out.push_back( e );
 		}
 		if( selectedCrawler() != nullptr && !TiberiumStart::isDecommissioning( me ) )
@@ -448,24 +507,34 @@ namespace
 		switch( what )
 		{
 			case TOP_CLASS:
-				openBox( FALSE );
+				openBox( FALSE, TiberiumStart::LIST_START );
 				break;
 			case TOP_DEPLOY:
+			case TOP_POWER:
 			{
-				const UnsignedInt when = TiberiumStart::getRedeployFrame( me );
+				const Int list = what == TOP_POWER ? (Int)TiberiumStart::LIST_POWER : (Int)TiberiumStart::LIST_START;
+				const UnsignedInt when = TiberiumStart::getRedeployFrame( me, list );
 				if( when != 0 && frame >= when )
-					openBox( TRUE );
+					openBox( TRUE, list );
 				break;
 			}
 			case TOP_CANCEL:
 				closeAll();
 				break;
+			case TOP_TIER:
+				if( TheMessageStream != nullptr )
+					TheMessageStream->appendMessage( GameMessage::MSG_TIBERIUM_CRAWLER_RESEARCH );
+				break;
 			case TOP_DECOMMISSION:
 				if( frame < s_confirmUntil )
 				{
 					s_confirmUntil = 0;
-					if( TheMessageStream != nullptr )
-						TheMessageStream->appendMessage( GameMessage::MSG_TIBERIUM_CRAWLER_DECOMMISSION );
+					Object *crawler = selectedCrawler();
+					if( TheMessageStream != nullptr && crawler != nullptr )
+					{
+						GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_TIBERIUM_CRAWLER_DECOMMISSION );
+						msg->appendObjectIDArgument( crawler->getID() );
+					}
 				}
 				else
 					s_confirmUntil = frame + CONFIRM_FRAMES;
@@ -489,6 +558,18 @@ namespace
 			label.translate( buttons[i].label );
 			drawButton( l, x + (Int)i * ( bw + gap ), y, bw, h, scale(), label.str(), size,
 				buttons[i].what == TOP_DECOMMISSION && now() < s_confirmUntil, s_hoverTop == (Int)i, buttons[i].dim );
+			// (under the upgrade's button: what must stand first)
+			UnicodeString missing;
+			if( buttons[i].what == TOP_TIER && TiberiumStart::getCrawlerPowerResearch( localPlayer(), nullptr ) == TiberiumStart::RESEARCH_OPEN
+				&& tierUpgrade() != nullptr && !TheUpgradeCenter->hasNeededObjects( localPlayer(), tierUpgrade(), &missing ) )
+			{
+				UnicodeString line( L"Needs: " );
+				line.concat( missing );
+				const Int lineSize = max( 8, px( 11.0f ) );
+				const Int lw = widthOf( line, lineSize, FALSE );
+				const Int bx = x + (Int)i * ( bw + gap );
+				drawText( line, lineSize, FALSE, bx + ( bw - lw ) / 2, y + h + px( 3.0f ), l.textDim );
+			}
 		}
 	}
 
@@ -799,7 +880,7 @@ void TiberiumStartView::update()
 		{
 			s_boxOpened = TRUE;
 			if( TiberiumStart::getChosen( me ) < 0 )
-				openBox( FALSE );
+				openBox( FALSE, TiberiumStart::LIST_START );
 		}
 	}
 	else
@@ -809,7 +890,7 @@ void TiberiumStartView::update()
 		if( !s_redeploy && s_mode != MODE_NONE )
 			closeAll();
 		// a redeployment no longer wanted (one came, or it may not now)
-		if( s_redeploy && ( TiberiumStart::hasCrawler( me ) || !TiberiumStart::redeploys( me ) ) )
+		if( s_redeploy && ( TiberiumStart::hasCrawler( me, s_list ) || TiberiumStart::getRedeployFrame( me, s_list ) == 0 ) )
 			closeAll();
 	}
 	if( s_sent )
@@ -940,7 +1021,7 @@ void TiberiumStartView::reset()
 }
 
 //-------------------------------------------------------------------------------------------------
-void TiberiumStartView::testPick( Int choice, Real dx, Real dy, Bool hasSpot )
+void TiberiumStartView::testPick( Int choice, Real dx, Real dy, Bool hasSpot, Int list )
 {
 	Player *me = localPlayer();
 	Coord3D home;
@@ -948,8 +1029,8 @@ void TiberiumStartView::testPick( Int choice, Real dx, Real dy, Bool hasSpot )
 		return;
 	if( !TiberiumStart::isStartPending() )
 	{
-		// a redeployment: the box's card, then the click
-		openBox( TRUE );
+		// a redeployment (or the Crawler power): the box's card, then the click
+		openBox( TRUE, list );
 		pickCard( choice );
 		if( hasSpot )
 		{
@@ -965,7 +1046,7 @@ void TiberiumStartView::testPick( Int choice, Real dx, Real dy, Bool hasSpot )
 	}
 	if( choice >= 0 )
 	{
-		openBox( FALSE );
+		openBox( FALSE, TiberiumStart::LIST_START );
 		pickCard( choice );
 	}
 	if( hasSpot )
@@ -982,8 +1063,13 @@ void TiberiumStartView::testPick( Int choice, Real dx, Real dy, Bool hasSpot )
 //-------------------------------------------------------------------------------------------------
 void TiberiumStartView::testDecommission()
 {
+	// the selected Crawler, as the button's second click does (none selected: the start's list's first)
+	Object *crawler = selectedCrawler();
 	if( TheMessageStream != nullptr )
-		TheMessageStream->appendMessage( GameMessage::MSG_TIBERIUM_CRAWLER_DECOMMISSION );
+	{
+		GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_TIBERIUM_CRAWLER_DECOMMISSION );
+		msg->appendObjectIDArgument( crawler != nullptr ? crawler->getID() : INVALID_ID );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1004,9 +1090,13 @@ void TiberiumStartView::describe( char *buffer, Int size )
 		top += buttons[i].dim ? " (dim); " : "; ";
 	}
 	snprintf( buffer, size, "entry %d, start pending %d (class box from %u, arrivals %u), mode %d%s, class %d, chosen %d, spot %s %.0f %.0f "
-		"(home %.0f %.0f), crawler %d, redeploy frame %u, decommissioning %d, zones shown %d, buttons: %s",
+		"(home %.0f %.0f), crawler %d, redeploy frame %u, power %d (crawler %d, frame %u, upgrade %s, research %d), decommissioning %d, "
+		"zones shown %d, buttons: %s",
 		(int)TiberiumStart::hasEntry( me ), (int)TiberiumStart::isStartPending(), TiberiumStart::getIntroEndFrame(),
 		TiberiumStart::getDeployFrame(), (int)s_mode, s_redeploy ? " (redeploy)" : "", (int)s_class, (int)TiberiumStart::getChosen( me ),
 		hasSpot ? "at" : "none", hasSpot ? spot.x : 0.0f, hasSpot ? spot.y : 0.0f, home.x, home.y, (int)TiberiumStart::hasCrawler( me ),
-		TiberiumStart::getRedeployFrame( me ), (int)TiberiumStart::isDecommissioning( me ), (int)showsZones(), top.c_str() );
+		TiberiumStart::getRedeployFrame( me ), (int)TiberiumStart::hasCrawlerPower( me ),
+		(int)TiberiumStart::hasCrawler( me, TiberiumStart::LIST_POWER ), TiberiumStart::getRedeployFrame( me, TiberiumStart::LIST_POWER ),
+		tierUpgrade() != nullptr ? tierUpgrade()->getUpgradeName().str() : "none", (int)TiberiumStart::getCrawlerPowerResearch( me, nullptr ),
+		(int)TiberiumStart::isDecommissioning( me ), (int)showsZones(), top.c_str() );
 }

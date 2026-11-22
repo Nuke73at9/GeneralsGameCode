@@ -187,6 +187,11 @@ public:
 	const AudioEventRTS* getResearchCompleteSound( const AsciiString& side, const AsciiString& baseSide ) const;
 	/// Tiberium Project @feature "SideResearchSound = <side> <sound>" (C&C4's upgrades: each side's engineer)
 	static void parseSideResearchSound( INI *ini, void *instance, void *store, const void *userData );
+	/// Tiberium Project @feature what the player must have standing first: NeededObjects every one of them,
+	/// NeededObjectsAny one of them (the Tiberium factions' Tier IV: a commando, their tech structures, the superweapon)
+	const std::vector<AsciiString>& getNeededObjects() const { return m_neededObjects; }
+	const std::vector<AsciiString>& getNeededObjectsAny() const { return m_neededObjectsAny; }
+	static void parseNameList( INI *ini, void *instance, void *store, const void *userData );
 
 	/// inventory pictures
 	void cacheButtonImage();
@@ -220,6 +225,8 @@ protected:
 	AsciiString m_neededUpgradeName;		///< Tiberium Project @feature the upgrade the player must have first (C&C4's tech tiers)
 	std::vector<AsciiString> m_researchSoundSides;		///< Tiberium Project @feature SideResearchSound's sides
 	std::vector<AudioEventRTS> m_researchSideSounds;	///< Tiberium Project @feature and their sounds
+	std::vector<AsciiString> m_neededObjects;					///< Tiberium Project @feature NeededObjects
+	std::vector<AsciiString> m_neededObjectsAny;			///< Tiberium Project @feature NeededObjectsAny
 
 	UpgradeTemplate *m_next;						///< next
 	UpgradeTemplate *m_prev;						///< prev
@@ -257,6 +264,9 @@ public:
 
 	/// does this player have all the necessary things to make this upgrade
 	Bool canAffordUpgrade( Player *player, const UpgradeTemplate *upgradeTemplate, Bool displayReason = FALSE ) const;
+	/// Tiberium Project @feature whether the player has what the upgrade's NeededObjects and NeededObjectsAny ask for
+	/// standing (finished); 'missing' (may be null) gets the display names of what it lacks
+	Bool hasNeededObjects( const Player *player, const UpgradeTemplate *upgradeTemplate, UnicodeString *missing ) const;
 	std::vector<AsciiString> getUpgradeNames() const;	// For WorldBuilder only!!!
 
 	static void parseUpgradeDefinition( INI *ini );

@@ -42,6 +42,15 @@
 // while one of its list stands (either form: it is its base, as in C&C4), while it may call another and still has
 // anything on the map, or for a short while after it decommissions its last object.
 //
+// Tiberium Project @feature the Crawler power (the Tiberium factions' Tier IV), opt-in in the same way:
+//   PlayerTemplate FactionAmerica
+//     CrawlerPower = C4_GDICrawlerBVehicle C4_GDICrawlerAVehicle C4_GDICrawlerCVehicle
+//     CrawlerPowerUpgrade = Upgrade_TibTierIV_GDI   ; the player upgrade that gives it (none: from the start)
+//     CrawlerPowerWait = 360000                    ; ms after its Crawler is lost or decommissioned before another
+//   End
+// Such a player (whatever its start) may call one of that list as the start's are called, one at a time. The
+// upgrade is researched here (MSG_TIBERIUM_CRAWLER_RESEARCH: its price, its time, its NeededObjects first).
+//
 // The picks are messages (MSG_TIBERIUM_CRAWLER_PICK, MSG_TIBERIUM_CRAWLER_DECOMMISSION), so every machine
 // makes the same; the state is saved with the game logic (it is made again from the players after a load of
 // a save that has none).
@@ -60,9 +69,17 @@ class Xfer;
 class TiberiumStart
 {
 public:
+	enum
+	{
+		LIST_START = 0,		///< the start's list (StartArrival)
+		LIST_POWER = 1		///< the Crawler power's (CrawlerPower)
+	};
+
 	// the logic's side
 	static Bool usesArrival( const PlayerTemplate *pt );		///< the faction starts and redeploys this way
-	/// GameLogic::startNewGame, in place of the start buildings: 'home' is the player's start
+	static Bool hasEntryData( const PlayerTemplate *pt );		///< it starts this way, or has a Crawler power
+	/// GameLogic::startNewGame, in place of the start buildings ('home' is the player's start); and for a faction that
+	/// starts as Zero Hour's with a Crawler power, after them
 	static void addPlayer( Player *player, const PlayerTemplate *pt, const Coord3D *home );
 	static void begin( Bool loadingSaveGame );							///< once the players are placed (and after a load)
 	static void reset();
@@ -70,8 +87,13 @@ public:
 	static void xfer( Xfer *xfer );
 	static void loadPostProcess();
 	/// a player's pick (MSG_TIBERIUM_CRAWLER_PICK): before the start's end, its choice and spot; after, a Crawler called
-	static void pick( Player *player, Int choice, const Coord3D *spot, Bool hasSpot );
-	static void decommission( Player *player );							///< MSG_TIBERIUM_CRAWLER_DECOMMISSION
+	/// (the start's list's, or the Crawler power's)
+	static void pick( Player *player, Int choice, const Coord3D *spot, Bool hasSpot, Int list = LIST_START );
+	/// MSG_TIBERIUM_CRAWLER_DECOMMISSION: its Crawler 'id' (INVALID_ID: the start's list's first it has)
+	static void decommission( Player *player, ObjectID id );
+	/// MSG_TIBERIUM_CRAWLER_RESEARCH: the Crawler power's upgrade bought (its NeededObjects standing, its price paid), done
+	/// after its research time
+	static void researchCrawlerPower( Player *player );
 
 	// what the client and the victory check ask (read only)
 	static Bool isActive();																///< someone in this game starts this way
@@ -82,8 +104,9 @@ public:
 	/// (either form), it may call another and still has something, or it has just decommissioned its last
 	static Bool isKeptIn( const Player *player );
 	static Bool hasEntry( const Player *player );
-	static Int getChoiceCount( const Player *player );
-	static const ThingTemplate *getChoice( const Player *player, Int i );
+	static Bool startsByArrival( const Player *player );		///< it has an entry and its faction starts this way (StartArrival)
+	static Int getChoiceCount( const Player *player, Int list = LIST_START );
+	static const ThingTemplate *getChoice( const Player *player, Int i, Int list = LIST_START );
 	static Int getChosen( const Player *player );						///< -1: not yet
 	static Bool getSpot( const Player *player, Coord3D *spot );	///< its start's landing spot, once picked
 	static Bool getHome( const Player *player, Coord3D *home );
@@ -92,9 +115,14 @@ public:
 	static Bool isSpotAllowed( const Player *player, const Coord3D *spot, const char **why );
 	static Real getMarkerRadius();												///< C&C4's landing ring (125)
 	static Bool redeploys( const Player *player );					///< it may call another after a loss
-	static Bool hasCrawler( const Player *player );					///< one of its list, either form, is on the map
-	static Bool isCrawler( const Object *obj );							///< one of its player's list, either form
-	static UnsignedInt getRedeployFrame( const Player *player );	///< when it may call one (0: not now: it has one, or never)
+	static Bool hasCrawler( const Player *player, Int list = LIST_START );	///< one of its list, either form, is on the map
+	static Bool isCrawler( const Object *obj );							///< one of its player's lists, either form
+	static Bool hasCrawlerPower( const Player *player );		///< it has its Crawler power's upgrade
+	enum { RESEARCH_NONE, RESEARCH_OPEN, RESEARCH_RUNNING, RESEARCH_DONE };
+	/// where its Crawler power's upgrade stands ('progress': the research's share done)
+	static Int getCrawlerPowerResearch( const Player *player, Real *progress );
+	/// when it may call one (0: not now: it has one, or never; the Crawler power: once it has its upgrade)
+	static UnsignedInt getRedeployFrame( const Player *player, Int list = LIST_START );
 	static Bool isDecommissioning( const Player *player );
 
 	enum

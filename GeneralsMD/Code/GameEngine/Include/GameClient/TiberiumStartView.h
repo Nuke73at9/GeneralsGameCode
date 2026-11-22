@@ -28,8 +28,8 @@
 //     drawn meanwhile.
 //   - DEPLOY! across the screen as the countdown ends
 //   - after the start, with redeployment: DEPLOY MCV at the top once the Crawler is lost (its wait counted
-//     down), which opens the box and the marker again; DECOMMISSION when the player's Crawler alone is
-//     selected (a second click within 3 s confirms)
+//     down), which opens the box and the marker again; with a Crawler power (Tier IV), CALL CRAWLER in the same
+//     way; DECOMMISSION when one of the player's Crawlers alone is selected (a second click within 3 s confirms)
 // Drawing and the player's messages only: the logic decides (MSG_TIBERIUM_CRAWLER_PICK, ..._DECOMMISSION).
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -50,7 +50,8 @@ public:
 	static Bool isPlacing();		///< the marker follows the mouse
 
 	// test hooks (TiberiumTest)
-	static void testPick( Int choice, Real dx, Real dy, Bool hasSpot );	///< the box's card, then a click at the start + dx,dy
+	/// the box's card, then a click at the start + dx,dy (list 1: the Crawler power's)
+	static void testPick( Int choice, Real dx, Real dy, Bool hasSpot, Int list = 0 );
 	static void testDecommission();
 	static void describe( char *buffer, Int size );
 };

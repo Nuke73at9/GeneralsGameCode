@@ -516,7 +516,7 @@ void AISkirmishPlayer::commandProduction()
 
 	// Tiberium Project @feature C&C4's match start: a player that started without a builder (its MCV became its command
 	// center) has one built, as Zero Hour's start would have given it one; its scripts build its base with it
-	if( muster.dozers == 0 && !muster.producers.empty() && TiberiumStart::hasEntry( m_player ) && !dozerInQueue() )
+	if( muster.dozers == 0 && !muster.producers.empty() && TiberiumStart::startsByArrival( m_player ) && !dozerInQueue() )
 	{
 		if( TiberiumTest::isActive() )
 			TiberiumTest::log( "frame %u: AI player %d has no builder: one is queued", now, (Int)m_player->getPlayerIndex() );
