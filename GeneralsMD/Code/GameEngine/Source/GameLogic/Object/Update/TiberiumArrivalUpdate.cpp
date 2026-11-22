@@ -101,7 +101,16 @@ TiberiumArrivalUpdate::TiberiumArrivalUpdate( Thing *thing, const ModuleData* mo
 	m_stage = STAGE_START;
 	m_style = TIBERIUM_ARRIVAL_DROP;
 	m_startFrame = m_endFrame = 0;
+	m_placed = FALSE;
 	setWakeFrame( getObject(), UPDATE_SLEEP_NONE );
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool TiberiumArrivalUpdate::isArriving() const
+{
+	if( m_stage == STAGE_START )
+		return m_placed;
+	return m_stage == STAGE_ARRIVING || m_stage == STAGE_FLARE || m_stage == STAGE_POD;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -196,22 +205,32 @@ UpdateSleepTime TiberiumArrivalUpdate::update()
 	if( m_stage == STAGE_START )
 	{
 		m_stage = STAGE_DONE;
-		// only what a factory made, in a game with zones
-		if( !TiberiumZones::isOn() || me->getProducerID() == INVALID_ID || me->isEffectivelyDead() )
-			return UPDATE_SLEEP_FOREVER;
 		const Player *player = me->getControllingPlayer();
-		const Object *factory = TheGameLogic->findObjectByID( me->getProducerID() );
-		const Coord3D *towards = me->getPosition();
-		if( factory != nullptr )
+		Coord3D spot = *me->getPosition();
+		if( m_placed )
 		{
-			towards = factory->getPosition();
-			const ExitInterface *exit = factory->getObjectExitInterface();
-			if( exit != nullptr && exit->getRallyPoint() != nullptr )
-				towards = exit->getRallyPoint();
+			// Tiberium Project @feature made at its spot (C&C4's match start, a redeployment): it arrives there
+			m_placed = FALSE;
+			if( me->isEffectivelyDead() )
+				return UPDATE_SLEEP_FOREVER;
 		}
-		Coord3D spot;
-		if( !TiberiumZones::findArrival( player, towards, &spot ) )
-			return UPDATE_SLEEP_FOREVER;
+		else
+		{
+			// only what a factory made, in a game with zones
+			if( !TiberiumZones::isOn() || me->getProducerID() == INVALID_ID || me->isEffectivelyDead() )
+				return UPDATE_SLEEP_FOREVER;
+			const Object *factory = TheGameLogic->findObjectByID( me->getProducerID() );
+			const Coord3D *towards = me->getPosition();
+			if( factory != nullptr )
+			{
+				towards = factory->getPosition();
+				const ExitInterface *exit = factory->getObjectExitInterface();
+				if( exit != nullptr && exit->getRallyPoint() != nullptr )
+					towards = exit->getRallyPoint();
+			}
+			if( !TiberiumZones::findArrival( player, towards, &spot ) )
+				return UPDATE_SLEEP_FOREVER;
+		}
 		me->setPosition( &spot );
 		if( me->getAI() != nullptr )
 			me->getAI()->aiIdle( CMD_FROM_AI );
@@ -314,10 +333,11 @@ void TiberiumArrivalUpdate::crc( Xfer *xfer )
 // Xfer method
 // Version Info:
 // 1: Initial version
+// 2: Tiberium Project: m_placed (TiberiumStart)
 //-------------------------------------------------------------------------------------------------
 void TiberiumArrivalUpdate::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 	UpdateModule::xfer( xfer );
@@ -325,6 +345,8 @@ void TiberiumArrivalUpdate::xfer( Xfer *xfer )
 	xfer->xferInt( &m_style );
 	xfer->xferUnsignedInt( &m_startFrame );
 	xfer->xferUnsignedInt( &m_endFrame );
+	if( version >= 2 )
+		xfer->xferBool( &m_placed );
 }
 
 //-------------------------------------------------------------------------------------------------

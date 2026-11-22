@@ -32,6 +32,7 @@
 #include <cstdio>
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 #include "Common/TiberiumTest.h"	// Tiberium Project
+#include "GameClient/TiberiumStartView.h"	// Tiberium Project
 #include "GameClient/GameClient.h"
 #include "GameClient/FXList.h"	// Tiberium Project (the dynamic decals)
 
@@ -302,6 +303,8 @@ void GameClient::init()
 		m_translators[ m_numTranslators++ ] =	TheMessageStream->attachTranslator( MSGNEW("GameClientSubsystem") WindowTranslator,     10 );
 		m_translators[ m_numTranslators++ ] =	TheMessageStream->attachTranslator( MSGNEW("GameClientSubsystem") MetaEventTranslator,	20 );
 		m_translators[ m_numTranslators++ ] =	TheMessageStream->attachTranslator( MSGNEW("GameClientSubsystem") HotKeyTranslator,	25 );
+		// Tiberium Project @feature C&C4's match start: the clicks that put the landing marker down
+		m_translators[ m_numTranslators++ ] =	TheMessageStream->attachTranslator( TiberiumStartView::makeTranslator(), 27 );
 		m_translators[ m_numTranslators++ ] =	TheMessageStream->attachTranslator( MSGNEW("GameClientSubsystem") PlaceEventTranslator,	30 );
 		m_translators[ m_numTranslators++ ] = TheMessageStream->attachTranslator( MSGNEW("GameClientSubsystem") GUICommandTranslator, 40 );
 		m_translators[ m_numTranslators++ ] =	TheMessageStream->attachTranslator( MSGNEW("GameClientSubsystem") SelectionTranslator,	50 );

@@ -628,6 +628,8 @@ public:
 		MSG_TIBERIUM_BASE_PLACE,										///< (objectID constructionYard, Location where, Real angle) the ready one, there
 		MSG_TIBERIUM_PRODUCTION_HOLD,								///< (objectID producer, Int templateID, Int what) a unit's queue there: 0 let it go on, 1 hold it, 2 cancel it all
 		MSG_TIBERIUM_SET_STANCE,										///< (Int stance) the sender's selected units take the stance (StanceType), those that can
+		MSG_TIBERIUM_CRAWLER_PICK,									///< (Int choice, Location spot, Int hasSpot) C&C4's start: the sender's class and landing spot; after it, a Crawler called
+		MSG_TIBERIUM_CRAWLER_DECOMMISSION,					///< () the sender's Crawler decommissioned (C&C4's start's factions)
 
 		MSG_BEGIN_DEBUG_NETWORK_MESSAGES = 1900,		///< network messages that exist only in debug/internal builds. all grouped separately.
 

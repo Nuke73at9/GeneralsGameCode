@@ -44,6 +44,7 @@
 #include "GameLogic/Module/TiberiumZoneNodeUpdate.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/TerrainLogic.h"
+#include "GameClient/TiberiumStartView.h"
 #include "GameLogic/TiberiumZones.h"
 
 #include <vector>
@@ -382,6 +383,9 @@ Bool TiberiumZoneView::isShown()
 	if( !TiberiumZones::isOn() )
 		return FALSE;
 	if( s_shown )
+		return TRUE;
+	// Tiberium Project @feature C&C4's match start: while the landing spot is picked
+	if( TiberiumStartView::showsZones() )
 		return TRUE;
 	// placing a structure where the zones decide
 	const AbramZoneMode mode = TiberiumZones::getMode();

@@ -207,6 +207,8 @@ public:
 	Real m_zoneExpansionRadius;			///< how far an expansion zone reaches from its middle
 	Real m_zoneLinkDistance;				///< allies' starts nearer than this share one start zone
 	AsciiString m_zoneNode;					///< the object in each expansion zone that takes it (C&C4's TCN)
+	UnsignedInt m_startIntro;				///< Tiberium Project: C&C4's match start (TiberiumStart), frames of the intro
+	UnsignedInt m_startCountdown;		///< and of the countdown after it, to the arrivals
 
 	Real m_terrainDrawDistanceScale;
 

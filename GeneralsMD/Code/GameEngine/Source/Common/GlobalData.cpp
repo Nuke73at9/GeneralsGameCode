@@ -886,6 +886,8 @@ GlobalData::GlobalData()
 	m_zoneExpansionRadius = 420.0f;
 	m_zoneLinkDistance = 1500.0f;
 	m_zoneNode = "C4_GoalStructure";
+	m_startIntro = LOGICFRAMES_PER_SECOND * 6;			// C&C4's MatchIntroSettings: held 1 s, the camera's pan 5 s
+	m_startCountdown = LOGICFRAMES_PER_SECOND * 10;	// and its CountdownDuration
 	m_terrainDrawDistanceScale = 1.0f;
 	m_terrainHeightAtEdgeOfMap = 0.0f;
 
@@ -1219,6 +1221,8 @@ void GlobalData::reset()
 	*       Texture = SCCGuard_Generic   ; (a radius cursor's fields)
 	*       ...
 	*     End
+	*     StartIntro = 6000              ; C&C4's match start (TiberiumStart): the intro, then the countdown
+	*     StartCountdown = 10000
 	*   End
 	*/
 //-------------------------------------------------------------------------------------------------
@@ -1234,6 +1238,8 @@ void GlobalData::parseTiberiumGameData( INI* ini )
 		{ "ZoneExpansionRadius",	INI::parseReal,		nullptr,	offsetof( GlobalData, m_zoneExpansionRadius ) },
 		{ "ZoneLinkDistance",		INI::parseReal,		nullptr,	offsetof( GlobalData, m_zoneLinkDistance ) },
 		{ "ZoneNode",						INI::parseAsciiString,	nullptr,	offsetof( GlobalData, m_zoneNode ) },
+		{ "StartIntro",					INI::parseDurationUnsignedInt,	nullptr,	offsetof( GlobalData, m_startIntro ) },
+		{ "StartCountdown",			INI::parseDurationUnsignedInt,	nullptr,	offsetof( GlobalData, m_startCountdown ) },
 #if PRESERVE_RETAIL_SCRIPTED_CAMERA
 		{ "CameraHeight",				INI::parseReal,		nullptr,	offsetof( GlobalData, m_cameraHeight ) },
 #endif

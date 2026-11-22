@@ -89,6 +89,7 @@
 #include "GameClient/InGameUI.h"
 #include "GameClient/LoadScreen.h"
 #include "Common/TiberiumTest.h"	// Tiberium Project
+#include "GameLogic/TiberiumStart.h"	// Tiberium Project
 #include "GameLogic/TiberiumZones.h"	// Tiberium Project
 #include "GameLogic/AbramCheats.h"	// Abram's Personal Test
 #include "GameClient/MapUtil.h"
@@ -471,6 +472,7 @@ void GameLogic::init()
 void GameLogic::reset()
 {
 	TiberiumZones::reset();	// Tiberium Project
+	TiberiumStart::reset();	// Tiberium Project
 	AbramCheats::reset();	// Abram's Personal Test
 
 	m_thingTemplateBuildableOverrides.clear();
@@ -2211,6 +2213,22 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 
 
 
+				// Tiberium Project @feature C&C4's match start: a faction with StartArrival lands its pick when the
+				// countdown ends (TiberiumStart), with nothing placed now
+				if (TiberiumStart::usesArrival(pt))
+				{
+					AsciiString startName;
+					startName.format("Player_%d_Start", slot->getStartPos()+1);
+					Waypoint *start = findNamedWaypoint(startName);
+					if (start != nullptr)
+					{
+						Coord3D home = *start->getLocation();
+						home.z = TheTerrainLogic->getGroundHeight( home.x, home.y );
+						TiberiumStart::addPlayer(player, pt, &home);
+						updateLoadProgress(progressCount++);
+						continue;
+					}
+				}
 				placeNetworkBuildingsForPlayer(i, slot, player, pt);
 			}
 
@@ -2315,6 +2333,8 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 
 	// Tiberium Project @feature C&C4's zones of a skirmish that has them (and their nodes, in a new game)
 	TiberiumZones::build( loadingSaveGame );
+	// Tiberium Project @feature C&C4's match start: its countdown, the AI's picks
+	TiberiumStart::begin( loadingSaveGame );
 
 	// final step, run newMap for all players
 	if( loadingSaveGame == FALSE )
@@ -4210,6 +4230,7 @@ void GameLogic::update()
 	TheLocomotorStore->UPDATE();
 	TheVictoryConditions->UPDATE();
 	TiberiumZones::update();	// Tiberium Project @feature who holds C&C4's zones
+	TiberiumStart::update();	// Tiberium Project @feature C&C4's match start and redeployment
 
 	{
 		//Handle disabled statii (and re-enable objects once frame matches)
@@ -5336,6 +5357,7 @@ void GameLogic::prepareLogicForObjectLoad()
 	* 9: Added m_rankPointsToAddAtGameStart, or else on a load game, your RestartGame button will forget your exp
   * 10: xfer m_superweaponRestriction
   * 11: TheSuperHackers @fix Save objects in reverse order so they load in correct order
+	* 12: Tiberium Project @feature TiberiumStart's state (C&C4's match start and redeployment)
 	*/
 // ------------------------------------------------------------------------------------------------
 void GameLogic::xfer( Xfer *xfer )
@@ -5345,7 +5367,7 @@ void GameLogic::xfer( Xfer *xfer )
 #if RETAIL_COMPATIBLE_XFER_SAVE
 	const XferVersion currentVersion = 10;
 #else
-	const XferVersion currentVersion = 11;
+	const XferVersion currentVersion = 12;
 #endif
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
@@ -5695,6 +5717,11 @@ void GameLogic::xfer( Xfer *xfer )
   {
     m_superweaponRestriction = 0;
   }
+
+	// Tiberium Project @feature C&C4's match start and redeployment (a save without it: made again from the
+	// players in loadPostProcess)
+	if ( version >= 12 )
+		TiberiumStart::xfer( xfer );
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -5774,6 +5801,8 @@ void GameLogic::loadPostProcess()
 
 	// re-sort the priority queue all at once now that all modules are on it
 	remakeSleepyUpdate();
+
+	TiberiumStart::loadPostProcess();	// Tiberium Project
 
 }
 

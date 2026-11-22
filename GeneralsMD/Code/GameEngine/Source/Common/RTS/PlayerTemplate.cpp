@@ -98,6 +98,9 @@
     { "OldFaction",               INI::parseBool,                                 nullptr, offsetof( PlayerTemplate, m_oldFaction ) },
 		{ "IntrinsicSciencePurchasePoints",				INI::parseInt,												nullptr, offsetof( PlayerTemplate, m_intrinsicSPP ) },
 		{ "GeneralsPoints",						INI::parseBool,																	nullptr, offsetof( PlayerTemplate, m_generalsPoints ) },	// Tiberium Project @feature
+		{ "StartArrival",							PlayerTemplate::parseStartArrival,							nullptr, 0 },	// Tiberium Project @feature
+		{ "StartRedeployTime",				INI::parseDurationUnsignedInt,									nullptr, offsetof( PlayerTemplate, m_startRedeployTime ) },	// Tiberium Project @feature
+		{ "StartArrivalUnits",				INI::parseBool,																	nullptr, offsetof( PlayerTemplate, m_startArrivalUnits ) },	// Tiberium Project @feature
 		{ "ScoreScreenImage",					INI::parseAsciiString,													nullptr, offsetof( PlayerTemplate, m_scoreScreenImage ) },
 		{ "LoadScreenImage",					INI::parseAsciiString,													nullptr, offsetof( PlayerTemplate, m_loadScreenImage ) },
 		{ "LoadScreenMusic",					INI::parseAsciiString,													nullptr, offsetof( PlayerTemplate, m_loadScreenMusic ) },
@@ -170,6 +173,25 @@ AsciiString PlayerTemplate::getStartingUnit( Int i ) const
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature "StartArrival = A B C": the objects a player of this faction picks from at
+	C&C4's match start (TiberiumStart); a later block's list replaces an earlier one's */
+//-------------------------------------------------------------------------------------------------
+/*static*/ void PlayerTemplate::parseStartArrival( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ )
+{
+	PlayerTemplate* self = (PlayerTemplate*)instance;
+	self->m_startArrivalCount = 0;
+	for (const char *token = ini->getNextTokenOrNull(); token != nullptr; token = ini->getNextTokenOrNull())
+	{
+		if (self->m_startArrivalCount >= MAX_START_ARRIVALS)
+		{
+			DEBUG_CRASH(("PlayerTemplate: StartArrival takes at most %d objects", MAX_START_ARRIVALS));
+			break;
+		}
+		self->m_startArrivals[self->m_startArrivalCount++] = token;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Parse integer money and deposit in the m_money */
 //-------------------------------------------------------------------------------------------------
 /*static*/ void PlayerTemplate::parseStartMoney( INI* ini, void *instance, void *store, const void* /*userData*/ )
@@ -196,6 +218,9 @@ PlayerTemplate::PlayerTemplate() :
 	m_playableSide(false),
   m_oldFaction(false),
 	m_generalsPoints(true),
+	m_startArrivalCount(0),
+	m_startRedeployTime(0),
+	m_startArrivalUnits(false),
 	m_intrinsicSPP(0),
 	m_specialPowerShortcutButtonCount(0)
 {

@@ -88,6 +88,7 @@
 #if RTS_ZEROHOUR
 #include "GameLogic/AbramCheats.h"	// Abram's Personal Test
 #include "GameLogic/Module/BaseConstructionUpdate.h"	// Tiberium Project
+#include "GameLogic/TiberiumStart.h"	// Tiberium Project
 #endif
 
 
@@ -574,6 +575,24 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, void *userData )
 				if( unitAI != nullptr )
 					unitAI->setStance( (StanceType)stance );
 			}
+#endif
+			break;
+		}
+		// Tiberium Project @feature C&C4's match start and redeployment (TiberiumStart): the sender's pick, or its
+		// Crawler decommissioned
+		case GameMessage::MSG_TIBERIUM_CRAWLER_PICK:
+		{
+#if RTS_ZEROHOUR
+			if( msg->getArgumentCount() >= 3 )
+				TiberiumStart::pick( getMessagePlayer( msg ), msg->getArgument( 0 )->integer, &msg->getArgument( 1 )->location,
+					msg->getArgument( 2 )->integer != 0 );
+#endif
+			break;
+		}
+		case GameMessage::MSG_TIBERIUM_CRAWLER_DECOMMISSION:
+		{
+#if RTS_ZEROHOUR
+			TiberiumStart::decommission( getMessagePlayer( msg ) );
 #endif
 			break;
 		}

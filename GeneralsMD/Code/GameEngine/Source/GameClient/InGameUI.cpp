@@ -34,6 +34,7 @@
 #include "GameClient/TiberiumHUD.h"	// Tiberium Project
 #include "GameClient/TiberiumSidebar.h"	// Tiberium Project
 #include "GameClient/TiberiumMusic.h"	// Tiberium Project
+#include "GameClient/TiberiumStartView.h"	// Tiberium Project
 #include "GameClient/TiberiumZoneView.h"	// Tiberium Project
 #include "GameLogic/TiberiumZones.h"	// Tiberium Project
 #include "GameLogic/Module/BaseConstructionUpdate.h"	// Tiberium Project
@@ -1868,6 +1869,8 @@ void InGameUI::preDraw()
 {
 	// Tiberium Project @feature C&C4's zones' borders over the world (under everything else drawn here)
 	TiberiumZoneView::draw();
+	// Tiberium Project @feature C&C4's match start: the landing markers, the countdown, DEPLOY!
+	TiberiumStartView::draw();
 
 	// handle any "icons" for the act of building things and placing them in the world
 	handleBuildPlacements();
@@ -2156,6 +2159,8 @@ void InGameUI::update()
 	TiberiumHUD::update();
 	// Tiberium Project @feature C&C4's zones on the radar (after the HUD has placed it)
 	TiberiumZoneView::update();
+	// Tiberium Project @feature C&C4's match start and redeployment: the class box and the buttons
+	TiberiumStartView::update();
 
 	// update any random window layout that so requests
 	for (std::list<WindowLayout *>::iterator it = m_windowLayouts.begin(); it != m_windowLayouts.end(); ++it)
@@ -2223,6 +2228,7 @@ void InGameUI::reset()
 	TiberiumSidebar::reset();
 	TiberiumMusic::reset();
 	TiberiumZoneView::reset();
+	TiberiumStartView::reset();
 
 	// Abram's Personal Test @feature Close the team menu with the game.
 	AbramTeamMenu::reset();
@@ -6053,6 +6059,7 @@ void InGameUI::recreateControlBar()
 	// Tiberium Project: the HUD gives the bar its windows back before the bar is made anew
 	TiberiumHUD::reset();
 	TiberiumZoneView::reset();
+	TiberiumStartView::reset();
 
 	GameWindow *win = TheWindowManager->winGetWindowFromId(nullptr, TheNameKeyGenerator->nameToKey("ControlBar.wnd"));
 	deleteInstance(win);

@@ -52,6 +52,7 @@
 #include "GameLogic/VictoryConditions.h"
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/NetworkDefs.h"
+#include "GameLogic/TiberiumStart.h"	// Tiberium Project
 
 
 //-------------------------------------------------------------------------------------------------
@@ -325,6 +326,11 @@ Bool VictoryConditions::hasBeenDefeated(Player *player)
 Bool VictoryConditions::hasSinglePlayerBeenDefeated(Player *player)
 {
 	if (!player)
+		return false;
+
+	// Tiberium Project @feature C&C4's match start: a player whose Crawler is yet to land, or stands (its base, as
+	// in C&C4), or who may call another and still has something, is not out
+	if (TiberiumStart::isKeptIn(player))
 		return false;
 
 	KindOfMaskType mask;

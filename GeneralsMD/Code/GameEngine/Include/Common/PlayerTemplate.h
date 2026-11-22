@@ -65,6 +65,7 @@ class Image;
 // ----------------------------------------------------------------------------------------------
 
 #define MAX_MP_STARTING_UNITS 10
+#define MAX_START_ARRIVALS 4		///< Tiberium Project: the most StartArrival choices
 
 // ----------------------------------------------------------------------------------------------
 class PlayerTemplate
@@ -136,6 +137,12 @@ public:
   Bool isOldFaction() const { return m_oldFaction; }
 	/// Tiberium Project @feature whether a rank-up gives General's Points (No: the Tiberium factions, whose powers come from their buildings and the Support Crawler)
 	Bool hasGeneralsPoints() const { return m_generalsPoints; }
+	/// Tiberium Project @feature C&C4's match start (TiberiumStart): what such a player picks from to land at the start,
+	/// in place of its start building and units, and how long after losing it another may be called (frames; 0: never)
+	Int getStartArrivalCount() const { return m_startArrivalCount; }
+	AsciiString getStartArrival( Int i ) const { return ( i >= 0 && i < m_startArrivalCount ) ? m_startArrivals[i] : AsciiString::TheEmptyString; }
+	UnsignedInt getStartRedeployTime() const { return m_startRedeployTime; }
+	Bool hasStartArrivalUnits() const { return m_startArrivalUnits; }	///< its StartingUnits come out beside the start's pick
 
 	static const FieldParse* getFieldParse();
 
@@ -147,6 +154,7 @@ protected:
 	static void parseProductionCostChange( INI* ini, void *instance, void *store, const void* /*userData*/ );
 	static void parseProductionTimeChange( INI* ini, void *instance, void *store, const void* /*userData*/ );
 	static void parseProductionVeterancyLevel( INI* ini, void *instance, void *store, const void* /*userData*/ );
+	static void parseStartArrival( INI* ini, void *instance, void *store, const void* /*userData*/ );	///< Tiberium Project
 
 private:
 
@@ -176,6 +184,10 @@ private:
 	Bool							m_playableSide;
   Bool              m_oldFaction;                       ///< Faction existed in the original Generals
 	Bool							m_generalsPoints;										///< Tiberium Project: rank-ups give General's Points
+	AsciiString				m_startArrivals[MAX_START_ARRIVALS];	///< Tiberium Project: C&C4's start, the classes to pick from
+	Int								m_startArrivalCount;
+	UnsignedInt				m_startRedeployTime;								///< Tiberium Project: frames from a loss to the next (0: none)
+	Bool							m_startArrivalUnits;								///< Tiberium Project: the StartingUnits come with the start's pick
 
 	Int								m_intrinsicSPP;
 

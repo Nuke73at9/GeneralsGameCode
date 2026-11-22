@@ -198,6 +198,7 @@ set(GAMEENGINE_SRC
     Include/GameClient/TiberiumSkirmish.h
     Include/GameClient/TiberiumSidebar.h
     Include/GameClient/TiberiumMusic.h
+    Include/GameClient/TiberiumStartView.h
     Include/GameClient/TiberiumZoneView.h
 #    Include/GameClient/Keyboard.h
     Include/GameClient/KeyDefs.h
@@ -543,6 +544,7 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Squad.h
 #    Include/GameLogic/TerrainLogic.h
     Include/GameLogic/AbramCheats.h
+    Include/GameLogic/TiberiumStart.h
     Include/GameLogic/TiberiumZones.h
     Include/GameLogic/TurretAI.h
     Include/GameLogic/VictoryConditions.h
@@ -855,6 +857,7 @@ set(GAMEENGINE_SRC
     Source/GameClient/GUI/TiberiumSkin.cpp
     Source/GameClient/GUI/TiberiumSkirmish.cpp
     Source/GameClient/TiberiumMusic.cpp
+    Source/GameClient/TiberiumStartView.cpp
     Source/GameClient/TiberiumZoneView.cpp
 #    Source/GameClient/Input/Keyboard.cpp
 #    Source/GameClient/Input/Mouse.cpp
@@ -1196,6 +1199,7 @@ set(GAMEENGINE_SRC
 #    Source/GameLogic/System/GameLogicDispatch.cpp
 #    Source/GameLogic/System/RankInfo.cpp
     Source/GameLogic/System/AbramCheats.cpp
+    Source/GameLogic/System/TiberiumStart.cpp
     Source/GameLogic/System/TiberiumZones.cpp
 #    Source/GameNetwork/Connection.cpp
 #    Source/GameNetwork/ConnectionManager.cpp

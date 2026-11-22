@@ -91,7 +91,9 @@
 #include "GameClient/TiberiumSidebar.h"
 #include "GameLogic/AbramCheats.h"
 #if RTS_ZEROHOUR
+#include "GameClient/TiberiumStartView.h"
 #include "GameClient/TiberiumZoneView.h"
+#include "GameLogic/TiberiumStart.h"
 #include "GameLogic/TiberiumZones.h"
 #endif
 #include "GameLogic/Module/BaseConstructionUpdate.h"
@@ -2088,6 +2090,38 @@ void TiberiumTest::update()
 			}
 			else
 				log( "frame %d: ui: arrive %s: %s", (int)s_frame, step.arg.c_str(), tmpl == nullptr ? "no such object" : "no factory" );
+		}
+		else if ( step.action == "start" )
+		{
+			// C&C4's match start (TiberiumStart): "start" logs the local player's; "start=k" picks the k-th class as the
+			// box's card does; "start=k,dx,dy" (k may be -1: the class kept) and then a click on the ground at its start
+			// + dx,dy (after the start: a Crawler called there)
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			if ( !f.empty() && !f[0].empty() )
+				TiberiumStartView::testPick( atoi( f[0].c_str() ), f.size() > 1 ? (Real)atof( f[1].c_str() ) : 0.0f,
+					f.size() > 2 ? (Real)atof( f[2].c_str() ) : 0.0f, f.size() > 2 );
+			char text[600];
+			TiberiumStartView::describe( text, sizeof( text ) );
+			log( "frame %d: ui: start: %s", (int)s_frame, text );
+		}
+		else if ( step.action == "decommission" )
+		{
+			// the local player's Crawler decommissioned, as the button's second click does
+			TiberiumStartView::testDecommission();
+			log( "frame %d: ui: decommission sent", (int)s_frame );
+		}
+		else if ( step.action == "killcrawler" && TheGameLogic != nullptr && ThePlayerList != nullptr )
+		{
+			// the local player's Crawler destroyed (a test, not a player's command: not with -testCRC)
+			Player *me = ThePlayerList->getLocalPlayer();
+			Int killed = 0;
+			for ( Object *o = TheGameLogic->getFirstObject(); o != nullptr; o = o->getNextObject() )
+				if ( o->getControllingPlayer() == me && TiberiumStart::isCrawler( o ) )
+				{
+					o->kill();
+					++killed;
+				}
+			log( "frame %d: ui: killcrawler: %d killed", (int)s_frame, (int)killed );
 		}
 		else if ( step.action == "where" && TheGameLogic != nullptr )
 		{

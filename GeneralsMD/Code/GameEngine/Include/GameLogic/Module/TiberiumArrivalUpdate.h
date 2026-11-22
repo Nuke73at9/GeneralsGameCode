@@ -21,7 +21,8 @@
 // this that a factory makes does not drive out of its door; it arrives in one of its player's zones (the
 // one nearest the factory's rally point, at the rally point when it is in it): GDI's dropped from the
 // sky (DROP), Nod's drilling up from under the ground (DRILL). Held while it arrives. Units made in
-// place of another (a Crawler packing up) and those on the map from the start do not.
+// place of another (a Crawler packing up) and those on the map from the start do not. One that C&C4's
+// match start or a redeployment makes (TiberiumStart) arrives where it was made, zones or not.
 //
 //   Behavior = TiberiumArrivalUpdate ModuleTag_Arrival
 //     Style = AUTO                           ; DROP, DRILL, or AUTO: Nod's sides drill, the rest drop
@@ -97,6 +98,10 @@ public:
 	// virtual destructor prototype provided by memory pool declaration
 
 	virtual UpdateSleepTime update() override;
+	/// Tiberium Project @feature C&C4's match start and redeployment (TiberiumStart): made at its spot, it arrives
+	/// there (whoever made it, with or without zones)
+	void beginPlaced() { m_placed = TRUE; }
+	Bool isArriving() const;							///< yet to come out (or to land)
 	/// (Tiberium Project: it holds the unit itself while it arrives, and must go on meanwhile)
 	virtual DisabledMaskType getDisabledTypesToProcess() const override { return MAKE_DISABLED_MASK( DISABLED_HELD ); }
 
@@ -120,4 +125,5 @@ private:
 	Int m_style;							///< DROP or DRILL, once it starts
 	UnsignedInt m_startFrame;
 	UnsignedInt m_endFrame;
+	Bool m_placed;						///< made at its spot (TiberiumStart)
 };
