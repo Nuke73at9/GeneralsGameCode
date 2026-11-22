@@ -258,15 +258,19 @@ namespace
 	}
 
 	//-----------------------------------------------------------------------------------------------
-	// C&C4's hex fill (CNC4_DeployZone.fx's SpawnZoneEffect), drawn as lines: a hex grid laid on the world
-	// (its texture repeats every 1 / 0.0091 of C&C4's units, 110: 88 of Zero Hour's at the converter's
-	// scale of 0.8; four hexes across a repeat, read off the footage against the GDI Crawler's size:
-	// inferred), each line in the zone's colour, shimmering by three layers of noise drifting over it
-	// (the shader's speeds and scales; its noise texture is not known, so a smooth value noise of eight
-	// cells a repeat stands in)
-	const Real HEX_REPEAT = 110.0f * 0.8f;
-	const Real HEX_ACROSS = HEX_REPEAT / 4.0f;							///< flat side to flat side
-	const Real HEX_RADIUS = HEX_ACROSS / 1.7320508f;				///< middle to corner
+	// C&C4's hex fill (CNC4_DeployZone.fx's SpawnZoneEffect), drawn as lines: its hex texture (Deployment_Zone,
+	// 256 x 256, read out of C&C4's static stream) laid on the world at 0.0091 a unit, so one repeat is 109.9 units
+	// (C&C4's maps keep their own units here). A repeat holds four columns and three rows of hexes with flat tops
+	// and bottoms along the world's X: a hex is a third of the repeat wide (corner to corner) and a third high (flat
+	// to flat), a little taller than a regular one, the columns a quarter apart, every other column half a row
+	// higher (the texture's own layout). Each line is in the zone's colour, shimmering by the shader's three layers
+	// of noise drifting over it (its noise texture is not known: a smooth value noise of eight cells a repeat
+	// stands in).
+	const Real HEX_REPEAT = 1.0f / 0.0091f;
+	const Real HEX_COLUMN = HEX_REPEAT / 4.0f;							///< from one column to the next
+	const Real HEX_ROW = HEX_REPEAT / 3.0f;								///< from one hex to the next in a column (flat to flat)
+	const Real HEX_HALF_WIDTH = HEX_REPEAT / 6.0f;					///< middle to the side corners
+	const Real HEX_HALF_HEIGHT = HEX_REPEAT / 6.0f;					///< middle to the flat top
 	const Int HEX_MOST = 9000;															///< no more drawn in a frame (zoomed far out)
 	Real s_hexTime = 0.0f;
 
@@ -294,7 +298,7 @@ namespace
 	/// the shader's three layers: (n1^2 + n2^2 + n3^2) * 2, at a spot of the world (Zero Hour's units)
 	Real shimmer( Real x, Real y, Real t )
 	{
-		const Real u = x / 0.8f * 0.0091f, v = y / 0.8f * 0.0091f;
+		const Real u = x * 0.0091f, v = y * 0.0091f;
 		const Real n1 = valueNoise( u * 0.9f * 0.25f + t * 0.025f, v * 0.7f * 0.25f + t * 0.0125f );
 		const Real n2 = valueNoise( u * 1.2f * 0.25f - t * 0.025f, v * 0.8f * 0.25f + t * 0.0125f );
 		const Real n3 = valueNoise( u * 0.97f * 0.25f - t * 0.005f, v * 1.06f * 0.25f - t * 0.01f );
@@ -487,16 +491,18 @@ void TiberiumZoneView::draw()
 	if( TheFramePacer != nullptr )
 		s_hexTime += TheFramePacer->getUpdateTime();
 	{
-		const Real rowStep = HEX_RADIUS * 1.5f;
-		const Int row0 = (Int)floorf( loy / rowStep ), row1 = (Int)ceilf( hiy / rowStep );
-		const Int col0 = (Int)floorf( lox / HEX_ACROSS ) - 1, col1 = (Int)ceilf( hix / HEX_ACROSS ) + 1;
+		// the hex in column c, row j: its middle at (c / 4, (j + 1/2) / 3) of a repeat in an even column, (c / 4, j / 3) in
+		// an odd one
+		const Int col0 = (Int)floorf( lox / HEX_COLUMN ) - 1, col1 = (Int)ceilf( hix / HEX_COLUMN ) + 1;
+		const Int row0 = (Int)floorf( loy / HEX_ROW ) - 1, row1 = (Int)ceilf( hiy / HEX_ROW ) + 1;
 		const Real hexWidth = (Real)max( 1, (Int)TheDisplay->getHeight() / 900 );
-		// the corners from the middle (pointy at the top), counter-clockwise from the lower right
-		static const Real CX[6] = { 0.8660254f, 0.8660254f, 0.0f, -0.8660254f, -0.8660254f, 0.0f };
-		static const Real CY[6] = { -0.5f, 0.5f, 1.0f, 0.5f, -0.5f, -1.0f };
-		// the neighbour across each side (side k joins corner k and k + 1), by the row's parity
-		static const Int NX_EVEN[6] = { 1, 0, -1, -1, -1, 0 }, NX_ODD[6] = { 1, 1, 0, -1, 0, 1 };
-		static const Int NY[6] = { 0, 1, 1, 0, -1, -1 };
+		// the corners from the middle, counter-clockwise from the right one (in half widths and half heights)
+		static const Real CX[6] = { 1.0f, 0.5f, -0.5f, -1.0f, -0.5f, 0.5f };
+		static const Real CY[6] = { 0.0f, 1.0f, 1.0f, 0.0f, -1.0f, -1.0f };
+		// the hex across each side (side k joins corners k and k + 1): its column, and its row in an even column and
+		// in an odd one
+		static const Int NC[6] = { 1, 0, -1, -1, 0, 1 };
+		static const Int NR_EVEN[6] = { 1, 1, 1, 0, -1, 0 }, NR_ODD[6] = { 0, 1, 0, -1, -1, -1 };
 		Int drawn = 0;
 		if( ( row1 - row0 + 1 ) * ( col1 - col0 + 1 ) <= HEX_MOST )
 		{
@@ -516,13 +522,13 @@ void TiberiumZoneView::draw()
 				cover.push_back( p->y );
 				cover.push_back( r * r * 0.8f );
 			}
-			for( Int row = row0; row <= row1; ++row )
-				for( Int col = col0; col <= col1; ++col )
+			for( Int col = col0; col <= col1; ++col )
+				for( Int row = row0; row <= row1; ++row )
 				{
-					const Bool odd = ( row & 1 ) != 0;
+					const Bool odd = ( col & 1 ) != 0;
 					Coord3D mid;
-					mid.x = ( col + ( odd ? 0.5f : 0.0f ) ) * HEX_ACROSS;
-					mid.y = row * rowStep;
+					mid.x = col * HEX_COLUMN;
+					mid.y = ( row + ( odd ? 0.0f : 0.5f ) ) * HEX_ROW;
 					mid.z = 0.0f;
 					const Int zone = TiberiumZones::zoneAt( &mid );
 					if( zone < 0 || zone >= count )
@@ -544,11 +550,11 @@ void TiberiumZoneView::draw()
 						continue;
 					if( pm.x < -100 || pm.y < -100 || pm.x > sw + 100 || pm.y > sh + 100 )
 						continue;
-					w.x = mid.x + HEX_RADIUS;
+					w.x = mid.x + HEX_HALF_WIDTH;
 					if( TheTacticalView->worldToScreenTriReturn( &w, &px ) == View::WTS_INVALID )
 						continue;
 					w.x = mid.x;
-					w.y = mid.y + HEX_RADIUS;
+					w.y = mid.y + HEX_HALF_HEIGHT;
 					if( TheTacticalView->worldToScreenTriReturn( &w, &py ) == View::WTS_INVALID )
 						continue;
 					const Real ax = (Real)( px.x - pm.x ), ay = (Real)( px.y - pm.y );
@@ -565,12 +571,14 @@ void TiberiumZoneView::draw()
 					const Color color = colorOf( zone, alpha );
 					for( Int k = 0; k < 6; ++k )
 					{
-						const Bool own = k == 0 || k == 1 || k == 2;
+						const Bool own = k == 0 || k == 1 || k == 2;	// the upper sides: each line drawn once
 						if( !own )
 						{
+							const Int nc = col + NC[k];
+							const Int nr = row + ( odd ? NR_ODD[k] : NR_EVEN[k] );
 							Coord3D beyond;
-							beyond.x = ( col + ( odd ? NX_ODD[k] : NX_EVEN[k] ) + ( ( ( row + NY[k] ) & 1 ) ? 0.5f : 0.0f ) ) * HEX_ACROSS;
-							beyond.y = ( row + NY[k] ) * rowStep;
+							beyond.x = nc * HEX_COLUMN;
+							beyond.y = ( nr + ( ( nc & 1 ) != 0 ? 0.0f : 0.5f ) ) * HEX_ROW;
 							beyond.z = 0.0f;
 							if( TiberiumZones::zoneAt( &beyond ) == zone )
 								continue;
