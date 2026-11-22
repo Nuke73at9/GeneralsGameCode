@@ -2110,6 +2110,19 @@ void TiberiumTest::update()
 			TiberiumStartView::testDecommission();
 			log( "frame %d: ui: decommission sent", (int)s_frame );
 		}
+		else if ( step.action == "startcrawler" && TheGameLogic != nullptr && ThePlayerList != nullptr )
+		{
+			// the local player's Crawler (or MCV) taken as a spawned object, for select=k and the like
+			Player *me = ThePlayerList->getLocalPlayer();
+			for ( Object *o = TheGameLogic->getFirstObject(); o != nullptr; o = o->getNextObject() )
+				if ( o->getControllingPlayer() == me && TiberiumStart::isCrawler( o ) )
+				{
+					s_spawned.push_back( o->getID() );
+					log( "frame %d: ui: startcrawler: %s is spawned object %d", (int)s_frame, o->getTemplate()->getName().str(),
+						(int)s_spawned.size() - 1 );
+					break;
+				}
+		}
 		else if ( step.action == "killcrawler" && TheGameLogic != nullptr && ThePlayerList != nullptr )
 		{
 			// the local player's Crawler destroyed (a test, not a player's command: not with -testCRC)

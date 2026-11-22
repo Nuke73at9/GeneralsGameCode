@@ -52,6 +52,7 @@
 #include "GameLogic/Module/RebuildHoleBehavior.h"
 #include "GameLogic/Module/UpdateModule.h"
 #include "GameLogic/PartitionManager.h"
+#include "GameLogic/TiberiumStart.h"	// Tiberium Project
 #include "GameLogic/ScriptEngine.h"
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameClient/TerrainVisual.h"
@@ -1000,6 +1001,12 @@ void AISkirmishPlayer::adjustBuildList(BuildListInfo *list)
 			}
 		}
 	}
+	// Tiberium Project @feature C&C4's match start (TiberiumStart): nothing stands at the start; the base is laid out
+	// round the start itself, and its command center is not built now (the faction's MCV deploys into one, if it has
+	// one; newMap takes it out of the list)
+	const Bool arrives = !foundStart && TiberiumStart::getHome(m_player, &startPos);
+	if (arrives)
+		foundStart = true;
 	if (!foundStart) {
 		DEBUG_LOG(("Couldn't find starting command center for ai player."));
 		return;
@@ -1013,7 +1020,7 @@ void AISkirmishPlayer::adjustBuildList(BuildListInfo *list)
 		if (tTemplate && tTemplate->isKindOf(KINDOF_COMMANDCENTER)) {
 			foundInBuildList = true;
 			buildPos = *cur->getLocation();
-			cur->setInitiallyBuilt(true);
+			cur->setInitiallyBuilt(!arrives);
 		}
 		cur = cur->getNext();
 	}
@@ -1103,6 +1110,20 @@ void AISkirmishPlayer::newMap()
 			for( BuildListInfo *info = buildList; info; info = info->getNext() )
 				info->setTemplateName( TheAI->getUnitStandIn( info->getTemplateName(), standIn++ ) );
 			adjustBuildList(buildList); // adjust to  our start position.
+			// Tiberium Project @feature C&C4's match start: its command center is never built from the list (none at the
+			// start; the faction's MCV deploys into one, which then takes its place: AIPlayer::onStructureProduced)
+			if (TiberiumStart::hasEntry(m_player))
+			{
+				for( BuildListInfo *info = buildList; info; info = info->getNext() )
+				{
+					const ThingTemplate *t = TheThingFactory->findTemplate( info->getTemplateName() );
+					if( t != nullptr && t->isKindOf( KINDOF_COMMANDCENTER ) )
+					{
+						info->setInitiallyBuilt( false );
+						info->setNumRebuilds( 0 );
+					}
+				}
+			}
 			m_player->setBuildList(buildList);
 			computeCenterAndRadiusOfBase(&m_baseCenter, &m_baseRadius);
 			break;

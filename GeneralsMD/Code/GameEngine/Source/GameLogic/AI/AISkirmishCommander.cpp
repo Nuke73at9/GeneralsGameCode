@@ -61,6 +61,7 @@
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Module/ReplaceSelfUpdate.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
+#include "GameLogic/TiberiumStart.h"	// Tiberium Project
 
 #include <algorithm>
 #include <set>
@@ -124,6 +125,7 @@ namespace
 		std::vector<Object *> structures;
 		std::vector<Object *> producers;	///< its factories (and deployed Crawlers)
 		std::vector<Object *> deployers;	///< what deploys into a factory (C&C4's Crawlers, packed up)
+		Int dozers = 0;										///< its builders
 	};
 
 	/// whether a unit button on these pages waits for the upgrade (a tech tier: it opens up more units)
@@ -166,12 +168,16 @@ namespace
 			return;
 		if( obj->isKindOf( KINDOF_STRUCTURE ) && !obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
 			muster->structures.push_back( obj );
-		if( obj->getProductionUpdateInterface() != nullptr && !obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
-			muster->producers.push_back( obj );
-		else if( !obj->isKindOf( KINDOF_STRUCTURE ) && !obj->isContained() && deploysIntoFactory( obj ) != nullptr )
+		// (a vehicle that deploys into a factory is a deployer first, even with production of its own: an MCV that
+		// buys its upgrades itself)
+		if( !obj->isKindOf( KINDOF_STRUCTURE ) && !obj->isContained() && deploysIntoFactory( obj ) != nullptr )
 			muster->deployers.push_back( obj );
+		else if( obj->getProductionUpdateInterface() != nullptr && !obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
+			muster->producers.push_back( obj );
 		if( isSoldier( obj ) )
 			muster->soldiers.push_back( obj );
+		if( obj->isKindOf( KINDOF_DOZER ) )
+			++muster->dozers;
 	}
 
 	/// the enemy building nearest pos: of enemy if it has one, else of any enemy of player; else the
@@ -507,6 +513,15 @@ void AISkirmishPlayer::commandProduction()
 
 	Muster muster;
 	m_player->iterateObjects( musterOne, &muster );
+
+	// Tiberium Project @feature C&C4's match start: a player that started without a builder (its MCV became its command
+	// center) has one built, as Zero Hour's start would have given it one; its scripts build its base with it
+	if( muster.dozers == 0 && !muster.producers.empty() && TiberiumStart::hasEntry( m_player ) && !dozerInQueue() )
+	{
+		if( TiberiumTest::isActive() )
+			TiberiumTest::log( "frame %u: AI player %d has no builder: one is queued", now, (Int)m_player->getPlayerIndex() );
+		queueDozer();
+	}
 
 	// a Crawler that is not deployed, standing still, deploys where it stands
 	for( size_t i = 0; i < muster.deployers.size(); ++i )

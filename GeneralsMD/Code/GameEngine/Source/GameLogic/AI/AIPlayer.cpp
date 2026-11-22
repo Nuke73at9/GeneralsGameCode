@@ -53,6 +53,7 @@
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "GameLogic/TiberiumStart.h"	// Tiberium Project
 #include "GameLogic/Module/DozerAIUpdate.h"
 #include "GameLogic/Module/UpdateModule.h"
 #include "GameLogic/ScriptEngine.h"
@@ -174,6 +175,25 @@ void AIPlayer::onStructureProduced( Object *factory, Object *bldg )
 					}
 				}
 			}
+		}
+	}
+
+	// Tiberium Project @feature C&C4's match start (TiberiumStart): a structure no dozer of the list built (the faction's
+	// MCV deployed into its command center) takes the first entry of its kind that stands empty, so the AI builds from it
+	if (TiberiumStart::hasEntry(m_player))
+	{
+		for( info = m_player->getBuildList(); info; info = info->getNext() )
+		{
+			const ThingTemplate *plan = TheThingFactory->findTemplate( info->getTemplateName() );
+			if (plan == nullptr || !plan->isEquivalentTo(bldg->getTemplate()))
+				continue;
+			Object *had = TheGameLogic->findObjectByID( info->getObjectID() );
+			if (had != nullptr && !had->isEffectivelyDead())
+				continue;
+			info->setObjectID(bldg->getID());
+			info->setUnderConstruction(false);
+			checkForSupplyCenter(info, bldg);
+			return;
 		}
 	}
 
