@@ -66,7 +66,7 @@ public:
 	/// Tiberium Project @feature A C&C4 map's own light and post effects (its WorldInfo's sage2Lighting, which the
 	/// c4maps converter writes from the map's GlobalLighting and PostEffectsChunk), for the map being loaded; null
 	/// or empty for a map that has none. With it, the automatic choice lights the map as C&C4 does, table, bloom,
-	/// overlay, falloff and grain with C&C4's values for that map.
+	/// overlay, falloff and grain and colour mask with C&C4's values for that map.
 	static void Set_Map_Lighting(const char* spec);
 	static bool Has_Map_Lighting();
 	/// How much of each map's own mood the C&C4 preset takes on (Options.ini Sage2MapMood, 0..1):

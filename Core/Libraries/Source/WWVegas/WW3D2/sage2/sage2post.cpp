@@ -58,6 +58,8 @@ namespace
 	float s_overlayFactor[4] = { 0.2f, 0.05f, 0.827f, 0.145f };
 	float s_falloffParams[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
 	float s_grainMode[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	std::string s_colorMaskName;		// Tiberium Project @feature Set_Color_Mask
+	float s_colorMaskStrength = 0.0f;
 	IDirect3DTexture9* s_grey = nullptr;		// the neutral grain (0.5: the pin light leaves the colour as it is)
 	float s_exposure = 1.0f;
 	float s_autoStrength = 0.5f;		// Sage2AutoExposure
@@ -361,6 +363,12 @@ void Sage2PostClass::Set_Overlays(const char* overlayTexture, const char* fallof
 
 void Sage2PostClass::Set_Overlays_Enabled(bool enabled) { s_overlaysEnabled = enabled; }
 
+void Sage2PostClass::Set_Color_Mask(const char* texture, float strength)
+{
+	s_colorMaskName = texture != nullptr ? texture : "";
+	s_colorMaskStrength = strength;
+}
+
 void Sage2PostClass::Set_Overlay_Params(const float overlayFactor[4], const float falloffParams[4], const float grainMode[4])
 {
 	for (int i = 0; i < 4; ++i)
@@ -543,7 +551,15 @@ bool Sage2PostClass::Apply()
 	}
 	grade.Set_Bool("ApplyOverlay", overlay != nullptr);
 	grade.Set_Bool("ApplyFalloffAndGrain", falloff != nullptr && grain != nullptr);
-	grade.Set_Bool("ApplyColorMask", false);
+	// Tiberium Project @feature a C&C4 map's colour mask (Capital City's)
+	IDirect3DBaseTexture9* colorMask = s_overlaysEnabled && !s_colorMaskName.empty() ? Sage2TextureClass::Get(s_colorMaskName.c_str()) : nullptr;
+	if (colorMask != nullptr)
+	{
+		const float maskParams[4] = { s_colorMaskStrength, 0.0f, 0.0f, 0.0f };
+		grade.Set_Texture("ColorMask", colorMask);
+		grade.Set_Float("ColorMaskParams", maskParams, 4);
+	}
+	grade.Set_Bool("ApplyColorMask", colorMask != nullptr);
 	// Tiberium Project @feature with edge anti-aliasing the grade goes to a copy, which the last
 	// pass smooths back into the frame
 	IDirect3DSurface9* gradeTarget = frame;

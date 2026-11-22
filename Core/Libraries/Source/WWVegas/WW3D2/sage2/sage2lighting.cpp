@@ -110,6 +110,9 @@ namespace
 	char s_mapOverlay[64], s_mapFalloff[64], s_mapGrain[64];
 	float s_mapOverlayFactor[4], s_mapFalloffParams[4], s_mapGrainMode[4];
 	bool s_mapHasOverlay = false, s_mapHasFalloff = false;
+	char s_mapMask[64];
+	float s_mapMaskStrength = 0.0f;
+	bool s_mapHasMask = false;
 	bool s_treeLight = true;	// Sage2TreeLight
 
 	// Tiberium Project @feature the map's mood: Zero Hour's default terrain light for each time of
@@ -222,6 +225,7 @@ const Sage2LightingPreset* Sage2LightingClass::Choose(int timeOfDay, bool snowy)
 		// PE_Junktown_GreenFalloff and PE_Junktown_Grain; RA3's look none of them
 		const char* name = preset->name;
 		Sage2PostClass::Set_Overlay_Params(nullptr, nullptr, nullptr);	// (the shader's own values, but a C&C4 map's)
+		Sage2PostClass::Set_Color_Mask(preset == &s_map && s_mapHasMask ? s_mapMask : nullptr, s_mapMaskStrength);
 		if (preset == &s_map)
 		{
 			Sage2PostClass::Set_Overlays(s_mapHasOverlay ? s_mapOverlay : nullptr, s_mapHasFalloff ? s_mapFalloff : nullptr,
@@ -246,6 +250,7 @@ const Sage2LightingPreset* Sage2LightingClass::Choose(int timeOfDay, bool snowy)
 	else
 	{
 		Sage2PostClass::Set_Overlays(nullptr, nullptr, nullptr);	// Tiberium Project (none of a preset's overlays left over)
+		Sage2PostClass::Set_Color_Mask(nullptr, 0.0f);
 		Sage2_Log("lighting: map (time of day %d%s) keeps its own lights", timeOfDay, snowy ? ", snow" : "");
 	}
 	return preset;
@@ -369,13 +374,13 @@ Sage2LightingPreset Sage2LightingClass::Adapt(const Sage2LightingPreset& preset,
 //-------------------------------------------------------------------------------------------------
 // Tiberium Project @feature a C&C4 map's own light and post effects, from its WorldInfo (c4maps writes them):
 //   "amb R G B|sun R G B X Y Z|fill R G B X Y Z|fill R G B X Y Z|lut NAME BLEND|bloom V|overlay NAME F0 F1 F2 F3
-//    |falloff NAME GRAIN P0 P1 P2 P3 M0 M1 M2 M3"
+//    |falloff NAME GRAIN P0 P1 P2 P3 M0 M1 M2 M3|mask NAME STRENGTH"
 // (C&C4's GlobalLighting for the time of day it plays at, its PostEffectsChunk); null or empty for none
 //-------------------------------------------------------------------------------------------------
 void Sage2LightingClass::Set_Map_Lighting(const char* spec)
 {
 	s_hasMap = false;
-	s_mapHasOverlay = s_mapHasFalloff = false;
+	s_mapHasOverlay = s_mapHasFalloff = s_mapHasMask = false;
 	if (spec == nullptr || *spec == '\0')
 		return;
 	memset(&s_map, 0, sizeof(s_map));
@@ -438,10 +443,17 @@ void Sage2LightingClass::Set_Map_Lighting(const char* spec)
 			}
 			s_mapHasFalloff = true;
 		}
+		else if (sscanf(part, "mask %63s %f", name, &v[0]) == 2)
+		{
+			strcpy(s_mapMask, name);
+			s_mapMaskStrength = v[0];
+			s_mapHasMask = true;
+		}
 	}
 	s_hasMap = ambient && lights == 3;
-	Sage2_Log("lighting: the map has C&C4's own light%s (table %s %.2f, bloom %.2f%s%s)", s_hasMap ? "" : " (incomplete: not used)",
-		s_mapLookup, s_map.lookupBlend, s_map.bloomIntensity, s_mapHasOverlay ? ", overlay" : "", s_mapHasFalloff ? ", falloff and grain" : "");
+	Sage2_Log("lighting: the map has C&C4's own light%s (table %s %.2f, bloom %.2f%s%s%s)", s_hasMap ? "" : " (incomplete: not used)",
+		s_mapLookup, s_map.lookupBlend, s_map.bloomIntensity, s_mapHasOverlay ? ", overlay" : "", s_mapHasFalloff ? ", falloff and grain" : "",
+		s_mapHasMask ? ", colour mask" : "");
 }
 
 bool Sage2LightingClass::Has_Map_Lighting() { return s_hasMap; }

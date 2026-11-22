@@ -47,6 +47,9 @@ public:
 	/// PostFX_LookupTable OverlayFactor, FalloffParams, FalloffAndGrainBlendMode, four values each), as a C&C4 map
 	/// sets them; null for the values the look uses otherwise
 	static void Set_Overlay_Params(const float overlayFactor[4], const float falloffParams[4], const float grainMode[4]);
+	/// Tiberium Project @feature C&C4's colour mask (Capital City's: its texture added to the frame at that strength,
+	/// PostFX_LookupTable's ColorMask and ColorMaskParams.x); null for none
+	static void Set_Color_Mask(const char* texture, float strength);
 	/// Exposure applied before the tone curve (1 = as C&C4)
 	static void Set_Exposure(float exposure);
 	/// Tiberium Project @feature How strongly the grading table applies, against the map look's own
