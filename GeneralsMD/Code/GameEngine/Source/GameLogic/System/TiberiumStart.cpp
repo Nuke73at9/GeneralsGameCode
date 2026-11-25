@@ -884,16 +884,16 @@ Bool TiberiumStart::isSpotAllowed( const Player *player, const Coord3D *spot, co
 	else
 	{
 		const Real reach = TheGlobalData->m_zoneHomeRadius;
-		Bool near = FALSE;
-		for( size_t i = 0; i < s_entries.size() && !near; ++i )
+		Bool nearHome = FALSE;	// (not "near": Windows' headers define it away)
+		for( size_t i = 0; i < s_entries.size() && !nearHome; ++i )
 		{
 			const Entry &e = s_entries[i];
 			if( !isFriend( player, playerOf( e ) ) )
 				continue;
 			const Real dx = spot->x - e.home.x, dy = spot->y - e.home.y;
-			near = dx * dx + dy * dy <= reach * reach;
+			nearHome = dx * dx + dy * dy <= reach * reach;
 		}
-		if( !near )
+		if( !nearHome )
 		{
 			*reason = "not near its start or an ally's";
 			return FALSE;
