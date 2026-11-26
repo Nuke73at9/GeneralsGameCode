@@ -653,6 +653,9 @@ public:
 	// adds the given AIGroup to the current selection of this player.
 	void addAIGroupToCurrentSelection(AIGroup *group);
 
+	/// Tiberium Project @feature the object is in its current selection (a C&C3 squad selected through another of its soldiers)
+	Bool isInCurrentSelection(const Object *obj) const;
+
 	// return the requested hotkey squad
 	Squad *getHotkeySquad(Int squadNumber);
 

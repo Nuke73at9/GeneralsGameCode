@@ -208,6 +208,8 @@ static PoolSizeRec PoolSizes[] =
 	{ "TiberiumArrivalUpdate", 32, 16 },
 	{ "AttributeModifierUpgrade", 1024, 128 },
 	{ "FXListUpgrade", 1024, 128 },
+	{ "SquadUpdate", 256, 64 },	// Tiberium Project @feature C&C3's squads
+	{ "SquadMemberUpdate", 1024, 256 },
 	{ "OrderAbilityUpdate", 128, 32 },
 	{ "AssembleStructureUpdate", 128, 32 },
 	{ "AIAbilityUseUpdate", 512, 128 },

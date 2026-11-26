@@ -167,6 +167,8 @@
 #include "GameLogic/Module/TiberiumArrivalUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/AttributeModifierUpgrade.h"	// Tiberium Project
 #include "GameLogic/Module/FXListUpgrade.h"	// Tiberium Project
+#include "GameLogic/Module/SquadUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/SquadMemberUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/OrderAbilityUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/AssembleStructureUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/AIAbilityUseUpdate.h"	// Tiberium Project
@@ -467,6 +469,8 @@ void ModuleFactory::init()
 	addModule( TiberiumArrivalUpdate );	// Tiberium Project
 	addModule( AttributeModifierUpgrade );	// Tiberium Project
 	addModule( FXListUpgrade );	// Tiberium Project
+	addModule( SquadUpdate );	// Tiberium Project
+	addModule( SquadMemberUpdate );	// Tiberium Project
 	addModule( OrderAbilityUpdate );	// Tiberium Project
 	addModule( AssembleStructureUpdate );	// Tiberium Project
 	addModule( AIAbilityUseUpdate );	// Tiberium Project

@@ -61,6 +61,7 @@
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
 #include "GameLogic/Module/SpecialAbilityUpdate.h"
+#include "GameLogic/Module/SquadUpdate.h"	// Tiberium Project
 #include "GameLogic/Weapon.h"
 
 #include "GameLogic/ExperienceTracker.h"//LORENZEN
@@ -758,7 +759,8 @@ CanAttackResult ActionManager::getCanAttackObject( const Object *obj, const Obje
 		//Fix a case where the Demo_GLAInfantryWorker is able to attack using his passive bomb upgrade. We don't
 		//want him to allow a visible attack cursor for the player. This code never checked for AutoChoosesSources
 		//logic, but now we will but only when the commandSource is FROM_PLAYER.
-		if( commandSource == CMD_FROM_PLAYER )
+		// (Tiberium Project @feature a C&C3 squad's weapons are its soldiers': SquadUpdate)
+		if( commandSource == CMD_FROM_PLAYER && SquadUpdate::getSquadUpdate( obj ) == nullptr )
 		{
 			//Check if it's got any weapons that can be used.
 			Bool anyValidWeapon = FALSE;

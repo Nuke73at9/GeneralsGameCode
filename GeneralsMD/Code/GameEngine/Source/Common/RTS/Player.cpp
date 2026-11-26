@@ -4022,6 +4022,13 @@ void Player::addAIGroupToCurrentSelection(AIGroup *group) {
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature
+Bool Player::isInCurrentSelection(const Object *obj) const
+{
+	return m_currentSelection != nullptr && obj != nullptr && m_currentSelection->isOnSquad(obj);
+}
+
+//-------------------------------------------------------------------------------------------------
 /** addTypeOfProductionCostChange adds a production change to the typeof list */
 //-------------------------------------------------------------------------------------------------
 void Player::addKindOfProductionCostChange(	KindOfMaskType kindOf, Real percent )

@@ -1653,6 +1653,36 @@ void TiberiumTest::update()
 				obj->getAIUpdateInterface()->aiEnter( into, CMD_FROM_PLAYER );
 			log( "frame %d: ui: enter %s%s", (int)s_frame, step.arg.c_str(), obj != nullptr && into != nullptr ? "" : " (no such object)" );
 		}
+		else if ( step.action == "selection" && TheInGameUI != nullptr && ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr )
+		{
+			// Tiberium Project @feature (the test) what is selected: the drawables the view shows selected, and the local player's
+			// selected group in the logic (the objects its orders go to)
+			std::string shown, held;
+			const DrawableList *list = TheInGameUI->getAllSelectedDrawables();
+			for ( DrawableListCIt it = list->begin(); it != list->end(); ++it )
+			{
+				const Object *o = ( *it )->getObject();
+				if ( o != nullptr )
+				{
+					char one[96];
+					snprintf( one, sizeof( one ), " %s#%u", o->getTemplate()->getName().str(), (unsigned)o->getID() );
+					shown += one;
+				}
+			}
+			for ( Object *o = TheGameLogic->getFirstObject(); o != nullptr; o = o->getNextObject() )
+			{
+#if RTS_ZEROHOUR
+				if ( ThePlayerList->getLocalPlayer()->isInCurrentSelection( o ) )
+				{
+					char one[96];
+					snprintf( one, sizeof( one ), " %s#%u", o->getTemplate()->getName().str(), (unsigned)o->getID() );
+					held += one;
+				}
+#endif
+			}
+			log( "frame %d: ui: selection: shown%s; ordered%s", (int)s_frame, shown.empty() ? " none" : shown.c_str(),
+				held.empty() ? " none" : held.c_str() );
+		}
 		else if ( step.action == "repair" && TheGameLogic != nullptr )
 		{
 			// Tiberium Project @feature (the test) "repair=k,j": the k-th spawned object (a dozer) told to repair the j-th
@@ -3004,6 +3034,20 @@ void TiberiumTest::update()
 				{
 					snprintf( more, sizeof( more ), ", holds %d", (int)o->getContain()->getContainCount() );
 					strlcat( hit, more, sizeof( hit ) );
+				}
+				// (Tiberium Project: its AI's state and what it goes after)
+				if ( o->getAIUpdateInterface() != nullptr )
+				{
+					AIUpdateInterface *oai = o->getAIUpdateInterface();
+					const Object *goal = oai->getGoalObject();
+					snprintf( more, sizeof( more ), ", ai %d%s%s", (int)oai->getAIStateType(), goal != nullptr ? " at " : "",
+						goal != nullptr ? goal->getTemplate()->getName().str() : "" );
+					strlcat( hit, more, sizeof( hit ) );
+					if ( oai->hasStances() )
+					{
+						snprintf( more, sizeof( more ), ", stance %d", (int)oai->getStance() );
+						strlcat( hit, more, sizeof( hit ) );
+					}
 				}
 				log( "frame %d: ui: objinfo %s: player %d%s, health %.0f of %.0f%s%s%s%s%s at %.0f %.0f", (int)s_frame, step.arg.c_str(),
 					owner != nullptr ? (int)owner->getPlayerIndex() : -1, owner != nullptr && owner == ThePlayerList->getNeutralPlayer() ? " (neutral)" : "",

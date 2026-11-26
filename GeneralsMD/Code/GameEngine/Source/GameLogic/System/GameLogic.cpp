@@ -89,6 +89,7 @@
 #include "GameClient/InGameUI.h"
 #include "GameClient/LoadScreen.h"
 #include "Common/TiberiumTest.h"	// Tiberium Project
+#include "GameLogic/Module/SquadMemberUpdate.h"	// Tiberium Project
 #include "GameLogic/TiberiumStart.h"	// Tiberium Project
 #include "GameLogic/TiberiumZones.h"	// Tiberium Project
 #include "GameLogic/AbramCheats.h"	// Abram's Personal Test
@@ -3037,6 +3038,23 @@ void GameLogic::selectObject(Object *obj, Bool createNewSelection, PlayerMaskTyp
 	if (!obj)
 	{
 		return;
+	}
+
+	// Tiberium Project @feature a soldier of a C&C3 squad stands for its squad: the squad is selected (and ordered) in its stead,
+	// once
+	Object *standIn = const_cast<Object *>( SquadMemberUpdate::getSelectionStandIn( obj ) );
+	if( standIn != obj )
+	{
+		obj = standIn;
+		if( !createNewSelection )
+		{
+			for( PlayerMaskType mask = playerMask; mask; )
+			{
+				const Player *player = ThePlayerList->getEachPlayerFromMask( mask );
+				if( player != nullptr && player->isInCurrentSelection( obj ) )
+					return;
+			}
+		}
 	}
 
 	if (!obj->isMassSelectable() && !createNewSelection)

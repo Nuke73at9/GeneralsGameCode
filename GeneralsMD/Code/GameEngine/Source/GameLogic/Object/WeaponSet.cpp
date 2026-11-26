@@ -51,6 +51,7 @@
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/StealthUpdate.h"
 #include "GameLogic/Module/SpawnBehavior.h"
+#include "GameLogic/Module/SquadUpdate.h"	// Tiberium Project
 
 #include "GameLogic/Weapon.h"
 
@@ -966,8 +967,13 @@ CanAttackResult WeaponSet::getAbleToUseWeaponAgainstTarget( AbleToAttackType att
 
 	// Do a check to see if we have a hive object that has slaved objects.
 	SpawnBehaviorInterface* spawnInterface = source->getSpawnBehaviorInterface();
-	if( spawnInterface &&
-		spawnInterface->getCanAnySlavesUseWeaponAgainstTarget( attackType, victim, pos, commandSource ) == ATTACKRESULT_POSSIBLE )
+	// Tiberium Project @feature a C&C3 squad (SquadUpdate) takes on what its soldiers reach once they have moved too: they go
+	// after it as the squad is told to
+	const CanAttackResult slavesResult = spawnInterface != nullptr
+		? spawnInterface->getCanAnySlavesUseWeaponAgainstTarget( attackType, victim, pos, commandSource ) : ATTACKRESULT_NOT_POSSIBLE;
+	if( slavesResult == ATTACKRESULT_POSSIBLE_AFTER_MOVING && SquadUpdate::getSquadUpdate( source ) != nullptr )
+		return ATTACKRESULT_POSSIBLE_AFTER_MOVING;
+	if( spawnInterface && slavesResult == ATTACKRESULT_POSSIBLE )
 	{
 
 // srj sez: this bit is intended to fix the situation where you have a stinger site

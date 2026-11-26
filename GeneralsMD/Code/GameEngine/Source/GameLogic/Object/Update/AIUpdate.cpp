@@ -65,6 +65,7 @@
 #include "GameLogic/Module/HackInternetAIUpdate.h"
 #include "GameLogic/Module/HordeUpdate.h"
 #include "GameLogic/Module/BehaviorModule.h"
+#include "GameLogic/Module/SquadUpdate.h"
 #include "GameLogic/Object.h"
 
 #include "GameLogic/PartitionManager.h"
@@ -2675,6 +2676,25 @@ void AIUpdateInterface::aiDoCommand(const AICommandParms* parms)
 	if (!isAllowedToRespondToAiCommands(parms))
 		return;
 
+	// Tiberium Project @feature C&C3's squads (SquadUpdate): an order given to a squad is its soldiers' (it has no weapon of
+	// its own), whoever gives it; an attack on a squad is one on its soldier nearest the attacker, as the squad itself is
+	// no target
+	SquadUpdate *squad = getObject()->isKindOf( KINDOF_SPAWNS_ARE_THE_WEAPONS ) ? SquadUpdate::getSquadUpdate( getObject() ) : nullptr;
+	if( squad != nullptr )
+		squad->passOrder( parms );
+	else if( ( parms->m_cmd == AICMD_ATTACK_OBJECT || parms->m_cmd == AICMD_FORCE_ATTACK_OBJECT ) && parms->m_obj != nullptr
+		&& parms->m_obj->isKindOf( KINDOF_SPAWNS_ARE_THE_WEAPONS ) )
+	{
+		Object *soldier = SquadUpdate::getSoldierToAttack( parms->m_obj, getObject() );
+		if( soldier != nullptr )
+		{
+			AICommandParms atSoldier = *parms;
+			atSoldier.m_obj = soldier;
+			aiDoCommand( &atSoldier );
+			return;
+		}
+	}
+
 #ifdef ALLOW_SURRENDER
 	// surrendered items have very limited options, and only via AI cmds
 	if (isSurrendered())
@@ -4274,7 +4294,8 @@ void AIUpdateInterface::setStance( StanceType stance )
 		return;
 	m_stance = stance;
 	m_stanceHomeValid = FALSE;
-	if (!stanceAllowsChase() && getLastCommandSource() == CMD_FROM_AI && isAttacking())
+	// (nor does it go on answering who hit it: retaliation is its own choice, whatever it last was told)
+	if (!stanceAllowsChase() && ((getLastCommandSource() == CMD_FROM_AI && isAttacking()) || getAIStateType() == AI_GUARD_RETALIATE))
 	{
 		aiIdle(CMD_FROM_AI);
 	}

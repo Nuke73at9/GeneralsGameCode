@@ -420,6 +420,8 @@ set(GAMEENGINE_SRC
     Include/GameLogic/Module/BannerCarrierUpdate.h
     Include/GameLogic/Module/CompositeStructureUpdate.h
     Include/GameLogic/Module/SupportMeterUpdate.h
+    Include/GameLogic/Module/SquadUpdate.h
+    Include/GameLogic/Module/SquadMemberUpdate.h
     Include/GameLogic/Module/StrafeAreaUpdate.h
     Include/GameLogic/Module/OrderAbilityUpdate.h
     Include/GameLogic/Module/AssembleStructureUpdate.h
@@ -1127,6 +1129,8 @@ set(GAMEENGINE_SRC
     Source/GameLogic/Object/Update/BannerCarrierUpdate.cpp
     Source/GameLogic/Object/Update/CompositeStructureUpdate.cpp
     Source/GameLogic/Object/Update/SupportMeterUpdate.cpp
+    Source/GameLogic/Object/Update/SquadUpdate.cpp
+    Source/GameLogic/Object/Update/SquadMemberUpdate.cpp
     Source/GameLogic/Object/Update/StrafeAreaUpdate.cpp
     Source/GameLogic/Object/Update/OrderAbilityUpdate.cpp
     Source/GameLogic/Object/Update/AssembleStructureUpdate.cpp

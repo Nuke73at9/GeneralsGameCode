@@ -98,6 +98,7 @@
 #include "GameLogic/Module/StealthUpdate.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 #include "GameLogic/Module/MobMemberSlavedUpdate.h"//ML
+#include "GameLogic/Module/SquadMemberUpdate.h"	// Tiberium Project
 
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/NetworkInterface.h"
@@ -2651,7 +2652,13 @@ void InGameUI::createMouseoverHint( const GameMessage *msg )
 
  			//Ahh, here is a weird exception: if the moused-over drawable is a mob-member
 			//(e.g. AngryMob), Lets fool the UI into creating the hint for the NEXUS instead...
- 			if (obj->isKindOf( KINDOF_IGNORED_IN_GUI ))
+ 			// Tiberium Project @feature a soldier of a C&C3 squad: the squad's hint
+ 			const Object *squadOf = SquadMemberUpdate::getSelectionStandIn( obj );
+ 			if ( squadOf != obj && squadOf->getDrawable() )
+ 			{
+ 				m_mousedOverDrawableID = squadOf->getDrawable()->getID();
+ 			}
+ 			else if (obj->isKindOf( KINDOF_IGNORED_IN_GUI ))
  			{
  				static NameKeyType key_MobMemberSlavedUpdate = NAMEKEY( "MobMemberSlavedUpdate" );
  				MobMemberSlavedUpdate *MMSUpdate = (MobMemberSlavedUpdate*)obj->findUpdateModule( key_MobMemberSlavedUpdate );
@@ -3545,6 +3552,12 @@ Real InGameUI::getPlacementAngle()
 //-------------------------------------------------------------------------------------------------
 void InGameUI::selectDrawable( Drawable *draw )
 {
+
+	// Tiberium Project @feature a soldier of a C&C3 squad stands for its squad (SquadMemberUpdate)
+	const Object *obj = draw != nullptr ? draw->getObject() : nullptr;
+	const Object *standIn = obj != nullptr ? SquadMemberUpdate::getSelectionStandIn( obj ) : nullptr;
+	if( standIn != nullptr && standIn != obj && standIn->getDrawable() != nullptr )
+		draw = standIn->getDrawable();
 
 	if( draw->isSelected() == FALSE )
 	{
