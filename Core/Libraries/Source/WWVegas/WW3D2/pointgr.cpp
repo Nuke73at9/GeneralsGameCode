@@ -139,7 +139,7 @@ SortingIndexBufferClass		*SortingTris, *SortingQuads;	// Sorting index buffers.
 // Tiberium Project @feature quads already placed in the world (see the header), drawn with the
 // particles' index buffers: the world transform is the identity and the camera's view stays
 void PointGroupClass::Render_World_Quads(const Vector3* loc, const Vector4* diffuse, const Vector2* uv, int vertexCount,
-	const ShaderClass& shader, TextureClass* texture)
+	const ShaderClass& shader, TextureClass* texture, bool allowSort)
 {
 	vertexCount -= vertexCount % 4;
 	if (vertexCount <= 0 || Quads == nullptr)
@@ -153,7 +153,7 @@ void PointGroupClass::Render_World_Quads(const Vector3* loc, const Vector4* diff
 	DX8Wrapper::Set_Shader(drawShader);
 	DX8Wrapper::Set_Texture(0, texture);
 
-	const bool sort = drawShader.Get_Dst_Blend_Func() != ShaderClass::DSTBLEND_ZERO &&
+	const bool sort = allowSort && drawShader.Get_Dst_Blend_Func() != ShaderClass::DSTBLEND_ZERO &&
 		drawShader.Get_Alpha_Test() == ShaderClass::ALPHATEST_DISABLE && WW3D::Is_Sorting_Enabled();
 	IndexBufferClass* indexbuffer = sort ? static_cast<IndexBufferClass*>(SortingQuads) : static_cast<IndexBufferClass*>(Quads);
 

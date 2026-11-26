@@ -217,6 +217,11 @@ public:
 
 	UnsignedInt getElapsedFrames() const;
 
+	/// Tiberium Project @feature particle trails: the points it left behind (see ParticleSystemTemplate::getTrailLength),
+	/// 0 the newest
+	Int getTrailPointCount() const { return m_trailCount; }
+	const Coord3D &getTrailPoint( Int i ) const { return m_trail[ ( m_trailHead + m_trailCapacity - i ) % m_trailCapacity ]; }
+
 protected:
 
 	// snapshot methods
@@ -256,6 +261,14 @@ protected:
 
 	Bool							m_isCulled;														///< status of particle relative to screen bounds
 	Bool							m_groundCollided;											///< Tiberium Project: it has come down to the ground (GroundCollisionFX; not saved)
+	// Tiberium Project @feature particle trails (not saved: a trail is begun anew): where it was, a point every
+	// m_trailStride updates, the newest at m_trailHead
+	Coord3D *					m_trail;
+	UnsignedByte			m_trailCapacity;
+	UnsignedByte			m_trailCount;
+	UnsignedByte			m_trailHead;
+	UnsignedByte			m_trailStride;
+	UnsignedByte			m_trailTick;
 public:
 	Bool							m_inSystemList;
 	Bool							m_inOverallList;
@@ -664,6 +677,19 @@ public:
 	/// the quads' length for a particle (its personality picks within the ranges) at an age in frames
 	Real getGeometryLength(UnsignedInt personality, UnsignedInt ageFrames) const;
 
+	/// Tiberium Project @feature particles that stay with their emitter (C&C4 and Kane's Wrath's ParticlesAttachToBone:
+	/// a muzzle's glow, a jet's flame, a shell's trail): each particle keeps its place and its course in the system's own
+	/// axes, carried as the system moves and turns (its drawable's bone), where Zero Hour leaves them where they were put.
+	/// AttachParticles = Yes. Drawing only.
+	Bool isAttachParticles() const { return m_attachParticles; }
+
+	/// Tiberium Project @feature particle trails (C&C4 and Kane's Wrath's Trail draw: contrails, shell and missile
+	/// trails, sparks): each particle is drawn as a ribbon through where it was over its last TrailLength frames, facing
+	/// the camera, as wide as its size, fading out to its end, instead of a sprite. An attached particle's trail is its
+	/// emitter's path. Drawing only.
+	UnsignedInt getTrailLength() const { return m_trailLength; }
+	enum { MAX_TRAIL_POINTS = 24 };	///< the points kept of a trail (a longer one keeps every few frames)
+
 	/// Tiberium Project @feature the emission volume moved off the system's origin (C&C4's volume
 	/// Offset: smoke rising from a vehicle's back, sparks off to one side), in the system's own
 	/// axes; outward velocities still point away from the volume's centre. Drawing only.
@@ -781,6 +807,9 @@ protected:
 	GameClientRandomVariable m_groundCollisionHeight;	///< GroundCollisionHeight
 	Bool m_groundCollisionKill;			///< GroundCollisionKill
 	Bool m_groundCollisionOrientFX;		///< GroundCollisionOrientFX
+	// Tiberium Project @feature attached particles and particle trails (on the template only)
+	Bool m_attachParticles;				///< AttachParticles
+	UnsignedInt m_trailLength;			///< TrailLength (frames; 0: no trail)
 
 	// template attribute data inherited from ParticleSystemInfo class
 };
@@ -934,6 +963,7 @@ protected:
 																		Bool forceCreate = FALSE );	///< factory method for particles
 
 	void updateTransform();
+	void carryParticles( const Matrix3D &before );	///< Tiberium Project: attached particles moved as the system moved since 'before'
 	void applyParentTransform(const Matrix3D &parentXfrm);
 	void applyLocalTransform();
 
@@ -1011,6 +1041,9 @@ protected:
 	Real							m_streamArcFrom;											///< the line's share of the stream: from
 	Real							m_streamArcTo;												///< to
 	Real							m_streamArcHeight;										///< the stream's arc at its middle
+
+	// Tiberium Project @feature attached particles (not saved: the first update after a load carries nothing)
+	Bool							m_carryReady;													///< m_transform is where the particles were carried to last
 
 
 	// the actual particle system data is inherited from ParticleSystemInfo

@@ -208,9 +208,10 @@ public:
 
 	// Tiberium Project @feature quads already placed in the world (four corners each, in order around
 	// the quad), drawn as particles are: the point groups' quad index buffers, the given shader and
-	// texture, sorted with the other particles when they blend; geometry particles use it
+	// texture, sorted with the other particles when they blend (unless allowSort is false: an additive
+	// blend, which looks the same in any order); geometry particles and particle trails use it
 	static void				Render_World_Quads(const Vector3* loc, const Vector4* diffuse, const Vector2* uv, int vertexCount,
-								const ShaderClass& shader, TextureClass* texture);
+								const ShaderClass& shader, TextureClass* texture, bool allowSort = true);
 
 private:
 	static Vector3 _TriVertexLocationOrientationTable[256][3];

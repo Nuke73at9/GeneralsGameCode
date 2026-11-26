@@ -64,6 +64,8 @@ private:
 	/// Tiberium Project @feature geometry particles: the system's particles as crossed quads (see
 	/// ParticleSystemTemplate::ParticleGeometry), each colour times its light factor; returns how many
 	UnsignedInt renderGeometryParticles(ParticleSystem& sys, const ParticleSystemTemplate& t, Bool lit, const Real sceneFactor[3]);
+	/// Tiberium Project @feature particle trails (ParticleSystemTemplate::getTrailLength): a ribbon a particle
+	UnsignedInt renderTrailParticles(ParticleSystem& sys, const ParticleSystemTemplate& t, Bool lit, const Real sceneFactor[3], const Vector3& eye);
 
 	/// Tiberium Project @feature model particles (see ParticleSystemTemplate's Model): a copy of each model for
 	/// each of its particles drawn, kept from frame to frame. Each copy's meshes and materials are its own, so the

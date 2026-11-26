@@ -624,6 +624,25 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 			continue;
 		}
 
+		// Tiberium Project @feature particle trails (C&C4 and Kane's Wrath's contrails, shell trails and sparks): a
+		// camera-facing ribbon through where each particle was, instead of a sprite
+		if (sys->isUsingParticles() && sys->getTemplate() != nullptr && sys->getTemplate()->getTrailLength() > 0)
+		{
+			flushParticleBatch(rinfo, pointCount);
+			Bool lit = FALSE;
+			Real factor[3] = { 1.0f, 1.0f, 1.0f };
+#ifdef RTS_RENDERER_D3D9
+			const Int trailLighting = sys->getTemplate()->getLighting();
+			lit = litParticles && trailLighting != ParticleSystemTemplate::PARTICLE_LIGHTING_UNLIT
+				&& (trailLighting == ParticleSystemTemplate::PARTICLE_LIGHTING_LIT
+					|| sys->getShaderType() == ParticleSystemInfo::ALPHA || sys->getShaderType() == ParticleSystemInfo::ALPHA_TEST);
+			for (Int c = 0; c < 3; ++c)
+				factor[c] = sceneFactor[c];
+#endif
+			m_onScreenParticleCount += renderTrailParticles(*sys, *sys->getTemplate(), lit, factor, rinfo.Camera.Get_Position());
+			continue;
+		}
+
 		// Tiberium Project @feature geometry particles (C&C4's muzzle flashes, sparks and flame blades):
 		// crossed quads along each particle's velocity instead of camera-facing sprites
 		if (sys->isUsingParticles() && sys->getTemplate() != nullptr
@@ -1039,6 +1058,122 @@ UnsignedInt W3DParticleSystemManager::renderGeometryParticles(ParticleSystem& sy
 	DX8Wrapper::Set_Soft_Particle(true, radiusSum / (Real)drawn);
 #endif
 	PointGroupClass::Render_World_Quads(&s_loc[0], &s_color[0], &s_uv[0], (int)s_loc.size(), shader, texture.Peek());
+#ifdef RTS_RENDERER_D3D9
+	DX8Wrapper::Set_Soft_Particle(false);
+#endif
+	return drawn;
+}
+
+// Tiberium Project @feature particle trails. Each particle: a strip through its place now and the points it left
+// behind (newest first), turned to face the camera at each point, as wide as the particle's size; the texture's u
+// runs along it (0 at the particle), its v across; it fades from the particle's alpha (an additive one: its colour)
+// to nothing at its far end.
+UnsignedInt W3DParticleSystemManager::renderTrailParticles(ParticleSystem& sys, const ParticleSystemTemplate& t, Bool lit, const Real sceneFactor[3], const Vector3& eye)
+{
+	static std::vector<Vector3> s_loc;
+	static std::vector<Vector4> s_color;
+	static std::vector<Vector2> s_uv;
+	s_loc.clear();
+	s_color.clear();
+	s_uv.clear();
+
+	const Bool additive = sys.getShaderType() == ParticleSystemInfo::ADDITIVE;
+	Vector3 points[ParticleSystemTemplate::MAX_TRAIL_POINTS + 1];
+	Vector3 sides[ParticleSystemTemplate::MAX_TRAIL_POINTS + 1];
+	Real radiusSum = 0.0f;
+	UnsignedInt drawn = 0;
+	for (Particle* p = sys.getFirstParticle(); p; p = p->m_systemNext)
+	{
+		if (p->isCulled())
+			continue;
+		const Real width = p->getSize();
+		if (width <= 0.0f)
+			continue;
+
+		// the particle, then where it was (a point where it still is left out)
+		const Coord3D* pos = p->getPosition();
+		Int n = 0;
+		points[n++].Set(pos->x, pos->y, pos->z);
+		const Int kept = p->getTrailPointCount();
+		for (Int i = 0; i < kept && n <= ParticleSystemTemplate::MAX_TRAIL_POINTS; ++i)
+		{
+			const Coord3D& was = p->getTrailPoint(i);
+			const Vector3 at(was.x, was.y, was.z);
+			if ((at - points[n - 1]).Length2() > 1.0e-6f)
+				points[n++] = at;
+		}
+		if (n < 2)
+			continue;
+
+		// across the strip at each point: square to its course there and to the line to the eye
+		for (Int i = 0; i < n; ++i)
+		{
+			const Vector3 course = points[i > 0 ? i - 1 : 0] - points[i < n - 1 ? i + 1 : n - 1];
+			Vector3 across;
+			Vector3::Cross_Product(course, eye - points[i], &across);
+			const Real len2 = across.Length2();
+			sides[i] = len2 > 1.0e-10f ? across * (0.5f * width / WWMath::Sqrt(len2)) : Vector3(0.0f, 0.0f, 0.0f);
+		}
+
+		const RGBColor* color = p->getColor();
+		Vector4 rgba(color->red, color->green, color->blue, p->getAlpha());
+		if (lit)
+		{
+			rgba.X *= sceneFactor[0];
+			rgba.Y *= sceneFactor[1];
+			rgba.Z *= sceneFactor[2];
+		}
+		for (Int i = 0; i + 1 < n; ++i)
+		{
+			const Real fadeFrom = 1.0f - (Real)i / (Real)(n - 1);
+			const Real fadeTo = 1.0f - (Real)(i + 1) / (Real)(n - 1);
+			const Vector4 a = additive ? Vector4(rgba.X * fadeFrom, rgba.Y * fadeFrom, rgba.Z * fadeFrom, rgba.W) : Vector4(rgba.X, rgba.Y, rgba.Z, rgba.W * fadeFrom);
+			const Vector4 b = additive ? Vector4(rgba.X * fadeTo, rgba.Y * fadeTo, rgba.Z * fadeTo, rgba.W) : Vector4(rgba.X, rgba.Y, rgba.Z, rgba.W * fadeTo);
+			const Real u0 = (Real)i / (Real)(n - 1), u1 = (Real)(i + 1) / (Real)(n - 1);
+			s_loc.push_back(points[i] + sides[i]);
+			s_loc.push_back(points[i] - sides[i]);
+			s_loc.push_back(points[i + 1] - sides[i + 1]);
+			s_loc.push_back(points[i + 1] + sides[i + 1]);
+			s_uv.push_back(Vector2(u0, 0.0f));
+			s_uv.push_back(Vector2(u0, 1.0f));
+			s_uv.push_back(Vector2(u1, 1.0f));
+			s_uv.push_back(Vector2(u1, 0.0f));
+			s_color.push_back(a);
+			s_color.push_back(a);
+			s_color.push_back(b);
+			s_color.push_back(b);
+		}
+		radiusSum += 0.5f * width;
+		++drawn;
+	}
+	if (drawn == 0)
+		return 0;
+
+	RefCountPtr<TextureClass> texture;
+	texture.Assign_No_Add_Ref(W3DDisplay::m_assetManager->Get_Texture(sys.getParticleTypeName().str()));
+	const Bool bright = isBright(sys);
+	ShaderClass shader = ShaderClass::_PresetAdditiveSpriteShader;
+	switch (sys.getShaderType())
+	{
+		case ParticleSystemInfo::ALPHA:
+			shader = bright ? brightShader(ShaderClass::_PresetAlphaSpriteShader) : ShaderClass::_PresetAlphaSpriteShader;
+			break;
+		case ParticleSystemInfo::ALPHA_TEST:
+			shader = bright ? brightShader(ShaderClass::_PresetATestSpriteShader) : ShaderClass::_PresetATestSpriteShader;
+			break;
+		case ParticleSystemInfo::MULTIPLY:
+			shader = ShaderClass::_PresetMultiplicativeSpriteShader;
+			break;
+		default:
+			shader = bright ? brightShader(ShaderClass::_PresetAdditiveSpriteShader) : ShaderClass::_PresetAdditiveSpriteShader;
+			break;
+	}
+	// (an additive trail is drawn at once, not sorted: it looks the same in any order, and its many vertices are kept out
+	// of the sorting renderer's pool, which brings Linux's software Vulkan down past some tens of thousands a frame)
+#ifdef RTS_RENDERER_D3D9
+	DX8Wrapper::Set_Soft_Particle(true, radiusSum / (Real)drawn);
+#endif
+	PointGroupClass::Render_World_Quads(&s_loc[0], &s_color[0], &s_uv[0], (int)s_loc.size(), shader, texture.Peek(), !additive);
 #ifdef RTS_RENDERER_D3D9
 	DX8Wrapper::Set_Soft_Particle(false);
 #endif

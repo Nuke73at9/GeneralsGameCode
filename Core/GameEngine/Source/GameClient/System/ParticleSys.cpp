@@ -313,6 +313,22 @@ Particle::Particle( ParticleSystem *system, const ParticleInfo *info )
 
 	m_isCulled = FALSE;
 	m_groundCollided = FALSE;	// Tiberium Project
+	// Tiberium Project @feature particle trails: room for its system's trail, a point every few updates when it is long
+	m_trail = nullptr;
+	m_trailCapacity = m_trailCount = m_trailHead = m_trailTick = 0;
+	m_trailStride = 1;
+	{
+		const ParticleSystemTemplate *tmpl = system != nullptr ? system->getTemplate() : nullptr;
+		const UnsignedInt trail = tmpl != nullptr ? tmpl->getTrailLength() : 0;
+		if (trail > 0)
+		{
+			const UnsignedInt most = ParticleSystemTemplate::MAX_TRAIL_POINTS;
+			const UnsignedInt stride = ( trail + most - 1 ) / most;
+			m_trailStride = (UnsignedByte)stride;
+			m_trailCapacity = (UnsignedByte)( ( trail + stride - 1 ) / stride );
+			m_trail = NEW Coord3D[ m_trailCapacity ];
+		}
+	}
 	m_accel.x = 0.0f;
 	m_accel.y = 0.0f;
 	m_accel.z = 0.0f;
@@ -426,6 +442,9 @@ Particle::~Particle()
 	// tell the particle system that this particle is gone
 	m_system->removeParticle( this );
 
+	delete [] m_trail;	// Tiberium Project
+	m_trail = nullptr;
+
 	// if this particle was controlling another particle system, destroy that system
 	if (m_systemUnderControl)
 	{
@@ -484,6 +503,16 @@ Bool Particle::update()
 	// Tiberium Project @feature lightning: a point of a bolt follows its bolt's waves as they change with its age
 	if (m_lightningBolt >= 0 && m_lifetime > 0)
 		m_system->placeLightningPoint( m_lightningBolt, m_lightningT, (Real)frameCount / (Real)m_lifetime, &m_pos );
+
+	// Tiberium Project @feature particle trails: where it is now, every few updates
+	if (m_trail != nullptr && ++m_trailTick >= m_trailStride)
+	{
+		m_trailTick = 0;
+		m_trailHead = (UnsignedByte)( ( m_trailHead + 1 ) % m_trailCapacity );
+		m_trail[ m_trailHead ] = m_pos;
+		if (m_trailCount < m_trailCapacity)
+			++m_trailCount;
+	}
 
 	// TheSuperHackers @info Skip the rest of the logic update on the creation frame. No render update has
 	// integrated this particle yet, so its rates must stay at their initial values for this frame, and testing
@@ -1320,6 +1349,7 @@ ParticleSystem::ParticleSystem( const ParticleSystemTemplate *sysTemplate,
 	m_streamArcFrom = 0.0f;
 	m_streamArcTo = 1.0f;
 	m_streamArcHeight = 0.0f;
+	m_carryReady = FALSE;	// Tiberium Project
 	m_lightningTarget.zero();
 
 	m_isStopped = false;
@@ -2336,6 +2366,16 @@ Bool ParticleSystem::update( Int localPlayerIndex  )
 	//
 	// Update position and rotation of the particle system
 	//
+	// Tiberium Project @feature attached particles: carried as the system moved and turned
+	if (m_template != nullptr && m_template->isAttachParticles())
+	{
+		const Matrix3D before = m_transform;
+		updateTransform();
+		if (m_carryReady)
+			carryParticles( before );
+		m_carryReady = TRUE;
+	}
+	else
 	updateTransform();
 
 	//
@@ -2471,6 +2511,48 @@ Bool ParticleSystem::update( Int localPlayerIndex  )
 	}
 
 	return true;
+}
+
+// ------------------------------------------------------------------------------------------------
+// Tiberium Project @feature attached particles: each particle (its place, course and the emitter it faces) taken
+// from where the system was to where it is now, as if it lived in the system's own axes
+void ParticleSystem::carryParticles( const Matrix3D &before )
+{
+	if (m_systemParticlesHead == nullptr)
+		return;
+	Bool same = TRUE;
+	for (Int r = 0; r < 3 && same; ++r)
+		for (Int c = 0; c < 4 && same; ++c)
+			same = before[r][c] == m_transform[r][c];
+	if (same)
+		return;
+	Matrix3D undo;
+	before.Get_Inverse( undo );
+	Matrix3D carry;
+#ifdef ALLOW_TEMPORARIES
+	carry = m_transform * undo;
+#else
+	carry.mul( m_transform, undo );
+#endif
+	for (Particle *p = m_systemParticlesHead; p != nullptr; p = p->m_systemNext)
+	{
+		Vector3 at( p->m_pos.x, p->m_pos.y, p->m_pos.z ), moved;
+		carry.mulVector3( at, moved );
+		p->m_pos.x = moved.X;
+		p->m_pos.y = moved.Y;
+		p->m_pos.z = moved.Z;
+		Vector3 from( p->m_emitterPos.x, p->m_emitterPos.y, p->m_emitterPos.z );
+		carry.mulVector3( from, moved );
+		p->m_emitterPos.x = moved.X;
+		p->m_emitterPos.y = moved.Y;
+		p->m_emitterPos.z = moved.Z;
+		const Vector3 vel( p->m_vel.x, p->m_vel.y, p->m_vel.z );
+		Vector3 turned;
+		Matrix3D::Rotate_Vector( carry, vel, &turned );
+		p->m_vel.x = turned.X;
+		p->m_vel.y = turned.Y;
+		p->m_vel.z = turned.Z;
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -3320,6 +3402,9 @@ const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 	{ "GroundCollisionHeight",	INI::parseGameClientRandomVariable,	nullptr,	offsetof( ParticleSystemTemplate, m_groundCollisionHeight ) },
 	{ "GroundCollisionKill",		INI::parseBool,					nullptr,	offsetof( ParticleSystemTemplate, m_groundCollisionKill ) },
 	{ "GroundCollisionOrientFX",	INI::parseBool,				nullptr,	offsetof( ParticleSystemTemplate, m_groundCollisionOrientFX ) },
+	// Tiberium Project @feature attached particles and particle trails
+	{ "AttachParticles",				INI::parseBool,					nullptr,	offsetof( ParticleSystemTemplate, m_attachParticles ) },
+	{ "TrailLength",						INI::parseUnsignedInt,	nullptr,	offsetof( ParticleSystemTemplate, m_trailLength ) },
 
 
 	{ nullptr,											nullptr,																					nullptr,		0 },
@@ -3449,6 +3534,8 @@ ParticleSystemTemplate::ParticleSystemTemplate( const AsciiString &name ) :
 	m_groundCollisionHeight.setRange( 0.0f, 0.0f );
 	m_groundCollisionKill = FALSE;
 	m_groundCollisionOrientFX = FALSE;
+	m_attachParticles = FALSE;
+	m_trailLength = 0;
 }
 
 // ------------------------------------------------------------------------------------------------
