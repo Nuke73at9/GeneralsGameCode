@@ -181,6 +181,8 @@ public:
 	Real m_repairHealthPercentPerSecond;	///< how many health points per second the dozer repairs at
 	Real m_boredTime;											///< after this many frames, a dozer will try to find something to do on its own
 	Real m_boredRange;										///< range the dozers try to auto repair when they're bored
+	AsciiString m_repairUpgrade;					///< Tiberium Project @feature an upgrade (the object's or its player's) that makes it repair faster
+	Real m_upgradedRepairHealthPercentPerSecond;	///< Tiberium Project @feature its repair rate with that upgrade
 
 	static void buildFieldParse( MultiIniFieldParse &p );
 

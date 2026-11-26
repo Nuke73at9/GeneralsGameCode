@@ -1653,6 +1653,17 @@ void TiberiumTest::update()
 				obj->getAIUpdateInterface()->aiEnter( into, CMD_FROM_PLAYER );
 			log( "frame %d: ui: enter %s%s", (int)s_frame, step.arg.c_str(), obj != nullptr && into != nullptr ? "" : " (no such object)" );
 		}
+		else if ( step.action == "repair" && TheGameLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) "repair=k,j": the k-th spawned object (a dozer) told to repair the j-th
+			Int k = -1, j = -1;
+			sscanf( step.arg.c_str(), "%d,%d", &k, &j );
+			Object *obj = k >= 0 && k < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[k] ) : nullptr;
+			Object *what = j >= 0 && j < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[j] ) : nullptr;
+			if ( obj != nullptr && what != nullptr && obj->getAIUpdateInterface() != nullptr )
+				obj->getAIUpdateInterface()->aiRepair( what, CMD_FROM_PLAYER );
+			log( "frame %d: ui: repair %s%s", (int)s_frame, step.arg.c_str(), obj != nullptr && what != nullptr ? "" : " (no such object)" );
+		}
 #if RTS_ZEROHOUR
 		else if ( step.action == "suppress" && TheGameLogic != nullptr )
 		{

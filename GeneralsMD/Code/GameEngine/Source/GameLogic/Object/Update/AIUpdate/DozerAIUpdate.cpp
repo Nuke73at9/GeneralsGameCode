@@ -43,6 +43,7 @@
 #include "Common/GameState.h"
 #include "Common/GlobalData.h"
 #include "Common/Xfer.h"
+#include "Common/Upgrade.h"	// Tiberium Project
 #include "GameClient/Drawable.h"
 #include "GameClient/GameText.h"
 #include "GameLogic/AIPathfind.h"
@@ -1428,6 +1429,7 @@ DozerAIUpdateModuleData::DozerAIUpdateModuleData()
 	m_repairHealthPercentPerSecond = 0.0f;
 	m_boredTime = 0.0f;
 	m_boredRange = 0.0f;
+	m_upgradedRepairHealthPercentPerSecond = 0.0f;	// Tiberium Project @feature
 
 }
 
@@ -1441,6 +1443,9 @@ void DozerAIUpdateModuleData::buildFieldParse( MultiIniFieldParse& p)
 		{ "RepairHealthPercentPerSecond",	INI::parsePercentToReal,	nullptr, offsetof( DozerAIUpdateModuleData, m_repairHealthPercentPerSecond ) },
 		{ "BoredTime",										INI::parseDurationReal,		nullptr, offsetof( DozerAIUpdateModuleData, m_boredTime ) },
 		{ "BoredRange",										INI::parseReal,						nullptr, offsetof( DozerAIUpdateModuleData, m_boredRange ) },
+		// Tiberium Project @feature a faster repair with an upgrade (C&C4's Enhanced Repairs); none by default
+		{ "RepairUpgrade",								INI::parseAsciiString,		nullptr, offsetof( DozerAIUpdateModuleData, m_repairUpgrade ) },
+		{ "UpgradedRepairHealthPercentPerSecond",	INI::parsePercentToReal,	nullptr, offsetof( DozerAIUpdateModuleData, m_upgradedRepairHealthPercentPerSecond ) },
 		{ nullptr, nullptr, nullptr, 0 }
 	};
 
@@ -2417,7 +2422,17 @@ const Coord3D* DozerAIUpdate::getDockPoint( DozerTask task, DozerDockPoint point
 // ------------------------------------------------------------------------------------------------
 Real DozerAIUpdate::getRepairHealthPerSecond() const
 {
-	return getDozerAIUpdateModuleData()->m_repairHealthPercentPerSecond;
+	const DozerAIUpdateModuleData *data = getDozerAIUpdateModuleData();
+	// Tiberium Project @feature the upgraded rate once its upgrade is had (the object's or its player's)
+	if( data->m_repairUpgrade.isNotEmpty() && TheUpgradeCenter != nullptr )
+	{
+		const UpgradeTemplate *upgrade = TheUpgradeCenter->findUpgrade( data->m_repairUpgrade );
+		const Object *me = getObject();
+		const Player *player = me->getControllingPlayer();
+		if( upgrade != nullptr && ( me->hasUpgrade( upgrade ) || ( player != nullptr && player->hasUpgradeComplete( upgrade ) ) ) )
+			return data->m_upgradedRepairHealthPercentPerSecond;
+	}
+	return data->m_repairHealthPercentPerSecond;
 }
 // ------------------------------------------------------------------------------------------------
 Real DozerAIUpdate::getBoredTime() const

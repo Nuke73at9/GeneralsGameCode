@@ -75,6 +75,8 @@ public:
 	Real m_warehouseScanDistance;
  	AudioEventRTS m_suppliesDepletedVoice;						///< Sound played when I take the last box.
 	Int m_upgradedSupplyBoost;
+	AsciiString m_repairUpgrade;					///< Tiberium Project @feature an upgrade (the object's or its player's) that makes it repair faster
+	Real m_upgradedRepairHealthPercentPerSecond;	///< Tiberium Project @feature its repair rate with that upgrade
 
 	WorkerAIUpdateModuleData()
 	{
@@ -86,6 +88,7 @@ public:
 		m_warehouseDelay = 0;
 		m_warehouseScanDistance = 100;
 		m_upgradedSupplyBoost = 0;
+		m_upgradedRepairHealthPercentPerSecond = 0.0f;	// Tiberium Project @feature
 	}
 
 	static void buildFieldParse(MultiIniFieldParse& p)
@@ -103,6 +106,9 @@ public:
 			{ "SupplyWarehouseScanDistance", INI::parseReal, nullptr, offsetof( WorkerAIUpdateModuleData, m_warehouseScanDistance ) },
  			{ "SuppliesDepletedVoice", INI::parseAudioEventRTS, nullptr, offsetof( WorkerAIUpdateModuleData, m_suppliesDepletedVoice) },
  			{ "UpgradedSupplyBoost", INI::parseInt, nullptr, offsetof( WorkerAIUpdateModuleData, m_upgradedSupplyBoost) },
+			// Tiberium Project @feature a faster repair with an upgrade, as the dozer's; none by default
+			{ "RepairUpgrade", INI::parseAsciiString, nullptr, offsetof( WorkerAIUpdateModuleData, m_repairUpgrade ) },
+			{ "UpgradedRepairHealthPercentPerSecond", INI::parsePercentToReal, nullptr, offsetof( WorkerAIUpdateModuleData, m_upgradedRepairHealthPercentPerSecond ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
     p.add(dataFieldParse);

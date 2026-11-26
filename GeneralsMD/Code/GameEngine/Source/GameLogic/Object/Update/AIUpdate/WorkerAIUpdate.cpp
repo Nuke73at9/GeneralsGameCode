@@ -156,7 +156,17 @@ Bool WorkerAIUpdate::isAvailableForSupplying() const
 // ------------------------------------------------------------------------------------------------
 Real WorkerAIUpdate::getRepairHealthPerSecond() const
 {
-	return getWorkerAIUpdateModuleData()->m_repairHealthPercentPerSecond;
+	const WorkerAIUpdateModuleData *data = getWorkerAIUpdateModuleData();
+	// Tiberium Project @feature the upgraded rate once its upgrade is had (the object's or its player's)
+	if( data->m_repairUpgrade.isNotEmpty() && TheUpgradeCenter != nullptr )
+	{
+		const UpgradeTemplate *upgrade = TheUpgradeCenter->findUpgrade( data->m_repairUpgrade );
+		const Object *me = getObject();
+		const Player *player = me->getControllingPlayer();
+		if( upgrade != nullptr && ( me->hasUpgrade( upgrade ) || ( player != nullptr && player->hasUpgradeComplete( upgrade ) ) ) )
+			return data->m_upgradedRepairHealthPercentPerSecond;
+	}
+	return data->m_repairHealthPercentPerSecond;
 }
 // ------------------------------------------------------------------------------------------------
 Real WorkerAIUpdate::getBoredTime() const
