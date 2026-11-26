@@ -234,6 +234,7 @@ enum ACBits CPP_11(: Int)
 	MAINTAIN_FRAME_ACROSS_STATES4,
 	ANIMATE_BY_CONSTRUCTION_PERCENT,	///< Tiberium Project @feature the animation's frame follows the construction (a build-up)
 	DO_NOT_PLAY_WHEN_UNPOWERED,				///< Tiberium Project @feature (C&C4's) the animation stands still while the object is unpowered
+	KEEP_ANIMATION_SPEED,							///< Tiberium Project @feature the animation plays at its own speed, never fitted to a time (a pre-attack's)
 
 	AC_BITS_COUNT
 };
@@ -252,6 +253,7 @@ static const char *const ACBitsNames[] =
 	"MAINTAIN_FRAME_ACROSS_STATES4",
 	"ANIMATE_BY_CONSTRUCTION_PERCENT",
 	"DO_NOT_PLAY_WHEN_UNPOWERED",
+	"KEEP_ANIMATION_SPEED",
 
 	nullptr
 };
@@ -4824,6 +4826,10 @@ Bool W3DModelDraw::handleWeaponFireFX(WeaponSlotType wslot, Int specificBarrelTo
 //-------------------------------------------------------------------------------------------------
 void W3DModelDraw::setAnimationLoopDuration(UnsignedInt numFrames)
 {
+	// Tiberium Project @feature a state that keeps its animation's own speed (C&C4's either-or weapon looks: its attack
+	// animation begun with the pre-attack runs as it is through the shot)
+	if (m_curState != nullptr && (m_curState->m_flags & (1 << KEEP_ANIMATION_SPEED)) != 0)
+		return;
 // this is never defined -- srj
 #ifdef NO_DURATIONS_ON_TRANSITIONS
 	if (m_curState != nullptr && m_curState->m_transition != NO_TRANSITION &&
