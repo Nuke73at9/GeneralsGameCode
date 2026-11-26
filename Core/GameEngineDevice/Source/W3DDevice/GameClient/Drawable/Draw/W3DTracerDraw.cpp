@@ -33,6 +33,7 @@
 #include "Common/FramePacer.h"
 #include "Common/Thing.h"
 #include "Common/ThingTemplate.h"
+#include "Common/TiberiumTest.h"	// Tiberium Project (the test)
 #include "Common/Xfer.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/FXList.h"
@@ -178,6 +179,8 @@ void W3DTracerDraw::doDrawModule(const Matrix3D* transformMtx)
 		const FXList *fx = m_hitFX;
 		m_hitFX = nullptr;
 		FXList::doFXPos( fx, &where );
+		if (TiberiumTest::isActive())
+			TiberiumTest::log( "frame %u: tracer hit effect at %.0f %.0f %.0f", TheGameLogic->getFrame(), where.x, where.y, where.z );
 	}
 
 }

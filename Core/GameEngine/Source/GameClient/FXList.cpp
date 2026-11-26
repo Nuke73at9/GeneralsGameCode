@@ -245,7 +245,8 @@ public:
 			Real frames = (dist >= 0.0f && speed >= 0.0f) ? (dist / speed) : 1;
 			Int framesAdjusted = REAL_TO_INT_CEIL(frames * m_decayAt);
 			// Tiberium Project @feature a tracer lives no longer than LifeFrames, and plays HitFX where it lands
-			if (m_lifeFrames > 0 && framesAdjusted > (Int)m_lifeFrames)
+			const Bool cut = m_lifeFrames > 0 && framesAdjusted >= (Int)m_lifeFrames;
+			if (cut)
 				framesAdjusted = (Int)m_lifeFrames;
 			if (!m_hitFXLookedUp)
 			{
@@ -257,8 +258,12 @@ public:
 				TracerDrawInterface* hit = nullptr;
 				for (DrawModule** d = tracer->getDrawModules(); *d && hit == nullptr; ++d)
 					hit = (*d)->getTracerDrawInterface();
-				if (hit != nullptr)
+				// (one frame more, for its head to come there while it is still drawn; one cut short by its life never does)
+				if (hit != nullptr && !cut)
+				{
 					hit->setTracerHit( m_hitFX, calcDist(*primary, *secondary) );
+					++framesAdjusted;
+				}
 			}
 			tracer->setExpirationDate(TheGameLogic->getFrame() + framesAdjusted);
 		}
