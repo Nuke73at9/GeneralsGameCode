@@ -255,6 +255,7 @@ struct ModelConditionInfo
 	TransitionSig											m_transitionSig;
 	Real															m_animMinSpeedFactor; //Min speed factor (randomized each time it's played)
 	Real															m_animBlendTime;			///< Tiberium Project @feature seconds to fade in from the previous animation
+	Int																m_pristineBoneFrame;	///< Tiberium Project @feature the animation's frame its bones are taken at (-1: the first, or the last with PRISTINE_BONE_POS_IN_FINAL_FRAME)
 	Real															m_animMaxSpeedFactor; //Max speed factor (randomized each time it's played)
 
 	mutable PristineBoneInfoMap				m_pristineBones;

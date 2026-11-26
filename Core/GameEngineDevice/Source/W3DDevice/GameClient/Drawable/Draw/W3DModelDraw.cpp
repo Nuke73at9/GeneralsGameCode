@@ -678,6 +678,9 @@ void ModelConditionInfo::validateCachedBones(RenderObjClass* robj, Real scale) c
 	{
 		// make sure we're in frame zero.
 		Int whichFrame = testFlagBit(m_flags, PRISTINE_BONE_POS_IN_FINAL_FRAME) ? animToUse->Get_Num_Frames()-1 : 0;
+		// Tiberium Project @feature or the frame the state names
+		if (m_pristineBoneFrame >= 0)
+			whichFrame = m_pristineBoneFrame < animToUse->Get_Num_Frames() ? m_pristineBoneFrame : animToUse->Get_Num_Frames() - 1;
 		robj->Set_Animation(animToUse, whichFrame, RenderObjClass::ANIM_MODE_MANUAL);
 		// must balance the addref, above
 		REF_PTR_RELEASE(animToUse);
@@ -1204,6 +1207,7 @@ void ModelConditionInfo::clear()
 	m_transitionSig = NO_TRANSITION;
 	m_animMinSpeedFactor = 1.0f;
 	m_animBlendTime = 0.0f;
+	m_pristineBoneFrame = -1;	// Tiberium Project
 	m_animMaxSpeedFactor = 1.0f;
 	m_pristineBones.clear();
 	m_validStuff = 0;
@@ -1810,6 +1814,9 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 #if RTS_ZEROHOUR
 		// Tiberium Project @feature the time (msec) this state's animation fades in from the previous one's
 		{ "AnimationBlendTime", parseAnimBlendTime, nullptr, offsetof(ModelConditionInfo, m_animBlendTime) },
+		// Tiberium Project @feature the frame of the state's animation its weapons' bones are taken at (C&C4 and Kane's Wrath's
+		// FrameForPristineBonePositions: a soldier's muzzle where the gun is up, not where its attack begins)
+		{ "PristineBoneFrame", INI::parseInt, nullptr, offsetof(ModelConditionInfo, m_pristineBoneFrame) },
 		// Tiberium Project @feature C&C4's frame events and procedural spins
 		{ "FXEvent", parseFXEvent, nullptr, 0 },
 		{ "SpinBone", parseSpinBone, nullptr, 0 },
