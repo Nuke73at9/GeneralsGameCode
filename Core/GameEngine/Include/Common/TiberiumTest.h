@@ -75,6 +75,8 @@ public:
 	static unsigned int getRules();
 	static void setPlayers( Int players );	///< -testPlayers 10: the -testSide skirmish's players, the local one and easy AIs (2 by default)
 	static Int getPlayers();
+	static void setTeams( Int allies );	///< -testTeams 3: the -testSide skirmish's first 3 players one team, the rest another (0: no teams)
+	static Int getTeams();
 	static void setReveal( Bool reveal );	///< reveal the map to the local player at the start (changes the logic's state: not with -testCRC)
 	static void setNoDraw( Bool noDraw );	///< -testNoDraw: the game is not drawn after its first frame (the logic only, as fast as it goes: AI test runs)
 	static Bool isNoDraw();

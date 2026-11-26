@@ -904,6 +904,9 @@ void GameEngine::init()
 					human.setColor(0);
 					human.setPlayerTemplate(sideNum);
 					human.setStartPos(0);
+					// -testTeams: the first so many players one team, the rest another
+					const Int teams = TiberiumTest::getTeams();
+					human.setTeamNumber(teams > 0 ? 0 : -1);
 					TheSkirmishGameInfo->setSlot(0, human);
 					// -testPlayers: more easy AIs, each on a start of its own (as many as the map has)
 					const Int numColors = TheMultiplayerSettings != nullptr ? TheMultiplayerSettings->getNumColors() : 8;
@@ -915,6 +918,7 @@ void GameEngine::init()
 						ai.setColor(numColors > 0 ? s % numColors : s);
 						ai.setPlayerTemplate(sideNum);
 						ai.setStartPos(-1);
+						ai.setTeamNumber(teams > 0 ? ( s < teams ? 0 : 1 ) : -1);
 						TheSkirmishGameInfo->setSlot(s, ai);
 					}
 					TheSkirmishGameInfo->setMap(fname);

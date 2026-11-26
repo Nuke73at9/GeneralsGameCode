@@ -77,7 +77,8 @@ enum CanMakeType CPP_11(: Int)
 	CANMAKE_FACTORY_IS_DISABLED,
 	CANMAKE_QUEUE_FULL,						// production bldg has full production queue
 	CANMAKE_PARKING_PLACES_FULL,	// production bldg has finite slots for existing units
-	CANMAKE_MAXED_OUT_FOR_PLAYER	// player has as many as they are allowed at once (eg, Black Lotus
+	CANMAKE_MAXED_OUT_FOR_PLAYER,	// player has as many as they are allowed at once (eg, Black Lotus
+	CANMAKE_NO_COMMAND_POINTS			// Tiberium Project @feature its player's command points would go over their cap (C&C4)
 };
 
 //-------------------------------------------------------------------------------------------------

@@ -1371,6 +1371,11 @@ CanMakeType BuildAssistant::canMakeUnit( Object *builder, const ThingTemplate *w
 			return cmt;
 	}
 
+	// Tiberium Project @feature C&C4's command points: a player with a cap may have no more than it holds, its
+	// living units and those queued in its factories counted
+	if( player && !player->canAffordCommandPoints( whatToBuild ) )
+		return CANMAKE_NO_COMMAND_POINTS;
+
 	// make sure we have enough money to build this
 	Money *money = player->getMoney();
 	if( whatToBuild->calcCostToBuild( player ) > money->countMoney() )

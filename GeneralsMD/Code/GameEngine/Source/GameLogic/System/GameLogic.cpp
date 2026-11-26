@@ -2348,6 +2348,9 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 	TiberiumZones::build( loadingSaveGame );
 	// Tiberium Project @feature C&C4's match start: its countdown, the AI's picks
 	TiberiumStart::begin( loadingSaveGame );
+	// Tiberium Project @feature C&C4's command point caps, by each team's size at the start (a loaded game keeps its own)
+	if( loadingSaveGame == FALSE )
+		Player::assignCommandPointCaps();
 
 	// final step, run newMap for all players
 	if( loadingSaveGame == FALSE )

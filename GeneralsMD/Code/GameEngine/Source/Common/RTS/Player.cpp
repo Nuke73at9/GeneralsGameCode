@@ -337,6 +337,7 @@ Player::Player( Int playerIndex )
 	m_supportFedFrame = 0;
 	m_radarJammedUntil = 0;	// Tiberium Project
 	m_deathShares.clear();	// Tiberium Project
+	m_commandPointCap = 0;	// Tiberium Project
 	m_side = nullptr;
 	m_baseSide = nullptr;
 	m_skillPoints = 0;
@@ -370,6 +371,7 @@ void Player::init(const PlayerTemplate* pt)
 	m_supportFedFrame = 0;
 	m_radarJammedUntil = 0;	// Tiberium Project
 	m_deathShares.clear();	// Tiberium Project
+	m_commandPointCap = 0;	// Tiberium Project
 
 	m_isPreorder = FALSE;
 	m_isPlayerDead = FALSE;
@@ -3019,6 +3021,76 @@ static void countExisting( Object *obj, void *userData )
   }
 }
 
+// ------------------------------------------------------------------------------------------------
+// Tiberium Project @feature C&C4's command points: what a living object takes, and what its queue holds back
+// ------------------------------------------------------------------------------------------------
+static void countCommandPoints( Object *obj, void *userData )
+{
+	if( obj->isEffectivelyDead() )
+		return;
+	Int *sum = (Int *)userData;
+	*sum += obj->getTemplate()->getCommandPoints();
+	ProductionUpdateInterface *pui = ProductionUpdate::getProductionUpdateInterfaceFromObject( obj );
+	if( pui == nullptr )
+		return;
+	for( const ProductionEntry *p = pui->firstProduction(); p != nullptr; p = pui->nextProduction( p ) )
+	{
+		if( p->getProductionType() == PRODUCTION_UNIT && p->getProductionObject() != nullptr )
+			*sum += p->getProductionObject()->getCommandPoints() * p->getProductionQuantityRemaining();
+	}
+}
+
+//=============================================================================
+// Tiberium Project @feature C&C4's command points in use: counted afresh from what the player has (nothing kept)
+Int Player::getCommandPointsUsed() const
+{
+	Int sum = 0;
+	iterateObjects( countCommandPoints, &sum );
+	return sum;
+}
+
+//=============================================================================
+// Tiberium Project @feature whether one more of these fits under the player's cap (always without a cap)
+Bool Player::canAffordCommandPoints( const ThingTemplate *what ) const
+{
+	if( !hasCommandPoints() || what == nullptr || what->getCommandPoints() <= 0 )
+		return TRUE;
+	return getCommandPointsUsed() + what->getCommandPoints() <= m_commandPointCap;
+}
+
+//=============================================================================
+// Tiberium Project @feature C&C4's command points at a new game's start (its TeamSizeSetting): a player whose
+// template has TeamCommandPoints gets its team's total for the number of such players on its team (itself and those
+// it and they are allied to), shared out evenly; any other player, none
+/*static*/ void Player::assignCommandPointCaps()
+{
+	if( ThePlayerList == nullptr )
+		return;
+	const Int count = ThePlayerList->getPlayerCount();
+	for( Int i = 0; i < count; ++i )
+	{
+		Player *p = ThePlayerList->getNthPlayer( i );
+		if( p == nullptr )
+			continue;
+		p->m_commandPointCap = 0;
+		const PlayerTemplate *pt = p->getPlayerTemplate();
+		if( p == ThePlayerList->getNeutralPlayer() || pt == nullptr || pt->getTeamCommandPointRows() <= 0 || p->getDefaultTeam() == nullptr )
+			continue;
+		Int team = 0;
+		for( Int j = 0; j < count; ++j )
+		{
+			Player *q = ThePlayerList->getNthPlayer( j );
+			if( q == nullptr || q == ThePlayerList->getNeutralPlayer() || q->getPlayerTemplate() == nullptr
+				|| q->getPlayerTemplate()->getTeamCommandPointRows() <= 0 || q->getDefaultTeam() == nullptr )
+				continue;
+			if( q == p || ( p->getRelationship( q->getDefaultTeam() ) == ALLIES && q->getRelationship( p->getDefaultTeam() ) == ALLIES ) )
+				++team;
+		}
+		p->m_commandPointCap = pt->getTeamCommandPoints( team ) / ( team > 0 ? team : 1 );
+		DEBUG_LOG(( "Player %d: %d command points (a team of %d)", (int)p->getPlayerIndex(), (int)p->m_commandPointCap, (int)team ));
+	}
+}
+
 //=============================================================================
 // Make sure that building another of this unit/structure/object won't exceed MaxSimultaneousOfType()
 Bool Player::canBuildMoreOfType( const ThingTemplate *whatToBuild ) const
@@ -4210,6 +4282,10 @@ void Player::crc( Xfer *xfer )
 	for( std::map<AsciiString, Int>::iterator it = m_deathShares.begin(); it != m_deathShares.end(); ++it )
 		xfer->xferInt( &it->second );
 
+	// Tiberium Project @feature C&C4's command point cap (only a player that has one, so that a game without keeps its CRC)
+	if( m_commandPointCap > 0 )
+		xfer->xferInt( &m_commandPointCap );
+
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -4229,7 +4305,7 @@ void Player::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 12;	// Tiberium Project @feature 9: 32 players (attacked by); 10: C&C4's support meter; 11: radar jammed; 12: death shares
+	const XferVersion currentVersion = 13;	// Tiberium Project @feature 9: 32 players (attacked by); 10: C&C4's support meter; 11: radar jammed; 12: death shares; 13: command point cap
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -4814,6 +4890,12 @@ void Player::xfer( Xfer *xfer )
 	}
 	else
 		m_deathShares.clear();
+
+	// Tiberium Project @feature 13: C&C4's command point cap
+	if( version >= 13 )
+		xfer->xferInt( &m_commandPointCap );
+	else
+		m_commandPointCap = 0;
 
 }
 

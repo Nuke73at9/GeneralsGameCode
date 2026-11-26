@@ -1557,6 +1557,13 @@ namespace
 			next.format( L"   Tier %d  %d%%", tier + 1, (Int)( progress * 100.0f ) );
 			label.concat( next );
 		}
+		// Tiberium Project @feature C&C4's command points: in use (living and queued) of the cap
+		if( localPlayer()->hasCommandPoints() )
+		{
+			UnicodeString cp;
+			cp.format( L"   Command points %d / %d", localPlayer()->getCommandPointsUsed(), localPlayer()->getCommandPointCap() );
+			label.concat( cp );
+		}
 		if( a.tier != nullptr )
 			TheDisplay->drawImage( a.tier, L.tierX, L.tierY, L.tierX + L.tierW, L.tierY + L.tierH );
 		else

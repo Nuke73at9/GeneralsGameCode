@@ -1140,6 +1140,13 @@ namespace
 			TheInGameUI->message( "GUI:ProductionQueueFull" );
 			return;
 		}
+		if( cmt == CANMAKE_NO_COMMAND_POINTS )	// Tiberium Project @feature C&C4's command points
+		{
+			Bool exists = FALSE;
+			UnicodeString text = TheGameText->fetch( "GUI:NoCommandPoints", &exists );
+			TheInGameUI->messageNoFormat( exists ? text : UnicodeString( L"Not enough command points" ) );
+			return;
+		}
 		if( cmt != CANMAKE_OK )
 			return;
 		GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_QUEUE_UNIT_CREATE );

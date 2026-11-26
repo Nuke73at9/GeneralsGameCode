@@ -66,6 +66,7 @@ class Image;
 
 #define MAX_MP_STARTING_UNITS 10
 #define MAX_START_ARRIVALS 4		///< Tiberium Project: the most StartArrival choices
+#define MAX_TEAM_COMMAND_POINT_ROWS 16	///< Tiberium Project: the most TeamCommandPoints rows (one a team size)
 
 // ----------------------------------------------------------------------------------------------
 class PlayerTemplate
@@ -152,6 +153,11 @@ public:
 	/// Tiberium Project @feature its Tier V: with the Crawler power and at least this many control nodes held (C&C4's goal
 	/// structures, TiberiumZoneNodeUpdate), one of each of its Crawlers at once, each with its own wait (0: never)
 	Int getCrawlerPowerNodes() const { return m_crawlerPowerNodes; }
+	/// Tiberium Project @feature C&C4's command points (its game modes' TeamSizeSetting): a team's total by how many of its
+	/// players count them at the start, one row a team size from one player up; a larger team takes the last row's
+	/// total. Each such player's cap is its team's total shared out among them. None: no cap.
+	Int getTeamCommandPointRows() const { return m_teamCommandPointCount; }
+	Int getTeamCommandPoints( Int playersOnTeam ) const;
 
 	static const FieldParse* getFieldParse();
 
@@ -165,6 +171,7 @@ protected:
 	static void parseProductionVeterancyLevel( INI* ini, void *instance, void *store, const void* /*userData*/ );
 	static void parseStartArrival( INI* ini, void *instance, void *store, const void* /*userData*/ );	///< Tiberium Project
 	static void parseCrawlerPower( INI* ini, void *instance, void *store, const void* /*userData*/ );	///< Tiberium Project
+	static void parseTeamCommandPoints( INI* ini, void *instance, void *store, const void* /*userData*/ );	///< Tiberium Project
 
 private:
 
@@ -203,6 +210,8 @@ private:
 	AsciiString				m_crawlerPowerUpgrade;							///< Tiberium Project: the upgrade that gives the power
 	UnsignedInt				m_crawlerPowerWait;									///< Tiberium Project: frames from a loss to the next
 	Int								m_crawlerPowerNodes;								///< Tiberium Project: the nodes held for its Tier V (0: none)
+	Int								m_teamCommandPoints[MAX_TEAM_COMMAND_POINT_ROWS];	///< Tiberium Project: a team's command points by its size
+	Int								m_teamCommandPointCount;							///< Tiberium Project: rows given (0: no command points)
 
 	Int								m_intrinsicSPP;
 

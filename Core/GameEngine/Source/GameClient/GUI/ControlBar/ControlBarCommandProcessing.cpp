@@ -46,6 +46,7 @@
 #include "GameClient/Drawable.h"
 #include "GameClient/Eva.h"
 #include "GameClient/GameClient.h"
+#include "GameClient/GameText.h"
 #include "GameClient/GadgetPushButton.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
@@ -117,6 +118,16 @@ CBCommandStatus ControlBar::processCommandTransitionUI( GameWindow *control, Gad
 /** Process a button selected message from the window system that should be for one of
 	* our GUI commands */
 //-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature C&C4's command points: the player is told why a unit cannot be bought
+//-------------------------------------------------------------------------------------------------
+static void showNoCommandPoints()
+{
+	Bool exists = FALSE;
+	UnicodeString text = TheGameText->fetch( "GUI:NoCommandPoints", &exists );
+	TheInGameUI->messageNoFormat( exists ? text : UnicodeString( L"Not enough command points" ) );
+}
+
 CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 																							GadgetGameMessage gadgetMessage )
 {
@@ -261,6 +272,11 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 				TheInGameUI->message( "GUI:ParkingPlacesFull" );
 				break;
 			}
+			else if( cmt == CANMAKE_NO_COMMAND_POINTS )	// Tiberium Project @feature C&C4's command points
+			{
+				showNoCommandPoints();
+				break;
+			}
 			else if( cmt == CANMAKE_MAXED_OUT_FOR_PLAYER )
 			{
 				TheInGameUI->message( "GUI:UnitMaxedOut" );
@@ -306,6 +322,11 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 				TheInGameUI->message( "GUI:ParkingPlacesFull" );
 				break;
 			}
+			else if( cmt == CANMAKE_NO_COMMAND_POINTS )	// Tiberium Project @feature C&C4's command points
+			{
+				showNoCommandPoints();
+				break;
+			}
 			else if( cmt == CANMAKE_MAXED_OUT_FOR_PLAYER )
 			{
 				TheInGameUI->message( "GUI:UnitMaxedOut" );
@@ -346,6 +367,11 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 			else if (cmt == CANMAKE_PARKING_PLACES_FULL)
 			{
 				TheInGameUI->message( "GUI:ParkingPlacesFull" );
+				break;
+			}
+			else if( cmt == CANMAKE_NO_COMMAND_POINTS )	// Tiberium Project @feature C&C4's command points
+			{
+				showNoCommandPoints();
 				break;
 			}
 			else if( cmt == CANMAKE_MAXED_OUT_FOR_PLAYER )
@@ -417,6 +443,11 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 			else if (cmt == CANMAKE_PARKING_PLACES_FULL)
 			{
 				TheInGameUI->message( "GUI:ParkingPlacesFull" );
+				break;
+			}
+			else if( cmt == CANMAKE_NO_COMMAND_POINTS )	// Tiberium Project @feature C&C4's command points
+			{
+				showNoCommandPoints();
 				break;
 			}
 			else if( cmt == CANMAKE_MAXED_OUT_FOR_PLAYER )

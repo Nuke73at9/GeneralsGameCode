@@ -705,6 +705,15 @@ public:
 	void feedSupportMeter( Int pointsPerMinute, Int maxPoints );	///< once a frame at most (the first source to call)
 	void spendSupportPoints( Int points );
 	void emptySupportMeter();
+	/// Tiberium Project @feature C&C4's command points: a cap on what this player's units take (ThingTemplate
+	/// CommandPoints), set at a new game's start from its PlayerTemplate's TeamCommandPoints (0: no cap). Used: its
+	/// living units' points and its factories' queued units'.
+	Int getCommandPointCap() const				{ return m_commandPointCap; }
+	void setCommandPointCap( Int cap )		{ m_commandPointCap = cap; }
+	Bool hasCommandPoints() const					{ return m_commandPointCap > 0; }
+	Int getCommandPointsUsed() const;
+	Bool canAffordCommandPoints( const ThingTemplate *what ) const;	///< whether one more fits under its cap
+	static void assignCommandPointCaps();	///< each such player's share of its team's total, by the team's size
 	/// Tiberium Project @feature a power's price (its Cost in credits, its SupportPoints): whether this player has it, and paying it
 	Bool canAffordSpecialPower( const SpecialPowerTemplate *power ) const;
 	void payForSpecialPower( const SpecialPowerTemplate *power );
@@ -808,6 +817,7 @@ private:
 	Int										m_supportPointsMax;				///< (SAVE) the meter's top (0: no meter yet)
 	UnsignedInt						m_supportFedFrame;				///< (SAVE) the frame the meter last filled on
 	UnsignedInt						m_radarJammedUntil;				///< (SAVE) Tiberium Project: its radar is dark until this frame (Kane's Wrath's Radar Jamming Missile)
+	Int										m_commandPointCap;				///< (SAVE) Tiberium Project: C&C4's command point cap (0: none)
 	std::map<AsciiString, Int>	m_deathShares;				///< (SAVE) Tiberium Project: addDeathShare's running tallies, in shares
 	Int										m_levelUp, m_levelDown;			///< (NO-SAVE) skill points to go up/down a level (runtime only)
 	UnicodeString					m_generalName;		///< (SAVE) This is the name of the general the player is allowed to change.

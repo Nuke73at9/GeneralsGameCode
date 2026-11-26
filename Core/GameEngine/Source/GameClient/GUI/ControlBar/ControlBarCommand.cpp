@@ -1245,7 +1245,8 @@ CommandAvailability ControlBar::getCommandAvailability( const CommandButton *com
 				return COMMAND_RESTRICTED;
 
 			CanMakeType makeType = TheBuildAssistant->canMakeUnit( obj, command->getThingTemplate() );
-			if( makeType == CANMAKE_MAXED_OUT_FOR_PLAYER || makeType == CANMAKE_PARKING_PLACES_FULL )
+			if( makeType == CANMAKE_MAXED_OUT_FOR_PLAYER || makeType == CANMAKE_PARKING_PLACES_FULL
+				|| makeType == CANMAKE_NO_COMMAND_POINTS )	// Tiberium Project @feature C&C4's command points
 			{
 				//Disable the button if the player has a max amount of these units in build queue or existence.
 				return COMMAND_RESTRICTED;

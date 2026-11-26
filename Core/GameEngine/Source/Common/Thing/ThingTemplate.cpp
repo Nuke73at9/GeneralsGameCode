@@ -162,6 +162,7 @@ const FieldParse ThingTemplate::s_objectFieldParseTable[] =
 	{ "BuildCost",						INI::parseUnsignedShort,						nullptr,		offsetof( ThingTemplate, m_buildCost ) },
 	{ "BuildTime",						INI::parseReal,											nullptr,		offsetof( ThingTemplate, m_buildTime ) },
 	{ "BuildQuantity",				INI::parseUnsignedShort,						nullptr,		offsetof( ThingTemplate, m_buildQuantity ) },	// Tiberium Project @feature
+	{ "CommandPoints",				INI::parseUnsignedShort,						nullptr,		offsetof( ThingTemplate, m_commandPoints ) },	// Tiberium Project @feature
 	{ "RefundValue",					INI::parseUnsignedShort,						nullptr,   offsetof( ThingTemplate, m_refundValue ) },
 	{ "BuildCompletion",			INI::parseByteSizedIndexList,				BuildCompletionNames,		offsetof( ThingTemplate, m_buildCompletion ) },
 	{ "EnergyProduction",			INI::parseInt,											nullptr,   offsetof( ThingTemplate, m_energyProduction ) },
@@ -295,6 +296,7 @@ const FieldParse ThingTemplate::s_objectReskinFieldParseTable[] =
   // Needed to avoid some cheats with the scud storm rebuild hole
   { "MaxSimultaneousOfType",	ThingTemplate::parseMaxSimultaneous,		nullptr, offsetof(ThingTemplate, m_maxSimultaneousOfType ) }, // Added in Zero Hour
   { "MaxSimultaneousLinkKey",	NameKeyGenerator::parseStringAsNameKeyType,		nullptr, offsetof(ThingTemplate, m_maxSimultaneousLinkKey ) }, // Added in Zero Hour
+	{ "CommandPoints",				INI::parseUnsignedShort,						nullptr,		offsetof( ThingTemplate, m_commandPoints ) },	// Tiberium Project @feature
 
 	{ nullptr, nullptr, nullptr, 0 }
 
@@ -1032,6 +1034,7 @@ ThingTemplate::ThingTemplate() :
 	m_buildCost = 0;
 	m_buildTime = 1;
 	m_buildQuantity = 1;	// Tiberium Project @feature
+	m_commandPoints = 0;	// Tiberium Project @feature
 	m_refundValue = 0;
 	m_energyProduction = 0;
 	m_energyBonus = 0;

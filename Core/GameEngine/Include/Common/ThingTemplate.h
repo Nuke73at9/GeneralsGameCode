@@ -624,6 +624,9 @@ public:
 	UnsignedByte getCrusherLevel() const { return m_crusherLevel; }
 	// Tiberium Project @feature how many a factory makes for one purchase (BuildQuantity: a Kane's Wrath squad's soldiers)
 	Int getBuildQuantity() const { return m_buildQuantity; }
+	/// Tiberium Project @feature C&C4's command points: what one of these takes of its player's cap while it lives or is
+	/// queued (0: none; only a player with a cap counts them, Player::getCommandPointCap)
+	Int getCommandPoints() const { return m_commandPoints; }
 
 	AsciiString getUpgradeCameoName( Int n)const{ return m_upgradeCameoUpgradeNames[n];	}
 
@@ -756,6 +759,7 @@ private:
 	UnsignedShort		m_threatValue;								///< Threat map info
 	UnsignedShort		m_maxSimultaneousOfType;			///< max simultaneous of this unit we can have (per player) at one time. (0 == unlimited)
 	UnsignedShort		m_buildQuantity;							///< Tiberium Project @feature how many one purchase makes (a squad's soldiers), 1 by default
+	UnsignedShort		m_commandPoints;							///< Tiberium Project @feature C&C4's command points it takes (0: none)
 
 	// ---- Bool-sized things
   Bool          m_maxSimultaneousDeterminedBySuperweaponRestriction; ///< If true, override value in m_maxSimultaneousOfType with value from GameInfo::getSuperweaponRestriction()

@@ -105,6 +105,7 @@
 		{ "CrawlerPowerUpgrade",			INI::parseAsciiString,													nullptr, offsetof( PlayerTemplate, m_crawlerPowerUpgrade ) },	// Tiberium Project @feature
 		{ "CrawlerPowerWait",					INI::parseDurationUnsignedInt,									nullptr, offsetof( PlayerTemplate, m_crawlerPowerWait ) },	// Tiberium Project @feature
 		{ "CrawlerPowerNodes",				INI::parseInt,																	nullptr, offsetof( PlayerTemplate, m_crawlerPowerNodes ) },	// Tiberium Project @feature
+		{ "TeamCommandPoints",				PlayerTemplate::parseTeamCommandPoints,					nullptr, 0 },	// Tiberium Project @feature
 		{ "ScoreScreenImage",					INI::parseAsciiString,													nullptr, offsetof( PlayerTemplate, m_scoreScreenImage ) },
 		{ "LoadScreenImage",					INI::parseAsciiString,													nullptr, offsetof( PlayerTemplate, m_loadScreenImage ) },
 		{ "LoadScreenMusic",					INI::parseAsciiString,													nullptr, offsetof( PlayerTemplate, m_loadScreenMusic ) },
@@ -196,6 +197,36 @@ AsciiString PlayerTemplate::getStartingUnit( Int i ) const
 }
 
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature C&C4's command points: a team's total for each team size, from one player up
+/*static*/ void PlayerTemplate::parseTeamCommandPoints( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ )
+{
+	PlayerTemplate* self = (PlayerTemplate*)instance;
+	self->m_teamCommandPointCount = 0;
+	for (const char *token = ini->getNextTokenOrNull(); token != nullptr; token = ini->getNextTokenOrNull())
+	{
+		if (self->m_teamCommandPointCount >= MAX_TEAM_COMMAND_POINT_ROWS)
+		{
+			DEBUG_CRASH(("PlayerTemplate: TeamCommandPoints takes at most %d rows", MAX_TEAM_COMMAND_POINT_ROWS));
+			break;
+		}
+		self->m_teamCommandPoints[self->m_teamCommandPointCount++] = INI::scanInt(token);
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature a team's command points for its size (the last row for a larger team; 0 without rows)
+Int PlayerTemplate::getTeamCommandPoints( Int playersOnTeam ) const
+{
+	if (m_teamCommandPointCount <= 0)
+		return 0;
+	if (playersOnTeam < 1)
+		playersOnTeam = 1;
+	if (playersOnTeam > m_teamCommandPointCount)
+		playersOnTeam = m_teamCommandPointCount;
+	return m_teamCommandPoints[playersOnTeam - 1];
+}
+
+//-------------------------------------------------------------------------------------------------
 /*static*/ void PlayerTemplate::parseStartArrival( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ )
 {
 	PlayerTemplate* self = (PlayerTemplate*)instance;
@@ -244,11 +275,14 @@ PlayerTemplate::PlayerTemplate() :
 	m_crawlerPowerCount(0),
 	m_crawlerPowerWait(0),
 	m_crawlerPowerNodes(0),
+	m_teamCommandPointCount(0),
 	m_intrinsicSPP(0),
 	m_specialPowerShortcutButtonCount(0)
 {
 	m_preferredColor.red = m_preferredColor.green = m_preferredColor.blue = 0.0f;
 	m_beaconTemplate.clear();
+	for (Int i = 0; i < MAX_TEAM_COMMAND_POINT_ROWS; ++i)
+		m_teamCommandPoints[i] = 0;	// Tiberium Project
 }
 
 //-----------------------------------------------------------------------------

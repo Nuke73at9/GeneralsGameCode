@@ -385,6 +385,14 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 							descrip.concat( L"\n\n" );
 							descrip.concat( TheGameText->fetch( "TOOLTIP:TooltipCannotBuildUnitBecauseParkingFull" ) );
 							break;
+						case CANMAKE_NO_COMMAND_POINTS:	// Tiberium Project @feature C&C4's command points
+						{
+							descrip.concat( L"\n\n" );
+							Bool exists = FALSE;
+							UnicodeString text = TheGameText->fetch( "TOOLTIP:TooltipNoMoreCommandPoints", &exists );
+							descrip.concat( exists ? text : UnicodeString( L"Not enough command points." ) );
+							break;
+						}
 						case CANMAKE_MAXED_OUT_FOR_PLAYER:
 							descrip.concat( L"\n\n" );
 							if ( thingTemplate->isKindOf( KINDOF_STRUCTURE ) )

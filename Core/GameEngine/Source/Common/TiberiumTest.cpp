@@ -81,6 +81,7 @@
 #include "GameClient/Mouse.h"
 #if RTS_ZEROHOUR
 #include "Common/Science.h"
+#include "Common/GameState.h"
 #include "GameClient/AbramSpawnMenu.h"
 #include "GameClient/AbramTeamMenu.h"
 #include "GameClient/TiberiumMusic.h"
@@ -520,6 +521,9 @@ unsigned int TiberiumTest::getRules() { return s_rules; }
 static Int s_players = 2;
 void TiberiumTest::setPlayers( Int players ) { if ( players >= 2 ) s_players = players; }
 Int TiberiumTest::getPlayers() { return s_players; }
+static Int s_teams = 0;
+void TiberiumTest::setTeams( Int allies ) { if ( allies >= 0 ) s_teams = allies; }
+Int TiberiumTest::getTeams() { return s_teams; }
 void TiberiumTest::setReveal( Bool reveal ) { s_reveal = reveal; if ( reveal ) s_active = TRUE; }
 static Bool s_noDraw = FALSE;
 void TiberiumTest::setNoDraw( Bool noDraw ) { s_noDraw = noDraw; if ( noDraw ) s_active = TRUE; }
@@ -1578,6 +1582,29 @@ void TiberiumTest::update()
 			log( "frame %d: ui: neutral %s%s", (int)s_frame, step.arg.c_str(), obj != nullptr ? "" : " (no such object)" );
 		}
 #if RTS_ZEROHOUR
+		else if ( step.action == "cp" && ThePlayerList != nullptr )
+		{
+			// Tiberium Project @feature (the test) "cp": each player's command points in use (living and queued) of its cap
+			std::string line;
+			for ( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
+			{
+				const Player *p = ThePlayerList->getNthPlayer( i );
+				if ( p == nullptr || !p->hasCommandPoints() )
+					continue;
+				char one[ 64 ];
+				snprintf( one, sizeof( one ), " p%d %d/%d", (int)p->getPlayerIndex(), (int)p->getCommandPointsUsed(), (int)p->getCommandPointCap() );
+				line += one;
+			}
+			log( "frame %d: ui: command points%s", (int)s_frame, line.empty() ? " (no player has a cap)" : line.c_str() );
+		}
+		else if ( step.action == "save" && TheGameState != nullptr && TheGameLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) "save=<name>": the game saved as <name>.sav in the save folder, to be
+			// loaded with -loadsave <name>.sav (the round trip: the reloaded game's CRC against the one that went on)
+			const std::string file = step.arg.empty() ? std::string( "tibtest.sav" ) : step.arg + ".sav";
+			const SaveResult r = TheGameState->saveGame( AsciiString( file.c_str() ), UnicodeString( L"Tiberium test" ), SAVE_FILE_TYPE_NORMAL );
+			log( "frame %d: ui: saved %s at logic frame %u (code %d)", (int)s_frame, file.c_str(), (unsigned)TheGameLogic->getFrame(), (int)r.saveCode );
+		}
 		else if ( step.action == "squad" && TheGameLogic != nullptr )
 		{
 			// Tiberium Project @feature (the test) "squad=k,j,...": those spawned objects one squad, as a factory's batch is
