@@ -51,6 +51,7 @@
 #include "GameLogic/Module/OverchargeBehavior.h"
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Module/SpawnBehavior.h"
+#include "GameLogic/Module/SquadUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/SpecialPowerModule.h"
 #include "GameLogic/Module/StealthUpdate.h"
 #include "GameLogic/Module/SpecialPowerUpdateModule.h"
@@ -2673,6 +2674,19 @@ void AIGroup::groupCreateFormation( CommandSourceType cmdSource )				///< Create
 	}
 }
 
+// Tiberium Project @feature who uses a power given to a group's member: a C&C3 squad's soldiers (SquadUpdate), each that has
+// the power; anything else, itself
+static void squadDoers( Object *object, std::vector<Object *> &out )
+{
+	out.clear();
+	const SquadUpdate *squad = object->isKindOf( KINDOF_SPAWNS_ARE_THE_WEAPONS ) ? SquadUpdate::getSquadUpdate( object ) : nullptr;
+	if( squad != nullptr )
+		squad->getSoldiers( out );
+	if( out.empty() )
+		out.push_back( object );
+}
+
+//-------------------------------------------------------------------------------------------------
 /**
  * The unit(s)/structure will perform it's special power -- special powers triggered by buildings
  * don't use AIUpdateInterfaces!!! No special power uses an AIUpdateInterface immediately, but special
@@ -2686,25 +2700,32 @@ void AIGroup::groupDoSpecialPower( UnsignedInt specialPowerID, UnsignedInt comma
 	{
 		//Special powers do a lot of different things, but the top level stuff doesn't use
 		//ai interface code. It finds the special power module and calls it directly for each object.
-		Object *object = (*i);
+		Object *member = (*i);
 		const SpecialPowerTemplate *spTemplate = TheSpecialPowerStore->findSpecialPowerTemplateByID( specialPowerID );
 		if( spTemplate )
 		{
 			// Have to justify the execution in case someone changed their button
 			if( spTemplate->getRequiredScience() != SCIENCE_INVALID )
 			{
-				if( !object->getControllingPlayer()->hasScience(spTemplate->getRequiredScience()) )
+				if( !member->getControllingPlayer()->hasScience(spTemplate->getRequiredScience()) )
 					continue;// Nice try, smacktard.
 			}
 
-			SpecialPowerModuleInterface *mod = object->getSpecialPowerModule( spTemplate );
-			if( mod )
+			// Tiberium Project @feature a C&C3 squad's abilities are its soldiers': each that has it uses it
+			std::vector<Object *> doers;
+			squadDoers( member, doers );
+			for( size_t k = 0; k < doers.size(); ++k )
 			{
-				if( TheActionManager->canDoSpecialPower( object, spTemplate, CMD_FROM_PLAYER, commandOptions ) )
+				Object *object = doers[k];
+				SpecialPowerModuleInterface *mod = object->getSpecialPowerModule( spTemplate );
+				if( mod )
 				{
-					mod->doSpecialPower( commandOptions );
+					if( TheActionManager->canDoSpecialPower( object, spTemplate, CMD_FROM_PLAYER, commandOptions ) )
+					{
+						mod->doSpecialPower( commandOptions );
 
-					object->friend_setUndetectedDefector( FALSE );// My secret is out
+						object->friend_setUndetectedDefector( FALSE );// My secret is out
+					}
 				}
 			}
 		}
@@ -2727,7 +2748,7 @@ void AIGroup::groupDoSpecialPowerAtLocation( UnsignedInt specialPowerID, const C
 		//Special powers do a lot of different things, but the top level stuff doesn't use
 		//ai interface code. It finds the special power module and calls it directly for each object.
 
-		Object *object = (*i);
+		Object *member = (*i);
 
     ++i; // just in case the act of specialpowering changes this list,
          // like when the rebelambush happens over the ocean, and all the rebels drown
@@ -2741,18 +2762,25 @@ void AIGroup::groupDoSpecialPowerAtLocation( UnsignedInt specialPowerID, const C
 			// Have to justify the execution in case someone changed their button
 			if( spTemplate->getRequiredScience() != SCIENCE_INVALID )
 			{
-				if( !object->getControllingPlayer()->hasScience(spTemplate->getRequiredScience()) )
+				if( !member->getControllingPlayer()->hasScience(spTemplate->getRequiredScience()) )
 					continue;// Nice try, smacktard.
 			}
 
-			SpecialPowerModuleInterface *mod = object->getSpecialPowerModule( spTemplate );
-			if( mod )
+			// Tiberium Project @feature a C&C3 squad's abilities are its soldiers': each that has it uses it
+			std::vector<Object *> doers;
+			squadDoers( member, doers );
+			for( size_t k = 0; k < doers.size(); ++k )
 			{
-				if( TheActionManager->canDoSpecialPowerAtLocation( object, location, CMD_FROM_PLAYER, spTemplate, objectInWay, commandOptions ) )
+				Object *object = doers[k];
+				SpecialPowerModuleInterface *mod = object->getSpecialPowerModule( spTemplate );
+				if( mod )
 				{
-					mod->doSpecialPowerAtLocation( location, angle, commandOptions );
+					if( TheActionManager->canDoSpecialPowerAtLocation( object, location, CMD_FROM_PLAYER, spTemplate, objectInWay, commandOptions ) )
+					{
+						mod->doSpecialPowerAtLocation( location, angle, commandOptions );
 
-					object->friend_setUndetectedDefector( FALSE );// My secret is out
+						object->friend_setUndetectedDefector( FALSE );// My secret is out
+					}
 				}
 			}
 		}
@@ -2774,25 +2802,32 @@ void AIGroup::groupDoSpecialPowerAtObject( UnsignedInt specialPowerID, Object *t
 		//Special powers do a lot of different things, but the top level stuff doesn't use
 		//ai interface code. It finds the special power module and calls it directly for each object.
 
-		Object *object = (*i);
+		Object *member = (*i);
 		const SpecialPowerTemplate *spTemplate = TheSpecialPowerStore->findSpecialPowerTemplateByID( specialPowerID );
 		if( spTemplate )
 		{
 			// Have to justify the execution in case someone changed their button
 			if( spTemplate->getRequiredScience() != SCIENCE_INVALID )
 			{
-				if( !object->getControllingPlayer()->hasScience(spTemplate->getRequiredScience()) )
+				if( !member->getControllingPlayer()->hasScience(spTemplate->getRequiredScience()) )
 					continue;// Nice try, smacktard.
 			}
 
-			SpecialPowerModuleInterface *mod = object->getSpecialPowerModule( spTemplate );
-			if( mod )
+			// Tiberium Project @feature a C&C3 squad's abilities are its soldiers': each that has it uses it
+			std::vector<Object *> doers;
+			squadDoers( member, doers );
+			for( size_t k = 0; k < doers.size(); ++k )
 			{
-				if( TheActionManager->canDoSpecialPowerAtObject( object, target, CMD_FROM_PLAYER, spTemplate, commandOptions ) )
+				Object *object = doers[k];
+				SpecialPowerModuleInterface *mod = object->getSpecialPowerModule( spTemplate );
+				if( mod )
 				{
-					mod->doSpecialPowerAtObject( target, commandOptions );
+					if( TheActionManager->canDoSpecialPowerAtObject( object, target, CMD_FROM_PLAYER, spTemplate, commandOptions ) )
+					{
+						mod->doSpecialPowerAtObject( target, commandOptions );
 
-					object->friend_setUndetectedDefector( FALSE );// My secret is out
+						object->friend_setUndetectedDefector( FALSE );// My secret is out
+					}
 				}
 			}
 		}

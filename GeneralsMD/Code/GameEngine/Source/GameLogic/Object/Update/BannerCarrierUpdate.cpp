@@ -23,6 +23,8 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
 #include "GameLogic/Module/BannerCarrierUpdate.h"
+#include "GameLogic/Module/SquadMemberUpdate.h"	// Tiberium Project
+#include "GameLogic/Module/SquadUpdate.h"	// Tiberium Project
 
 #include "Common/NameKeyGenerator.h"
 #include "Common/Player.h"
@@ -69,7 +71,11 @@ void BannerCarrierUpdate::joinSquad( Object *obj, ObjectID squadID )
 //-------------------------------------------------------------------------------------------------
 ObjectID BannerCarrierUpdate::getSquadID() const
 {
-	return m_squadID != INVALID_ID ? m_squadID : getObject()->getID();
+	if( m_squadID != INVALID_ID )
+		return m_squadID;
+	// (Tiberium Project @feature a soldier of a C&C3 squad (SquadUpdate): its squad's)
+	const Object *squad = SquadUpdate::getSquadOf( getObject() );
+	return squad != nullptr ? squad->getID() : getObject()->getID();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -148,6 +154,8 @@ UpdateSleepTime BannerCarrierUpdate::update()
 	carrier->setPosition( &pos );
 	carrier->setOrientation( angle );
 	carrier->setProducer( me );
+	// (Tiberium Project @feature a C&C3 squad's (SquadUpdate) leader is one of its soldiers, in its middle)
+	SquadMemberUpdate::enlist( carrier, SquadUpdate::getSquadOf( me ) );
 	// and where the squad goes
 	AIUpdateInterface *myAI = me->getAI();
 	AIUpdateInterface *ai = carrier->getAI();

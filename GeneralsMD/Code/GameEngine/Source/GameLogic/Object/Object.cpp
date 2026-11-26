@@ -92,6 +92,7 @@
 #include "GameLogic/Module/RebuildHoleBehavior.h"
 #include "GameLogic/Module/SpawnBehavior.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
+#include "GameLogic/Module/SquadUpdate.h"	// Tiberium Project
 #include "GameLogic/Module/SpecialAbilityUpdate.h"
 #include "GameLogic/Module/StatusDamageHelper.h"
 #include "GameLogic/Module/StickyBombUpdate.h"
@@ -3247,7 +3248,22 @@ void Object::clearWeaponSetFlag(WeaponSetType wst)
 //-------------------------------------------------------------------------------------------------
 Bool Object::hasSpecialPower( SpecialPowerType type ) const
 {
-	return TEST_SPECIALPOWERMASK( m_specialPowerBits, type );
+	if( TEST_SPECIALPOWERMASK( m_specialPowerBits, type ) )
+		return TRUE;
+	// Tiberium Project @feature a C&C3 squad has its soldiers' powers (SquadUpdate; see getSpecialPowerModule)
+	if( isKindOf( KINDOF_SPAWNS_ARE_THE_WEAPONS ) )
+	{
+		const SquadUpdate *squad = SquadUpdate::getSquadUpdate( this );
+		if( squad != nullptr )
+		{
+			std::vector<Object *> soldiers;
+			squad->getSoldiers( soldiers );
+			for( size_t k = 0; k < soldiers.size(); ++k )
+				if( soldiers[k]->hasSpecialPower( type ) )
+					return TRUE;
+		}
+	}
+	return FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -6013,6 +6029,24 @@ SpecialPowerModuleInterface *Object::getSpecialPowerModule( const SpecialPowerTe
 
 		if( sp->isModuleForPower( specialPowerTemplate ) )
 			return sp;
+	}
+
+	// Tiberium Project @feature a C&C3 squad's abilities are its soldiers' (SquadUpdate): its first soldier's stands for
+	// it (its button's readiness, the checks before its use; AIGroup has each of its soldiers use it)
+	if( isKindOf( KINDOF_SPAWNS_ARE_THE_WEAPONS ) )
+	{
+		const SquadUpdate *squad = SquadUpdate::getSquadUpdate( this );
+		if( squad != nullptr )
+		{
+			std::vector<Object *> soldiers;
+			squad->getSoldiers( soldiers );
+			for( size_t k = 0; k < soldiers.size(); ++k )
+			{
+				SpecialPowerModuleInterface *sp = soldiers[k]->getSpecialPowerModule( specialPowerTemplate );
+				if( sp != nullptr )
+					return sp;
+			}
+		}
 	}
 
 	return nullptr;

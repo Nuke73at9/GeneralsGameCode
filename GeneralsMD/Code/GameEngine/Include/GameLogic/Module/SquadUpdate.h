@@ -94,13 +94,15 @@ public:
 	/// a soldier joins (SquadMemberUpdate::onEnslave): the first place nobody living holds
 	void addMember( const Object *member );
 	Int getMemberCount() const;									///< its soldiers alive
+	void getSoldiers( std::vector<Object *> &out ) const;	///< its soldiers alive and not inside anything, by place
 	/// the squad a soldier is in (its SquadMemberUpdate's slaver, while that has this module), or null
 	static Object *getSquadOf( const Object *member );
 	static SquadUpdate *getSquadUpdate( const Object *squad );
 
-	/// an attack order given to the squad (AIUpdateInterface::aiDoCommand, whoever gives it: the player, a script, its AI
-	/// team) is its soldiers', as it has no weapon of its own
-	void passOrder( const AICommandParms *parms );
+	/// an order given to the squad (AIUpdateInterface::aiDoCommand, whoever gives it: the player, a script, its AI team):
+	/// an attack is its soldiers', as it has no weapon of its own; so is getting into a transport or a building, which the
+	/// squad itself then takes no part in (TRUE: the squad does nothing with it)
+	Bool passOrder( const AICommandParms *parms );
 	/// what to hit for an attack on a squad (AIUpdateInterface::aiDoCommand): its soldier nearest the attacker; null when
 	/// 'target' is no squad or has none left
 	static Object *getSoldierToAttack( const Object *target, const Object *attacker );

@@ -2681,7 +2681,10 @@ void AIUpdateInterface::aiDoCommand(const AICommandParms* parms)
 	// no target
 	SquadUpdate *squad = getObject()->isKindOf( KINDOF_SPAWNS_ARE_THE_WEAPONS ) ? SquadUpdate::getSquadUpdate( getObject() ) : nullptr;
 	if( squad != nullptr )
-		squad->passOrder( parms );
+	{
+		if( squad->passOrder( parms ) )
+			return;
+	}
 	else if( ( parms->m_cmd == AICMD_ATTACK_OBJECT || parms->m_cmd == AICMD_FORCE_ATTACK_OBJECT ) && parms->m_obj != nullptr
 		&& parms->m_obj->isKindOf( KINDOF_SPAWNS_ARE_THE_WEAPONS ) )
 	{

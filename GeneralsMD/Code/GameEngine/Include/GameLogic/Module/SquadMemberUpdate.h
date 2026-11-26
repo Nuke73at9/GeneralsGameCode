@@ -62,6 +62,8 @@ public:
 
 	/// the squad obj stands for when it is selected (itself when it is in none)
 	static const Object *getSelectionStandIn( const Object *obj );
+	/// a soldier that joins a squad without being made by it (its banner carrier, BannerCarrierUpdate): one with this module
+	static void enlist( Object *member, Object *squad );
 
 private:
 	ObjectID m_squad;

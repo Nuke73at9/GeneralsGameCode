@@ -1621,6 +1621,16 @@ void TiberiumTest::update()
 			log( "frame %d: ui: foe %s%s", (int)s_frame, step.arg.c_str(), foe != nullptr ? "" : " (no such object or no other player)" );
 		}
 #endif
+		else if ( step.action == "evacuate" && TheGameLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) "evacuate=k": the k-th spawned object (a transport, a building) lets its
+			// passengers out, as its Evacuate button does
+			const Int k = atoi( step.arg.c_str() );
+			Object *obj = k >= 0 && k < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[k] ) : nullptr;
+			if ( obj != nullptr && obj->getAI() != nullptr )
+				obj->getAI()->aiEvacuate( FALSE, CMD_FROM_PLAYER );
+			log( "frame %d: ui: evacuate %s%s", (int)s_frame, step.arg.c_str(), obj != nullptr && obj->getAI() != nullptr ? "" : " (no such object)" );
+		}
 		else if ( step.action == "enter" && TheGameLogic != nullptr )
 		{
 			// "enter=k,j": the k-th spawned object told to get into the j-th (a transport, a building)

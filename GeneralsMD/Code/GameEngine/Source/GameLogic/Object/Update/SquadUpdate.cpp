@@ -136,10 +136,10 @@ Object *SquadUpdate::getSoldierToAttack( const Object *target, const Object *att
 }
 
 //-------------------------------------------------------------------------------------------------
-void SquadUpdate::passOrder( const AICommandParms *parms )
+Bool SquadUpdate::passOrder( const AICommandParms *parms )
 {
 	if( parms == nullptr || m_ownCommand )
-		return;
+		return FALSE;
 	Object *me = getObject();
 	// (an attack on a squad goes on until it has no soldier left, as C&C3's does; any other order ends it)
 	const Bool atSquad = ( parms->m_cmd == AICMD_ATTACK_OBJECT || parms->m_cmd == AICMD_FORCE_ATTACK_OBJECT ) && parms->m_obj != nullptr
@@ -147,6 +147,8 @@ void SquadUpdate::passOrder( const AICommandParms *parms )
 	m_targetSquad = atSquad ? parms->m_obj->getID() : INVALID_ID;
 	m_targetForced = atSquad && parms->m_cmd == AICMD_FORCE_ATTACK_OBJECT;
 	m_targetSource = atSquad ? (Int)parms->m_cmdSource : (Int)CMD_FROM_AI;
+	// (getting in: its soldiers go in, the squad keeps with them, see update)
+	const Bool enter = parms->m_cmd == AICMD_ENTER;
 	switch( parms->m_cmd )
 	{
 		case AICMD_ATTACK_OBJECT:
@@ -155,9 +157,10 @@ void SquadUpdate::passOrder( const AICommandParms *parms )
 		case AICMD_ATTACK_POSITION:
 		case AICMD_ATTACK_AREA:
 		case AICMD_HUNT:
+		case AICMD_ENTER:
 			break;
 		default:
-			return;
+			return FALSE;
 	}
 	Int sent = 0;
 	for( size_t k = 0; k < m_members.size(); ++k )
@@ -178,6 +181,7 @@ void SquadUpdate::passOrder( const AICommandParms *parms )
 	if( TiberiumTest::isActive() && sent > 0 )
 		TiberiumTest::log( "frame %u: squad %s #%u: order %d passed to %d soldiers", TheGameLogic->getFrame(), me->getTemplate()->getName().str(),
 			(unsigned)me->getID(), (int)parms->m_cmd, (int)sent );
+	return enter;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -211,6 +215,17 @@ Int SquadUpdate::getMemberCount() const
 			++n;
 	}
 	return n;
+}
+
+//-------------------------------------------------------------------------------------------------
+void SquadUpdate::getSoldiers( std::vector<Object *> &out ) const
+{
+	for( size_t k = 0; k < m_members.size(); ++k )
+	{
+		Object *m = m_members[k] != INVALID_ID ? TheGameLogic->findObjectByID( m_members[k] ) : nullptr;
+		if( m != nullptr && !m->isEffectivelyDead() && m->getContainedBy() == nullptr )
+			out.push_back( m );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -250,6 +265,31 @@ UpdateSleepTime SquadUpdate::update()
 			++alive;
 		}
 	}
+	// its soldiers all inside a transport or a building: it keeps with them there, not to be selected or ordered, until
+	// they come out
+	Object *inside = nullptr;
+	if( alive == 0 )
+		for( size_t k = 0; k < m_members.size() && inside == nullptr; ++k )
+		{
+			Object *m = m_members[k] != INVALID_ID ? TheGameLogic->findObjectByID( m_members[k] ) : nullptr;
+			if( m != nullptr && !m->isEffectivelyDead() && m->getContainedBy() != nullptr )
+				inside = m->getContainedBy();
+		}
+	if( inside != nullptr )
+	{
+		if( me->isSelectable() )
+		{
+			TheGameLogic->deselectObject( me, PLAYERMASK_ALL, TRUE );
+			me->setSelectable( FALSE );
+			m_ownCommand = TRUE;
+			ai->aiIdle( CMD_FROM_AI );
+			m_ownCommand = FALSE;
+		}
+		me->setPosition( inside->getPosition() );
+		return UPDATE_SLEEP( LOOK_EVERY );
+	}
+	if( alive > 0 && !me->isSelectable() && me->getTemplate()->isKindOf( KINDOF_SELECTABLE ) )
+		me->setSelectable( TRUE );
 	if( alive == 0 )
 		return UPDATE_SLEEP( LOOK_EVERY );
 

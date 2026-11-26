@@ -66,6 +66,17 @@ UpdateSleepTime SquadMemberUpdate::update()
 }
 
 //-------------------------------------------------------------------------------------------------
+void SquadMemberUpdate::enlist( Object *member, Object *squad )
+{
+	static const NameKeyType key = NAMEKEY( "SquadMemberUpdate" );
+	SquadMemberUpdate *update = member != nullptr ? (SquadMemberUpdate *)member->findUpdateModule( key ) : nullptr;
+	if( update == nullptr || squad == nullptr || SquadUpdate::getSquadUpdate( squad ) == nullptr )
+		return;
+	update->onEnslave( squad );
+	update->setWakeFrame( member, UPDATE_SLEEP( LOGICFRAMES_PER_SECOND ) );
+}
+
+//-------------------------------------------------------------------------------------------------
 const Object *SquadMemberUpdate::getSelectionStandIn( const Object *obj )
 {
 	const Object *squad = SquadUpdate::getSquadOf( obj );
