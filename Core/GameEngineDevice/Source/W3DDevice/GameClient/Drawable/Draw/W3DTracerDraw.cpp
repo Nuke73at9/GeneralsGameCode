@@ -35,6 +35,7 @@
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
 #include "GameClient/Drawable.h"
+#include "GameClient/FXList.h"
 #include "GameClient/GameClient.h"
 #include "GameLogic/GameLogic.h"
 #include "W3DDevice/GameClient/W3DDisplay.h"
@@ -61,6 +62,9 @@ W3DTracerDraw::W3DTracerDraw( Thing *thing, const ModuleData* moduleData ) : Dra
 	m_color.blue = 0.7f;
 	m_speedInDistPerFrame = 1.0f;
 	m_theTracer = nullptr;
+	m_hitFX = nullptr;	// Tiberium Project
+	m_hitDistance = 0.0f;
+	m_flown = 0.0f;
 
 }
 
@@ -87,6 +91,14 @@ void W3DTracerDraw::setTracerParms(Real speed, Real length, Real width, const RG
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the effect where the tracer lands
+void W3DTracerDraw::setTracerHit(const FXList* hitFX, Real distance)
+{
+	m_hitFX = hitFX;
+	m_hitDistance = distance;
+	m_flown = 0.0f;
+}
+
 W3DTracerDraw::~W3DTracerDraw()
 {
 	// remove tracer from the scene and delete
@@ -153,6 +165,19 @@ void W3DTracerDraw::doDrawModule(const Matrix3D* transformMtx)
 		Matrix3D pos = m_theTracer->Get_Transform();
 		pos.Translate( Vector3( m_speedInDistPerFrame * frameShare, 0.0f, 0.0 ) );
 		m_theTracer->Set_Transform( pos );
+		m_flown += m_speedInDistPerFrame * frameShare;
+	}
+
+	// Tiberium Project @feature its head has come to where it lands: the effect there, once
+	if (m_hitFX != nullptr && m_flown + m_length >= m_hitDistance)
+	{
+		const Matrix3D at = m_theTracer->Get_Transform();
+		Vector3 head;
+		Matrix3D::Transform_Vector( at, Vector3( m_length, 0.0f, 0.0f ), &head );
+		const Coord3D where = { head.X, head.Y, head.Z };
+		const FXList *fx = m_hitFX;
+		m_hitFX = nullptr;
+		FXList::doFXPos( fx, &where );
 	}
 
 }

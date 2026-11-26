@@ -2647,7 +2647,17 @@ void TiberiumTest::update()
 				p.z = ( TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( p.x, p.y ) : p.z ) + 10.0f;
 				Matrix3D mtx( true );
 				mtx.Set_Translation( Vector3( p.x, p.y, p.z ) );
-				FXList::doFXPos( fx, &p, &mtx );
+				// Tiberium Project @feature (the test) "fx=<FX list>,dx,dy,tx,ty": aimed at tx,ty further on (a weapon's
+				// target: what its tracers fly to)
+				Coord3D to = p;
+				const Bool aimed = f.size() > 4;
+				if ( aimed )
+				{
+					to.x += (Real)atof( f[3].c_str() );
+					to.y += (Real)atof( f[4].c_str() );
+					to.z = ( TheTerrainLogic != nullptr ? TheTerrainLogic->getGroundHeight( to.x, to.y ) : to.z ) + 5.0f;
+				}
+				FXList::doFXPos( fx, &p, &mtx, 0.0f, aimed ? &to : nullptr );
 				log( "frame %d: ui: effect %s at %.0f %.0f", (int)s_frame, f[0].c_str(), p.x, p.y );
 			}
 			else

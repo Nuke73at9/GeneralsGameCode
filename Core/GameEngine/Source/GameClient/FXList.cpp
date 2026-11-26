@@ -165,6 +165,12 @@ public:
 		m_width = 1.0f;
 		m_color.red = m_color.green = m_color.blue = 1.0f;
 		m_probability = 1.0f;
+		// Tiberium Project @feature C&C4 and Kane's Wrath's tracers (TracerModelDraw)
+		m_count = 1.0f;
+		m_spreadAngle = 0.0f;
+		m_lifeFrames = 0;
+		m_hitFX = nullptr;
+		m_hitFXLookedUp = FALSE;
 	}
 
 	virtual void doFXPos(const Coord3D *primary, const Matrix3D* primaryMtx, const Real primarySpeed, const Coord3D *secondary, const Real /*overrideRadius*/ ) const override
@@ -172,6 +178,20 @@ public:
 		if (m_probability <= GameClientRandomValueReal(0, 1))
 			return;
 
+		// Tiberium Project @feature tracers a shot: Count's whole part, and one more by its fraction
+		Int count = 1;
+		if (m_count != 1.0f)
+		{
+			count = REAL_TO_INT_FLOOR(m_count);
+			if (GameClientRandomValueReal(0, 1) < m_count - (Real)count)
+				++count;
+		}
+		for (Int k = 0; k < count; ++k)
+			fireOne(primary, primarySpeed, secondary);
+	}
+
+	void fireOne(const Coord3D *primary, const Real primarySpeed, const Coord3D *secondary) const
+	{
 		if (primary && secondary)
 		{
 			Drawable *tracer = TheThingFactory->newDrawable(TheThingFactory->findTemplate(m_tracerName));
@@ -189,6 +209,18 @@ public:
 			Vector3 pos( primary->x, primary->y, primary->z );
 			Vector3 dir( secondary->x - primary->x, secondary->y - primary->y, secondary->z - primary->z );
 			dir.Normalize(); //This is fantastically crucial for calling buildTransformMatrix!!!!!
+			// Tiberium Project @feature a tracer's spread: up to SpreadAngle off the line to the target, evenly over the cone's disc
+			if (m_spreadAngle > 0.0f)
+			{
+				Vector3 across, other;
+				Vector3::Cross_Product( dir, fabs( dir.Z ) < 0.9f ? Vector3( 0.0f, 0.0f, 1.0f ) : Vector3( 1.0f, 0.0f, 0.0f ), &across );
+				across.Normalize();
+				Vector3::Cross_Product( dir, across, &other );
+				const Real tilt = m_spreadAngle * sqrtf( GameClientRandomValueReal( 0.0f, 1.0f ) );
+				const Real turn = GameClientRandomValueReal( 0.0f, 2.0f * PI );
+				dir = dir * Cos( tilt ) + ( across * Cos( turn ) + other * Sin( turn ) ) * Sin( tilt );
+				dir.Normalize();
+			}
 			tracerMtx.buildTransformMatrix( pos, dir );
 			tracer->setTransformMatrix( &tracerMtx );
 			tracer->setPosition(primary);
@@ -212,6 +244,22 @@ public:
 			Real dist = calcDist(*primary, *secondary) - m_length;
 			Real frames = (dist >= 0.0f && speed >= 0.0f) ? (dist / speed) : 1;
 			Int framesAdjusted = REAL_TO_INT_CEIL(frames * m_decayAt);
+			// Tiberium Project @feature a tracer lives no longer than LifeFrames, and plays HitFX where it lands
+			if (m_lifeFrames > 0 && framesAdjusted > (Int)m_lifeFrames)
+				framesAdjusted = (Int)m_lifeFrames;
+			if (!m_hitFXLookedUp)
+			{
+				m_hitFXLookedUp = TRUE;
+				m_hitFX = m_hitFXName.isEmpty() ? nullptr : TheFXListStore->findFXList( m_hitFXName.str() );
+			}
+			if (m_hitFX != nullptr)
+			{
+				TracerDrawInterface* hit = nullptr;
+				for (DrawModule** d = tracer->getDrawModules(); *d && hit == nullptr; ++d)
+					hit = (*d)->getTracerDrawInterface();
+				if (hit != nullptr)
+					hit->setTracerHit( m_hitFX, calcDist(*primary, *secondary) );
+			}
 			tracer->setExpirationDate(TheGameLogic->getFrame() + framesAdjusted);
 		}
 		else
@@ -232,6 +280,11 @@ public:
       { "Width",					INI::parseReal,             nullptr, offsetof( TracerFXNugget, m_width ) },
       { "Color",					INI::parseRGBColor,					nullptr, offsetof( TracerFXNugget, m_color ) },
       { "Probability",		INI::parseReal,             nullptr, offsetof( TracerFXNugget, m_probability ) },
+			// Tiberium Project @feature C&C4 and Kane's Wrath's tracers
+			{ "Count",					INI::parseReal,							nullptr, offsetof( TracerFXNugget, m_count ) },
+			{ "SpreadAngle",		INI::parseAngleReal,				nullptr, offsetof( TracerFXNugget, m_spreadAngle ) },
+			{ "LifeFrames",			INI::parseUnsignedInt,			nullptr, offsetof( TracerFXNugget, m_lifeFrames ) },
+			{ "HitFX",					INI::parseAsciiString,			nullptr, offsetof( TracerFXNugget, m_hitFXName ) },
 			{ nullptr, nullptr, nullptr, 0 }
 		};
 
@@ -249,6 +302,13 @@ private:
 	Real						m_width;
 	RGBColor				m_color;
 	Real						m_probability;
+	// Tiberium Project @feature C&C4 and Kane's Wrath's tracers (TracerModelDraw)
+	Real						m_count;				///< Count: tracers a shot on average (its fraction a chance of one more)
+	Real						m_spreadAngle;	///< SpreadAngle: the most a tracer is off the line to the target
+	UnsignedInt			m_lifeFrames;		///< LifeFrames: the longest a tracer lives (0: until it gets there)
+	AsciiString			m_hitFXName;		///< HitFX: played where a tracer lands
+	mutable const FXList *m_hitFX;
+	mutable Bool		m_hitFXLookedUp;
 };
 EMPTY_DTOR(TracerFXNugget)
 

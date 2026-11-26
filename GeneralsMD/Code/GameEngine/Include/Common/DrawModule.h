@@ -131,6 +131,8 @@ class TracerDrawInterface
 {
 public:
 	virtual void setTracerParms(Real speed, Real length, Real width, const RGBColor& color, Real initialOpacity) = 0;
+	/// Tiberium Project @feature a tracer that plays an effect where it lands, once its head has flown 'distance'
+	virtual void setTracerHit(const FXList* /*hitFX*/, Real /*distance*/) { }
 };
 
 //-------------------------------------------------------------------------------------------------

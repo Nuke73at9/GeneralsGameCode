@@ -56,6 +56,7 @@ public:
 	virtual void reactToGeometryChange() override { }
 
 	virtual void setTracerParms(Real speed, Real length, Real width, const RGBColor& color, Real initialOpacity) override;
+	virtual void setTracerHit(const FXList* hitFX, Real distance) override;	///< Tiberium Project
 
 	virtual TracerDrawInterface* getTracerDrawInterface() override { return this; }
 	virtual const TracerDrawInterface* getTracerDrawInterface() const override { return this; }
@@ -68,5 +69,9 @@ protected:
 	RGBColor m_color;							///< color of tracer
 	Real m_speedInDistPerFrame;		///< speed of tracer (in dist/frame)
 	Real m_opacity;								///< opacity of the tracer
+	// Tiberium Project @feature the effect where the tracer lands (not saved: a tracer lives a moment)
+	const FXList *m_hitFX;				///< played once its head has flown m_hitDistance
+	Real m_hitDistance;
+	Real m_flown;									///< how far it has flown
 
 };
