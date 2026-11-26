@@ -92,6 +92,7 @@ public:
 
 	/// Once per engine update, after the client has drawn and before the logic runs (the fly step's tilt, as drawn)
 	static void beforeLogic();
+	static void afterLogic();	///< Tiberium Project @feature (the test) after each logic frame: its time, for "logictime"
 	static void afterDraw();	///< Tiberium Project (the test): straight after the client has drawn (the trace of what was drawn)
 	static void noteDrawnTurret( const Drawable *draw, Real angle );	///< the main turret's angle as handed to its bone (the trace)
 

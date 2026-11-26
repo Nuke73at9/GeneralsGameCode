@@ -776,8 +776,32 @@ static void logCRCWhenDue()
 	TiberiumTest::log( "logic frame %u: CRC %08X", (unsigned)TheGameLogic->getFrame(), (unsigned)crc );
 }
 
+// Tiberium Project @feature (the test) the logic's own time per frame, from before each logic frame to after it: the
+// simulation's cost apart from drawing ("logictime" logs it since the last one)
+static std::chrono::steady_clock::time_point s_logicStart;
+static Bool s_logicTiming = FALSE;
+static double s_logicTotalMs = 0.0, s_logicMaxMs = 0.0;
+static Int s_logicFrames = 0;
+
+void TiberiumTest::afterLogic()
+{
+	if ( !s_active || !s_logicTiming )
+		return;
+	s_logicTiming = FALSE;
+	const double ms = std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() - s_logicStart ).count();
+	s_logicTotalMs += ms;
+	if ( ms > s_logicMaxMs )
+		s_logicMaxMs = ms;
+	++s_logicFrames;
+}
+
 void TiberiumTest::beforeLogic()
 {
+	if ( s_active )
+	{
+		s_logicStart = std::chrono::steady_clock::now();
+		s_logicTiming = TRUE;
+	}
 	if ( s_active )
 		logCRCWhenDue();
 	if ( !s_active || s_flyTemplates.empty() || TheGameLogic == nullptr )
@@ -1596,6 +1620,18 @@ void TiberiumTest::update()
 				line += one;
 			}
 			log( "frame %d: ui: command points%s", (int)s_frame, line.empty() ? " (no player has a cap)" : line.c_str() );
+		}
+		else if ( step.action == "logictime" && ThePlayerList != nullptr && TheGameLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) "logictime": the logic's mean and longest frame since the last such step,
+			// with the objects there are and each player's units (what the simulation carries)
+			Int objects = 0;
+			for ( Object *o = TheGameLogic->getFirstObject(); o != nullptr; o = o->getNextObject() )
+				++objects;
+			log( "frame %d: ui: logic %d frames, mean %.3f ms, longest %.3f ms; %d objects", (int)s_frame, (int)s_logicFrames,
+				s_logicFrames > 0 ? s_logicTotalMs / s_logicFrames : 0.0, s_logicMaxMs, (int)objects );
+			s_logicTotalMs = s_logicMaxMs = 0.0;
+			s_logicFrames = 0;
 		}
 		else if ( step.action == "status" && TheGameLogic != nullptr )
 		{

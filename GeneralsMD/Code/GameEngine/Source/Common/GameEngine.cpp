@@ -1196,6 +1196,7 @@ void GameEngine::update()
 			TiberiumTest::beforeLogic();
 
 			TheGameLogic->UPDATE();
+			TiberiumTest::afterLogic();	// Tiberium Project @feature (the test) the logic frame's time
 
 			if (!TheFramePacer->isTimeFrozen())
 			{
@@ -1212,6 +1213,7 @@ void GameEngine::update()
 				TheGameClient->stepCaughtUpLogicFrame();
 				TiberiumTest::beforeLogic();
 				TheGameLogic->UPDATE();
+				TiberiumTest::afterLogic();	// Tiberium Project
 				TheGameClient->step();
 			}
 		}
