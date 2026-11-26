@@ -149,6 +149,9 @@ public:
 	AsciiString getCrawlerPower( Int i ) const { return ( i >= 0 && i < m_crawlerPowerCount ) ? m_crawlerPowers[i] : AsciiString::TheEmptyString; }
 	const AsciiString& getCrawlerPowerUpgrade() const { return m_crawlerPowerUpgrade; }
 	UnsignedInt getCrawlerPowerWait() const { return m_crawlerPowerWait; }
+	/// Tiberium Project @feature its Tier V: with the Crawler power and at least this many control nodes held (C&C4's goal
+	/// structures, TiberiumZoneNodeUpdate), one of each of its Crawlers at once, each with its own wait (0: never)
+	Int getCrawlerPowerNodes() const { return m_crawlerPowerNodes; }
 
 	static const FieldParse* getFieldParse();
 
@@ -199,6 +202,7 @@ private:
 	Int								m_crawlerPowerCount;
 	AsciiString				m_crawlerPowerUpgrade;							///< Tiberium Project: the upgrade that gives the power
 	UnsignedInt				m_crawlerPowerWait;									///< Tiberium Project: frames from a loss to the next
+	Int								m_crawlerPowerNodes;								///< Tiberium Project: the nodes held for its Tier V (0: none)
 
 	Int								m_intrinsicSPP;
 

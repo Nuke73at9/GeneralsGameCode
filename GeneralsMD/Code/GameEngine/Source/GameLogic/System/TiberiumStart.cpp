@@ -44,6 +44,7 @@
 #include "GameLogic/Module/CreateModule.h"
 #include "GameLogic/Module/ReplaceSelfUpdate.h"
 #include "GameLogic/Module/TiberiumArrivalUpdate.h"
+#include "GameLogic/Module/TiberiumZoneNodeUpdate.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/TerrainLogic.h"
@@ -78,6 +79,9 @@ namespace
 		UnsignedInt powerReady;	///< the frame its Crawler power may be used from (0: at once, once it has the upgrade)
 		UnsignedInt tierStart;	///< the Crawler power's upgrade being researched: since, and done on tierDone (0: not)
 		UnsignedInt tierDone;
+		Int nodes;							///< Tiberium Project @feature its Tier V: the control nodes it holds (as last looked)
+		Bool classCrawler[ TiberiumStart::MOST_CHOICES ];		///< one of each class of its Crawler power stands (as last looked)
+		UnsignedInt classReady[ TiberiumStart::MOST_CHOICES ];	///< and when another of that class may be called (Tier V)
 	};
 
 	std::vector<Entry> s_entries;
@@ -140,6 +144,14 @@ namespace
 		return up != nullptr && player->hasUpgradeComplete( up );
 	}
 
+	/// Tiberium Project @feature its Tier V: the Crawler power, and at least CrawlerPowerNodes control nodes held (as last
+	/// looked): one of each class at once
+	Bool tierFive( const Entry &e, const Player *player )
+	{
+		const PlayerTemplate *pt = player != nullptr ? player->getPlayerTemplate() : nullptr;
+		return pt != nullptr && pt->getCrawlerPowerNodes() > 0 && e.nodes >= pt->getCrawlerPowerNodes() && powerUnlocked( player );
+	}
+
 	Bool isFriend( const Player *me, const Player *other )
 	{
 		if( me == nullptr || other == nullptr )
@@ -153,17 +165,18 @@ namespace
 	//-----------------------------------------------------------------------------------------------
 	/** whether obj is one of the player's list (the start's or its Crawler power's), either form (the vehicle, or
 		what it unpacks into: that packs up into one of the list) */
-	Bool isCrawlerOf( const Object *obj, const PlayerTemplate *pt, Int list )
+	/// the class (its place in the list) obj is of, in either form; -1: none of the list
+	Int classOf( const Object *obj, const PlayerTemplate *pt, Int list )
 	{
 		if( obj == nullptr || pt == nullptr || obj->isEffectivelyDead() )
-			return FALSE;
+			return -1;
 		const ThingTemplate *t = obj->getTemplate();
 		const Int count = listCount( pt, list );
 		for( Int i = 0; i < count; ++i )
 		{
 			const ThingTemplate *c = TheThingFactory->findTemplate( listName( pt, list, i ) );
 			if( c != nullptr && t->isEquivalentTo( c ) )
-				return TRUE;
+				return i;
 		}
 		static const NameKeyType replaceKey = NAMEKEY( "ReplaceSelfUpdate" );
 		const ReplaceSelfUpdate *replace = (const ReplaceSelfUpdate *)obj->findUpdateModule( replaceKey );
@@ -171,9 +184,14 @@ namespace
 		{
 			for( Int i = 0; i < count; ++i )
 				if( replace->getReplacementName().compareNoCase( listName( pt, list, i ) ) == 0 )
-					return TRUE;
+					return i;
 		}
-		return FALSE;
+		return -1;
+	}
+
+	Bool isCrawlerOf( const Object *obj, const PlayerTemplate *pt, Int list )
+	{
+		return classOf( obj, pt, list ) >= 0;
 	}
 
 	struct LookFor
@@ -181,22 +199,34 @@ namespace
 		const PlayerTemplate *pt;
 		Int list;
 		Bool found;
+		Bool classes[ TiberiumStart::MOST_CHOICES ];	///< (Tiberium Project: which classes of the list stand)
+		Int nodes;																		///< (and the control nodes held)
 	};
 
 	void lookOne( Object *obj, void *data )
 	{
 		LookFor *look = (LookFor *)data;
-		if( !look->found && isCrawlerOf( obj, look->pt, look->list ) )
+		const Int k = classOf( obj, look->pt, look->list );
+		if( k >= 0 )
+		{
 			look->found = TRUE;
+			if( k < TiberiumStart::MOST_CHOICES )
+				look->classes[k] = TRUE;
+		}
+		// (Tiberium Project @feature a control node it holds, for its Tier V)
+		if( TiberiumZoneNodeUpdate::isNode( obj ) && !obj->isEffectivelyDead() )
+			++look->nodes;
 	}
 
-	Bool lookForCrawler( const Entry &e, Int list )
+	Bool lookForCrawler( const Entry &e, Int list, LookFor *out = nullptr )
 	{
 		Player *player = playerOf( e );
-		LookFor look = { templateOf( player ), list, FALSE };
+		LookFor look = { templateOf( player ), list, FALSE, { FALSE }, 0 };
 		if( player == nullptr || look.pt == nullptr || listCount( look.pt, list ) <= 0 )
 			return FALSE;
 		player->iterateObjects( lookOne, &look );
+		if( out != nullptr )
+			*out = look;
 		return look.found;
 	}
 
@@ -421,6 +451,12 @@ void TiberiumStart::addPlayer( Player *player, const PlayerTemplate *pt, const C
 	e.powerCrawler = FALSE;
 	e.powerReady = 0;
 	e.tierStart = e.tierDone = 0;
+	e.nodes = 0;
+	for( Int k = 0; k < MOST_CHOICES; ++k )
+	{
+		e.classCrawler[k] = FALSE;
+		e.classReady[k] = 0;
+	}
 	// (a faction that starts as Zero Hour's, with a Crawler power only: as if it had landed)
 	e.landed = !usesArrival( pt );
 	s_entries.push_back( e );
@@ -563,7 +599,9 @@ void TiberiumStart::update()
 				&& TheUpgradeCenter->canAffordUpgrade( player, up, FALSE ) )
 				researchCrawlerPower( player );
 			const Bool had = e.powerCrawler;
-			e.powerCrawler = lookForCrawler( e, LIST_POWER );
+			const Bool wasFive = tierFive( e, player );
+			LookFor look = { nullptr, LIST_POWER, FALSE, { FALSE }, 0 };
+			e.powerCrawler = lookForCrawler( e, LIST_POWER, &look );
 			if( had && !e.powerCrawler )
 			{
 				e.powerReady = now + pt->getCrawlerPowerWait();
@@ -571,12 +609,40 @@ void TiberiumStart::update()
 					TiberiumTest::log( "frame %u: start: player %d's Crawler power's Crawler is gone; another from frame %u", now, (int)e.player,
 						e.powerReady );
 			}
-			// the AI uses it as soon as it may, at its start
-			const UnsignedInt ready = getRedeployFrame( player, LIST_POWER );
-			if( !e.powerCrawler && ready != 0 && now >= ready && isAI( player ) && player->isPlayerActive() )
+			// (Tiberium Project @feature its Tier V: the nodes it holds, and each class's own wait after its loss)
+			const Int nodesBefore = e.nodes;
+			e.nodes = pt->getCrawlerPowerNodes() > 0 ? look.nodes : 0;
+			for( Int k = 0; k < min( (Int)MOST_CHOICES, listCount( pt, LIST_POWER ) ); ++k )
 			{
-				const Coord3D spot = findSpotNear( player, e.home );
-				pick( player, randomChoice( pt, LIST_POWER ), &spot, TRUE, LIST_POWER );
+				const Bool stands = e.powerCrawler && look.classes[k];
+				if( e.classCrawler[k] && !stands )
+					e.classReady[k] = now + pt->getCrawlerPowerWait();
+				e.classCrawler[k] = stands;
+			}
+			if( TiberiumTest::isActive() && ( wasFive != tierFive( e, player ) || nodesBefore != e.nodes ) )
+				TiberiumTest::log( "frame %u: start: player %d holds %d control nodes (%d needed): Tier V %s", now, (int)e.player,
+					(int)e.nodes, (int)pt->getCrawlerPowerNodes(), tierFive( e, player ) ? "on" : "off" );
+			// the AI uses it as soon as it may, at its start (with Tier V, each class it may call)
+			if( isAI( player ) && player->isPlayerActive() )
+			{
+				Int choice = -1;
+				if( tierFive( e, player ) )
+				{
+					for( Int k = 0; k < min( (Int)MOST_CHOICES, listCount( pt, LIST_POWER ) ) && choice < 0; ++k )
+						if( !e.classCrawler[k] && now >= e.classReady[k] )
+							choice = k;
+				}
+				else
+				{
+					const UnsignedInt ready = getRedeployFrame( player, LIST_POWER );
+					if( !e.powerCrawler && ready != 0 && now >= ready )
+						choice = randomChoice( pt, LIST_POWER );
+				}
+				if( choice >= 0 )
+				{
+					const Coord3D spot = findSpotNear( player, e.home );
+					pick( player, choice, &spot, TRUE, LIST_POWER );
+				}
 			}
 		}
 	}
@@ -597,17 +663,26 @@ void TiberiumStart::pick( Player *player, Int choice, const Coord3D *spot, Bool 
 	{
 		if( !s_deployed || !validChoice || !hasSpot || spot == nullptr || !player->isPlayerActive() || !powerUnlocked( player ) )
 			return;
-		e->powerCrawler = lookForCrawler( *e, LIST_POWER );
+		LookFor look = { nullptr, LIST_POWER, FALSE, { FALSE }, 0 };
+		e->powerCrawler = lookForCrawler( *e, LIST_POWER, &look );
 		const char *why = nullptr;
-		if( e->powerCrawler || now < e->powerReady || !isSpotAllowed( player, spot, &why ) )
+		// (Tiberium Project @feature with Tier V, one of each class, each after its own wait; else one at a time)
+		const Bool five = tierFive( *e, player );
+		const Bool has = five ? ( choice < MOST_CHOICES && look.classes[choice] ) : e->powerCrawler;
+		const UnsignedInt ready = five ? ( choice < MOST_CHOICES ? e->classReady[choice] : 0 ) : e->powerReady;
+		if( has || now < ready || !isSpotAllowed( player, spot, &why ) )
 		{
 			if( TiberiumTest::isActive() )
-				TiberiumTest::log( "frame %u: start: player %d's Crawler power at %.0f %.0f: refused (%s)", now, (int)e->player, spot->x, spot->y,
-					why != nullptr ? why : ( e->powerCrawler ? "it has one" : "not yet" ) );
+				TiberiumTest::log( "frame %u: start: player %d's Crawler power (class %d%s) at %.0f %.0f: refused (%s)", now, (int)e->player,
+					(int)choice, five ? ", Tier V" : "", spot->x, spot->y, why != nullptr ? why : ( has ? "it has one" : "not yet" ) );
 			return;
 		}
 		if( makeArrival( player, TheThingFactory->findTemplate( listName( pt, LIST_POWER, choice ) ), *spot ) != nullptr )
+		{
 			e->powerCrawler = TRUE;
+			if( choice < MOST_CHOICES )
+				e->classCrawler[choice] = TRUE;
+		}
 		return;
 	}
 
@@ -980,13 +1055,47 @@ UnsignedInt TiberiumStart::getRedeployFrame( const Player *player, Int list )
 		return 0;
 	if( list == LIST_POWER )
 	{
-		if( e->powerCrawler || !powerUnlocked( player ) )
+		if( !powerUnlocked( player ) )
+			return 0;
+		// (Tiberium Project @feature with Tier V: the first a class not standing may be called)
+		if( tierFive( *e, player ) )
+		{
+			UnsignedInt first = 0;
+			for( Int k = 0; k < min( (Int)MOST_CHOICES, listCount( templateOf( player ), LIST_POWER ) ); ++k )
+				if( !e->classCrawler[k] && ( first == 0 || max( (UnsignedInt)1, e->classReady[k] ) < first ) )
+					first = max( (UnsignedInt)1, e->classReady[k] );
+			return first;
+		}
+		if( e->powerCrawler )
 			return 0;
 		return max( (UnsignedInt)1, e->powerReady );
 	}
 	if( e->crawler || e->lostFrame == 0 || !redeploys( player ) )
 		return 0;
 	return e->lostFrame + templateOf( player )->getStartRedeployTime();
+}
+
+//-------------------------------------------------------------------------------------------------
+UnsignedInt TiberiumStart::getClassReadyFrame( const Player *player, Int list, Int choice )
+{
+	const Entry *e = entryOf( player );
+	if( e == nullptr || list != LIST_POWER || !tierFive( *e, player ) )
+		return getRedeployFrame( player, list );
+	if( choice < 0 || choice >= MOST_CHOICES || e->classCrawler[choice] )
+		return 0;
+	return max( (UnsignedInt)1, e->classReady[choice] );
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool TiberiumStart::getTierFive( const Player *player, Int *held, Int *needed )
+{
+	const Entry *e = entryOf( player );
+	const PlayerTemplate *pt = templateOf( player );
+	if( held != nullptr )
+		*held = e != nullptr ? e->nodes : 0;
+	if( needed != nullptr )
+		*needed = pt != nullptr ? pt->getCrawlerPowerNodes() : 0;
+	return e != nullptr && tierFive( *e, player );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1000,10 +1109,11 @@ Bool TiberiumStart::isDecommissioning( const Player *player )
 // Version Info:
 // 1: Initial version
 // 2: the Crawler power (powerCrawler, powerReady, tierStart, tierDone)
+// 3: its Tier V (nodes, classCrawler, classReady)
 //-------------------------------------------------------------------------------------------------
 void TiberiumStart::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 	xfer->xferUnsignedInt( &s_introEnd );
@@ -1041,6 +1151,24 @@ void TiberiumStart::xfer( Xfer *xfer )
 			e.powerCrawler = FALSE;
 			e.powerReady = 0;
 			e.tierStart = e.tierDone = 0;
+		}
+		if( version >= 3 )
+		{
+			xfer->xferInt( &e.nodes );
+			for( Int k = 0; k < MOST_CHOICES; ++k )
+			{
+				xfer->xferBool( &e.classCrawler[k] );
+				xfer->xferUnsignedInt( &e.classReady[k] );
+			}
+		}
+		else if( xfer->getXferMode() == XFER_LOAD )
+		{
+			e.nodes = 0;
+			for( Int k = 0; k < MOST_CHOICES; ++k )
+			{
+				e.classCrawler[k] = FALSE;
+				e.classReady[k] = 0;
+			}
 		}
 	}
 	if( xfer->getXferMode() == XFER_LOAD )

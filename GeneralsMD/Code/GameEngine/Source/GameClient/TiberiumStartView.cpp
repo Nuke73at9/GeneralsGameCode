@@ -74,7 +74,8 @@ namespace
 		TOP_DECOMMISSION,	///< the player's Crawler, selected
 		TOP_CANCEL,				///< a redeployment's marker put away
 		TOP_POWER,				///< its Crawler power (the Tiberium factions' Tier IV)
-		TOP_TIER					///< the Crawler power's upgrade, researched
+		TOP_TIER,					///< the Crawler power's upgrade, researched
+		TOP_TIER_FIVE			///< Tiberium Project @feature its Tier V: the control nodes held (no button)
 	};
 
 	const UnsignedInt HOLD_FRAMES = LOGICFRAMES_PER_SECOND;						///< C&C4's CenterHoldDuration
@@ -232,10 +233,23 @@ namespace
 	}
 
 	/// a card of the box picked
+	/// Tiberium Project @feature a class the box may not give now (the Crawler power's with Tier V: one standing, or its wait)
+	Bool cardOff( Int i, UnsignedInt *when )
+	{
+		*when = 0;
+		if( !s_redeploy || s_list != (Int)TiberiumStart::LIST_POWER )
+			return FALSE;
+		*when = TiberiumStart::getClassReadyFrame( localPlayer(), s_list, i );
+		return *when == 0 || now() < *when;
+	}
+
 	void pickCard( Int i )
 	{
 		Player *me = localPlayer();
 		if( i < 0 || i >= TiberiumStart::getChoiceCount( me, s_list ) )
+			return;
+		UnsignedInt when;
+		if( cardOff( i, &when ) )
 			return;
 		s_class = i;
 		if( s_redeploy )
@@ -339,6 +353,22 @@ namespace
 			const Int ps = B.cardW - px( 16.0f );
 			if( portrait != nullptr )
 				TheDisplay->drawImage( portrait, x + px( 8.0f ), y + px( 24.0f ), x + px( 8.0f ) + ps, y + px( 24.0f ) + min( ps, B.cardH - px( 30.0f ) ) );
+			// (Tiberium Project @feature a class it may not call now: shaded, with what keeps it)
+			UnsignedInt when;
+			if( cardOff( i, &when ) )
+			{
+				TheDisplay->drawFillRect( x + 1, y + 1, B.cardW - 2, B.cardH - 2, l.shade );
+				UnicodeString why;
+				if( when == 0 )
+					why = UnicodeString( L"DEPLOYED" );
+				else
+				{
+					const UnsignedInt seconds = ( when - now() + LOGICFRAMES_PER_SECOND - 1 ) / LOGICFRAMES_PER_SECOND;
+					why.format( L"%u:%02u", seconds / 60, seconds % 60 );
+				}
+				const Int ww = widthOf( why, nameSize, TRUE );
+				drawText( why, nameSize, TRUE, x + ( B.cardW - ww ) / 2, y + B.cardH - px( 22.0f ), l.text );
+			}
 		}
 		// the line on the card under the mouse
 		if( s_hoverCard >= 0 )
@@ -440,7 +470,8 @@ namespace
 			{
 				if( list == TiberiumStart::LIST_START ? !TiberiumStart::redeploys( me ) : !TiberiumStart::hasCrawlerPower( me ) )
 					continue;
-				if( TiberiumStart::hasCrawler( me, list ) )
+				// (the Crawler power: while it may call one, of any class: Tier V's own each)
+				if( list == TiberiumStart::LIST_POWER ? TiberiumStart::getRedeployFrame( me, list ) == 0 : TiberiumStart::hasCrawler( me, list ) )
 					continue;
 				const UnsignedInt when = TiberiumStart::getRedeployFrame( me, list );
 				const wchar_t *name = list == TiberiumStart::LIST_START ? L"DEPLOY MCV" : L"CALL CRAWLER";
@@ -478,6 +509,17 @@ namespace
 			}
 			e.label = tierName();
 			e.label.concat( amount );
+			out.push_back( e );
+		}
+		// Tiberium Project @feature its Tier V: lit while it has it (the Crawler power and the control nodes), with the nodes held
+		Int held = 0, needed = 0;
+		const Bool five = TiberiumStart::getTierFive( me, &held, &needed );
+		if( needed > 0 && TiberiumStart::hasCrawlerPower( me ) )
+		{
+			TopEntry e;
+			e.what = TOP_TIER_FIVE;
+			e.dim = !five;
+			e.label.format( L"TIER V  %d/%d NODES", min( held, needed ), needed );
 			out.push_back( e );
 		}
 		if( selectedCrawler() != nullptr && !TiberiumStart::isDecommissioning( me ) )

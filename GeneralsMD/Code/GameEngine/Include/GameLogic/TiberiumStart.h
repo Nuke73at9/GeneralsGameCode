@@ -123,6 +123,11 @@ public:
 	static Int getCrawlerPowerResearch( const Player *player, Real *progress );
 	/// when it may call one (0: not now: it has one, or never; the Crawler power: once it has its upgrade)
 	static UnsignedInt getRedeployFrame( const Player *player, Int list = LIST_START );
+	/// Tiberium Project @feature when it may call one of that class (0: not now); the Crawler power's with Tier V: each class
+	/// its own, else as getRedeployFrame
+	static UnsignedInt getClassReadyFrame( const Player *player, Int list, Int choice );
+	/// its Tier V (the Crawler power and CrawlerPowerNodes control nodes held): whether it has it, the nodes it holds and needs
+	static Bool getTierFive( const Player *player, Int *held, Int *needed );
 	static Bool isDecommissioning( const Player *player );
 
 	enum

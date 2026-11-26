@@ -104,6 +104,7 @@
 		{ "CrawlerPower",							PlayerTemplate::parseCrawlerPower,							nullptr, 0 },	// Tiberium Project @feature
 		{ "CrawlerPowerUpgrade",			INI::parseAsciiString,													nullptr, offsetof( PlayerTemplate, m_crawlerPowerUpgrade ) },	// Tiberium Project @feature
 		{ "CrawlerPowerWait",					INI::parseDurationUnsignedInt,									nullptr, offsetof( PlayerTemplate, m_crawlerPowerWait ) },	// Tiberium Project @feature
+		{ "CrawlerPowerNodes",				INI::parseInt,																	nullptr, offsetof( PlayerTemplate, m_crawlerPowerNodes ) },	// Tiberium Project @feature
 		{ "ScoreScreenImage",					INI::parseAsciiString,													nullptr, offsetof( PlayerTemplate, m_scoreScreenImage ) },
 		{ "LoadScreenImage",					INI::parseAsciiString,													nullptr, offsetof( PlayerTemplate, m_loadScreenImage ) },
 		{ "LoadScreenMusic",					INI::parseAsciiString,													nullptr, offsetof( PlayerTemplate, m_loadScreenMusic ) },
@@ -242,6 +243,7 @@ PlayerTemplate::PlayerTemplate() :
 	m_startArrivalUnits(false),
 	m_crawlerPowerCount(0),
 	m_crawlerPowerWait(0),
+	m_crawlerPowerNodes(0),
 	m_intrinsicSPP(0),
 	m_specialPowerShortcutButtonCount(0)
 {
