@@ -37,6 +37,7 @@
 #pragma once
 
 #include "Common/KindOf.h"
+#include "Common/ObjectStatusTypes.h"	// Tiberium Project
 #include "GameLogic/Module/UpdateModule.h"
 
 class FXList;
@@ -51,6 +52,7 @@ public:
 	UnsignedInt m_decaptureTime;
 	KindOfMaskType m_capturerKindOf;
 	KindOfMaskType m_capturerForbiddenKindOf;
+	ObjectStatusMaskType m_capturerForbiddenStatus;	///< Tiberium Project: not a capturer with any of these (C&C4: CLONED)
 	const FXList *m_captureFX;
 	const FXList *m_loseFX;
 

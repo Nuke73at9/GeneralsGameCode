@@ -72,6 +72,7 @@ TiberiumZoneNodeUpdateModuleData::TiberiumZoneNodeUpdateModuleData()
 	m_capturerKindOf = MAKE_KINDOF_MASK( KINDOF_INFANTRY );
 	m_capturerKindOf.set( KINDOF_VEHICLE );
 	m_capturerForbiddenKindOf = MAKE_KINDOF_MASK( KINDOF_AIRCRAFT );
+	m_capturerForbiddenStatus.clear();
 	m_captureFX = nullptr;
 	m_loseFX = nullptr;
 }
@@ -86,6 +87,7 @@ void TiberiumZoneNodeUpdateModuleData::buildFieldParse( MultiIniFieldParse& p )
 		{ "DecaptureTime",						INI::parseDurationUnsignedInt,	nullptr, offsetof( TiberiumZoneNodeUpdateModuleData, m_decaptureTime ) },
 		{ "CapturerKindOf",						KindOfMaskType::parseFromINI,		nullptr, offsetof( TiberiumZoneNodeUpdateModuleData, m_capturerKindOf ) },
 		{ "CapturerForbiddenKindOf",	KindOfMaskType::parseFromINI,		nullptr, offsetof( TiberiumZoneNodeUpdateModuleData, m_capturerForbiddenKindOf ) },
+		{ "CapturerForbiddenStatus",	ObjectStatusMaskType::parseFromINI,	nullptr, offsetof( TiberiumZoneNodeUpdateModuleData, m_capturerForbiddenStatus ) },	// Tiberium Project @feature
 		{ "CaptureFX",								INI::parseFXList,								nullptr, offsetof( TiberiumZoneNodeUpdateModuleData, m_captureFX ) },
 		{ "LoseFX",										INI::parseFXList,								nullptr, offsetof( TiberiumZoneNodeUpdateModuleData, m_loseFX ) },
 		{ nullptr, nullptr, nullptr, 0 }
@@ -172,6 +174,9 @@ UpdateSleepTime TiberiumZoneNodeUpdate::update()
 			if( other == me || !other->isAnyKindOf( d->m_capturerKindOf ) || other->isAnyKindOf( d->m_capturerForbiddenKindOf ) )
 				continue;
 			if( other->isAirborneTarget() || other->isContained() || other->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
+				continue;
+			// Tiberium Project @feature C&C4's capturers leave out what has any of these (a decoy: CLONED)
+			if( other->getStatusBits().testForAny( d->m_capturerForbiddenStatus ) )
 				continue;
 			Player *p = other->getControllingPlayer();
 			if( !isPlayable( p ) )

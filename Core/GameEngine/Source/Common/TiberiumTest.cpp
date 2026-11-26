@@ -1597,6 +1597,19 @@ void TiberiumTest::update()
 			}
 			log( "frame %d: ui: command points%s", (int)s_frame, line.empty() ? " (no player has a cap)" : line.c_str() );
 		}
+		else if ( step.action == "status" && TheGameLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) "status=k,NAME": the k-th spawned object given that status (a decoy's
+			// CLONED: what leaves copies out)
+			Int k = -1;
+			char name[ 64 ] = { 0 };
+			sscanf( step.arg.c_str(), "%d,%63s", &k, name );
+			Object *obj = k >= 0 && k < (Int)s_spawned.size() ? TheGameLogic->findObjectByID( s_spawned[k] ) : nullptr;
+			const Int bit = ObjectStatusMaskType::getSingleBitFromName( name );
+			if ( obj != nullptr && bit >= 0 )
+				obj->setStatus( MAKE_OBJECT_STATUS_MASK( (ObjectStatusTypes)bit ) );
+			log( "frame %d: ui: status %s%s", (int)s_frame, step.arg.c_str(), obj == nullptr ? " (no such object)" : bit < 0 ? " (no such status)" : "" );
+		}
 		else if ( step.action == "save" && TheGameState != nullptr && TheGameLogic != nullptr )
 		{
 			// Tiberium Project @feature (the test) "save=<name>": the game saved as <name>.sav in the save folder, to be
