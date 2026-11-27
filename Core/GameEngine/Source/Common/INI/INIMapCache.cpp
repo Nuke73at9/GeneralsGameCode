@@ -63,6 +63,7 @@ class MapMetaDataReader
 public:
 	Region3D m_extent;
 	Int m_numPlayers;
+	Int m_spawnZones;		///< Tiberium Project @feature its areas TeamN_SpawnZone
 	Bool m_isMultiplayer;
 	AsciiString m_asciiDisplayName;
 	AsciiString m_asciiNameLookupTag;
@@ -107,6 +108,7 @@ const FieldParse MapMetaDataReader::m_mapFieldParseTable[] =
 	{ "extentMin",							INI::parseCoord3D,	nullptr, offsetof( MapMetaDataReader, m_extent.lo ) },
 	{ "extentMax",							INI::parseCoord3D,	nullptr, offsetof( MapMetaDataReader, m_extent.hi ) },
 	{ "numPlayers",							INI::parseInt,			nullptr,	offsetof( MapMetaDataReader, m_numPlayers ) },
+	{ "spawnZones",							INI::parseInt,			nullptr,	offsetof( MapMetaDataReader, m_spawnZones ) },	// Tiberium Project
 	{ "fileSize",								INI::parseUnsignedInt,	nullptr,	offsetof( MapMetaDataReader, m_filesize ) },
 	{ "fileCRC",								INI::parseUnsignedInt,	nullptr,	offsetof( MapMetaDataReader, m_CRC ) },
 	{ "timestampLo",						INI::parseInt,			nullptr,	offsetof( MapMetaDataReader, m_timestamp.m_lowTimeStamp ) },
@@ -155,6 +157,7 @@ void INI::parseMapCacheDefinition( INI* ini )
 	name.set( c );
 	name = QuotedPrintableToAsciiString(name);
 	md.m_waypoints.clear();
+	mdr.m_spawnZones = 0;	// Tiberium Project (a line only where the map has any)
 
 	ini->initFromINI( &mdr, mdr.getFieldParse() );
 
@@ -163,6 +166,7 @@ void INI::parseMapCacheDefinition( INI* ini )
 	md.m_doesExist = TRUE;
 	md.m_isMultiplayer = mdr.m_isMultiplayer != 0;
 	md.m_numPlayers = mdr.m_numPlayers;
+	md.m_spawnZones = mdr.m_spawnZones;	// Tiberium Project
 	md.m_filesize = mdr.m_filesize;
 	md.m_CRC = mdr.m_CRC;
 	md.m_timestamp = mdr.m_timestamp;

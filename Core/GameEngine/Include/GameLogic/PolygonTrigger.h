@@ -108,6 +108,9 @@ public:
 	/// Writes Triggers Info
 	static void WritePolygonTriggersDataChunk(DataChunkOutput &chunkWriter);
 	static void deleteTriggers();
+	/// Tiberium Project @feature a team's spawn zone's number (an area named TeamN_SpawnZone, N from 1: C&C4's
+	/// TeamManagerN_SpawnZone, as the map converter carries them); 0 for any other name
+	static Int getSpawnZoneTeam( const AsciiString &name );
 
 public:
 	static void addPolygonTrigger(PolygonTrigger *pTrigger);

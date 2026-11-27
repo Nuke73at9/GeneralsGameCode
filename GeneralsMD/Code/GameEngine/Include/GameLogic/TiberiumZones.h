@@ -25,6 +25,9 @@
 //                   built in one that is nobody's, a Crawler deployed in it
 //   Free zones      structures anywhere, as Zero Hour; the zones are taken as above
 // In every mode a Crawler arrives in one of its player's zones (TiberiumArrivalUpdate).
+// With zone spawns (TiberiumGameData ZoneSpawns) on a map with spawn zones, the start zone of a team is its spawn
+// zone (the map's area TeamN_SpawnZone, where its players start: AI::placeZoneSpawns) and the land round each of
+// their starts.
 // The zones are made from the map when the game starts (the same on every machine and after a load);
 // who holds an expansion zone is worked out from the objects in it, so nothing needs saving.
 ///////////////////////////////////////////////////////////////////////////////////////////////////

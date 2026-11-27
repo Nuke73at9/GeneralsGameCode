@@ -456,6 +456,8 @@ namespace
 			has[i] = FALSE;
 			if( i >= md->m_numPlayers || !md->m_isMultiplayer )
 				continue;
+			if( TheGlobalData->m_zoneSpawns )
+				continue;	// zone spawns: no start to pick (the game puts each in its team's zone)
 			AsciiString name;
 			name.format( "Player_%d_Start", (int)( i + 1 ) );
 			WaypointMap::const_iterator at = md->m_waypoints.find( name );
@@ -599,7 +601,9 @@ namespace
 			drawCombo( l, u, i, FIELD_TEAM, x0, y1, teamW, fh, size, live );
 			drawCombo( l, u, i, FIELD_COLOR, x0 + teamW + gap, y1, colourW, fh, size, live );
 			UnicodeString start;
-			if( slot->getStartPos() >= 0 )
+			if( TheGlobalData->m_zoneSpawns )
+				start = L"Start: by team";	// zone spawns: in the team's spawn zone
+			else if( slot->getStartPos() >= 0 )
 				start.format( L"Start %d", (int)( slot->getStartPos() + 1 ) );
 			else
 				start = L"Start: any";
@@ -677,7 +681,7 @@ namespace
 			drawText( md->m_displayName, nameSize, TRUE, PX( 640 ) - widthOf( md->m_displayName, nameSize, TRUE ) / 2, PY( 392 ), l.text );
 			UnicodeString players;
 			if( md->m_isMultiplayer )
-				players.format( L"%d players", (int)md->m_numPlayers );
+				players.format( L"%d players", (int)md->getPlayerLimit() );	// (zone spawns: every slot on a map with spawn zones)
 			else
 				players = L"Played alone";
 			drawText( players, textSize, FALSE, PX( 640 ) - widthOf( players, textSize, FALSE ) / 2, PY( 416 ), l.textDim );
@@ -1221,7 +1225,12 @@ void TiberiumSkirmish::describe( char *buffer, Int size )
 	}
 	std::string text;
 	char part[160];
-	snprintf( part, sizeof( part ), "on; %d rows; %d parts; map %s; ", (int)s_rowCount, (int)s_hits.size(), TheSkirmishGameInfo->getMap().str() );
+	Int startBoxes = 0;
+	for( size_t h = 0; h < s_hits.size(); ++h )
+		if( s_hits[h].act.kind == ACT_START )
+			++startBoxes;
+	snprintf( part, sizeof( part ), "on; %d rows; %d parts (%d starts to pick); map %s; ", (int)s_rowCount, (int)s_hits.size(), (int)startBoxes,
+		TheSkirmishGameInfo->getMap().str() );
 	text += part;
 	if( mapsUp() )
 	{
@@ -1229,8 +1238,9 @@ void TiberiumSkirmish::describe( char *buffer, Int size )
 		if( s_mapList != nullptr )
 			GadgetListBoxGetSelected( s_mapList, &chosen );
 		const MapMetaData *md = s_mapPreview != nullptr ? (const MapMetaData *)s_mapPreview->winGetUserData() : nullptr;
-		snprintf( part, sizeof( part ), "map list up: %d maps, from row %d, chosen %d (%d players); ", s_mapList != nullptr ? (int)GadgetListBoxGetNumEntries( s_mapList ) : 0,
-			(int)s_mapTop, (int)chosen, md != nullptr ? (int)md->m_numPlayers : 0 );
+		snprintf( part, sizeof( part ), "map list up: %d maps, from row %d, chosen %d (%d starts, takes %d players, %d spawn zones); ",
+			s_mapList != nullptr ? (int)GadgetListBoxGetNumEntries( s_mapList ) : 0, (int)s_mapTop, (int)chosen, md != nullptr ? (int)md->m_numPlayers : 0,
+			md != nullptr ? (int)md->getPlayerLimit() : 0, md != nullptr ? (int)md->m_spawnZones : 0 );
 		text += part;
 	}
 	if( s_list != nullptr )

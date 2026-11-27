@@ -207,6 +207,10 @@ public:
 	Real m_zoneExpansionRadius;			///< how far an expansion zone reaches from its middle
 	Real m_zoneLinkDistance;				///< allies' starts nearer than this share one start zone
 	AsciiString m_zoneNode;					///< the object in each expansion zone that takes it (C&C4's TCN)
+	/// Tiberium Project @feature zone spawns (TiberiumGameData ZoneSpawns): no start is picked in a skirmish's or a
+	/// network game's lobby; on a map with spawn zones (areas TeamN_SpawnZone) each player starts in its team's zone
+	/// (AI::placeZoneSpawns) and the map takes every slot, on a map without the map's starts are given out by team
+	Bool m_zoneSpawns;
 	UnsignedInt m_startIntro;				///< Tiberium Project: C&C4's match start (TiberiumStart), frames of the intro
 	UnsignedInt m_startCountdown;		///< and of the countdown after it, to the arrivals
 	// Tiberium Project @feature command points by size (Player.h): a unit with no CommandPoints of its own takes them from

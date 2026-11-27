@@ -65,6 +65,7 @@ static std::set<std::string> s_failedMapLookups;
 #include "GameClient/MapUtil.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/FPUControl.h"
+#include "GameLogic/PolygonTrigger.h"	// Tiberium Project
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/NetworkDefs.h"
 
@@ -114,6 +115,7 @@ static Dict worldDict = 0;
 static WaypointMap *m_waypoints = nullptr;
 static Coord3DList	m_supplyPositions;
 static Coord3DList	m_techPositions;
+static Int m_spawnZones = 0;		///< Tiberium Project @feature its areas TeamN_SpawnZone
 
 static Int m_mapDX = 0;
 static Int m_mapDY = 0;
@@ -199,6 +201,36 @@ static Bool ParseObjectsDataChunk(DataChunkInput &file, DataChunkInfo *info, voi
 	return (file.parse(userData));
 }
 
+/// Tiberium Project @feature the areas (PolygonTriggers): its teams' spawn zones counted
+static Bool ParsePolygonTriggersCount(DataChunkInput &file, DataChunkInfo *info, void *userData)
+{
+	Int count = file.readInt();
+	while (count-- > 0)
+	{
+		AsciiString name = file.readAsciiString();
+		if (info->version >= K_TRIGGERS_VERSION_4)
+			file.readAsciiString();	// its layer
+		file.readInt();	// its id
+		if (info->version >= K_TRIGGERS_VERSION_2)
+			file.readByte();	// water
+		if (info->version >= K_TRIGGERS_VERSION_3)
+		{
+			file.readByte();	// a river
+			file.readInt();	// its start
+		}
+		Int points = file.readInt();
+		for (Int i = 0; i < points; ++i)
+		{
+			file.readInt();
+			file.readInt();
+			file.readInt();
+		}
+		if (points >= 3 && PolygonTrigger::getSpawnZoneTeam(name) > 0)
+			++m_spawnZones;
+	}
+	return true;
+}
+
 static Bool ParseWorldDictDataChunk(DataChunkInput &file, DataChunkInfo *info, void *userData)
 {
 	worldDict = file.readDict();
@@ -270,6 +302,7 @@ static Bool loadMap( AsciiString filename )
 	file.registerParser( "HeightMapData", AsciiString::TheEmptyString, ParseSizeOnlyInChunk );
 	file.registerParser( "WorldInfo", AsciiString::TheEmptyString, ParseWorldDictDataChunk );
 	file.registerParser( "ObjectsList", AsciiString::TheEmptyString, ParseObjectsDataChunk );
+	file.registerParser( "PolygonTriggers", AsciiString::TheEmptyString, ParsePolygonTriggersCount );	// Tiberium Project
 	if (!file.parse(nullptr)) {
 		throw(ERROR_CORRUPT_FILE_FORMAT);
 	}
@@ -290,6 +323,7 @@ static void resetMap()
 
 	m_techPositions.clear();
 	m_supplyPositions.clear();
+	m_spawnZones = 0;	// Tiberium Project
 }
 
 static void getExtent( Region3D *extent )
@@ -413,6 +447,9 @@ void MapCache::writeCacheINI( const AsciiString &mapDir )
 
 			fprintf(fp, "  isMultiplayer = %s\n", (md.m_isMultiplayer)?"yes":"no");
 			fprintf(fp, "  numPlayers = %d\n", md.m_numPlayers);
+			// Tiberium Project @feature its teams' spawn zones, where it has any (a map without keeps its lines as they were)
+			if (md.m_spawnZones > 0)
+				fprintf(fp, "  spawnZones = %d\n", md.m_spawnZones);
 
 			fprintf(fp, "  extentMin = X:%2.2f Y:%2.2f Z:%2.2f\n", md.m_extent.lo.x, md.m_extent.lo.y, md.m_extent.lo.z);
 			fprintf(fp, "  extentMax = X:%2.2f Y:%2.2f Z:%2.2f\n", md.m_extent.hi.x, md.m_extent.hi.y, md.m_extent.hi.z);
@@ -717,6 +754,7 @@ Bool MapCache::addMap(
 	md.m_timestamp.m_lowTimeStamp = fileInfo.timestampLow;
 	md.m_supplyPositions = m_supplyPositions;
 	md.m_techPositions = m_techPositions;
+	md.m_spawnZones = m_spawnZones;	// Tiberium Project
 	md.m_CRC = calcCRC(fname);
 
 	Bool exists = false;
@@ -1168,6 +1206,18 @@ Bool isOfficialMap( AsciiString mapName )
 	return FALSE;
 }
 
+
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature how many players the map takes (MapUtil.h) */
+//-------------------------------------------------------------------------------------------------
+Int MapMetaData::getPlayerLimit() const
+{
+#if RTS_ZEROHOUR
+	if (m_spawnZones > 0 && m_isMultiplayer && TheGlobalData != nullptr && TheGlobalData->m_zoneSpawns)
+		return MAX_SLOTS;
+#endif
+	return m_numPlayers;
+}
 
 const MapMetaData *MapCache::findMap(AsciiString mapName)
 {

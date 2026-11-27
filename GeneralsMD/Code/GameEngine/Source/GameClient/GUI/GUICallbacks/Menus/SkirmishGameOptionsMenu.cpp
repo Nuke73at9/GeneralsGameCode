@@ -573,11 +573,12 @@ static void startPressed()
 		MessageBoxOk(TheGameText->fetch("GUI:ErrorStartingGame"), TheGameText->fetch("GUI:CantFindMap"), nullptr);
 	}
 	MapMetaData mmd = it->second;
-	if(playerCount > mmd.m_numPlayers)
+	// Tiberium Project @feature zone spawns: every slot on a map with spawn zones
+	if(playerCount > mmd.getPlayerLimit())
 	{
 		buttonPushed = FALSE;
 		UnicodeString msg;
-		msg.format(TheGameText->fetch("GUI:TooManyPlayers"), mmd.m_numPlayers);
+		msg.format(TheGameText->fetch("GUI:TooManyPlayers"), mmd.getPlayerLimit());
 		MessageBoxOk(TheGameText->fetch("GUI:ErrorStartingGame"), msg, nullptr);
 	}
 	/*
@@ -836,7 +837,10 @@ void positionStartSpots( AsciiString mapName, GameWindow *buttonMapStartPosition
 
 		AsciiString waypointName;
 		Int i = 0;
-		for(; i < mmd.m_numPlayers && mmd.m_isMultiplayer; ++i )
+		// Tiberium Project @feature zone spawns (TiberiumGameData ZoneSpawns): no start to pick, the game puts each
+		// player's in its team's spawn zone (or gives out the map's by team), so the map shows none
+		const Bool startsPicked = !( TheGlobalData != nullptr && TheGlobalData->m_zoneSpawns );
+		for(; i < mmd.m_numPlayers && mmd.m_isMultiplayer && startsPicked; ++i )
 		{
 			waypointName.format("Player_%d_Start", i+1); // start pos waypoints are 1-based
 			WaypointMap::iterator wmIt = mmd.m_waypoints.find(waypointName);

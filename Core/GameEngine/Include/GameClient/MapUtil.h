@@ -88,6 +88,13 @@ public:
 	Coord3DList m_supplyPositions;
 	Coord3DList m_techPositions;
 	AsciiString m_fileName;
+
+	/// Tiberium Project @feature the map's teams' spawn zones (its areas TeamN_SpawnZone)
+	Int m_spawnZones = 0;
+	/// Tiberium Project @feature how many players it takes: its starts, or with zone spawns (TiberiumGameData
+	/// ZoneSpawns) on a map with spawn zones every slot (each start is put in its team's zone, made where the map
+	/// has too few)
+	Int getPlayerLimit() const;
 };
 
 // TheSuperHackers @performance xezon 02/11/2025 Simplifies and improves the implementation of MapCache

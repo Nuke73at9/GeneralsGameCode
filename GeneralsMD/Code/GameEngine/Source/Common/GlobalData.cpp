@@ -886,6 +886,7 @@ GlobalData::GlobalData()
 	m_zoneExpansionRadius = 420.0f;
 	m_zoneLinkDistance = 1500.0f;
 	m_zoneNode = "C4_GoalStructure";
+	m_zoneSpawns = FALSE;
 	m_startIntro = LOGICFRAMES_PER_SECOND * 6;			// C&C4's MatchIntroSettings: held 1 s, the camera's pan 5 s
 	m_startCountdown = LOGICFRAMES_PER_SECOND * 10;	// and its CountdownDuration
 	// Tiberium Project @feature command points by size: off until a mod's TiberiumGameData asks; the tables as C&C4's own
@@ -1312,6 +1313,7 @@ void GlobalData::parseTiberiumGameData( INI* ini )
 		{ "ZoneExpansionRadius",	INI::parseReal,		nullptr,	offsetof( GlobalData, m_zoneExpansionRadius ) },
 		{ "ZoneLinkDistance",		INI::parseReal,		nullptr,	offsetof( GlobalData, m_zoneLinkDistance ) },
 		{ "ZoneNode",						INI::parseAsciiString,	nullptr,	offsetof( GlobalData, m_zoneNode ) },
+		{ "ZoneSpawns",				INI::parseBool,		nullptr,	offsetof( GlobalData, m_zoneSpawns ) },
 		{ "StartIntro",					INI::parseDurationUnsignedInt,	nullptr,	offsetof( GlobalData, m_startIntro ) },
 		{ "StartCountdown",			INI::parseDurationUnsignedInt,	nullptr,	offsetof( GlobalData, m_startCountdown ) },
 		{ "CommandPointsBySize",	INI::parseBool,		nullptr,	offsetof( GlobalData, m_commandPointsBySize ) },

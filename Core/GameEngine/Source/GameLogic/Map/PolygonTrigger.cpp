@@ -493,6 +493,27 @@ Bool PolygonTrigger::pointInTrigger(ICoord3D &point) const
 }
 
 // ------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature TeamN_SpawnZone (any case): N (1 and up); 0 for any other name */
+// ------------------------------------------------------------------------------------------------
+Int PolygonTrigger::getSpawnZoneTeam( const AsciiString &name )
+{
+	const char *s = name.str();
+	if( s == nullptr || _strnicmp( s, "Team", 4 ) != 0 )
+		return 0;
+	s += 4;
+	Int team = 0, digits = 0;
+	while( *s >= '0' && *s <= '9' && digits < 4 )
+	{
+		team = team * 10 + ( *s - '0' );
+		++s;
+		++digits;
+	}
+	if( digits == 0 || team <= 0 || _stricmp( s, "_SpawnZone" ) != 0 )
+		return 0;
+	return team;
+}
+
+// ------------------------------------------------------------------------------------------------
 const WaterHandle* PolygonTrigger::getWaterHandle()	const
 {
 

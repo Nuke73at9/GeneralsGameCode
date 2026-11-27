@@ -37,6 +37,7 @@
 #include "GameLogic/Module/TiberiumZoneNodeUpdate.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
+#include "GameLogic/PolygonTrigger.h"
 #include "GameLogic/TerrainLogic.h"
 #include "GameNetwork/GameInfo.h"
 
@@ -373,8 +374,19 @@ void TiberiumZones::build( Bool loadingSaveGame )
 	const Int expansionLimit = (Int)( TheGlobalData->m_zoneExpansionRadius * ( nodesOnMap > 0 ? 2.0f : 1.0f ) / CELL * STEP );
 	std::vector<Seed> seeds;
 
-	// the starts: one zone each, or one for allies' starts near each other (bridged along the way)
-	struct Start { Coord3D pos; Int team; PlayerMaskType mask; Int group; };
+	// zone spawns (TiberiumGameData ZoneSpawns): a team's spawn zone (the map's area TeamN_SpawnZone, where its
+	// players' starts were put) is its start zone, with the land round each of their starts as below
+	std::vector<const PolygonTrigger *> spawnAreas;
+	if( TheGlobalData->m_zoneSpawns )
+	{
+		for( const PolygonTrigger *area = PolygonTrigger::getFirstPolygonTrigger(); area != nullptr; area = area->getNext() )
+			if( PolygonTrigger::getSpawnZoneTeam( area->getTriggerName() ) > 0 && area->getNumPoints() >= 3 )
+				spawnAreas.push_back( area );
+	}
+
+	// the starts: one zone each, or one for allies' starts near each other (bridged along the way), or one for the
+	// starts in a spawn zone
+	struct Start { Coord3D pos; Int team; PlayerMaskType mask; Int group; Int area; };
 	std::vector<Start> starts;
 	for( Int i = 0; i < MAX_SLOTS; ++i )
 	{
@@ -394,6 +406,21 @@ void TiberiumZones::build( Bool loadingSaveGame )
 		s.team = slot->getTeamNumber();
 		s.mask = player->getPlayerMask();
 		s.group = (Int)starts.size();
+		s.area = -1;
+		ICoord3D point;
+		point.x = REAL_TO_INT_FLOOR( s.pos.x );
+		point.y = REAL_TO_INT_FLOOR( s.pos.y );
+		point.z = 0;
+		for( size_t a = 0; a < spawnAreas.size() && s.area < 0; ++a )
+			if( spawnAreas[a]->pointInTrigger( point ) )
+				s.area = (Int)a;
+		// (the starts in one spawn zone: the first's group)
+		for( size_t k = 0; k < starts.size() && s.area >= 0; ++k )
+			if( starts[k].area == s.area )
+			{
+				s.group = starts[k].group;
+				break;
+			}
 		starts.push_back( s );
 	}
 	if( starts.empty() )
@@ -408,6 +435,8 @@ void TiberiumZones::build( Bool loadingSaveGame )
 		{
 			if( starts[i].team < 0 || starts[i].team != starts[j].team )
 				continue;
+			if( starts[i].area >= 0 || starts[j].area >= 0 )
+				continue;	// (a spawn zone's starts are one zone already)
 			const Real dx = starts[i].pos.x - starts[j].pos.x, dy = starts[i].pos.y - starts[j].pos.y;
 			if( dx * dx + dy * dy > link2 )
 				continue;
@@ -438,6 +467,34 @@ void TiberiumZones::build( Bool loadingSaveGame )
 		s_zones[zone].homeOwners |= starts[i].mask;
 		Seed s = { nearestLand( cellOf( starts[i].pos.x, starts[i].pos.y ), 12 ), zone, homeLimit };
 		seeds.push_back( s );
+	}
+	// a spawn zone's land: each cell in it its start zone's (a seed that reaches no further)
+	for( size_t a = 0; a < spawnAreas.size(); ++a )
+	{
+		Int zone = -1;
+		for( size_t i = 0; i < starts.size() && zone < 0; ++i )
+		{
+			if( starts[i].area != (Int)a )
+				continue;
+			for( size_t z = 0; z < s_zones.size(); ++z )
+				if( s_zones[z].home && s_zones[z].cells == starts[i].group )
+					zone = (Int)z;
+		}
+		if( zone < 0 )
+			continue;	// (no one starts there)
+		for( Int c = 0; c < s_w * s_h; ++c )
+		{
+			if( !s_land[c] )
+				continue;
+			ICoord3D point;
+			point.x = REAL_TO_INT_FLOOR( s_ox + ( c % s_w ) * CELL + CELL * 0.5f );
+			point.y = REAL_TO_INT_FLOOR( s_oy + ( c / s_w ) * CELL + CELL * 0.5f );
+			point.z = 0;
+			if( !spawnAreas[a]->pointInTrigger( point ) )
+				continue;
+			Seed s = { c, zone, 0 };
+			seeds.push_back( s );
+		}
 	}
 	for( size_t l = 0; l < links.size(); ++l )
 	{

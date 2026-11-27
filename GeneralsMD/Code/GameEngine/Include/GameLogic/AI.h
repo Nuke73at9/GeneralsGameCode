@@ -305,6 +305,7 @@ public:
 	/// Tiberium Project @feature a map without the skirmish AI's approach paths and base perimeters (C&C4's:
 	/// only its starts) gets them, made from its starts and ground (after the pathfinder has the map)
 	void prepareSkirmishMap();
+	Bool placeZoneSpawns( const Region3D &extent );	///< Tiberium Project @feature the starts in their teams' spawn zones
 
 protected:
 	Pathfinder *m_pathfinder;							///< the pathfinding system

@@ -388,7 +388,7 @@ Int GameInfo::getMaxPlayers() const
 	if (it == TheMapCache->end())
 		return -1;
 	MapMetaData data = it->second;
-	return data.m_numPlayers;
+	return data.getPlayerLimit();	// Tiberium Project @feature zone spawns: every slot on a map with spawn zones
 }
 
 void GameInfo::enterGame()
@@ -767,7 +767,7 @@ void GameInfo::adjustSlotsForMap()
 	if (md != nullptr)
 	{
 		// get the number of players allowed from the map.
-		Int numPlayers = md->m_numPlayers;
+		Int numPlayers = md->getPlayerLimit();	// Tiberium Project @feature zone spawns: every slot on a map with spawn zones
 		Int numPlayerSlots = 0;
 
 		// first get the number of occupied slots.

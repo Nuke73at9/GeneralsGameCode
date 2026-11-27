@@ -96,6 +96,7 @@
 #include "GameClient/TiberiumZoneView.h"
 #include "GameLogic/TiberiumStart.h"
 #include "GameLogic/TiberiumZones.h"
+#include "GameLogic/PolygonTrigger.h"
 #endif
 #include "GameLogic/Module/BaseConstructionUpdate.h"
 #include "GameLogic/Module/ToggleAbilityUpdate.h"
@@ -2333,6 +2334,42 @@ void TiberiumTest::update()
 			log( "frame %d: ui: zones mode %d, %d zones, shown %d:%s", (int)s_frame, (int)TiberiumZones::getMode(),
 				(int)TiberiumZones::getCount(), (int)TiberiumZoneView::isShown(), all.c_str() );
 		}
+		else if ( step.action == "spawnzones" )
+		{
+			// Tiberium Project @feature (the test) zone spawns: each spawn zone's (area TeamN_SpawnZone's) cells of the zones'
+			// grid, by the zone they are in (-1: none)
+			const Int w = TiberiumZones::getGridWidth(), h = TiberiumZones::getGridHeight();
+			const Real size = TiberiumZones::getCellSize();
+			Real ox = 0.0f, oy = 0.0f;
+			TiberiumZones::getGridOrigin( &ox, &oy );
+			for ( const PolygonTrigger *area = PolygonTrigger::getFirstPolygonTrigger(); area != nullptr; area = area->getNext() )
+			{
+				if ( PolygonTrigger::getSpawnZoneTeam( area->getTriggerName() ) <= 0 )
+					continue;
+				std::map<Int, Int> byZone;
+				Int cells = 0;
+				for ( Int y = 0; y < h; ++y )
+					for ( Int x = 0; x < w; ++x )
+					{
+						ICoord3D point;
+						point.x = REAL_TO_INT_FLOOR( ox + x * size + size * 0.5f );
+						point.y = REAL_TO_INT_FLOOR( oy + y * size + size * 0.5f );
+						point.z = 0;
+						if ( !area->pointInTrigger( point ) )
+							continue;
+						++cells;
+						++byZone[ TiberiumZones::cellZone( x, y ) ];
+					}
+				std::string all;
+				for ( std::map<Int, Int>::const_iterator it = byZone.begin(); it != byZone.end(); ++it )
+				{
+					char one[48];
+					snprintf( one, sizeof( one ), " z%d %d;", (int)it->first, (int)it->second );
+					all += one;
+				}
+				log( "frame %d: ui: spawnzones %s: %d cells:%s", (int)s_frame, area->getTriggerName().str(), (int)cells, all.c_str() );
+			}
+		}
 		else if ( step.action == "zonebuild" && TheThingFactory != nullptr && TheTacticalView != nullptr && ThePlayerList != nullptr
 			&& ThePlayerList->getLocalPlayer() != nullptr && TheBuildAssistant != nullptr )
 		{
@@ -2442,6 +2479,30 @@ void TiberiumTest::update()
 					++killed;
 				}
 			log( "frame %d: ui: killcrawler: %d killed", (int)s_frame, (int)killed );
+		}
+		else if ( step.action == "bases" && TheGameLogic != nullptr && ThePlayerList != nullptr )
+		{
+			// Tiberium Project @feature (the test) each match player's base: its first structure or Crawler, where, and
+			// its zone (-1: none)
+			std::string all;
+			for ( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
+			{
+				Player *p = ThePlayerList->getNthPlayer( i );
+				if ( p == nullptr || ( p->getPlayerType() != PLAYER_HUMAN && p->getPlayerType() != PLAYER_COMPUTER ) || p == ThePlayerList->getNeutralPlayer() )
+					continue;
+				const Object *base = nullptr;
+				for ( Object *o = TheGameLogic->getFirstObject(); o != nullptr && base == nullptr; o = o->getNextObject() )
+					if ( o->getControllingPlayer() == p && !o->isEffectivelyDead() && ( o->isKindOf( KINDOF_STRUCTURE ) || TiberiumStart::isCrawler( o ) ) )
+						base = o;
+				char one[200];
+				if ( base != nullptr )
+					snprintf( one, sizeof( one ), " p%d %s at %.0f %.0f (zone %d);", (int)i, base->getTemplate()->getName().str(), base->getPosition()->x,
+						base->getPosition()->y, (int)TiberiumZones::zoneAt( base->getPosition() ) );
+				else
+					snprintf( one, sizeof( one ), " p%d none;", (int)i );
+				all += one;
+			}
+			log( "frame %d: ui: bases%s", (int)s_frame, all.c_str() );
 		}
 		else if ( step.action == "where" && TheGameLogic != nullptr )
 		{

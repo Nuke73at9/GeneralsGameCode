@@ -48,6 +48,9 @@
 #include "GameLogic/Scripts.h"
 #include "GameLogic/TerrainLogic.h"
 #include "GameNetwork/NetworkDefs.h"
+#include "GameNetwork/GameInfo.h"	// Tiberium Project
+
+#include <algorithm>
 #include "Common/TiberiumTest.h"
 
 extern void addIcon(const Coord3D *pos, Real width, Int numFramesDuration, RGBColor color);
@@ -566,6 +569,220 @@ namespace
 }
 
 //--------------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature zone spawns (TiberiumGameData ZoneSpawns): on a map with spawn zones (its areas
+	Team1_SpawnZone, Team2_SpawnZone ...: C&C4's TeamManager1_SpawnZone and the others, as the map converter carries
+	them) every player starts in its team's zone. The teams in order of their number, then each player without one as
+	a team of its own, take the zones in turn (more teams than zones: from the first again). A zone's players are spread
+	over its clear ground, the ground a vehicle reaches from its middle: one alone at the ground nearest the middle;
+	more, the first at the ground farthest from the middle and each next at the ground farthest from those before it,
+	where there is room for a base if the zone has any. Each player's start (Player_N_Start, N its slot's start number:
+	GameLogic numbers them in slot order) is moved there, or made where the map has fewer. Made from the map and the
+	slots alone, the same each time it loads. TRUE if it placed the starts. */
+//--------------------------------------------------------------------------------------------------------
+Bool AI::placeZoneSpawns( const Region3D &extent )
+{
+	if( TheGameInfo == nullptr || !TheGlobalData->m_zoneSpawns )
+		return FALSE;
+
+	// the zones, by their number (the first of a number)
+	std::vector<const PolygonTrigger *> zones;
+	std::vector<Int> numbers;
+	for( const PolygonTrigger *area = PolygonTrigger::getFirstPolygonTrigger(); area != nullptr; area = area->getNext() )
+	{
+		const Int team = PolygonTrigger::getSpawnZoneTeam( area->getTriggerName() );
+		if( team <= 0 || area->getNumPoints() < 3 || std::find( numbers.begin(), numbers.end(), team ) != numbers.end() )
+			continue;
+		size_t at = 0;
+		while( at < numbers.size() && numbers[at] < team )
+			++at;
+		numbers.insert( numbers.begin() + at, team );
+		zones.insert( zones.begin() + at, area );
+	}
+	if( zones.empty() )
+		return FALSE;
+
+	// the players, and their teams' order: numbered teams first, by number, then the rest by slot
+	struct Spawner { Int slot; Int start; Int key; Int zone; };
+	std::vector<Spawner> players;
+	std::vector<Int> keys;
+	for( Int i = 0; i < MAX_SLOTS; ++i )
+	{
+		const GameSlot *slot = TheGameInfo->getConstSlot( i );
+		if( slot == nullptr || !slot->isOccupied() || slot->getPlayerTemplate() == PLAYERTEMPLATE_OBSERVER || slot->getStartPos() < 0 )
+			continue;
+		Spawner p;
+		p.slot = i;
+		p.start = slot->getStartPos();
+		p.key = slot->getTeamNumber() >= 0 ? slot->getTeamNumber() : MAX_SLOTS + i;
+		p.zone = -1;
+		players.push_back( p );
+		if( std::find( keys.begin(), keys.end(), p.key ) == keys.end() )
+			keys.push_back( p.key );
+	}
+	if( players.empty() )
+		return FALSE;
+	std::sort( keys.begin(), keys.end() );
+	for( size_t k = 0; k < players.size(); ++k )
+	{
+		const Int rank = (Int)( std::find( keys.begin(), keys.end(), players[k].key ) - keys.begin() );
+		players[k].zone = rank % (Int)zones.size();
+	}
+
+	const Real STEP = PATHFIND_CELL_SIZE_F * 2.0f;	// the ground looked at, every two cells
+	const Real BASE_ROOM = 120.0f;					// as the crowded starts' spread (prepareSkirmishMap)
+	for( size_t z = 0; z < zones.size(); ++z )
+	{
+		std::vector<Int> here;
+		for( size_t k = 0; k < players.size(); ++k )
+			if( players[k].zone == (Int)z )
+				here.push_back( (Int)k );
+		if( here.empty() )
+			continue;
+		const PolygonTrigger *area = zones[z];
+
+		// the zone's clear ground, and its middle
+		Int loX = area->getPoint( 0 )->x, hiX = loX, loY = area->getPoint( 0 )->y, hiY = loY;
+		for( Int i = 1; i < area->getNumPoints(); ++i )
+		{
+			loX = min( loX, area->getPoint( i )->x );
+			hiX = max( hiX, area->getPoint( i )->x );
+			loY = min( loY, area->getPoint( i )->y );
+			hiY = max( hiY, area->getPoint( i )->y );
+		}
+		std::vector<Coord3D> ground;
+		Real sumX = 0.0f, sumY = 0.0f;
+		for( Real y = (Real)loY + STEP * 0.5f; y <= (Real)hiY; y += STEP )
+		{
+			for( Real x = (Real)loX + STEP * 0.5f; x <= (Real)hiX; x += STEP )
+			{
+				ICoord3D point;
+				point.x = REAL_TO_INT_FLOOR( x );
+				point.y = REAL_TO_INT_FLOOR( y );
+				point.z = 0;
+				if( !area->pointInTrigger( point ) )
+					continue;
+				if( x < extent.lo.x || x > extent.hi.x || y < extent.lo.y || y > extent.hi.y )
+					continue;
+				Coord3D at;
+				at.x = x;
+				at.y = y;
+				at.z = 0.0f;
+				PathfindCell *cell = m_pathfinder->getCell( LAYER_GROUND, &at );
+				if( cell == nullptr || cell->getType() != PathfindCell::CELL_CLEAR || TheTerrainLogic->isUnderwater( x, y ) )
+					continue;
+				ground.push_back( at );
+				sumX += x;
+				sumY += y;
+			}
+		}
+		Coord3D middle;
+		middle.z = 0.0f;
+		if( ground.empty() )
+		{
+			// a zone with no clear ground: its middle's nearest
+			Coord3D centre;
+			area->getCenterPoint( &centre );
+			middle = centre;
+			if( !nearestClearGround( m_pathfinder, extent, &middle ) )
+				middle = centre;
+			ground.push_back( middle );
+		}
+		else
+		{
+			middle.x = sumX / (Real)ground.size();
+			middle.y = sumY / (Real)ground.size();
+		}
+
+		// the ground a vehicle reaches from the clear ground nearest the middle (an island of it left out)
+		size_t first = 0;
+		Real best = HUGE_DIST;
+		for( size_t g = 0; g < ground.size(); ++g )
+		{
+			const Real d = sqr( ground[g].x - middle.x ) + sqr( ground[g].y - middle.y );
+			if( d < best )
+			{
+				best = d;
+				first = g;
+			}
+		}
+		Reach reach;
+		reach.flood( m_pathfinder, ground[first], (Real)max( hiX - loX, hiY - loY ) + 600.0f );
+		std::vector<Coord3D> reached, roomy;
+		for( size_t g = 0; g < ground.size(); ++g )
+		{
+			if( !reach.has( m_pathfinder, ground[g] ) )
+				continue;
+			reached.push_back( ground[g] );
+			if( roomForBase( m_pathfinder, extent, ground[g], BASE_ROOM, 300.0f, reach ) )
+				roomy.push_back( ground[g] );
+		}
+		if( reached.empty() )
+			reached.push_back( ground[first] );
+		const std::vector<Coord3D> &spots = roomy.empty() ? reached : roomy;
+
+		// the starts: one alone at the middle; more, spread
+		std::vector<Coord3D> chosen;
+		if( here.size() == 1 )
+		{
+			size_t at = 0;
+			Real near2 = HUGE_DIST;
+			for( size_t g = 0; g < spots.size(); ++g )
+			{
+				const Real d = sqr( spots[g].x - middle.x ) + sqr( spots[g].y - middle.y );
+				if( d < near2 )
+				{
+					near2 = d;
+					at = g;
+				}
+			}
+			chosen.push_back( spots[at] );
+		}
+		else
+		{
+			std::vector<Real> apart( spots.size(), 0.0f );
+			for( size_t g = 0; g < spots.size(); ++g )
+				apart[g] = sqr( spots[g].x - middle.x ) + sqr( spots[g].y - middle.y );
+			while( chosen.size() < here.size() )
+			{
+				size_t at = 0;
+				for( size_t g = 1; g < spots.size(); ++g )
+					if( apart[g] > apart[at] )
+						at = g;
+				const Coord3D pick = spots[at];
+				chosen.push_back( pick );
+				for( size_t g = 0; g < spots.size(); ++g )
+				{
+					const Real d = sqr( spots[g].x - pick.x ) + sqr( spots[g].y - pick.y );
+					// (from the first on, how far from the starts chosen: the middle counts no more)
+					apart[g] = chosen.size() == 1 ? d : min( apart[g], d );
+				}
+			}
+		}
+
+		for( size_t k = 0; k < here.size(); ++k )
+		{
+			const Spawner &p = players[ here[k] ];
+			Coord3D at = chosen[k];
+			at.z = TheTerrainLogic->getGroundHeight( at.x, at.y );
+			AsciiString name;
+			name.format( "Player_%d_Start", p.start + 1 );
+			Waypoint *way = TheTerrainLogic->getWaypointByName( name );
+			if( way != nullptr )
+				way->setLocation( &at );
+			else
+				TheTerrainLogic->addMadeWaypoint( name, &at, AsciiString::TheEmptyString );
+			if( TiberiumTest::isActive() )
+				TiberiumTest::log( "zone spawns: slot %d (team %d) start %d in %s at %.0f %.0f", p.slot,
+					TheGameInfo->getConstSlot( p.slot )->getTeamNumber(), p.start + 1, area->getTriggerName().str(), at.x, at.y );
+		}
+		if( TiberiumTest::isActive() )
+			TiberiumTest::log( "zone spawns: %s: %d players, %d of %d clear cells reached, %d with room for a base", area->getTriggerName().str(),
+				(Int)here.size(), (Int)reached.size(), (Int)ground.size(), (Int)roomy.size() );
+	}
+	return TRUE;
+}
+
+//--------------------------------------------------------------------------------------------------------
 /** Tiberium Project @feature The skirmish scripts' teams go to an enemy's base along its approach paths
 	(Center, Flank and Backdoor, numbered for the base's start) and watch two areas round each base
 	(InnerPerimeter and OuterPerimeter); a team whose path is not on the map does nothing. C&C4's maps have
@@ -582,6 +799,14 @@ void AI::prepareSkirmishMap()
 	// a campaign's (and a Challenge's) maps and the shell map are played by their own scripts
 	if( TheGameLogic->getGameMode() == GAME_SINGLE_PLAYER || TheGameLogic->getGameMode() == GAME_SHELL )
 		return;
+
+	Region3D extent;
+	TheTerrainLogic->getMaximumPathfindExtent( &extent );
+	if( extent.hi.x <= extent.lo.x || extent.hi.y <= extent.lo.y )
+		return;
+
+	// zone spawns: the players' starts in their teams' spawn zones (they are spread there, not below)
+	const Bool zoneSpawned = placeZoneSpawns( extent );
 
 	// the starts (Player_1_Start ...: numbered from 1, as the paths are)
 	struct Start { Int number; Coord3D pos; Waypoint *way; };
@@ -602,10 +827,6 @@ void AI::prepareSkirmishMap()
 	if( starts.size() < 2 )
 		return;
 
-	Region3D extent;
-	TheTerrainLogic->getMaximumPathfindExtent( &extent );
-	if( extent.hi.x <= extent.lo.x || extent.hi.y <= extent.lo.y )
-		return;
 	Coord3D middle;
 	middle.x = ( extent.lo.x + extent.hi.x ) * 0.5f;
 	middle.y = ( extent.lo.y + extent.hi.y ) * 0.5f;
@@ -622,7 +843,7 @@ void AI::prepareSkirmishMap()
 	const Real SPACING = 950.0f;		// what a spread start keeps from the others
 	const Real BASE_ROOM = 120.0f;		// the clear ground round it
 	Bool crowded = FALSE;
-	for( size_t i = 0; i < starts.size() && !crowded; ++i )
+	for( size_t i = 0; i < starts.size() && !crowded && !zoneSpawned; ++i )
 		for( size_t j = i + 1; j < starts.size() && !crowded; ++j )
 		{
 			const Real dx = starts[i].pos.x - starts[j].pos.x, dy = starts[i].pos.y - starts[j].pos.y;
@@ -686,7 +907,7 @@ void AI::prepareSkirmishMap()
 	{
 		PathfindCell *first = m_pathfinder->getCell( LAYER_GROUND, &starts[0].pos );
 		TiberiumTest::log( "skirmish map: %d starts, %s, %d spread out (the first start's ground: type %d zone %d)",
-			(Int)starts.size(), crowded ? "crowded" : "a base apart", moved, first != nullptr ? (Int)first->getType() : -1,
+			(Int)starts.size(), zoneSpawned ? "in their spawn zones" : crowded ? "crowded" : "a base apart", moved, first != nullptr ? (Int)first->getType() : -1,
 			first != nullptr ? (Int)first->getZone() : -1 );
 		for( size_t k = 0; k < starts.size(); ++k )
 			TiberiumTest::log( "skirmish map: start %d at %.0f %.0f", starts[k].number, starts[k].pos.x, starts[k].pos.y );

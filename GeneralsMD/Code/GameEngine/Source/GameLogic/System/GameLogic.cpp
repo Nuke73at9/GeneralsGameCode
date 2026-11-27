@@ -915,10 +915,46 @@ static void populateRandomSideAndColor( GameInfo *game )
 // ------------------------------------------------------------------------------------------------
 static const WaypointMap s_emptyWaypoints = WaypointMap();
 
-static void populateRandomStartPosition( GameInfo *game )
+static void populateRandomStartPosition( GameInfo *game, Bool loadingSaveGame )
 {
 	if(!game)
 		return;
+
+	// Tiberium Project @feature zone spawns (TiberiumGameData ZoneSpawns; not a campaign's or a Challenge's map): no
+	// start is picked in the lobby. On a map with spawn zones (its areas TeamN_SpawnZone) each player's start is its
+	// own, numbered in slot order, and is put in its team's zone once the map is in (AI::prepareSkirmishMap). On a map
+	// without, the map's starts are given out below as for random picks, teammates side by side (the lobby's picks
+	// cleared; a saved game keeps those it was given).
+	if( TheGlobalData->m_zoneSpawns && TheGameLogic->getGameMode() != GAME_SINGLE_PLAYER && TheGameLogic->getGameMode() != GAME_SHELL )
+	{
+		const MapMetaData *zoned = TheMapCache ? TheMapCache->findMap( game->getMap() ) : nullptr;
+		if( zoned != nullptr && zoned->m_spawnZones > 0 )
+		{
+			Int next = 0;
+			for( Int s = 0; s < MAX_SLOTS; ++s )
+			{
+				GameSlot *slot = game->getSlot( s );
+				if( slot == nullptr )
+					continue;
+				if( !slot->isOccupied() || slot->getPlayerTemplate() == PLAYERTEMPLATE_OBSERVER )
+					slot->setStartPos( -1 );
+				else
+					slot->setStartPos( next++ );
+				if( TiberiumTest::isActive() && slot->isOccupied() )
+					TiberiumTest::log( "zone spawns: slot %d (team %d) given start %d", (int)s, (int)slot->getTeamNumber(), (int)slot->getStartPos() + 1 );
+			}
+			// an observer watches from the first player's start (Zero Hour gives it a player's start too)
+			for( Int s = 0; s < MAX_SLOTS && next > 0; ++s )
+			{
+				GameSlot *slot = game->getSlot( s );
+				if( slot != nullptr && slot->isOccupied() && slot->getPlayerTemplate() == PLAYERTEMPLATE_OBSERVER )
+					slot->setStartPos( 0 );
+			}
+			return;
+		}
+		if( !loadingSaveGame )
+			game->resetStartSpots();
+	}
 
 	Int i;
 	Int numPlayers = MAX_SLOTS;
@@ -1434,7 +1470,7 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 	}
 
 	populateRandomSideAndColor( TheGameInfo );
-	populateRandomStartPosition( TheGameInfo );
+	populateRandomStartPosition( TheGameInfo, loadingSaveGame );
 
 	//****************************//
 	// Start the LoadScreen Now!	//

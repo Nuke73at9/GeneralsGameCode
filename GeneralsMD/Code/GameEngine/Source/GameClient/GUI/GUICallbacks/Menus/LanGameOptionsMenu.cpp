@@ -252,12 +252,13 @@ void StartPressed()
 
 	// Check for too many players
 	const MapMetaData *md = TheMapCache->findMap( myGame->getMap() );
-	if (!md || md->m_numPlayers < numUsers)
+	// Tiberium Project @feature zone spawns: every slot on a map with spawn zones
+	if (!md || md->getPlayerLimit() < numUsers)
 	{
 		if (TheLAN->AmIHost())
 		{
 			UnicodeString text;
-			text.format(TheGameText->fetch("LAN:TooManyPlayers"), (md)?md->m_numPlayers:0);
+			text.format(TheGameText->fetch("LAN:TooManyPlayers"), (md)?md->getPlayerLimit():0);
 			TheLAN->OnChat(L"SYSTEM", TheLAN->GetLocalIP(), text, LANAPI::LANCHAT_SYSTEM);
 		}
 		return;
