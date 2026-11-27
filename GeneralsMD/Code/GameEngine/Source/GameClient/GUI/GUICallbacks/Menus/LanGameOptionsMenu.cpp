@@ -59,6 +59,7 @@
 #include "Common/MultiplayerSettings.h"
 #include "GameClient/GameText.h"
 #include "GameNetwork/GUIUtil.h"
+#include "GameClient/AbramMatchOptionsMenu.h"	// Tiberium Project: the match options in the LAN lobby
 
 // Tiberium Project @feature 16 slots: a network game (LAN, online) has the original game's 8, so this menu
 // goes through those (its layout has rows for them)
@@ -662,6 +663,19 @@ static void handleLimitSuperweaponsClick()
   }
 }
 
+// Tiberium Project @feature the match options (the army cap and the rest) in the LAN lobby: the host's change goes round
+// to every player with the game's options, as its other settings do
+static void lanMatchOptionsChanged()
+{
+	LANGameInfo *myGame = TheLAN != nullptr ? TheLAN->GetMyGame() : nullptr;
+	if (myGame == nullptr || !myGame->amIHost() || s_isIniting)
+		return;
+	myGame->resetAccepted();
+	updateGameOptions();	// (the Limit Superweapons box, which the dialog also sets)
+	TheLAN->RequestGameOptions(GenerateGameOptionsString(), true);
+	lanUpdateSlotList();
+}
+
 void lanUpdateSlotList()
 {
 	if(!AreSlotListUpdatesEnabled() || s_isIniting)
@@ -670,6 +684,7 @@ void lanUpdateSlotList()
 		comboBoxPlayerTemplate, comboBoxTeam, buttonAccept, buttonStart, buttonMapStartPosition);
 
 	updateMapStartSpots(TheLAN->GetMyGame(), buttonMapStartPosition);
+	AbramMatchOptionsMenu::refresh();	// Tiberium Project: a guest's open MATCH OPTIONS follow the host's
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -696,6 +711,8 @@ void InitLanGameGadgets()
 	buttonChat = TheWindowManager->winGetWindowFromId( parentLanGameOptions,buttonChatID  );
 	DEBUG_ASSERTCRASH(buttonChat, ("Could not find the buttonChat"));
 	buttonSelectMap = TheWindowManager->winGetWindowFromId( parentLanGameOptions,buttonSelectMapID  );
+	// Tiberium Project @feature MATCH OPTIONS under SELECT MAP: the host sets them, a guest sees them
+	AbramMatchOptionsMenu::init( buttonSelectMap, lanMatchOptionsChanged );
 	DEBUG_ASSERTCRASH(buttonSelectMap, ("Could not find the buttonSelectMap"));
 	buttonStart = TheWindowManager->winGetWindowFromId( parentLanGameOptions,buttonStartID  );
 	DEBUG_ASSERTCRASH(buttonStart, ("Could not find the buttonStart"));
@@ -797,6 +814,7 @@ void InitLanGameGadgets()
 
 void DeinitLanGameGadgets()
 {
+	AbramMatchOptionsMenu::shutdown();	// Tiberium Project
 	parentLanGameOptions = nullptr;
 	buttonChat = nullptr;
 	buttonSelectMap = nullptr;
@@ -1256,6 +1274,11 @@ WindowMsgHandledType LanGameOptionsMenuSystem( GameWindow *window, UnsignedInt m
 					{
 						TheLAN->RequestPlayerChat(txtInput);
 					}
+				}
+				// Tiberium Project @feature MATCH OPTIONS: the host's to change; a guest sees the host's
+				else if ( AbramMatchOptionsMenu::handleSelected( control, TheLAN->GetMyGame(),
+					TheLAN->GetMyGame() == nullptr || !TheLAN->GetMyGame()->amIHost() ) )
+				{
 				}
 				else if ( controlID == buttonSelectMapID )
 				{

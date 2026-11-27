@@ -47,7 +47,16 @@ enum
 	// Tiberium Project @feature C&C4's zones (Zero Hour): off, pre-zones, expansion zones, free zones
 	ABRAM_ZONES_SHIFT             = 16,
 	ABRAM_ZONES_MASK              = 0x00030000,
+	// Tiberium Project @feature the army cap (C&C4's command points): its mode, and a custom cap's points per player
+	ABRAM_ARMY_CAP_SHIFT          = 18,
+	ABRAM_ARMY_CAP_MASK           = 0x000C0000,
+	ABRAM_ARMY_POINTS_SHIFT       = 20,
+	ABRAM_ARMY_POINTS_MAX         = 4095,	///< the most a custom cap may be (its 12 bits)
+	ABRAM_ARMY_POINTS_DEFAULT     = 250,	///< a custom cap's points until the host sets them
 };
+
+// Tiberium Project @feature a custom army cap's points, the rules' top 12 bits (outside the enum: above an Int's range)
+static const UnsignedInt ABRAM_ARMY_POINTS_MASK = 0xFFF00000u;
 
 // Tiberium Project @feature how a skirmish's bases grow (C&C4's zones; TiberiumZones in Zero Hour)
 enum AbramZoneMode
@@ -57,6 +66,15 @@ enum AbramZoneMode
 	ABRAM_ZONES_EXPANSION,    ///< the start zones, and more taken (their node, an outpost, a Crawler deployed)
 	ABRAM_ZONES_FREE,         ///< structures anywhere (as Zero Hour), the zones' taking as expansion; Crawlers arrive in zones
 	ABRAM_ZONE_MODE_COUNT
+};
+
+// Tiberium Project @feature the army cap: how each player's command point cap is set at the match start
+enum AbramArmyCapMode
+{
+	ABRAM_ARMY_CAP_CLASSIC,     ///< C&C4's: a team's total by its size, shared out (the players' PlayerTemplate TeamCommandPoints)
+	ABRAM_ARMY_CAP_CUSTOM,      ///< the host's points for every player, whatever its faction or team
+	ABRAM_ARMY_CAP_UNLIMITED,   ///< no cap; every other build rule as before
+	ABRAM_ARMY_CAP_MODE_COUNT
 };
 
 class AbramGameRules
@@ -83,6 +101,15 @@ public:
 	static AbramZoneMode getZoneMode();
 	static AbramZoneMode getZoneModeOf( UnsignedInt rules );
 	static UnsignedInt setZoneMode( UnsignedInt rules, AbramZoneMode mode );
+
+	// Tiberium Project @feature the army cap of the game being played (Classic outside skirmish, network games and
+	// replays), and a custom cap's points per player (1 to ABRAM_ARMY_POINTS_MAX)
+	static AbramArmyCapMode getArmyCapMode();
+	static AbramArmyCapMode getArmyCapModeOf( UnsignedInt rules );
+	static UnsignedInt setArmyCapMode( UnsignedInt rules, AbramArmyCapMode mode );
+	static Int getArmyCapPoints();
+	static Int getArmyCapPointsOf( UnsignedInt rules );
+	static UnsignedInt setArmyCapPoints( UnsignedInt rules, Int points );
 
 	static Int getCashMultiplierIndex( UnsignedInt rules );
 	static Int getBuildSpeedIndex( UnsignedInt rules );

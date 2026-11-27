@@ -27,6 +27,8 @@
 
 #include "Common/UnicodeString.h"
 
+#include <string>
+
 class GameInfo;
 class GameWindow;
 
@@ -41,7 +43,8 @@ public:
 
 	// Call for GBM_SELECTED. Returns TRUE when the control was the MATCH OPTIONS button; the dialog is
 	// then open and changes the game's options directly.
-	static Bool handleSelected( GameWindow *control, GameInfo *game );
+	// Tiberium Project @feature readOnly: a network game's guest sees the host's options and can change none.
+	static Bool handleSelected( GameWindow *control, GameInfo *game, Bool readOnly = FALSE );
 
 	// Closes the dialog, for when the screen goes away.
 	static void shutdown();
@@ -52,4 +55,22 @@ public:
 	static Int getOptionCount();
 	static UnicodeString getOptionText( Int option, const GameInfo *game );
 	static void changeOption( Int option, GameInfo *game );
+	// Tiberium Project @feature an option set by a number typed in (the custom army cap's command points per player):
+	// whether this one is, its number, its most, and setting it (kept between 1 and its most)
+	static Bool isNumberOption( Int option );
+	static Int getOptionNumber( Int option, const GameInfo *game );
+	static Int getOptionNumberMax( Int option );
+	static void setOptionNumber( Int option, GameInfo *game, Int value );
+
+	// Tiberium Project @feature typing a number (the dialog's and the Tiberium skirmish screen's): a key's effect on the
+	// digits typed so far (the number row and the keypad's digits, Backspace; no leading zero, no more digits than `most`
+	// has; `fresh`: the first digit replaces the number shown), Enter to set it, Escape to leave it as it was; and the
+	// digits' number, kept between 1 and `most` (0 when nothing is typed)
+	enum NumberKey { NUMBER_KEY_IGNORED, NUMBER_KEY_TYPED, NUMBER_KEY_SET, NUMBER_KEY_CANCEL };
+	static NumberKey typeNumberKey( std::string &digits, Bool &fresh, UnsignedByte key, UnsignedByte state, Int most );
+	static Int numberOf( const std::string &digits, Int most );
+
+	// Tiberium Project @feature the open dialog's lines read again from the game (a guest's, when the host's options
+	// arrive)
+	static void refresh();
 };

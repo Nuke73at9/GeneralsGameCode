@@ -524,6 +524,9 @@ Int TiberiumTest::getPlayers() { return s_players; }
 static Int s_teams = 0;
 void TiberiumTest::setTeams( Int allies ) { if ( allies >= 0 ) s_teams = allies; }
 Int TiberiumTest::getTeams() { return s_teams; }
+static Int s_aiLevel = 0;
+void TiberiumTest::setAILevel( Int level ) { if ( level >= 0 && level <= 2 ) s_aiLevel = level; }
+Int TiberiumTest::getAILevel() { return s_aiLevel; }
 void TiberiumTest::setReveal( Bool reveal ) { s_reveal = reveal; if ( reveal ) s_active = TRUE; }
 static Bool s_noDraw = FALSE;
 void TiberiumTest::setNoDraw( Bool noDraw ) { s_noDraw = noDraw; if ( noDraw ) s_active = TRUE; }
@@ -782,6 +785,8 @@ static std::chrono::steady_clock::time_point s_logicStart;
 static Bool s_logicTiming = FALSE;
 static double s_logicTotalMs = 0.0, s_logicMaxMs = 0.0;
 static Int s_logicFrames = 0;
+static UnsignedInt s_logicMaxFrame = 0;	// the logic frame that took longest
+static Int s_logicOver = 0;	// frames over 30 ms
 
 void TiberiumTest::afterLogic()
 {
@@ -791,7 +796,12 @@ void TiberiumTest::afterLogic()
 	const double ms = std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() - s_logicStart ).count();
 	s_logicTotalMs += ms;
 	if ( ms > s_logicMaxMs )
+	{
 		s_logicMaxMs = ms;
+		s_logicMaxFrame = TheGameLogic != nullptr ? TheGameLogic->getFrame() : 0;
+	}
+	if ( ms > 30.0 )
+		++s_logicOver;
 	++s_logicFrames;
 }
 
@@ -1510,6 +1520,46 @@ void TiberiumTest::update()
 	for ( size_t n = 0; n < s_uiSteps.size() && TheWindowManager != nullptr; ++n )
 	{
 		const UIStep &step = s_uiSteps[n];
+		// Tiberium Project @feature (the test) keys=Layout.wnd:Name,WHAT: keys sent to a window's input as the keyboard
+		// sends them (down, then up): WHAT is digits, or enter, escape or backspace; text=Layout.wnd:Name: a window's text
+		if ( step.frame == s_frame && ( step.action == "keys" || step.action == "text" ) )
+		{
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			GameWindow *win = f.empty() ? nullptr : TheWindowManager->winGetWindowFromId( nullptr, TheNameKeyGenerator->nameToKey( f[0].c_str() ) );
+			if ( win == nullptr )
+			{
+				log( "frame %d: no window %s", (int)s_frame, f.empty() ? "" : f[0].c_str() );
+				continue;
+			}
+			if ( step.action == "keys" && f.size() > 1 )
+			{
+				std::string keys;
+				static const UnsignedByte ROW[10] = { KEY_0, KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9 };
+				if ( f[1] == "enter" )
+					keys += (char)KEY_ENTER;
+				else if ( f[1] == "escape" )
+					keys += (char)KEY_ESC;
+				else if ( f[1] == "backspace" )
+					keys += (char)KEY_BACKSPACE;
+				else
+					for ( size_t i = 0; i < f[1].size(); ++i )
+						if ( f[1][i] >= '0' && f[1][i] <= '9' )
+							keys += (char)ROW[f[1][i] - '0'];
+				for ( size_t i = 0; i < keys.size(); ++i )
+				{
+					TheWindowManager->winSendInputMsg( win, GWM_CHAR, (UnsignedByte)keys[i], KEY_STATE_DOWN );
+					TheWindowManager->winSendInputMsg( win, GWM_CHAR, (UnsignedByte)keys[i], KEY_STATE_UP );
+				}
+				log( "frame %d: keys %s sent to %s", (int)s_frame, f[1].c_str(), f[0].c_str() );
+			}
+			else
+			{
+				AsciiString text;
+				text.translate( win->winGetText() );
+				log( "frame %d: %s reads '%s'%s", (int)s_frame, f[0].c_str(), text.str(), win->winIsHidden() ? " (hidden)" : "" );
+			}
+			continue;
+		}
 		if ( step.frame != s_frame || step.action != "press" )
 			continue;
 		GameWindow *win = TheWindowManager->winGetWindowFromId( nullptr, TheNameKeyGenerator->nameToKey( step.arg.c_str() ) );
@@ -1628,11 +1678,70 @@ void TiberiumTest::update()
 			Int objects = 0;
 			for ( Object *o = TheGameLogic->getFirstObject(); o != nullptr; o = o->getNextObject() )
 				++objects;
-			log( "frame %d: ui: logic %d frames, mean %.3f ms, longest %.3f ms; %d objects", (int)s_frame, (int)s_logicFrames,
-				s_logicFrames > 0 ? s_logicTotalMs / s_logicFrames : 0.0, s_logicMaxMs, (int)objects );
+			log( "frame %d: ui: logic %d frames, mean %.3f ms, longest %.3f ms (logic frame %u), %d over 30 ms; %d objects", (int)s_frame,
+				(int)s_logicFrames, s_logicFrames > 0 ? s_logicTotalMs / s_logicFrames : 0.0, s_logicMaxMs, (unsigned)s_logicMaxFrame,
+				(int)s_logicOver, (int)objects );
 			s_logicTotalMs = s_logicMaxMs = 0.0;
 			s_logicFrames = 0;
+			s_logicOver = 0;
 		}
+#if RTS_ZEROHOUR
+		else if ( step.action == "army" && ThePlayerList != nullptr && TheGameLogic != nullptr && TheTerrainLogic != nullptr )
+		{
+			// Tiberium Project @feature (the test) "army=N,Template[,spacing]": every match player (a playable side, not an
+			// observer) given N of that kind in a square about its own objects' middle, all sent to attack-move to the map's
+			// middle: armies of a set size for the simulation's cost, apart from what the AI would build
+			std::vector<std::string> f = split( step.arg.c_str(), ',' );
+			const Int n = f.empty() ? 0 : atoi( f[0].c_str() );
+			const ThingTemplate *tmpl = f.size() > 1 ? TheThingFactory->findTemplate( f[1].c_str() ) : nullptr;
+			const Real spacing = f.size() > 2 ? (Real)atof( f[2].c_str() ) : 40.0f;
+			Region3D extent;
+			TheTerrainLogic->getExtent( &extent );
+			Coord3D middle;
+			middle.x = ( extent.lo.x + extent.hi.x ) * 0.5f;
+			middle.y = ( extent.lo.y + extent.hi.y ) * 0.5f;
+			middle.z = TheTerrainLogic->getGroundHeight( middle.x, middle.y );
+			Int players = 0, made = 0;
+			for ( Int i = 0; i < ThePlayerList->getPlayerCount() && tmpl != nullptr && n > 0; ++i )
+			{
+				Player *p = ThePlayerList->getNthPlayer( i );
+				const PlayerTemplate *pt = p != nullptr ? p->getPlayerTemplate() : nullptr;
+				if ( p == nullptr || p == ThePlayerList->getNeutralPlayer() || pt == nullptr || !pt->isPlayableSide() || pt->isObserver()
+					|| p->getDefaultTeam() == nullptr )
+					continue;
+				Real sx = 0.0f, sy = 0.0f;
+				Int owned = 0;
+				for ( Object *o = TheGameLogic->getFirstObject(); o != nullptr; o = o->getNextObject() )
+				{
+					if ( o->getControllingPlayer() != p )
+						continue;
+					sx += o->getPosition()->x;
+					sy += o->getPosition()->y;
+					++owned;
+				}
+				if ( owned == 0 )
+					continue;
+				++players;
+				const Int side = (Int)ceilf( sqrtf( (Real)n ) );
+				for ( Int k = 0; k < n; ++k )
+				{
+					Coord3D at;
+					at.x = sx / owned + ( ( k % side ) - side * 0.5f ) * spacing;
+					at.y = sy / owned + ( ( k / side ) - side * 0.5f ) * spacing;
+					at.z = TheTerrainLogic->getGroundHeight( at.x, at.y );
+					Object *obj = makeAsInLogicFrame( tmpl, p->getDefaultTeam() );
+					if ( obj == nullptr )
+						continue;
+					obj->setPosition( &at );
+					if ( obj->getAIUpdateInterface() != nullptr )
+						obj->getAIUpdateInterface()->aiAttackMoveToPosition( &middle, NO_MAX_SHOTS_LIMIT, CMD_FROM_SCRIPT );
+					++made;
+				}
+			}
+			log( "frame %d: ui: army %d %s for each of %d players (%d made), sent to %.0f %.0f", (int)s_frame, (int)n,
+				tmpl != nullptr ? tmpl->getName().str() : "(no such kind)", (int)players, (int)made, middle.x, middle.y );
+		}
+#endif
 		else if ( step.action == "status" && TheGameLogic != nullptr )
 		{
 			// Tiberium Project @feature (the test) "status=k,NAME": the k-th spawned object given that status (a decoy's

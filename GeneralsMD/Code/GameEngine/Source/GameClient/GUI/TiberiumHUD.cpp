@@ -66,6 +66,7 @@
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Module/ShieldSphereUpdate.h"
+#include "Common/AbramGameRules.h"	// Tiberium Project: the army cap
 #include "GameLogic/Module/SpecialPowerModule.h"
 
 #include <ctype.h>
@@ -1535,6 +1536,25 @@ namespace
 	}
 
 	//-----------------------------------------------------------------------------------------------
+	/** Tiberium Project @feature the tier bar's command points: in use (living and queued) of the cap, for a faction that
+		has them (or units that cost them) under the match's army cap, Custom included; with no cap (Unlimited), what is
+		in use; nothing for a faction without them */
+	UnicodeString commandPointText()
+	{
+		UnicodeString cp;
+		const Player *me = localPlayer();
+		if( me == nullptr )
+			return cp;
+		const Bool costs = me->getPlayerTemplate() != nullptr && me->getPlayerTemplate()->getTeamCommandPointRows() > 0;
+		const Int used = ( me->hasCommandPoints() || costs ) ? me->getCommandPointsUsed() : 0;
+		if( me->hasCommandPoints() && ( costs || used > 0 ) )
+			cp.format( L"   Command points %d / %d", used, me->getCommandPointCap() );
+		else if( costs && AbramGameRules::getArmyCapMode() == ABRAM_ARMY_CAP_UNLIMITED )
+			cp.format( L"   Command points %d (no cap)", used );
+		return cp;
+	}
+
+	//-----------------------------------------------------------------------------------------------
 	/** the tier bar: the tier, and the next being researched */
 	void drawTier( GameWindow *, WinInstanceData * )
 	{
@@ -1557,13 +1577,7 @@ namespace
 			next.format( L"   Tier %d  %d%%", tier + 1, (Int)( progress * 100.0f ) );
 			label.concat( next );
 		}
-		// Tiberium Project @feature C&C4's command points: in use (living and queued) of the cap
-		if( localPlayer()->hasCommandPoints() )
-		{
-			UnicodeString cp;
-			cp.format( L"   Command points %d / %d", localPlayer()->getCommandPointsUsed(), localPlayer()->getCommandPointCap() );
-			label.concat( cp );
-		}
+		label.concat( commandPointText() );	// Tiberium Project
 		if( a.tier != nullptr )
 			TheDisplay->drawImage( a.tier, L.tierX, L.tierY, L.tierX + L.tierW, L.tierY + L.tierH );
 		else
@@ -2410,4 +2424,10 @@ void TiberiumHUD::describe( char *buffer, Int size )
 		shield ? ( up ? "up" : "down" ) : "none", row.str(), slots.str(), isTier ? "tier" : "rank", (int)tier, progress >= 0.0f ? (int)( progress * 100.0f ) : 0,
 		(int)rx, (int)ry, TheTacticalView != nullptr ? (int)TheTacticalView->getHeight() : -1, (int)powers, (int)readyPowers,
 		s_powersHidden ? " (put away)" : "", me != nullptr ? (int)me->getSupportPoints() : 0, me != nullptr ? (int)me->getSupportPointsMax() : 0, jukebox );
+	// Tiberium Project @feature the tier bar's command points, as drawn
+	AsciiString cp;
+	cp.translate( commandPointText() );
+	const size_t written = strlen( buffer );
+	if( written + 1 < (size_t)size )
+		snprintf( buffer + written, size - written, "; tier bar '%s'", cp.str() );
 }

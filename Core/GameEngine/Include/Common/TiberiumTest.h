@@ -77,6 +77,8 @@ public:
 	static Int getPlayers();
 	static void setTeams( Int allies );	///< -testTeams 3: the -testSide skirmish's first 3 players one team, the rest another (0: no teams)
 	static Int getTeams();
+	static void setAILevel( Int level );	///< Tiberium Project @feature -testAI 2: the -testSide skirmish's AIs easy (0), medium (1) or hard (2)
+	static Int getAILevel();
 	static void setReveal( Bool reveal );	///< reveal the map to the local player at the start (changes the logic's state: not with -testCRC)
 	static void setNoDraw( Bool noDraw );	///< -testNoDraw: the game is not drawn after its first frame (the logic only, as fast as it goes: AI test runs)
 	static Bool isNoDraw();

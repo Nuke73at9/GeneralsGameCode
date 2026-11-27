@@ -101,6 +101,9 @@ namespace
 
 	GameWindow *s_list = nullptr;				///< the combo box whose list is open
 	Bool s_options = FALSE;							///< the match options' menu is open over the screen
+	Int s_editOption = -1;							///< Tiberium Project @feature the match option a number is being typed into (-1: none)
+	std::string s_editDigits;						///< what is typed so far
+	Bool s_editFresh = FALSE;						///< the first digit typed replaces the number shown
 	Bool s_under = FALSE;								///< what is being drawn lies under an open list or menu: it answers no mouse
 	Int s_listRow = 0, s_listField = 0;
 	Int s_listX = 0, s_listY = 0, s_listW = 0, s_listH = 0;	///< under its field, as last drawn
@@ -250,10 +253,28 @@ namespace
 	}
 
 	//-----------------------------------------------------------------------------------------------
+	/** Tiberium Project @feature a number typed into a match option (the custom army cap's points): set (kept within
+		its range), or left as it was when nothing was typed */
+	void commitEdit()
+	{
+		if( s_editOption < 0 )
+			return;
+		const Int option = s_editOption;
+		s_editOption = -1;
+		if( s_editDigits.empty() || TheSkirmishGameInfo == nullptr )
+			return;
+		AbramMatchOptionsMenu::setOptionNumber( option, TheSkirmishGameInfo,
+			AbramMatchOptionsMenu::numberOf( s_editDigits, AbramMatchOptionsMenu::getOptionNumberMax( option ) ) );
+	}
+
+	//-----------------------------------------------------------------------------------------------
 	void run( const Act &act )
 	{
 		followMapList();
 		const Bool maps = mapsUp();
+		// (a click anywhere but the line being typed into sets what was typed)
+		if( s_editOption >= 0 && !( act.kind == ACT_OPTION && act.a == s_editOption ) )
+			commitEdit();
 		switch( act.kind )
 		{
 			case ACT_LIST:
@@ -298,12 +319,29 @@ namespace
 				s_list = nullptr;
 				break;
 			case ACT_OPTION:
-				// (the mod's own code changes the option, as a click on its line in its dialog does)
-				if( s_options && !maps )
+				// (the mod's own code changes the option, as a click on its line in its dialog does; a line that takes a
+				// number, the custom army cap's points, is typed into instead: a click starts it (and makes the cap Custom),
+				// Enter, a second click or a click elsewhere sets it, Escape leaves it as it was)
+				if( s_options && !maps && AbramMatchOptionsMenu::isNumberOption( act.a ) )
+				{
+					if( s_editOption == act.a )
+						commitEdit();
+					else
+					{
+						AbramMatchOptionsMenu::changeOption( act.a, TheSkirmishGameInfo );
+						char digits[16];
+						snprintf( digits, sizeof( digits ), "%d", (int)AbramMatchOptionsMenu::getOptionNumber( act.a, TheSkirmishGameInfo ) );
+						s_editDigits = digits;
+						s_editOption = act.a;
+						s_editFresh = TRUE;
+					}
+				}
+				else if( s_options && !maps )
 					AbramMatchOptionsMenu::changeOption( act.a, TheSkirmishGameInfo );
 				break;
 			case ACT_OPTIONS_DONE:
 				s_options = FALSE;
+				s_editOption = -1;	// Tiberium Project
 				break;
 			case ACT_RESET:
 				if( !maps )
@@ -593,7 +631,10 @@ namespace
 		const Int buttonSize = max( 9, PS( 15.0f ) ), labelSize = max( 8, PS( 12.0f ) ), textSize = max( 8, PS( 12.0f ) ), nameSize = max( 9, PS( 16.0f ) );
 		const Bool maps = mapsUp();
 		if( maps )
+		{
 			s_options = FALSE;
+			s_editOption = -1;	// Tiberium Project
+		}
 		s_hits.clear();
 		s_under = s_list != nullptr || s_options;
 
@@ -804,8 +845,17 @@ namespace
 					TheDisplay->drawFillRect( rx - PS( 6 ), ry - PS( 2 ), rw + PS( 12 ), rowH + PS( 4 ), l.fill );
 				DisplayString *ns = textOf( name, labelSize + 1, TRUE );
 				drawTextIn( name, labelSize + 1, TRUE, rx, ns != nullptr ? ry + ( rowH - ns->getFont()->height ) / 2 : ry, rw - PS( 200 ), hover ? l.text : l.textDim );
+				// (a number being typed: what is typed so far, with a caret)
+				const Bool editing = i == s_editOption;
+				if( editing )
+				{
+					setting.translate( AsciiString( s_editDigits.c_str() ) );
+					if( ( timeGetTime() / 500 ) & 1 )
+						setting.concat( L'_' );
+				}
 				// (a setting other than the game's own stands out: "Off" and "x1" are the game as it always was)
-				const Bool plain = setting.compare( L"Off" ) == 0 || setting.compare( L"x1" ) == 0;
+				const Bool plain = !editing && ( setting.compare( L"Off" ) == 0 || setting.compare( L"x1" ) == 0 || setting.compare( L"Classic" ) == 0
+					|| setting.compare( L"by team size" ) == 0 );
 				const Int fx = rx + rw - PS( 180 ), fw = PS( 180 );
 				TheDisplay->drawFillRect( fx, ry, fw, rowH, plain ? l.fill : l.fillOn );
 				TheDisplay->drawOpenRect( fx, ry, fw, rowH, plain ? 1.0f : 2.0f, hover || !plain ? l.hi : l.accentDim );
@@ -936,6 +986,18 @@ namespace
 				return MSG_HANDLED;
 			}
 			case GWM_CHAR:
+				// Tiberium Project @feature a number typed into a match option: digits (the number row and the keypad),
+				// Backspace, Enter sets it, Escape leaves it as it was
+				if( s_editOption >= 0 )
+				{
+					const AbramMatchOptionsMenu::NumberKey did = AbramMatchOptionsMenu::typeNumberKey( s_editDigits, s_editFresh,
+						(UnsignedByte)mData1, (UnsignedByte)mData2, AbramMatchOptionsMenu::getOptionNumberMax( s_editOption ) );
+					if( did == AbramMatchOptionsMenu::NUMBER_KEY_SET )
+						commitEdit();
+					else if( did == AbramMatchOptionsMenu::NUMBER_KEY_CANCEL )
+						s_editOption = -1;
+					return MSG_HANDLED;
+				}
 				// Escape: the open list shut, else the match options' menu, else the map list left, else the screen (as
 				// Zero Hour's own do it)
 				if( (UnsignedByte)mData1 == KEY_ESC && BitIsSet( mData2, KEY_STATE_UP ) )
@@ -1016,6 +1078,7 @@ void TiberiumSkirmish::update( WindowLayout *layout, GameWindow *parent )
 		forgetMapGadgets();
 		s_list = nullptr;
 		s_options = FALSE;
+		s_editOption = -1;	// Tiberium Project
 		s_hits.clear();
 		s_acts.clear();
 	}
@@ -1057,6 +1120,7 @@ void TiberiumSkirmish::shutdown()
 	s_rowCount = 0;
 	s_list = nullptr;
 	s_options = FALSE;
+	s_editOption = -1;	// Tiberium Project
 	forgetMapGadgets();
 	s_hits.clear();
 	s_acts.clear();
@@ -1101,6 +1165,31 @@ Bool TiberiumSkirmish::testClick( const char *part, Int a, Int b )
 		act.kind = ACT_CHOOSE;
 		act.a = a;
 		run( act );
+		return TRUE;
+	}
+	// Tiberium Project @feature (the test) keys while a number is typed into an option: "type,N" types N's digits;
+	// "enter", "escape", "backspace" press that key (their codes differ between the Windows and Linux builds)
+	const Bool named = strcmp( part, "enter" ) == 0 || strcmp( part, "escape" ) == 0 || strcmp( part, "backspace" ) == 0;
+	if( strcmp( part, "type" ) == 0 || named )
+	{
+		std::string keys;
+		if( !named )
+		{
+			static const UnsignedByte ROW[10] = { KEY_0, KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9 };
+			char digits[16];
+			snprintf( digits, sizeof( digits ), "%d", (int)a );
+			for( const char *d = digits; *d != '\0'; ++d )
+				if( *d >= '0' && *d <= '9' )
+					keys += (char)ROW[*d - '0'];
+		}
+		else
+			keys += (char)(UnsignedByte)( part[0] == 'e' ? ( part[1] == 'n' ? KEY_ENTER : KEY_ESC ) : KEY_BACKSPACE );
+		for( size_t i = 0; i < keys.size(); ++i )
+		{
+			const UnsignedByte key = (UnsignedByte)keys[i];
+			input( nullptr, GWM_CHAR, key, KEY_STATE_DOWN );
+			input( nullptr, GWM_CHAR, key, KEY_STATE_UP );
+		}
 		return TRUE;
 	}
 	static const struct { const char *name; ActKind kind; } simple[] =
@@ -1151,7 +1240,14 @@ void TiberiumSkirmish::describe( char *buffer, Int size )
 	}
 	snprintf( part, sizeof( part ), "cash %d; limit %d; ", (int)TheSkirmishGameInfo->getStartingCash().countMoney(), (int)TheSkirmishGameInfo->getSuperweaponRestriction() );
 	text += part;
-	// the mod's match options, each as its own line words it
+	// the mod's match options, each as its own line words it (Tiberium Project: the rules' value, and a number being typed)
+	snprintf( part, sizeof( part ), "rules 0x%X; ", (unsigned int)TheSkirmishGameInfo->getAbramRules() );
+	text += part;
+	if( s_editOption >= 0 )
+	{
+		snprintf( part, sizeof( part ), "typing into option %d: '%s'; ", (int)s_editOption, s_editDigits.c_str() );
+		text += part;
+	}
 	text += s_options ? "match options open:" : "match options:";
 	for( Int i = 0; i < AbramMatchOptionsMenu::getOptionCount(); ++i )
 	{

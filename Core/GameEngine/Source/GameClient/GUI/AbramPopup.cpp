@@ -44,6 +44,7 @@ Color choiceTextBorderColor = 0;
 
 AbramPopup::ChoiceFunc choiceFunc = nullptr;
 void *choiceUserData = nullptr;
+AbramPopup::KeyFunc keyFunc = nullptr;	// Tiberium Project
 
 void findWindows()
 {
@@ -81,6 +82,7 @@ void clearWindows()
 		buttonChoices[i] = nullptr;
 	choiceFunc = nullptr;
 	choiceUserData = nullptr;
+	keyFunc = nullptr;
 }
 
 // The panel as tall as the buttons in use need (the space under the last one as above the title), in the
@@ -169,6 +171,7 @@ Bool AbramPopup::open( const UnicodeString &title, const UnicodeString &message,
 	}
 
 	choiceFunc = func;
+	keyFunc = nullptr;	// Tiberium Project: the owner sets its own again
 	choiceUserData = userData;
 
 	if (staticTextTitle)
@@ -218,8 +221,14 @@ void AbramPopup::setChoiceEnabled( Int index, Bool enabled )
 		buttonChoices[index]->winEnable( enabled );
 }
 
+void AbramPopup::setKeyFunc( KeyFunc func )
+{
+	keyFunc = func;
+}
+
 void AbramPopup::close()
 {
+	keyFunc = nullptr;	// Tiberium Project
 	if (popupLayout != nullptr)
 	{
 		popupLayout->destroyWindows();
@@ -247,6 +256,9 @@ WindowMsgHandledType AbramPopupInput( GameWindow *window, UnsignedInt msg,
 	{
 		UnsignedByte key = mData1;
 		UnsignedByte state = mData2;
+		// Tiberium Project @feature the owner's first (a number being typed)
+		if (keyFunc != nullptr && keyFunc( key, state ))
+			return MSG_HANDLED;
 		if (key == KEY_ESC)
 		{
 			if (BitIsSet( state, KEY_STATE_UP ))

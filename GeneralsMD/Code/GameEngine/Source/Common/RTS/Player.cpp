@@ -3059,13 +3059,17 @@ Bool Player::canAffordCommandPoints( const ThingTemplate *what ) const
 }
 
 //=============================================================================
-// Tiberium Project @feature C&C4's command points at a new game's start (its TeamSizeSetting): a player whose
-// template has TeamCommandPoints gets its team's total for the number of such players on its team (itself and those
-// it and they are allied to), shared out evenly; any other player, none
+// Tiberium Project @feature the command point caps at a new game's start, by the match's army cap (AbramGameRules):
+// - Classic, C&C4's (its TeamSizeSetting): a player whose template has TeamCommandPoints gets its team's total for the
+//   number of such players on its team (itself and those it and they are allied to), shared out evenly; any other, none;
+// - Custom: every player of a playable side (not the neutral one, the civilians nor an observer) the host's points,
+//   whatever its faction or team;
+// - Unlimited: none.
 /*static*/ void Player::assignCommandPointCaps()
 {
 	if( ThePlayerList == nullptr )
 		return;
+	const AbramArmyCapMode mode = AbramGameRules::getArmyCapMode();
 	const Int count = ThePlayerList->getPlayerCount();
 	for( Int i = 0; i < count; ++i )
 	{
@@ -3074,7 +3078,16 @@ Bool Player::canAffordCommandPoints( const ThingTemplate *what ) const
 			continue;
 		p->m_commandPointCap = 0;
 		const PlayerTemplate *pt = p->getPlayerTemplate();
-		if( p == ThePlayerList->getNeutralPlayer() || pt == nullptr || pt->getTeamCommandPointRows() <= 0 || p->getDefaultTeam() == nullptr )
+		if( mode == ABRAM_ARMY_CAP_UNLIMITED || p == ThePlayerList->getNeutralPlayer() || pt == nullptr || p->getDefaultTeam() == nullptr )
+			continue;
+		if( mode == ABRAM_ARMY_CAP_CUSTOM )
+		{
+			// (the match's players only: a playable side, not the civilians nor an observer)
+			if( pt->isPlayableSide() && !pt->isObserver() )
+				p->m_commandPointCap = AbramGameRules::getArmyCapPoints();
+			continue;
+		}
+		if( pt->getTeamCommandPointRows() <= 0 )
 			continue;
 		Int team = 0;
 		for( Int j = 0; j < count; ++j )

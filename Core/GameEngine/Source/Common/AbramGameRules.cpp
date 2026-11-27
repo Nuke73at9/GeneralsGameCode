@@ -124,3 +124,44 @@ UnsignedInt AbramGameRules::setZoneMode( UnsignedInt rules, AbramZoneMode mode )
 		mode = ABRAM_ZONES_OFF;
 	return (rules & ~(UnsignedInt)ABRAM_ZONES_MASK) | ((UnsignedInt)mode << ABRAM_ZONES_SHIFT);
 }
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature the army cap: its mode in the rules' bits 18 and 19, a custom cap's points in bits 20 to 31
+AbramArmyCapMode AbramGameRules::getArmyCapModeOf( UnsignedInt rules )
+{
+	const Int mode = (Int)((rules & ABRAM_ARMY_CAP_MASK) >> ABRAM_ARMY_CAP_SHIFT);
+	return mode < ABRAM_ARMY_CAP_MODE_COUNT ? (AbramArmyCapMode)mode : ABRAM_ARMY_CAP_CLASSIC;
+}
+
+AbramArmyCapMode AbramGameRules::getArmyCapMode()
+{
+	return getArmyCapModeOf( currentRules() );
+}
+
+UnsignedInt AbramGameRules::setArmyCapMode( UnsignedInt rules, AbramArmyCapMode mode )
+{
+	if (mode < ABRAM_ARMY_CAP_CLASSIC || mode >= ABRAM_ARMY_CAP_MODE_COUNT)
+		mode = ABRAM_ARMY_CAP_CLASSIC;
+	return (rules & ~(UnsignedInt)ABRAM_ARMY_CAP_MASK) | ((UnsignedInt)mode << ABRAM_ARMY_CAP_SHIFT);
+}
+
+Int AbramGameRules::getArmyCapPointsOf( UnsignedInt rules )
+{
+	// (none set yet: the default)
+	const Int points = (Int)((rules & ABRAM_ARMY_POINTS_MASK) >> ABRAM_ARMY_POINTS_SHIFT);
+	return points > 0 ? points : ABRAM_ARMY_POINTS_DEFAULT;
+}
+
+Int AbramGameRules::getArmyCapPoints()
+{
+	return getArmyCapPointsOf( currentRules() );
+}
+
+UnsignedInt AbramGameRules::setArmyCapPoints( UnsignedInt rules, Int points )
+{
+	if (points < 1)
+		points = 1;
+	if (points > ABRAM_ARMY_POINTS_MAX)
+		points = ABRAM_ARMY_POINTS_MAX;
+	return (rules & ~ABRAM_ARMY_POINTS_MASK) | ((UnsignedInt)points << ABRAM_ARMY_POINTS_SHIFT);
+}

@@ -914,7 +914,7 @@ void GameEngine::init()
 					for (Int s = 1; s < players; ++s)
 					{
 						GameSlot ai;
-						ai.setState(SLOT_EASY_AI);
+						ai.setState((SlotState)(SLOT_EASY_AI + TiberiumTest::getAILevel()));	// -testAI
 						ai.setColor(numColors > 0 ? s % numColors : s);
 						ai.setPlayerTemplate(sideNum);
 						ai.setStartPos(-1);

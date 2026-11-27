@@ -43,6 +43,9 @@ public:
 	};
 
 	typedef void (*ChoiceFunc)( Int choice, void *userData );
+	// Tiberium Project @feature a key the open dialog gets, offered to the owner first (a number typed into a button):
+	// TRUE when the owner used it
+	typedef Bool (*KeyFunc)( UnsignedByte key, UnsignedByte state );
 
 	// Shows the dialog (or replaces the texts of the open one). Returns FALSE if it could not be created.
 	// Every button is enabled and in its usual colour again.
@@ -53,6 +56,7 @@ public:
 	static void setChoiceText( Int index, const UnicodeString &text );
 	static void setChoiceColor( Int index, Color color );		///< the button's text in that colour (a player's)
 	static void setChoiceEnabled( Int index, Bool enabled );	///< a disabled button is shown greyed and cannot be clicked
+	static void setKeyFunc( KeyFunc func );	///< Tiberium Project: until the dialog closes or opens again
 
 	static void close();
 	static Bool isOpen();
