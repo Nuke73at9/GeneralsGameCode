@@ -165,3 +165,49 @@ UnsignedInt AbramGameRules::setArmyCapPoints( UnsignedInt rules, Int points )
 		points = ABRAM_ARMY_POINTS_MAX;
 	return (rules & ~ABRAM_ARMY_POINTS_MASK) | ((UnsignedInt)points << ABRAM_ARMY_POINTS_SHIFT);
 }
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature C&C4's Lethality: in the rules' bits 4 and 5 (0: Medium, C&C4's default)
+AbramLethality AbramGameRules::getLethalityOf( UnsignedInt rules )
+{
+	return (AbramLethality)((rules & ABRAM_LETHALITY_MASK) >> ABRAM_LETHALITY_SHIFT);
+}
+
+AbramLethality AbramGameRules::getLethality()
+{
+	return getLethalityOf( currentRules() );
+}
+
+UnsignedInt AbramGameRules::setLethality( UnsignedInt rules, AbramLethality lethality )
+{
+	if (lethality < ABRAM_LETHALITY_MEDIUM || lethality >= ABRAM_LETHALITY_COUNT)
+		lethality = ABRAM_LETHALITY_MEDIUM;
+	return (rules & ~(UnsignedInt)ABRAM_LETHALITY_MASK) | ((UnsignedInt)lethality << ABRAM_LETHALITY_SHIFT);
+}
+
+Int AbramGameRules::levelOfLethality( AbramLethality lethality )
+{
+	switch (lethality)
+	{
+	case ABRAM_LETHALITY_LOW: return 0;
+	case ABRAM_LETHALITY_HIGH: return 2;
+	case ABRAM_LETHALITY_VERY_HIGH: return 3;
+	default: return 1;
+	}
+}
+
+AbramLethality AbramGameRules::lethalityOfLevel( Int level )
+{
+	switch (level)
+	{
+	case 0: return ABRAM_LETHALITY_LOW;
+	case 2: return ABRAM_LETHALITY_HIGH;
+	case 3: return ABRAM_LETHALITY_VERY_HIGH;
+	default: return ABRAM_LETHALITY_MEDIUM;
+	}
+}
+
+Int AbramGameRules::getLethalityLevel()
+{
+	return levelOfLethality( getLethality() );
+}

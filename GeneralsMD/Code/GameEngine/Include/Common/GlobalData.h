@@ -209,6 +209,22 @@ public:
 	AsciiString m_zoneNode;					///< the object in each expansion zone that takes it (C&C4's TCN)
 	UnsignedInt m_startIntro;				///< Tiberium Project: C&C4's match start (TiberiumStart), frames of the intro
 	UnsignedInt m_startCountdown;		///< and of the countdown after it, to the arrivals
+	// Tiberium Project @feature command points by size (Player.h): a unit with no CommandPoints of its own takes them from
+	// its kind and footprint, the Geometry's area scaled to C&C4's (CommandPointSizeScale, a length's), up to each area of
+	// its kind's table that many; and the team totals for the Classic army cap of a faction without TeamCommandPoints
+	enum { COMMAND_POINT_SIZE_KINDS = 3, COMMAND_POINT_SIZE_STEPS = 8, COMMAND_POINT_TEAM_ROWS = 16 };
+	enum { COMMAND_POINT_SIZE_INFANTRY, COMMAND_POINT_SIZE_VEHICLE, COMMAND_POINT_SIZE_AIRCRAFT };
+	Bool m_commandPointsBySize;
+	Real m_commandPointSizeScale;
+	Real m_commandPointSizeLimit[COMMAND_POINT_SIZE_KINDS][COMMAND_POINT_SIZE_STEPS];		///< (the last: any size)
+	UnsignedShort m_commandPointSizePoints[COMMAND_POINT_SIZE_KINDS][COMMAND_POINT_SIZE_STEPS];
+	Int m_commandPointSizeSteps[COMMAND_POINT_SIZE_KINDS];
+	Int m_teamCommandPoints[COMMAND_POINT_TEAM_ROWS];
+	Int m_teamCommandPointRows;
+	static void parseCommandPointSize( INI* ini, void *instance, void *store, const void* userData );
+	static void parseTeamCommandPoints( INI* ini, void *instance, void *store, const void* userData );
+	/// a team's total for the Classic cap of a faction without its own table (0: none)
+	Int getDefaultTeamCommandPoints( Int playersOnTeam ) const;
 
 	Real m_terrainDrawDistanceScale;
 

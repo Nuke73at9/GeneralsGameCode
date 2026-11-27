@@ -1545,7 +1545,7 @@ namespace
 		const Player *me = localPlayer();
 		if( me == nullptr )
 			return cp;
-		const Bool costs = me->getPlayerTemplate() != nullptr && me->getPlayerTemplate()->getTeamCommandPointRows() > 0;
+		const Bool costs = Player::hasClassicCommandPoints( me->getPlayerTemplate() );
 		const Int used = ( me->hasCommandPoints() || costs ) ? me->getCommandPointsUsed() : 0;
 		if( me->hasCommandPoints() && ( costs || used > 0 ) )
 			cp.format( L"   Command points %d / %d", used, me->getCommandPointCap() );

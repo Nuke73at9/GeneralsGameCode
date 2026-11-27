@@ -43,6 +43,7 @@ enum Choice
 	CHOICE_ZONES,		// Tiberium Project @feature C&C4's zones
 	CHOICE_ARMY_CAP,	// Tiberium Project @feature the army cap: Classic, Custom, Unlimited
 	CHOICE_ARMY_POINTS,	// Tiberium Project @feature a custom army cap's command points per player
+	CHOICE_LETHALITY,	// Tiberium Project @feature C&C4's Lethality: its armours' percents
 	CHOICE_CHEATS,	// Abram's Personal Test @feature the team menu's cheats (GameLogic/AbramCheats.h)
 #endif
 	CHOICE_DONE,
@@ -115,6 +116,12 @@ UnicodeString choiceText( Int choice, const GameInfo *game )
 		else
 			text = L"Command Points per Player: no cap";
 		break;
+	case CHOICE_LETHALITY:
+	{
+		static const wchar_t *const LEVELS[4] = { L"Low", L"Medium", L"High", L"Very High" };
+		text.format( L"Lethality: %ls", LEVELS[AbramGameRules::levelOfLethality( AbramGameRules::getLethalityOf( rules ) )] );
+		break;
+	}
 	case CHOICE_CHEATS:
 		text.format( L"Enable Cheats: %ls", onOff( (rules & ABRAM_RULE_CHEATS) != 0 ) );
 		break;
@@ -171,6 +178,11 @@ void applyChoice( GameInfo *game, Int choice )
 	case CHOICE_ARMY_POINTS:
 		// the cap made Custom at the points it has (the number itself is typed in: setOptionNumber)
 		game->setAbramRules( AbramGameRules::setArmyCapMode( rules, ABRAM_ARMY_CAP_CUSTOM ) );
+		break;
+	case CHOICE_LETHALITY:
+		// (the next level up, from Low to Very High, then Low again)
+		game->setAbramRules( AbramGameRules::setLethality( rules, AbramGameRules::lethalityOfLevel(
+			(AbramGameRules::levelOfLethality( AbramGameRules::getLethalityOf( rules ) ) + 1) % 4 ) ) );
 		break;
 	case CHOICE_CHEATS:
 		toggleRule( game, ABRAM_RULE_CHEATS );

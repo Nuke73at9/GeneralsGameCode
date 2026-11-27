@@ -625,8 +625,10 @@ public:
 	// Tiberium Project @feature how many a factory makes for one purchase (BuildQuantity: a Kane's Wrath squad's soldiers)
 	Int getBuildQuantity() const { return m_buildQuantity; }
 	/// Tiberium Project @feature C&C4's command points: what one of these takes of its player's cap while it lives or is
-	/// queued (0: none; only a player with a cap counts them, Player::getCommandPointCap)
-	Int getCommandPoints() const { return m_commandPoints; }
+	/// queued (0: none; only a player with a cap counts them, Player::getCommandPointCap). Without a CommandPoints of its
+	/// own, and with the mod's CommandPointsBySize, a buildable unit's from its kind and size (computeSizeCommandPoints)
+	Int getCommandPoints() const;
+	Int computeSizeCommandPoints() const;	///< Tiberium Project @feature by kind and footprint (TiberiumGameData's tables)
 
 	AsciiString getUpgradeCameoName( Int n)const{ return m_upgradeCameoUpgradeNames[n];	}
 
@@ -650,6 +652,7 @@ protected:
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 	static void parseArmorTemplateSet( INI* ini, void *instance, void *store, const void* /*userData*/ );
+	static void parseCommandPoints( INI* ini, void *instance, void *store, const void* /*userData*/ );	///< Tiberium Project
 	static void parseWeaponTemplateSet( INI* ini, void *instance, void *store, const void* /*userData*/ );
 	static void parsePrerequisites( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ );
 	static void parseModuleName(INI* ini, void *instance, void* /*store*/, const void* userData);
@@ -760,6 +763,8 @@ private:
 	UnsignedShort		m_maxSimultaneousOfType;			///< max simultaneous of this unit we can have (per player) at one time. (0 == unlimited)
 	UnsignedShort		m_buildQuantity;							///< Tiberium Project @feature how many one purchase makes (a squad's soldiers), 1 by default
 	UnsignedShort		m_commandPoints;							///< Tiberium Project @feature C&C4's command points it takes (0: none)
+	mutable Short		m_sizeCommandPoints;					///< Tiberium Project @feature by size, worked out once (-1: not yet)
+	Bool						m_commandPointsSet;						///< Tiberium Project @feature CommandPoints given (0 included)
 
 	// ---- Bool-sized things
   Bool          m_maxSimultaneousDeterminedBySuperweaponRestriction; ///< If true, override value in m_maxSimultaneousOfType with value from GameInfo::getSuperweaponRestriction()

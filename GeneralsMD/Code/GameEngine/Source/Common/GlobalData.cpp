@@ -888,6 +888,27 @@ GlobalData::GlobalData()
 	m_zoneNode = "C4_GoalStructure";
 	m_startIntro = LOGICFRAMES_PER_SECOND * 6;			// C&C4's MatchIntroSettings: held 1 s, the camera's pan 5 s
 	m_startCountdown = LOGICFRAMES_PER_SECOND * 10;	// and its CountdownDuration
+	// Tiberium Project @feature command points by size: off until a mod's TiberiumGameData asks; the tables as C&C4's own
+	// units are spread (their areas at the 1.7 upscale; Kane's Wrath's are converted at it), Zero Hour's lengths x1.5
+	m_commandPointsBySize = FALSE;
+	m_commandPointSizeScale = 1.5f;
+	{
+		static const Real LIMITS[COMMAND_POINT_SIZE_KINDS][4] = { { 1000.0f, 4000.0f, 0.0f, 0.0f }, { 900.0f, 2600.0f, 3600.0f, 0.0f }, { 600.0f, 3000.0f, 4500.0f, 0.0f } };
+		static const UnsignedShort POINTS[COMMAND_POINT_SIZE_KINDS][4] = { { 3, 6, 10, 0 }, { 3, 6, 10, 12 }, { 3, 6, 8, 12 } };
+		static const Int STEPS[COMMAND_POINT_SIZE_KINDS] = { 3, 4, 4 };
+		for( Int k = 0; k < COMMAND_POINT_SIZE_KINDS; ++k )
+		{
+			m_commandPointSizeSteps[k] = STEPS[k];
+			for( Int s = 0; s < COMMAND_POINT_SIZE_STEPS; ++s )
+			{
+				m_commandPointSizeLimit[k][s] = s < 4 ? LIMITS[k][s] : 0.0f;
+				m_commandPointSizePoints[k][s] = s < 4 ? POINTS[k][s] : 0;
+			}
+		}
+	}
+	for( Int r = 0; r < COMMAND_POINT_TEAM_ROWS; ++r )
+		m_teamCommandPoints[r] = 0;
+	m_teamCommandPointRows = 0;
 	m_terrainDrawDistanceScale = 1.0f;
 	m_terrainHeightAtEdgeOfMap = 0.0f;
 
@@ -1226,6 +1247,59 @@ void GlobalData::reset()
 	*   End
 	*/
 //-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+/** Tiberium Project @feature "CommandPointSize = VEHICLE 900:3 2600:6 3600:10 *:12": a kind's table (INFANTRY, VEHICLE or
+	AIRCRAFT), area:points up to that area, * for any size */
+void GlobalData::parseCommandPointSize( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ )
+{
+	GlobalData *self = (GlobalData *)instance;
+	const char *kind = ini->getNextToken();
+	Int k = -1;
+	if( stricmp( kind, "INFANTRY" ) == 0 )
+		k = COMMAND_POINT_SIZE_INFANTRY;
+	else if( stricmp( kind, "VEHICLE" ) == 0 )
+		k = COMMAND_POINT_SIZE_VEHICLE;
+	else if( stricmp( kind, "AIRCRAFT" ) == 0 )
+		k = COMMAND_POINT_SIZE_AIRCRAFT;
+	else
+		throw INI_INVALID_DATA;
+	Int n = 0;
+	for( const char *tok = ini->getNextTokenOrNull(); tok != nullptr; tok = ini->getNextTokenOrNull() )
+	{
+		if( n >= COMMAND_POINT_SIZE_STEPS )
+			throw INI_INVALID_DATA;
+		const char *colon = strchr( tok, ':' );
+		if( colon == nullptr )
+			throw INI_INVALID_DATA;
+		self->m_commandPointSizeLimit[k][n] = ( tok[0] == '*' ) ? 0.0f : (Real)atof( tok );
+		self->m_commandPointSizePoints[k][n] = (UnsignedShort)atoi( colon + 1 );
+		++n;
+	}
+	self->m_commandPointSizeSteps[k] = n;
+}
+
+/** Tiberium Project @feature "TeamCommandPoints = 90 160 210 240 250": a team's total by its size (C&C4's TeamSizeSetting),
+	for the Classic army cap of a faction whose PlayerTemplate has none */
+void GlobalData::parseTeamCommandPoints( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ )
+{
+	GlobalData *self = (GlobalData *)instance;
+	self->m_teamCommandPointRows = 0;
+	for( const char *tok = ini->getNextTokenOrNull(); tok != nullptr && self->m_teamCommandPointRows < COMMAND_POINT_TEAM_ROWS;
+		tok = ini->getNextTokenOrNull() )
+		self->m_teamCommandPoints[ self->m_teamCommandPointRows++ ] = INI::scanInt( tok );
+}
+
+Int GlobalData::getDefaultTeamCommandPoints( Int playersOnTeam ) const
+{
+	if( m_teamCommandPointRows <= 0 )
+		return 0;
+	if( playersOnTeam < 1 )
+		playersOnTeam = 1;
+	if( playersOnTeam > m_teamCommandPointRows )
+		playersOnTeam = m_teamCommandPointRows;
+	return m_teamCommandPoints[ playersOnTeam - 1 ];
+}
+
 void GlobalData::parseTiberiumGameData( INI* ini )
 {
 	static const FieldParse tiberiumFieldParse[] =
@@ -1240,6 +1314,10 @@ void GlobalData::parseTiberiumGameData( INI* ini )
 		{ "ZoneNode",						INI::parseAsciiString,	nullptr,	offsetof( GlobalData, m_zoneNode ) },
 		{ "StartIntro",					INI::parseDurationUnsignedInt,	nullptr,	offsetof( GlobalData, m_startIntro ) },
 		{ "StartCountdown",			INI::parseDurationUnsignedInt,	nullptr,	offsetof( GlobalData, m_startCountdown ) },
+		{ "CommandPointsBySize",	INI::parseBool,		nullptr,	offsetof( GlobalData, m_commandPointsBySize ) },
+		{ "CommandPointSizeScale",	INI::parseReal,		nullptr,	offsetof( GlobalData, m_commandPointSizeScale ) },
+		{ "CommandPointSize",		GlobalData::parseCommandPointSize,	nullptr,	0 },
+		{ "TeamCommandPoints",		GlobalData::parseTeamCommandPoints,	nullptr,	0 },
 #if PRESERVE_RETAIL_SCRIPTED_CAMERA
 		{ "CameraHeight",				INI::parseReal,		nullptr,	offsetof( GlobalData, m_cameraHeight ) },
 #endif

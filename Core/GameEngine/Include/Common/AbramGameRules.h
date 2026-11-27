@@ -39,7 +39,10 @@ enum
 	ABRAM_LARGE_BUILD_QUEUE_SIZE = 99,
 
 	// The rules value also holds two small settings above the on/off rules.
-	ABRAM_RULE_FLAG_MASK          = 0x000000FF,
+	ABRAM_RULE_FLAG_MASK          = 0x0000000F,
+	// Tiberium Project @feature C&C4's Lethality (Zero Hour): its armour percents by the match's lethality
+	ABRAM_LETHALITY_SHIFT         = 4,
+	ABRAM_LETHALITY_MASK          = 0x00000030,
 	ABRAM_CASH_MULTIPLIER_SHIFT   = 8,
 	ABRAM_CASH_MULTIPLIER_MASK    = 0x00000F00,
 	ABRAM_BUILD_SPEED_SHIFT       = 12,
@@ -66,6 +69,16 @@ enum AbramZoneMode
 	ABRAM_ZONES_EXPANSION,    ///< the start zones, and more taken (their node, an outpost, a Crawler deployed)
 	ABRAM_ZONES_FREE,         ///< structures anywhere (as Zero Hour), the zones' taking as expansion; Crawlers arrive in zones
 	ABRAM_ZONE_MODE_COUNT
+};
+
+// Tiberium Project @feature C&C4's Lethality, as the rules hold it (Medium, C&C4's default, is 0)
+enum AbramLethality
+{
+	ABRAM_LETHALITY_MEDIUM,
+	ABRAM_LETHALITY_LOW,
+	ABRAM_LETHALITY_HIGH,
+	ABRAM_LETHALITY_VERY_HIGH,
+	ABRAM_LETHALITY_COUNT
 };
 
 // Tiberium Project @feature the army cap: how each player's command point cap is set at the match start
@@ -108,6 +121,14 @@ public:
 	static AbramArmyCapMode getArmyCapModeOf( UnsignedInt rules );
 	static UnsignedInt setArmyCapMode( UnsignedInt rules, AbramArmyCapMode mode );
 	static Int getArmyCapPoints();
+	// Tiberium Project @feature C&C4's Lethality of the game being played (Medium outside skirmish, network games and
+	// replays), and its level from the lowest: 0 Low, 1 Medium, 2 High, 3 Very High (the armours' LethalityArmor order)
+	static AbramLethality getLethality();
+	static AbramLethality getLethalityOf( UnsignedInt rules );
+	static UnsignedInt setLethality( UnsignedInt rules, AbramLethality lethality );
+	static Int getLethalityLevel();
+	static Int levelOfLethality( AbramLethality lethality );
+	static AbramLethality lethalityOfLevel( Int level );
 	static Int getArmyCapPointsOf( UnsignedInt rules );
 	static UnsignedInt setArmyCapPoints( UnsignedInt rules, Int points );
 

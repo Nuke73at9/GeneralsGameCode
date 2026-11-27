@@ -162,7 +162,7 @@ const FieldParse ThingTemplate::s_objectFieldParseTable[] =
 	{ "BuildCost",						INI::parseUnsignedShort,						nullptr,		offsetof( ThingTemplate, m_buildCost ) },
 	{ "BuildTime",						INI::parseReal,											nullptr,		offsetof( ThingTemplate, m_buildTime ) },
 	{ "BuildQuantity",				INI::parseUnsignedShort,						nullptr,		offsetof( ThingTemplate, m_buildQuantity ) },	// Tiberium Project @feature
-	{ "CommandPoints",				INI::parseUnsignedShort,						nullptr,		offsetof( ThingTemplate, m_commandPoints ) },	// Tiberium Project @feature
+	{ "CommandPoints",				ThingTemplate::parseCommandPoints,						nullptr,		offsetof( ThingTemplate, m_commandPoints ) },	// Tiberium Project @feature
 	{ "RefundValue",					INI::parseUnsignedShort,						nullptr,   offsetof( ThingTemplate, m_refundValue ) },
 	{ "BuildCompletion",			INI::parseByteSizedIndexList,				BuildCompletionNames,		offsetof( ThingTemplate, m_buildCompletion ) },
 	{ "EnergyProduction",			INI::parseInt,											nullptr,   offsetof( ThingTemplate, m_energyProduction ) },
@@ -296,7 +296,7 @@ const FieldParse ThingTemplate::s_objectReskinFieldParseTable[] =
   // Needed to avoid some cheats with the scud storm rebuild hole
   { "MaxSimultaneousOfType",	ThingTemplate::parseMaxSimultaneous,		nullptr, offsetof(ThingTemplate, m_maxSimultaneousOfType ) }, // Added in Zero Hour
   { "MaxSimultaneousLinkKey",	NameKeyGenerator::parseStringAsNameKeyType,		nullptr, offsetof(ThingTemplate, m_maxSimultaneousLinkKey ) }, // Added in Zero Hour
-	{ "CommandPoints",				INI::parseUnsignedShort,						nullptr,		offsetof( ThingTemplate, m_commandPoints ) },	// Tiberium Project @feature
+	{ "CommandPoints",				ThingTemplate::parseCommandPoints,						nullptr,		offsetof( ThingTemplate, m_commandPoints ) },	// Tiberium Project @feature
 
 	{ nullptr, nullptr, nullptr, 0 }
 
@@ -927,6 +927,68 @@ void ArmorTemplateSet::parseArmorTemplateSet( INI* ini )
 }
 
 //-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature CommandPoints: the number, and that it was given (so the size rule leaves it, 0 included)
+void ThingTemplate::parseCommandPoints( INI* ini, void *instance, void *store, const void* /*userData*/ )
+{
+	INI::parseUnsignedShort( ini, instance, store, nullptr );
+	((ThingTemplate *)instance)->m_commandPointsSet = TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+Int ThingTemplate::getCommandPoints() const
+{
+#if RTS_ZEROHOUR
+	if( !m_commandPointsSet && TheGlobalData != nullptr && TheGlobalData->m_commandPointsBySize )
+	{
+		if( m_sizeCommandPoints < 0 )
+			m_sizeCommandPoints = (Short)computeSizeCommandPoints();
+		return m_sizeCommandPoints;
+	}
+#endif
+	return m_commandPoints;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Tiberium Project @feature a unit's command points by size: a unit a player buys (buildable, with a price) that is no
+// structure, builder, harvester or drone, by its kind's table (aircraft, then infantry, then vehicles) and the area of
+// its footprint (a box's, or a circle's), its lengths scaled to C&C4's (CommandPointSizeScale). Worked out from the
+// template's own data, so the same on every machine.
+Int ThingTemplate::computeSizeCommandPoints() const
+{
+#if RTS_ZEROHOUR
+	if( TheGlobalData == nullptr || getBuildCost() <= 0 || getBuildable() == BSTATUS_NO )
+		return 0;
+	if( isKindOf( KINDOF_STRUCTURE ) || isKindOf( KINDOF_PROJECTILE ) || isKindOf( KINDOF_DOZER ) || isKindOf( KINDOF_HARVESTER )
+		|| isKindOf( KINDOF_DRONE ) )
+		return 0;
+	Int kind = -1;
+	if( isKindOf( KINDOF_AIRCRAFT ) )
+		kind = GlobalData::COMMAND_POINT_SIZE_AIRCRAFT;
+	else if( isKindOf( KINDOF_INFANTRY ) )
+		kind = GlobalData::COMMAND_POINT_SIZE_INFANTRY;
+	else if( isKindOf( KINDOF_VEHICLE ) )
+		kind = GlobalData::COMMAND_POINT_SIZE_VEHICLE;
+	if( kind < 0 )
+		return 0;
+	const GeometryInfo &geom = m_geometryInfo;
+	const Real scale = TheGlobalData->m_commandPointSizeScale;
+	const Real major = geom.getMajorRadius() * scale;
+	const Real minor = geom.getMinorRadius() * scale;
+	const Real area = geom.getGeomType() == GEOMETRY_BOX ? 4.0f * major * minor : PI * major * major;
+	for( Int s = 0; s < TheGlobalData->m_commandPointSizeSteps[kind]; ++s )
+	{
+		const Real limit = TheGlobalData->m_commandPointSizeLimit[kind][s];
+		if( limit <= 0.0f || area <= limit )
+			return TheGlobalData->m_commandPointSizePoints[kind][s];
+	}
+	return 0;
+#else
+	return 0;
+#endif
+}
+
+//-------------------------------------------------------------------------------------------------
 void ThingTemplate::parseArmorTemplateSet( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ )
 {
 	ThingTemplate* self = (ThingTemplate*)instance;
@@ -1035,6 +1097,8 @@ ThingTemplate::ThingTemplate() :
 	m_buildTime = 1;
 	m_buildQuantity = 1;	// Tiberium Project @feature
 	m_commandPoints = 0;	// Tiberium Project @feature
+	m_sizeCommandPoints = -1;
+	m_commandPointsSet = FALSE;
 	m_refundValue = 0;
 	m_energyProduction = 0;
 	m_energyBonus = 0;

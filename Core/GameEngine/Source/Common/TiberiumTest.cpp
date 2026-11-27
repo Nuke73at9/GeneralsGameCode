@@ -1706,6 +1706,22 @@ void TiberiumTest::update()
 			}
 			log( "frame %d: ui: command points%s", (int)s_frame, line.empty() ? " (no player has a cap)" : line.c_str() );
 		}
+#if RTS_ZEROHOUR
+		else if ( step.action == "cpcost" && TheThingFactory != nullptr )
+		{
+			// Tiberium Project @feature (the test) "cpcost=A,B,...": what one of each kind costs in command points (its own, or
+			// by size with the mod's CommandPointsBySize)
+			std::string line;
+			for ( const std::string &name : split( step.arg.c_str(), ',' ) )
+			{
+				const ThingTemplate *t = TheThingFactory->findTemplate( name.c_str() );
+				char one[ 160 ];
+				snprintf( one, sizeof( one ), " %s %d", name.c_str(), t != nullptr ? (int)t->getCommandPoints() : -1 );
+				line += one;
+			}
+			log( "frame %d: ui: cpcost%s", (int)s_frame, line.c_str() );
+		}
+#endif
 		else if ( step.action == "hitches" )
 		{
 			// Tiberium Project @feature (the test) "hitches=MS": from now on, each logic frame over MS ms is written with its

@@ -3059,9 +3059,30 @@ Bool Player::canAffordCommandPoints( const ThingTemplate *what ) const
 }
 
 //=============================================================================
+// Tiberium Project @feature a faction's team totals for the Classic cap: its own TeamCommandPoints, else the mod's for every
+// faction (TiberiumGameData TeamCommandPoints, with command points by size); none without either
+static Bool hasTeamCommandPoints( const PlayerTemplate *pt )
+{
+	return pt != nullptr && ( pt->getTeamCommandPointRows() > 0 || ( TheGlobalData != nullptr && TheGlobalData->m_teamCommandPointRows > 0 ) );
+}
+
+static Int teamCommandPoints( const PlayerTemplate *pt, Int playersOnTeam )
+{
+	if( pt != nullptr && pt->getTeamCommandPointRows() > 0 )
+		return pt->getTeamCommandPoints( playersOnTeam );
+	return TheGlobalData != nullptr ? TheGlobalData->getDefaultTeamCommandPoints( playersOnTeam ) : 0;
+}
+
+/*static*/ Bool Player::hasClassicCommandPoints( const PlayerTemplate *pt )
+{
+	return hasTeamCommandPoints( pt );
+}
+
+//=============================================================================
 // Tiberium Project @feature the command point caps at a new game's start, by the match's army cap (AbramGameRules):
-// - Classic, C&C4's (its TeamSizeSetting): a player whose template has TeamCommandPoints gets its team's total for the
-//   number of such players on its team (itself and those it and they are allied to), shared out evenly; any other, none;
+// - Classic, C&C4's (its TeamSizeSetting): a player whose faction has team totals (its TeamCommandPoints, or the mod's
+//   for every faction) gets its team's total for the number of such players on its team (itself and those it and they
+//   are allied to), shared out evenly; any other, none;
 // - Custom: every player of a playable side (not the neutral one, the civilians nor an observer) the host's points,
 //   whatever its faction or team;
 // - Unlimited: none.
@@ -3087,19 +3108,19 @@ Bool Player::canAffordCommandPoints( const ThingTemplate *what ) const
 				p->m_commandPointCap = AbramGameRules::getArmyCapPoints();
 			continue;
 		}
-		if( pt->getTeamCommandPointRows() <= 0 )
+		if( !hasTeamCommandPoints( pt ) || !pt->isPlayableSide() || pt->isObserver() )
 			continue;
 		Int team = 0;
 		for( Int j = 0; j < count; ++j )
 		{
 			Player *q = ThePlayerList->getNthPlayer( j );
 			if( q == nullptr || q == ThePlayerList->getNeutralPlayer() || q->getPlayerTemplate() == nullptr
-				|| q->getPlayerTemplate()->getTeamCommandPointRows() <= 0 || q->getDefaultTeam() == nullptr )
+				|| !hasTeamCommandPoints( q->getPlayerTemplate() ) || !q->getPlayerTemplate()->isPlayableSide() || q->getDefaultTeam() == nullptr )
 				continue;
 			if( q == p || ( p->getRelationship( q->getDefaultTeam() ) == ALLIES && q->getRelationship( p->getDefaultTeam() ) == ALLIES ) )
 				++team;
 		}
-		p->m_commandPointCap = pt->getTeamCommandPoints( team ) / ( team > 0 ? team : 1 );
+		p->m_commandPointCap = teamCommandPoints( pt, team ) / ( team > 0 ? team : 1 );
 		DEBUG_LOG(( "Player %d: %d command points (a team of %d)", (int)p->getPlayerIndex(), (int)p->m_commandPointCap, (int)team ));
 	}
 }

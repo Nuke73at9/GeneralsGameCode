@@ -34,6 +34,7 @@
 #include "Common/INI.h"
 #include "Common/ThingFactory.h"
 #include "GameLogic/Armor.h"
+#include "Common/AbramGameRules.h"	// Tiberium Project: the match's lethality
 #include "GameLogic/Damage.h"
 #include "GameLogic/Object.h"
 
@@ -74,6 +75,9 @@ void ArmorTemplate::clear()
 	for (int i = 0; i < DAMAGE_NUM_TYPES; i++)
 	{
 		m_damageCoefficient[i] = 1.0f;
+		m_hasLethality[i] = FALSE;	// Tiberium Project
+		for (int l = 0; l < LETHALITY_LEVELS; l++)
+			m_lethalityCoefficient[i][l] = 1.0f;
 	}
 	m_sideDamageScalar = 1.0f;
 	m_rearDamageScalar = 1.0f;
@@ -114,7 +118,11 @@ Real ArmorTemplate::adjustDamage(DamageType t, Real damage) const
 	if (t == DAMAGE_SUBDUAL_UNRESISTABLE)
 		return damage;
 
-	damage *= m_damageCoefficient[t];
+	// Tiberium Project @feature C&C4's Lethality: the match's level's percent, for a type that has them
+	if (m_hasLethality[t])
+		damage *= m_lethalityCoefficient[t][AbramGameRules::getLethalityLevel()];
+	else
+		damage *= m_damageCoefficient[t];
 
 	if (damage < 0.0f)
 		damage = 0.0f;
@@ -141,6 +149,28 @@ Real ArmorTemplate::adjustDamage(DamageType t, Real damage) const
 
 	DamageType dt = (DamageType)INI::scanIndexList(damageName, DamageTypeFlags::getBitNames());
 	self->m_damageCoefficient[dt] = pct;
+}
+
+//-------------------------------------------------------------------------------------------Static
+/*static*/ void ArmorTemplate::parseLethalityCoefficients( INI* ini, void *instance, void* /* store */, const void* /*userData*/ )
+{
+	ArmorTemplate* self = (ArmorTemplate*) instance;
+
+	const char* damageName = ini->getNextToken();
+	Real pct[LETHALITY_LEVELS];
+	for (Int l = 0; l < LETHALITY_LEVELS; l++)
+		pct[l] = INI::scanPercentToReal(ini->getNextToken());
+
+	const Bool all = stricmp(damageName, "Default") == 0;
+	const Int only = all ? -1 : INI::scanIndexList(damageName, DamageTypeFlags::getBitNames());
+	for (Int i = 0; i < DAMAGE_NUM_TYPES; i++)
+	{
+		if (!all && i != only)
+			continue;
+		self->m_hasLethality[i] = TRUE;
+		for (Int l = 0; l < LETHALITY_LEVELS; l++)
+			self->m_lethalityCoefficient[i][l] = pct[l];
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -190,6 +220,7 @@ const ArmorTemplate* ArmorStore::findArmorTemplate(const char* name) const
 	static const FieldParse myFieldParse[] =
 	{
 		{ "Armor", ArmorTemplate::parseArmorCoefficients, nullptr, 0 },
+		{ "LethalityArmor", ArmorTemplate::parseLethalityCoefficients, nullptr, 0 },	// Tiberium Project
 		{ "SideDamageScalar", INI::parsePercentToReal, nullptr, offsetof(ArmorTemplate, m_sideDamageScalar) },	// Tiberium Project
 		{ "RearDamageScalar", INI::parsePercentToReal, nullptr, offsetof(ArmorTemplate, m_rearDamageScalar) },	// Tiberium Project
 		{ "CounteredBy", INI::parseBitString32, TheWeaponCounterCategoryNames, offsetof(ArmorTemplate, m_counteredBy) },	// Tiberium Project

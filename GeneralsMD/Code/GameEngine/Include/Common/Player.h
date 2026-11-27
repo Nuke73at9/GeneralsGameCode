@@ -714,6 +714,7 @@ public:
 	Int getCommandPointsUsed() const;
 	Bool canAffordCommandPoints( const ThingTemplate *what ) const;	///< whether one more fits under its cap
 	static void assignCommandPointCaps();	///< each such player's share of its team's total, by the team's size
+	static Bool hasClassicCommandPoints( const PlayerTemplate *pt );	///< Tiberium Project: the faction has team totals (its own or the mod's)
 	/// Tiberium Project @feature a power's price (its Cost in credits, its SupportPoints): whether this player has it, and paying it
 	Bool canAffordSpecialPower( const SpecialPowerTemplate *power ) const;
 	void payForSpecialPower( const SpecialPowerTemplate *power );

@@ -69,6 +69,10 @@ public:
 	Real directionalScalar(const Object *victim, const Object *source) const;
 
 	static void parseArmorCoefficients( INI* ini, void *instance, void* /* store */, const void* userData );
+	/// Tiberium Project @feature C&C4's Lethality: "LethalityArmor = TYPE low% medium% high% veryhigh%", the type's percent
+	/// at each of the match's lethalities (AbramGameRules), in place of its Armor percent
+	static void parseLethalityCoefficients( INI* ini, void *instance, void* /* store */, const void* userData );
+	enum { LETHALITY_LEVELS = 4 };
 
 	Real						m_sideDamageScalar;		///< Tiberium Project: hits from the sides
 	Real						m_rearDamageScalar;		///< Tiberium Project: hits from behind
@@ -78,6 +82,8 @@ protected:
 
 private:
 	Real						m_damageCoefficient[DAMAGE_NUM_TYPES];	///< modifiers to damage
+	Real						m_lethalityCoefficient[DAMAGE_NUM_TYPES][LETHALITY_LEVELS];	///< Tiberium Project: by lethality
+	Bool						m_hasLethality[DAMAGE_NUM_TYPES];	///< Tiberium Project: the type has them
 };
 
 //-------------------------------------------------------------------------------------------------
