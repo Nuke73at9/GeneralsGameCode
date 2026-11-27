@@ -4079,6 +4079,7 @@ void GameLogic::update()
 	{
 		TheScriptEngine->UPDATE();
 	}
+	TiberiumTest::lap( TiberiumTest::LAP_SCRIPTS );	// Tiberium Project (the test): "hitches"
 
 	// TheSuperHackers @info Updates the frozen time status because it may have changed after the script engine update.
 	TheFramePacer->setTimeFrozen(TheGameEngine->isTimeFrozen());
@@ -4091,6 +4092,7 @@ void GameLogic::update()
 	{
 		TheTerrainLogic->UPDATE();
 	}
+	TiberiumTest::lap( TiberiumTest::LAP_TERRAIN );
 
 	// force CRC calculation, so we can keep a cache of the last N CRCs.  We do this right where the recorder
 	// would be getting the CRC anyway, so replays can get the CRCs from the exact instant in time as the original.
@@ -4124,6 +4126,8 @@ void GameLogic::update()
 		DEBUG_LOG(("Appended %sCRC on frame %d: %8.8X", isPlayback ? "Playback " : "", m_frame, m_CRC));
 	}
 
+	TiberiumTest::lap( TiberiumTest::LAP_CRC );
+
 	// collect stats
 	if(TheStatsCollector)
 	{
@@ -4135,10 +4139,13 @@ void GameLogic::update()
 		TheRecorder->UPDATE();
 	}
 
+	TiberiumTest::lap( TiberiumTest::LAP_RECORDER );
+
 	// process client commands
 	{
 		processCommandList( TheCommandList );
 	}
+	TiberiumTest::lap( TiberiumTest::LAP_COMMANDS );
 
 	// Abram's Personal Test @feature the match's cheats: a frozen AI stays frozen (its new objects too),
 	// from the frame the command came in
@@ -4229,21 +4236,25 @@ void GameLogic::update()
 	}
 
 	validateSleepyUpdate();
+	TiberiumTest::lap( TiberiumTest::LAP_OBJECTS );
 
 	// update the Artificial Intelligence system
 	{
 		TheAI->UPDATE();
 	}
+	TiberiumTest::lap( TiberiumTest::LAP_AI );
 
 	// production updates
 	{
 		TheBuildAssistant->UPDATE();
 	}
+	TiberiumTest::lap( TiberiumTest::LAP_BUILD );
 
 	// update partition info
 	{
 		ThePartitionManager->UPDATE();
 	}
+	TiberiumTest::lap( TiberiumTest::LAP_PARTITION );
 
 	// Tiberium Project: the units sent into what a call for transport or a dig-in made this frame (placed in its
 	// cells now, so seen)
@@ -4258,12 +4269,16 @@ void GameLogic::update()
 
 	// reset the command list, destroying all messages
 	TheCommandList->reset();
+	TiberiumTest::lap( TiberiumTest::LAP_DESTROY );
 
 	TheWeaponStore->UPDATE();
 	TheLocomotorStore->UPDATE();
+	TiberiumTest::lap( TiberiumTest::LAP_STORES );
 	TheVictoryConditions->UPDATE();
+	TiberiumTest::lap( TiberiumTest::LAP_VICTORY );
 	TiberiumZones::update();	// Tiberium Project @feature who holds C&C4's zones
 	TiberiumStart::update();	// Tiberium Project @feature C&C4's match start and redeployment
+	TiberiumTest::lap( TiberiumTest::LAP_ZONES );
 
 	{
 		//Handle disabled statii (and re-enable objects once frame matches)
@@ -4284,6 +4299,8 @@ void GameLogic::update()
 
 
 
+
+	TiberiumTest::lap( TiberiumTest::LAP_END );
 
 	// increment world time
 	if (!m_startNewGame)

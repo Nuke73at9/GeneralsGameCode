@@ -95,6 +95,10 @@ public:
 	/// Once per engine update, after the client has drawn and before the logic runs (the fly step's tilt, as drawn)
 	static void beforeLogic();
 	static void afterLogic();	///< Tiberium Project @feature (the test) after each logic frame: its time, for "logictime"
+	/// Tiberium Project @feature (the test) a point in the logic frame reached (GameLogic::update's stages), for "hitches"
+	static void lap( Int stage );
+	enum { LAP_SCRIPTS, LAP_TERRAIN, LAP_CRC, LAP_RECORDER, LAP_COMMANDS, LAP_OBJECTS, LAP_PATHS, LAP_AI, LAP_BUILD, LAP_PARTITION,
+		LAP_DESTROY, LAP_STORES, LAP_VICTORY, LAP_ZONES, LAP_END, LAP_COUNT };
 	static void afterDraw();	///< Tiberium Project (the test): straight after the client has drawn (the trace of what was drawn)
 	static void noteDrawnTurret( const Drawable *draw, Real angle );	///< the main turret's angle as handed to its bone (the trace)
 

@@ -374,6 +374,7 @@ void AI::update()
 {
 	// Do pathfinding.
 	m_pathfinder->processPathfindQueue();
+	TiberiumTest::lap( TiberiumTest::LAP_PATHS );	// Tiberium Project (the test): "hitches"
 
 	// run player updates
 	{

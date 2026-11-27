@@ -2303,6 +2303,81 @@ static void flattenZones(zoneStorageType *zoneArray, zoneStorageType *zoneHierar
 #endif
 }
 
+// Tiberium Project @tweak resolveZones' merge, walking the two zones' members instead of the whole array. resolveZones gives
+// every entry of either zone the lower one by a pass over all the zones, once a merge; on C&C4's large maps that pass,
+// for every merge of calculateZones' equivalence step, took some 30 ms each time the zones were remade (every 300 frames
+// while buildings go up or come down). Here each zone keeps the list of the entries that hold it, so a merge relabels
+// only the higher zone's: after every merge the array is exactly what resolveZones leaves, so the zones, the paths and
+// the logic are unchanged. It relies on what calculateZones' step starts from and keeps: each entry holds a zone that
+// holds itself (the identity at first, and merges only).
+class ZoneEquivalenceMerger
+{
+public:
+	ZoneEquivalenceMerger( zoneStorageType *zoneEquivalency, Int sizeOfZE ) :
+		m_zone( zoneEquivalency ), m_size( sizeOfZE ), m_head( sizeOfZE, -1 ), m_tail( sizeOfZE, -1 ), m_next( sizeOfZE, -1 )
+	{
+		for (Int i = 0; i < m_size; ++i)
+		{
+			const Int zone = m_zone[i];
+			if (zone < 0 || zone >= m_size)
+				continue;
+			if (m_head[zone] < 0)
+				m_head[zone] = i;
+			else
+				m_next[m_tail[zone]] = i;
+			m_tail[zone] = i;
+		}
+	}
+
+	zoneStorageType *array() const { return m_zone; }
+
+	/// resolveZones( srcZone, targetZone, array, size )
+	void resolve( Int srcZone, Int targetZone )
+	{
+		srcZone = m_zone[srcZone];
+		targetZone = m_zone[targetZone];
+		const Int finalZone = (targetZone < srcZone) ? m_zone[targetZone] : m_zone[srcZone];
+		if (srcZone != finalZone)
+			moveAll( srcZone, finalZone );
+		if (targetZone != finalZone)
+			moveAll( targetZone, finalZone );
+	}
+
+	/// applyZone( targetCell, sourceCell, array, size )
+	void apply( PathfindCell &targetCell, const PathfindCell &sourceCell )
+	{
+		const Int srcZone = m_zone[sourceCell.getZone()];
+		const Int targetZone = m_zone[targetCell.getZone()];
+		if (targetZone == 0) {
+			targetCell.setZone(srcZone);
+			return;
+		}
+		if (targetZone == srcZone)
+			return; // already match.
+		resolve( srcZone, targetZone );
+	}
+
+private:
+	/// every entry holding `from` given `to`, its list joined to `to`'s
+	void moveAll( Int from, Int to )
+	{
+		if (from < 0 || from >= m_size || to < 0 || to >= m_size || m_head[from] < 0)
+			return;
+		for (Int i = m_head[from]; i >= 0; i = m_next[i])
+			m_zone[i] = (zoneStorageType)to;
+		if (m_head[to] < 0)
+			m_head[to] = m_head[from];
+		else
+			m_next[m_tail[to]] = m_head[from];
+		m_tail[to] = m_tail[from];
+		m_head[from] = m_tail[from] = -1;
+	}
+
+	zoneStorageType *m_zone;
+	Int m_size;
+	std::vector<Int> m_head, m_tail, m_next;
+};
+
 inline void applyZone(PathfindCell &targetCell, const PathfindCell &sourceCell, zoneStorageType *zoneEquivalency, Int sizeOfZE)
 {
 	DEBUG_ASSERTCRASH(sourceCell.getZone()!=0, ("Unset source zone."));
@@ -2812,6 +2887,13 @@ void PathfindZoneManager::calculateZones( PathfindCell **map, PathfindLayer laye
 		m_crusherZones[i] = i;
 		m_hierarchicalZones[i] = i;
 	}
+	// Tiberium Project @tweak the merges below by ZoneEquivalenceMerger: the same arrays, without a pass over every zone a merge
+	ZoneEquivalenceMerger hierarchicalMerger( m_hierarchicalZones, m_maxZone );
+	ZoneEquivalenceMerger groundWaterMerger( m_groundWaterZones, m_maxZone );
+	ZoneEquivalenceMerger groundRubbleMerger( m_groundRubbleZones, m_maxZone );
+	ZoneEquivalenceMerger groundCliffMerger( m_groundCliffZones, m_maxZone );
+	ZoneEquivalenceMerger terrainMerger( m_terrainZones, m_maxZone );
+	ZoneEquivalenceMerger crusherMerger( m_crusherZones, m_maxZone );
 
 	for( j=globalBounds.lo.y; j<=globalBounds.hi.y; j++ ) {
 		for( i=globalBounds.lo.x; i<=globalBounds.hi.x; i++ ) {
@@ -2820,7 +2902,7 @@ void PathfindZoneManager::calculateZones( PathfindCell **map, PathfindLayer laye
 			if ( (r_thisCell.getConnectLayer() > LAYER_GROUND) &&
 				(r_thisCell.getType() == PathfindCell::CELL_CLEAR) ) {
 				PathfindLayer *layer = layers + r_thisCell.getConnectLayer();
-				resolveZones(r_thisCell.getZone(), layer->getZone(), m_hierarchicalZones, m_maxZone);
+				hierarchicalMerger.resolve(r_thisCell.getZone(), layer->getZone());
 			}
 
 			if ( i > globalBounds.lo.x && r_thisCell.getZone() != map[i-1][j].getZone() ) {
@@ -2828,47 +2910,47 @@ void PathfindZoneManager::calculateZones( PathfindCell **map, PathfindLayer laye
 
 #if RTS_GENERALS && RETAIL_COMPATIBLE_PATHFINDING
 				if (r_thisCell.getType() == r_leftCell.getType()) {
-					applyZone(r_thisCell, r_leftCell, m_hierarchicalZones, m_maxZone);
+					hierarchicalMerger.apply(r_thisCell, r_leftCell);
 				}
 				if (waterGround(r_thisCell, r_leftCell)) {
-					applyZone(r_thisCell, r_leftCell, m_groundWaterZones, m_maxZone);
+					groundWaterMerger.apply(r_thisCell, r_leftCell);
 				}
 				if (groundRubble(r_thisCell, r_leftCell)) {
-					applyZone(r_thisCell, r_leftCell, m_groundRubbleZones, m_maxZone);
+					groundRubbleMerger.apply(r_thisCell, r_leftCell);
 				}
 				if (groundCliff(r_thisCell, r_leftCell)) {
-					applyZone(r_thisCell, r_leftCell, m_groundCliffZones, m_maxZone);
+					groundCliffMerger.apply(r_thisCell, r_leftCell);
 				}
 				if (terrain(r_thisCell, r_leftCell)) {
-					applyZone(r_thisCell, r_leftCell, m_terrainZones, m_maxZone);
+					terrainMerger.apply(r_thisCell, r_leftCell);
 				}
 				if (crusherGround(r_thisCell, r_leftCell)) {
-					applyZone(r_thisCell, r_leftCell, m_crusherZones, m_maxZone);
+					crusherMerger.apply(r_thisCell, r_leftCell);
 				}
 #else
 				//if this is true, skip all the ones below
 				if (r_thisCell.getType() == r_leftCell.getType())
-					applyZone(r_thisCell, r_leftCell, m_hierarchicalZones, m_maxZone);
+					hierarchicalMerger.apply(r_thisCell, r_leftCell);
 				else {
 					Bool notTerrainOrCrusher = TRUE; // if this is false, skip the if-else-ladder below
 
 					if (terrain(r_thisCell, r_leftCell)) {
-						applyZone(r_thisCell, r_leftCell, m_terrainZones, m_maxZone);
+						terrainMerger.apply(r_thisCell, r_leftCell);
 						notTerrainOrCrusher = FALSE;
 					}
 
 					if (crusherGround(r_thisCell, r_leftCell)) {
-						applyZone(r_thisCell, r_leftCell, m_crusherZones, m_maxZone);
+						crusherMerger.apply(r_thisCell, r_leftCell);
 						notTerrainOrCrusher = FALSE;
 					}
 
 					if ( notTerrainOrCrusher ) {
 						if (waterGround(r_thisCell, r_leftCell))
-							applyZone(r_thisCell, r_leftCell, m_groundWaterZones, m_maxZone);
+							groundWaterMerger.apply(r_thisCell, r_leftCell);
 						else if (groundRubble(r_thisCell, r_leftCell))
-							applyZone(r_thisCell, r_leftCell, m_groundRubbleZones, m_maxZone);
+							groundRubbleMerger.apply(r_thisCell, r_leftCell);
 						else if (groundCliff(r_thisCell, r_leftCell))
-							applyZone(r_thisCell, r_leftCell, m_groundCliffZones, m_maxZone);
+							groundCliffMerger.apply(r_thisCell, r_leftCell);
 					}
 
 				}
@@ -2881,47 +2963,47 @@ void PathfindZoneManager::calculateZones( PathfindCell **map, PathfindLayer laye
 
 #if RTS_GENERALS && RETAIL_COMPATIBLE_PATHFINDING
 				if (r_thisCell.getType() == r_topCell.getType()) {
-					applyZone(r_thisCell, r_topCell, m_hierarchicalZones, m_maxZone);
+					hierarchicalMerger.apply(r_thisCell, r_topCell);
 				}
 				if (waterGround(r_thisCell, r_topCell)) {
-					applyZone(r_thisCell, r_topCell, m_groundWaterZones, m_maxZone);
+					groundWaterMerger.apply(r_thisCell, r_topCell);
 				}
 				if (groundRubble(r_thisCell, r_topCell)) {
-					applyZone(r_thisCell, r_topCell, m_groundRubbleZones, m_maxZone);
+					groundRubbleMerger.apply(r_thisCell, r_topCell);
 				}
 				if (groundCliff(r_thisCell, r_topCell)) {
-					applyZone(r_thisCell, r_topCell, m_groundCliffZones, m_maxZone);
+					groundCliffMerger.apply(r_thisCell, r_topCell);
 				}
 				if (terrain(r_thisCell, r_topCell)) {
-					applyZone(r_thisCell, r_topCell, m_terrainZones, m_maxZone);
+					terrainMerger.apply(r_thisCell, r_topCell);
 				}
 				if (crusherGround(r_thisCell, r_topCell)) {
-					applyZone(r_thisCell, r_topCell, m_crusherZones, m_maxZone);
+					crusherMerger.apply(r_thisCell, r_topCell);
 				}
 #else
 				//if this is true, skip all the ones below
 				if (r_thisCell.getType() == r_topCell.getType())
-					applyZone(r_thisCell, r_topCell, m_hierarchicalZones, m_maxZone);
+					hierarchicalMerger.apply(r_thisCell, r_topCell);
 				else {
 					Bool notTerrainOrCrusher = TRUE; // if this is false, skip the if-else-ladder below
 
 					if (terrain(r_thisCell, r_topCell)) {
-						applyZone(r_thisCell, r_topCell, m_terrainZones, m_maxZone);
+						terrainMerger.apply(r_thisCell, r_topCell);
 						notTerrainOrCrusher = FALSE;
 					}
 
 					if (crusherGround(r_thisCell, r_topCell)) {
-						applyZone(r_thisCell, r_topCell, m_crusherZones, m_maxZone);
+						crusherMerger.apply(r_thisCell, r_topCell);
 						notTerrainOrCrusher = FALSE;
 					}
 
 					if (notTerrainOrCrusher) {
 						if (waterGround(r_thisCell, r_topCell))
-							applyZone(r_thisCell, r_topCell, m_groundWaterZones, m_maxZone);
+							groundWaterMerger.apply(r_thisCell, r_topCell);
 						else if (groundRubble(r_thisCell, r_topCell))
-							applyZone(r_thisCell, r_topCell, m_groundRubbleZones, m_maxZone);
+							groundRubbleMerger.apply(r_thisCell, r_topCell);
 						else if (groundCliff(r_thisCell, r_topCell))
-							applyZone(r_thisCell, r_topCell, m_groundCliffZones, m_maxZone);
+							groundCliffMerger.apply(r_thisCell, r_topCell);
 					}
 
 				}

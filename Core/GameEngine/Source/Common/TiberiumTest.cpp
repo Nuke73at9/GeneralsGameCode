@@ -787,6 +787,18 @@ static double s_logicTotalMs = 0.0, s_logicMaxMs = 0.0;
 static Int s_logicFrames = 0;
 static UnsignedInt s_logicMaxFrame = 0;	// the logic frame that took longest
 static Int s_logicOver = 0;	// frames over 30 ms
+// Tiberium Project @feature (the test) "hitches=MS": each logic frame over MS written with its stages' times
+static double s_hitchMs = 0.0;
+static double s_laps[ TiberiumTest::LAP_COUNT ];
+static Bool s_lapsSeen[ TiberiumTest::LAP_COUNT ];
+
+void TiberiumTest::lap( Int stage )
+{
+	if ( s_hitchMs <= 0.0 || !s_logicTiming || stage < 0 || stage >= LAP_COUNT )
+		return;
+	s_laps[ stage ] = std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() - s_logicStart ).count();
+	s_lapsSeen[ stage ] = TRUE;
+}
 
 void TiberiumTest::afterLogic()
 {
@@ -803,6 +815,29 @@ void TiberiumTest::afterLogic()
 	if ( ms > 30.0 )
 		++s_logicOver;
 	++s_logicFrames;
+	if ( s_hitchMs > 0.0 )
+	{
+		if ( ms > s_hitchMs )
+		{
+			// each stage's own time: from the last stage reached before it
+			static const char *const NAMES[ LAP_COUNT ] = { "scripts", "terrain", "crc", "recorder", "commands", "objects", "paths", "players",
+				"build", "partition", "destroy", "stores", "victory", "zones", "end" };
+			std::string line;
+			double last = 0.0;
+			for ( Int i = 0; i < LAP_COUNT; ++i )
+			{
+				if ( !s_lapsSeen[ i ] )
+					continue;
+				char one[ 48 ];
+				snprintf( one, sizeof( one ), " %s %.1f", NAMES[ i ], s_laps[ i ] - last );
+				line += one;
+				last = s_laps[ i ];
+			}
+			log( "logic frame %u took %.1f ms:%s", (unsigned)( TheGameLogic != nullptr ? TheGameLogic->getFrame() : 0 ), ms, line.c_str() );
+		}
+		for ( Int i = 0; i < LAP_COUNT; ++i )
+			s_lapsSeen[ i ] = FALSE;
+	}
 }
 
 void TiberiumTest::beforeLogic()
@@ -1670,6 +1705,13 @@ void TiberiumTest::update()
 				line += one;
 			}
 			log( "frame %d: ui: command points%s", (int)s_frame, line.empty() ? " (no player has a cap)" : line.c_str() );
+		}
+		else if ( step.action == "hitches" )
+		{
+			// Tiberium Project @feature (the test) "hitches=MS": from now on, each logic frame over MS ms is written with its
+			// stages' times (0: off)
+			s_hitchMs = atof( step.arg.c_str() );
+			log( "frame %d: ui: hitches over %.1f ms", (int)s_frame, s_hitchMs );
 		}
 		else if ( step.action == "logictime" && ThePlayerList != nullptr && TheGameLogic != nullptr )
 		{
